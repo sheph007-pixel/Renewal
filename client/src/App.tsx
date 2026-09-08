@@ -70,6 +70,9 @@ export default function App() {
   const [code, setCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
   const [codeError, setCodeError] = useState(false);
+  /** Set when the staff code was right and the second factor is owed. */
+  const [pending2fa, setPending2fa] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState("");
   const [email, setEmail] = useState("");
   const [staffCode, setStaffCode] = useState("");
   const [staffError, setStaffError] = useState(false);
@@ -167,6 +170,12 @@ export default function App() {
         }
         const p = await r.json();
         const asked = currentPage();
+        if (p.kind === "staff-2fa") {
+          // The code was right; the authenticator still has to agree.
+          setPending2fa(p.pending as string);
+          setTotpCode("");
+          return;
+        }
         if (p.kind === "admin") {
           applyAdmin(p, p.token || "");
           if (asked.kind !== "admin") navigate(PATHS.groups, { replace: true });
@@ -183,6 +192,37 @@ export default function App() {
     },
     [applyAdmin, applyGroup],
   );
+
+  /** The second factor: six digits from the authenticator, or a recovery code. */
+  const submitTotp = useCallback(async () => {
+    if (!pending2fa || !totpCode.trim()) return;
+    setBusy(true);
+    setStaffError(false);
+    try {
+      const r = await fetch("/api/signin/2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pending: pending2fa, code: totpCode.trim() }),
+      });
+      if (!r.ok) {
+        setStaffError(true);
+        // An expired or spent ticket means starting the sign-in over.
+        if (r.status === 401 && (await r.json().catch(() => ({}))).error?.includes("expired")) {
+          setPending2fa(null);
+        }
+        return;
+      }
+      const p = await r.json();
+      setPending2fa(null);
+      setTotpCode("");
+      applyAdmin(p, p.token || "");
+      if (currentPage().kind !== "admin") navigate(PATHS.groups, { replace: true });
+    } catch {
+      setLoadError(true);
+    } finally {
+      setBusy(false);
+    }
+  }, [applyAdmin, pending2fa, totpCode]);
 
   /**
    * Re-establish the session this tab already had. A group's code is simply
@@ -511,6 +551,18 @@ export default function App() {
         }}
         onSubmit={submit}
         onStaffSubmit={staffSubmit}
+        twoFactor={!!pending2fa}
+        totpCode={totpCode}
+        onTotpCode={(v) => {
+          setTotpCode(v);
+          setStaffError(false);
+        }}
+        onTotpSubmit={() => void submitTotp()}
+        onCancelTwoFactor={() => {
+          setPending2fa(null);
+          setTotpCode("");
+          setStaffError(false);
+        }}
         onMode={(m) => {
           setCodeError(false);
           setStaffError(false);
