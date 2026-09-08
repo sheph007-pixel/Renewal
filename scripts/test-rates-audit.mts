@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import xlsx from "xlsx";
-import { buildAuditWorkbook, rowKey, KEY_HEADER } from "../client/src/lib/worksheet.ts";
+import { buildAuditWorkbook } from "../client/src/lib/worksheet.ts";
 import { type Group, type Overrides } from "../client/src/lib/model.ts";
 
 const PORT = 5088;
@@ -53,28 +53,25 @@ const send = (buf: Buffer, apply: boolean) =>
 const toBuffer = (book: xlsx.WorkBook): Buffer =>
   xlsx.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
-/** Fill in a Correct column the way an auditor would, by row key. */
+/** Type over a rate the way an auditor would, finding the row by group and plan. */
 function correct(
   book: xlsx.WorkBook,
-  edits: Array<{ key: string; column: string; value: string | number }>,
+  edits: Array<{ group: string; plan: string; column: string; value: string | number }>,
 ) {
   for (const name of book.SheetNames) {
     const sheet = book.Sheets[name];
     const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null });
-    if (!rows.length || !(KEY_HEADER in rows[0])) continue;
+    if (!rows.length || !("Group" in rows[0]) || !("Plan" in rows[0])) continue;
     let touched = false;
     for (const row of rows) {
       // Every edit for this row, not just the first: a row can carry a
       // correction in more than one tier.
-      for (const hit of edits.filter((e) => e.key === row[KEY_HEADER])) {
+      for (const hit of edits.filter((e) => e.group === row.Group && e.plan === row.Plan)) {
         row[hit.column] = hit.value;
         touched = true;
       }
     }
-    if (touched) {
-      const rebuilt = xlsx.utils.json_to_sheet(rows, { header: Object.keys(rows[0]) });
-      book.Sheets[name] = rebuilt;
-    }
+    if (touched) book.Sheets[name] = xlsx.utils.json_to_sheet(rows, { header: Object.keys(rows[0]) });
   }
   return book;
 }
@@ -82,7 +79,7 @@ function correct(
 // A plan to correct, and the rate it currently carries.
 const target = groups.find((g) => (g.plans || []).length && !(g as unknown as { archived?: boolean }).archived)!;
 const plan = target.plans![0].plan;
-const key = rowKey(target.name, plan);
+const row = { group: target.name, plan };
 
 // 1. An untouched workbook is a no-op. Sending back what was sent out must not
 //    invent a single change, whatever Excel did to the formatting.
@@ -97,7 +94,7 @@ assert.deepEqual(j.problems, [], "and reports no problems");
 
 // 2. A correction is read, reported against what was there, and not yet applied.
 book = correct(await buildAuditWorkbook(groups, overrides), [
-  { key, column: "Correct Employee", value: 123.45 },
+  { ...row, column: "Employee", value: 123.45 },
 ]);
 r = await send(toBuffer(book), false);
 j = await r.json();
@@ -115,8 +112,8 @@ assert.equal(payload.overrides[`${target.name}||${plan}||Employee`], undefined, 
 
 // 3. Money as a person types it: "$1,234.56" is a rate, "n/a" is not.
 book = correct(await buildAuditWorkbook(groups, overrides), [
-  { key, column: "Correct Employee", value: "$1,234.56" },
-  { key, column: "Correct Employee + Family", value: "n/a" },
+  { ...row, column: "Employee", value: "$1,234.56" },
+  { ...row, column: "Employee + Family", value: "n/a" },
 ]);
 j = await (await send(toBuffer(book), false)).json();
 assert.equal(j.changes.length, 1, "the money string is read as a rate");
@@ -126,7 +123,7 @@ assert.match(j.problems[0].reason, /not a rate/);
 
 // 4. A rate of zero or less is refused rather than written.
 book = correct(await buildAuditWorkbook(groups, overrides), [
-  { key, column: "Correct Employee", value: 0 },
+  { ...row, column: "Employee", value: 0 },
 ]);
 j = await (await send(toBuffer(book), false)).json();
 assert.equal(j.changes.length, 0);
@@ -135,7 +132,7 @@ assert.match(j.problems[0].reason, /more than zero/);
 
 // 5. Applying writes it, and the portal serves the new rate.
 book = correct(await buildAuditWorkbook(groups, overrides), [
-  { key, column: "Correct Employee", value: 123.45 },
+  { ...row, column: "Employee", value: 123.45 },
 ]);
 j = await (await send(toBuffer(book), true)).json();
 assert.equal(j.applied, true);
@@ -151,17 +148,17 @@ assert.equal(
 // 6. Sending the same workbook again is not a second change: the rate now
 //    matches what is on file, so there is nothing to do.
 book = correct(await buildAuditWorkbook(payload.groups, payload.overrides), [
-  { key, column: "Correct Employee", value: 123.45 },
+  { ...row, column: "Employee", value: 123.45 },
 ]);
 j = await (await send(toBuffer(book), false)).json();
 assert.deepEqual(j.changes, [], "re-sending the same corrections is a no-op");
 
 // 7. A file that is not the audit workbook is refused with something useful.
 const stranger = xlsx.utils.book_new();
-xlsx.utils.book_append_sheet(stranger, xlsx.utils.aoa_to_sheet([["Group", "Rate"], ["Someone", 10]]), "Sheet1");
+xlsx.utils.book_append_sheet(stranger, xlsx.utils.aoa_to_sheet([["Company", "Rate"], ["Someone", 10]]), "Sheet1");
 r = await send(toBuffer(stranger), false);
 assert.equal(r.status, 400);
-assert.match((await r.json()).error, /Row Key/, "the error says what is missing");
+assert.match((await r.json()).error, /Group and Plan/, "the error says what is missing");
 
 // 8. Locking. With the rates locked nothing lands — not the workbook, not a
 //    single override by hand — and both say so with 423 rather than pretending.
@@ -176,7 +173,7 @@ assert.equal(lock.locked, true);
 assert.ok(lock.at, "the lock records when");
 
 book = correct(await buildAuditWorkbook(payload.groups, payload.overrides), [
-  { key, column: "Correct Employee", value: 999.99 },
+  { ...row, column: "Employee", value: 999.99 },
 ]);
 r = await send(toBuffer(book), true);
 assert.equal(r.status, 423, "a locked portal refuses the workbook");

@@ -412,7 +412,7 @@ export default function Admin({
             <button
               onClick={() => void makeWorkbook()}
               disabled={makingWorkbook}
-              title="Every plan and rate, a sheet per account manager, with empty columns to key corrections into"
+              title="Group, plan and the four tier rates — one sheet per account manager, to correct in place and send back"
               style={{
                 padding: "8px 16px",
                 fontSize: 13.5,
