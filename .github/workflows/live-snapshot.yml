@@ -3,7 +3,8 @@
 # branch. GitHub's runners can reach app.kennion.com; the coding sandbox cannot.
 #
 # Aggregates only — the export endpoint carries no employee records. The staff
-# credentials come from repository secrets when set, else the app's defaults.
+# credentials come from repository secrets; there is no fallback, because this
+# repository is public.
 name: Live reconciliation snapshot
 
 on:
@@ -32,9 +33,16 @@ jobs:
         env:
           SITE: ${{ inputs.site || 'https://app.kennion.com' }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || 'hunter@kennion.com' }}
-          ADMIN_CODE: ${{ secrets.ADMIN_CODE || '87878787' }}
+          ADMIN_CODE: ${{ secrets.ADMIN_CODE }}
         run: |
           set -euo pipefail
+          # No fallback: this repository is public, so a code written here
+          # would not be a secret. Set ADMIN_CODE as a repository secret to
+          # match the one in Railway.
+          if [ -z "${ADMIN_CODE:-}" ]; then
+            echo "::error::ADMIN_CODE repository secret is not set — add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
           echo "health: $(curl -sS -f "$SITE/healthz")"
           TOKEN=$(curl -sS -f -X POST "$SITE/api/signin" \
             -H 'Content-Type: application/json' \

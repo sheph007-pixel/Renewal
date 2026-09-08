@@ -399,6 +399,19 @@ saves a hand-keyed rate to the database. The check counts the plans with two or
 more billed tiers whose rates hold those factors; the ones that do not are
 flagged "Off schedule" and want the real rates from the carrier sheet.
 
+## Staff sign-in
+
+**This repository is public, so nothing written in it is a secret.** The server
+refuses any staff code that has ever appeared here. Set `ADMIN_CODE` in Railway
+(and `ADMIN_EMAIL` if it should not be `hunter@kennion.com`) to a code of your
+own; that is the only setting that survives a restart. With none set, the
+server mints a strong one at boot and prints it once in the deploy log, so
+there is always a way in without a guessable code ever being live.
+
+Codes are compared in constant time, failed attempts are counted per caller
+and cut off after ten in ten minutes, and every sign-in and refusal is written
+to the log with the caller's address.
+
 ## Privacy
 
 The census carries names, ages, genders, ZIPs and premiums for over 1,300
