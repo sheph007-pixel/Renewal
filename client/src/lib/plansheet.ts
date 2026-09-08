@@ -114,6 +114,17 @@ export function splitNote(data: KennionData, g: Group, eePct: number, depPct: nu
     : `Employer and employee amounts are illustrative: your payroll contributions are not in the data we hold, so they are modelled at ${eePct}% of the employee rate and ${depPct}% of the dependent cost.`;
 }
 
+/** Where the figures came from — the line the page used to carry. */
+export function sourceNote(data: KennionData): string {
+  const m = data.funding?.month;
+  const when = m
+    ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+  return when
+    ? `Rates as billed in ${when}; enrollment from your Employee Navigator export.`
+    : "Enrollment and rates from your Employee Navigator export.";
+}
+
 const DISCLAIMER =
   "For general information and discussion only. Rates are determined by the carrier and are not final until the group is enrolled with the carrier.";
 
@@ -154,7 +165,8 @@ export async function downloadPlanSheet(
     ...plans,
     totalRow,
     [],
-    [`${money0(premium * 12)} a year at today's enrollment.`],
+    [`${money0(premium * 12)} a year at today's enrollment. ${g.enrolled} employees, ${g.lives} lives with dependents.`],
+    [sourceNote(data)],
     [splitNote(data, g, eePct, depPct)],
     ["Tiers with nobody enrolled have no billed rate; those are calculated and are in no total."],
     [DISCLAIMER],
@@ -181,6 +193,7 @@ export async function downloadPlanSheet(
       ...tiers,
       ["All plans", "", enrolled, "", round(erTotal), round(eeTotal), round(premium)],
       [],
+      [sourceNote(data)],
       [splitNote(data, g, eePct, depPct)],
       [DISCLAIMER],
     ];

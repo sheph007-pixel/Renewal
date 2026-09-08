@@ -8,7 +8,15 @@
 // wording and the arithmetic are held to each case. Runs with `npx tsx`.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { planRowsFor, tierRowsFor, splitNote, COLUMNS, DETAIL_COLUMNS, ENROLL_URL } from "../client/src/lib/plansheet.ts";
+import {
+  planRowsFor,
+  tierRowsFor,
+  splitNote,
+  sourceNote,
+  COLUMNS,
+  DETAIL_COLUMNS,
+  ENROLL_URL,
+} from "../client/src/lib/plansheet.ts";
 import {
   hasActualSplit,
   planRows,
@@ -169,7 +177,12 @@ for (const r of [a, b]) {
   );
 }
 
-// 9. The file points a client at their own live data rather than pretending to be it.
+// 9. The file says where the figures came from. The page no longer carries
+//    this line, so if it were missing here a client would have no source at all.
+const source = sourceNote(data);
+assert.match(source, /Employee Navigator export/, "the file names its source");
+
+// 10. And it points a client at their own live data rather than pretending to be it.
 assert.equal(ENROLL_URL, "https://go.kennion.com/enroll");
 
 console.log(

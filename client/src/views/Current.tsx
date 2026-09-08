@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   TIERS,
   money,
-  money0,
   rateFor,
   type Group,
   type KennionData,
@@ -89,9 +88,6 @@ function Head({
   );
 }
 
-const monthName = (m: string | null) =>
-  m ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
-
 export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
@@ -133,10 +129,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
       setSaving(false);
     }
   };
-
-  // Any tier with nobody in it has no billed rate, so it is shown at the
-  // program factors. Say so once, under the table, rather than per plan.
-  const anyDerived = rows.some((r) => TIERS.some((t) => rateFor(overrides, g, r.p.plan, t.key).derived));
 
   const cell = { padding: "12px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14 };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
@@ -180,10 +172,12 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => {
+            {sorted.map((r, i) => {
               const n = TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0);
               return (
-                <tr key={r.p.plan}>
+                // Alternating bands, so the eye keeps its place across a wide
+                // row of rates.
+                <tr key={r.p.plan} style={{ background: i % 2 ? C.zebra : "#fff" }}>
                   <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: C.ink }}>
                     {r.p.plan}
                   </td>
@@ -242,20 +236,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         </div>
       )}
 
-      {/*
-        Only what the table above does not already say: the annual figure, the
-        dependants behind the headcount, and where the numbers came from. The
-        headcount itself, and the factors behind a calculated rate, were being
-        said twice.
-      */}
-      <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted, lineHeight: 1.7, maxWidth: 940 }}>
-        <strong style={{ color: C.body }}>{money0(totals.total * 12)}</strong> a year at
-        today&rsquo;s enrollment · {g.lives} lives with dependents ·{" "}
-        {data.funding?.month
-          ? `rates as billed in ${monthName(data.funding.month)}, enrollment from your Employee Navigator export`
-          : "enrollment and rates from your Employee Navigator export"}
-        .{anyDerived && " Greyed rates have nobody enrolled, so they are calculated rather than billed and are in no total."}
-      </div>
     </div>
   );
 }
