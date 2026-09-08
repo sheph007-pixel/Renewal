@@ -20,6 +20,7 @@ import { expandUpload, prepareForModel } from "./intake.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
+import { readAuditWorkbook } from "./rates-audit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "dist", "public");
@@ -694,6 +695,7 @@ function adminPayload() {
     carrierStats,
     funding: fundingView(funding),
     managers: MANAGERS,
+    ratesLock: ratesLock || { locked: false },
     durable: !!db || DURABLE,
     storage: db ? "postgres" : DURABLE ? "volume" : "ephemeral",
     overrides,
@@ -1631,7 +1633,120 @@ app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }),
 });
 
 /** Persist one hand-keyed rate. Shared across the team, not per-browser. */
+/**
+ * Locking the rates.
+ *
+ * Once the account managers have audited the book and their corrections are
+ * in, the rates are the answer. Locking says so: no override, by hand or by
+ * workbook, lands while the lock is on. It is a deliberate act with a name and
+ * a time against it, and it can be lifted the same way.
+ */
+let ratesLock = null;
+async function loadRatesLock() {
+  if (!db) return;
+  try {
+    ratesLock = await db.getSetting("ratesLock");
+  } catch (e) {
+    console.error("could not read the rates lock:", e.message);
+  }
+}
+const ratesLocked = () => !!(ratesLock && ratesLock.locked);
+
+app.get("/api/admin/rates-lock", requireStaff, (req, res) => {
+  res.json(ratesLock || { locked: false });
+});
+
+/**
+ * The rate on file for one cell, as the workbook showed it: a rate keyed by
+ * hand wins, then the billed rate. `undefined` means there is no such plan,
+ * which the reader reports rather than inventing a row for.
+ */
+function currentRate(group, plan, censusTier) {
+  const g = groups.find((x) => x.name === group);
+  if (!g) return undefined;
+  if (!(g.plans || []).some((p) => p.plan === plan)) return undefined;
+  const ov = overrides[`${group}||${plan}||${censusTier}`];
+  if (ov != null && String(ov) !== "") return Number(ov);
+  const billed = ((g.rates || {})[plan] || {})[censusTier];
+  return billed == null ? null : Number(billed);
+}
+
+/**
+ * The audit workbook, filled in and sent back.
+ *
+ * Reading and applying are separate on purpose: the first call says what would
+ * change and what could not be read, and nothing is written until a second
+ * call asks for it. A workbook that comes back with a hundred corrections is
+ * worth looking at before it lands on the rates.
+ */
+app.post(
+  "/api/admin/rates-workbook",
+  requireStaff,
+  express.raw({ type: () => true, limit: "20mb" }),
+  async (req, res) => {
+    const apply = String(req.query.apply || "") === "1";
+    const filename = String(req.query.filename || "audit.xlsx").slice(0, 200);
+    if (!Buffer.isBuffer(req.body) || !req.body.length) {
+      return res.status(400).json({ error: "No file received." });
+    }
+    if (apply && ratesLocked()) {
+      return res.status(423).json({ error: "The rates are locked. Unlock them to apply corrections." });
+    }
+
+    let read;
+    try {
+      read = readAuditWorkbook(req.body, currentRate);
+    } catch (e) {
+      return res.status(400).json({ error: "Could not read that workbook: " + e.message });
+    }
+    if (!read.sheetsRead) {
+      return res.status(400).json({
+        error:
+          "No audit sheet in that file. Send back the workbook this page produced, with its Row Key column intact.",
+      });
+    }
+
+    if (!apply) {
+      return res.json({ ...read, filename, applied: false });
+    }
+
+    const failed = [];
+    let applied = 0;
+    for (const c of read.changes) {
+      const key = `${c.group}||${c.plan}||${c.censusTier}`;
+      try {
+        if (db) await db.setOverride(c.group, c.plan, c.censusTier, c.rate, req.staffEmail || null);
+        overrides[key] = String(c.rate);
+        applied++;
+      } catch (e) {
+        failed.push({ ...c, reason: e.message });
+      }
+    }
+    console.log(`rates audit applied: ${applied} of ${read.changes.length} from ${filename} by ${req.staffEmail}`);
+    await refreshAudit();
+    res.json({ ...read, filename, applied: true, appliedCount: applied, failed, overrides });
+  },
+);
+
+app.post("/api/admin/rates-lock", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const locked = !!(req.body || {}).locked;
+  const next = locked
+    ? { locked: true, by: req.staffEmail || null, at: new Date().toISOString() }
+    : { locked: false, by: req.staffEmail || null, at: new Date().toISOString() };
+  try {
+    if (db) await db.setSetting("ratesLock", next, req.staffEmail || null);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  ratesLock = next;
+  console.warn(`rates ${locked ? "locked" : "unlocked"} by ${req.staffEmail}`);
+  res.json(next);
+});
+
 app.post("/api/admin/override", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
+  if (ratesLocked()) {
+    return res.status(423).json({ error: "The rates are locked. Unlock them to make a change." });
+  }
   const { group, plan, censusTier, rate } = req.body || {};
   if (!group || !plan || !censusTier) {
     return res.status(400).json({ error: "group, plan and censusTier are required" });
@@ -2185,6 +2300,7 @@ async function boot() {
     console.error("could not settle the sign-in code:", e.message);
   }
   markAdminCodeReady();
+  await loadRatesLock();
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.
