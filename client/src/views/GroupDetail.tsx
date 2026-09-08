@@ -46,9 +46,21 @@ const FIELDS: { key: string; label: string; width?: number }[] = [
  * is the link to send the client. The code is the credential, so the link is
  * too: anyone holding it is signed in as that group.
  */
-function ClientLink({ code, archived }: { code: string; archived: boolean }) {
+function ClientLink({
+  code,
+  token,
+  archived,
+  onReset,
+}: {
+  code: string;
+  token: string | null;
+  archived: boolean;
+  onReset: () => Promise<void>;
+}) {
   const [copied, setCopied] = useState(false);
-  const url = `${typeof window === "undefined" ? "" : window.location.origin}/?code=${encodeURIComponent(code)}`;
+  const [confirmReset, setConfirmReset] = useState(false);
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const url = token ? `${origin}/g/${token}` : `${origin}/?code=${encodeURIComponent(code)}`;
   return (
     <div style={{ marginTop: 14 }}>
       <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
@@ -84,9 +96,36 @@ function ClientLink({ code, archived }: { code: string; archived: boolean }) {
         </button>
       </div>
       <div style={{ marginTop: 5, fontSize: 11.5, color: C.faint, lineHeight: 1.5, maxWidth: 460 }}>
-        {archived
-          ? "This group is archived, so the link is refused at sign-in until it is restored."
-          : "Opens the client's own pages in a new tab. The link carries the code, so treat it like the code itself."}
+        {archived ? (
+          "This group is archived, so the link is refused until it is restored."
+        ) : (
+          <>
+            The group&rsquo;s permanent address: bookmark it, send it, come back to it — no code to type, and it
+            stays in the bar. Anyone holding it sees this company&rsquo;s pages, so send it to the client rather
+            than posting it anywhere public.{" "}
+            {confirmReset ? (
+              <>
+                <button
+                  onClick={async () => {
+                    setConfirmReset(false);
+                    await onReset();
+                  }}
+                  style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.red, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Replace it — the old link stops working
+                </button>
+                {" · "}
+                <button onClick={() => setConfirmReset(false)} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.blue, cursor: "pointer" }}>
+                  Keep
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmReset(true)} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.blue, cursor: "pointer" }}>
+                New link
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -244,7 +283,20 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
               />
             </div>
 
-            <ClientLink code={group.code} archived={!!group.archived} />
+            <ClientLink
+              code={group.code}
+              token={group.linkToken || null}
+              archived={!!group.archived}
+              onReset={async () => {
+                const r = await fetch("/api/admin/group-link/reset", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({ group: group.name }),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (r.ok && j.groups) onChanged(j.groups);
+              }}
+            />
 
             <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>

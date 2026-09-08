@@ -6,6 +6,8 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
+ *   /g/:token            a group's own permanent address — Current
+ *   /g/:token/options    …and its 2027 options
  *   /admin               staff sign-in
  *   /current             Current Medical Plan(s)
  *   /options             2027 Medical Plan Options
@@ -24,7 +26,7 @@ export interface Route {
 
 export type Page =
   | { kind: "signin"; staff: boolean }
-  | { kind: "group"; tab: "current" | "options" }
+  | { kind: "group"; tab: "current" | "options"; token?: string }
   | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import"; group: string | null }
   | { kind: "unknown" };
 
@@ -41,6 +43,10 @@ export const PATHS = {
 
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
 
+/** A group's own address, by its permanent token. */
+export const linkPath = (token: string, tab: "current" | "options" = "current") =>
+  `/g/${encodeURIComponent(token)}${tab === "options" ? "/options" : ""}`;
+
 function safeDecode(s: string): string {
   try {
     return decodeURIComponent(s);
@@ -54,6 +60,10 @@ export function parsePath(path: string): Page {
   if (path === PATHS.staffSignin) return { kind: "signin", staff: true };
   if (path === PATHS.current) return { kind: "group", tab: "current" };
   if (path === PATHS.options) return { kind: "group", tab: "options" };
+  // A group's permanent address: the token stays in the bar, so the page can
+  // be bookmarked and shared without a code being typed.
+  const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(options))?$/);
+  if (t) return { kind: "group", tab: t[2] === "options" ? "options" : "current", token: t[1] };
   const m = path.match(/^\/admin\/(groups|rates|proposals|import)(?:\/(.+))?$/);
   if (m) {
     const tab = m[1] as "groups" | "rates" | "proposals" | "import";

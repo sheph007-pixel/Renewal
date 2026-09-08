@@ -51,6 +51,11 @@ ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS fields jsonb NOT NULL DE
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS broker text CHECK (broker IN ('kennion','outside'));
 -- The Kennion account manager who looks after the group.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS manager text CHECK (manager IN ('debbie','tracy'));
+-- The group's permanent link: a random, unguessable token in the address, so
+-- the page can be bookmarked and shared without typing a code. Reset it and
+-- the old link stops working.
+ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS link_token text;
+CREATE UNIQUE INDEX IF NOT EXISTS group_meta_link_token_idx ON kennion.group_meta (link_token);
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -195,7 +200,7 @@ export function createDb(url) {
 
       const meta = {};
       const mrows = await pool.query(
-        "SELECT group_name, company_id, size_category, archived, fields, broker, renewal, manager FROM kennion.group_meta",
+        "SELECT group_name, company_id, size_category, archived, fields, broker, renewal, manager, link_token FROM kennion.group_meta",
       );
       for (const r of mrows.rows) {
         meta[r.group_name] = {
@@ -205,6 +210,7 @@ export function createDb(url) {
           fields: r.fields || {},
           broker: r.broker || null,
           manager: r.manager || null,
+          linkToken: r.link_token || null,
           renewal: r.renewal || null,
         };
       }
@@ -249,6 +255,8 @@ export function createDb(url) {
               ? "broker"
               : field === "manager"
                 ? "manager"
+                : field === "linkToken"
+                  ? "link_token"
               : field === "renewal"
                 ? "renewal"
                 : "size_category";
