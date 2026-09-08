@@ -2252,6 +2252,13 @@ app.use(
 );
 app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
 
+// An API path no route claimed is a mistake, not a page. Falling through to
+// the app answered a mistyped endpoint with 200 and a lump of HTML, so the
+// caller got a JSON parse error instead of being told what was wrong.
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `No such endpoint: ${req.method} /api${req.path}` });
+});
+
 // SPA fallback — the portal owns every non-API route.
 app.use((_req, res) => res.sendFile(indexHtml));
 
