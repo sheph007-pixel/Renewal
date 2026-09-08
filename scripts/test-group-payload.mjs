@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 
 const PORT = 5077;
+// A code for this run only. The server refuses anything published in the repo.
+const CODE = "test-only-code-not-in-repo";
 const server = spawn("node", ["server/index.js"], {
-  env: { ...process.env, PORT: String(PORT), KENNION_FAKE_AI: "1" },
+  env: { ...process.env, PORT: String(PORT), ADMIN_CODE: CODE, KENNION_FAKE_AI: "1" },
   stdio: ["ignore", "pipe", "pipe"],
 });
 const stop = () => server.kill();
@@ -26,7 +28,7 @@ const staff = await (
   await fetch(`${base}/api/signin`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "hunter@kennion.com", code: "87878787" }),
+    body: JSON.stringify({ email: "hunter@kennion.com", code: CODE }),
   })
 ).json();
 const roster = staff.groups.filter((g) => !g.archived && g.eligible !== false);
