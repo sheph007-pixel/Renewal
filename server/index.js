@@ -369,7 +369,47 @@ const splitFor = (name) =>
   (imported.splits || {})[name] || data.splits[name] || null;
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toLowerCase();
-const ADMIN_CODE = String(process.env.ADMIN_CODE || "87878787").trim();
+
+/**
+ * Staff sign-in code. This repository is public, so a code written in it is
+ * not a secret: any value that has ever been published here is refused, and
+ * the server mints a strong one at boot instead and prints it once in the
+ * deploy log. Set ADMIN_CODE in Railway to a code of your own and it is used
+ * as given — that is the only configuration that survives a restart.
+ */
+const PUBLISHED_CODES = new Set(["87878787", "12345678", "password", "changeme"]);
+const envAdminCode = String(process.env.ADMIN_CODE || "").trim();
+const bootAdminCode =
+  !envAdminCode || PUBLISHED_CODES.has(envAdminCode.toLowerCase())
+    ? crypto.randomBytes(9).toString("base64url")
+    : null;
+const ADMIN_CODE = bootAdminCode || envAdminCode;
+if (bootAdminCode) {
+  console.warn(
+    [
+      "",
+      "  ┌───────────────────────────────────────────────────────────────┐",
+      "  │  ADMIN_CODE is not set, or is one published in this repo.     │",
+      "  │  That code is refused. A one-time code for this run only:     │",
+      `  │      ${bootAdminCode.padEnd(57)}│`,
+      "  │  Set ADMIN_CODE in Railway to keep a code across restarts.    │",
+      "  └───────────────────────────────────────────────────────────────┘",
+      "",
+    ].join("\n"),
+  );
+}
+
+/** Compare two secrets without leaking their length or contents through timing. */
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a));
+  const y = Buffer.from(String(b));
+  if (x.length !== y.length) {
+    // Still do the work, so a wrong length is not faster than a wrong value.
+    crypto.timingSafeEqual(x, x);
+    return false;
+  }
+  return crypto.timingSafeEqual(x, y);
+}
 /**
  * Staff sessions. Import endpoints must not accept the admin code on every
  * call, so signing in mints a short-lived bearer token held in memory.
@@ -561,11 +601,14 @@ app.post("/api/signin", (req, res) => {
   if (body.email != null) {
     const email = String(body.email).trim().toLowerCase();
     const code = String(body.code || "").trim();
-    if (email !== ADMIN_EMAIL || code !== ADMIN_CODE) {
+    const ok = sameSecret(email, ADMIN_EMAIL) && sameSecret(code, ADMIN_CODE);
+    if (!ok) {
       noteFail(caller);
+      console.warn(`staff sign-in refused for ${email || "(no email)"} from ${caller}`);
       return res.status(401).json({ error: "invalid credentials" });
     }
     clearFails(caller);
+    console.log(`staff signed in: ${email} from ${caller}`);
     return res.json({ ...adminPayload(), token: mintSession(email) });
   }
 
