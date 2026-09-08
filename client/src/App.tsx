@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  fmtDate,
   ovKey,
   planRows,
   type KennionData,
   type Overrides,
 } from "@/lib/model";
-import { C, Logo, panel, smallPrimaryBtn } from "@/lib/ui";
+import { C, Logo, panel } from "@/lib/ui";
 import { PATHS, currentPage, linkPath, navigate, parsePath, useRoute } from "@/lib/router";
 import Link from "@/lib/Link";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
@@ -592,14 +591,21 @@ export default function App() {
     color: C.ink,
   };
 
+  /**
+   * The program runs on the calendar year, so every group's page says the same
+   * thing. A handful of groups carry a mid-year date because that is when they
+   * joined, not because their plan year differs, and showing 04/01 there read
+   * as a different plan year to anyone comparing two groups.
+   */
+  const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
     tab === "options"
-      ? "Effective 01/01/2027"
-      : `Dates ${fmtDate(g.pyStart)} - ${fmtDate(g.pyEnd)}`;
+      ? "Effective January 1, 2027"
+      : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
 
   const printLine =
     (tab === "current"
-      ? `Current group health plans and cost, plan year ${fmtDate(g.pyStart)} – ${fmtDate(g.pyEnd)}`
+      ? `Current group health plans and cost, calendar year ${planYear}`
       : "2027 renewal options, effective January 1, 2027") +
     ` · data as of 7/31/2026 · printed ${new Date().toLocaleDateString("en-US", {
       month: "long",
@@ -716,11 +722,7 @@ export default function App() {
               current={route.hash}
             />
           </div>
-          <div className="noprint" style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => window.print()} style={smallPrimaryBtn}>
-              Print
-            </button>
-          </div>
+
         </div>
 
         {tab === "current" ? (
