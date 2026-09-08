@@ -373,31 +373,143 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toL
 
 /**
  * Staff sign-in code. This repository is public, so a code written in it is
- * not a secret: any value that has ever been published here is refused, and
- * the server mints a strong one at boot instead and prints it once in the
- * deploy log. Set ADMIN_CODE in Railway to a code of your own and it is used
- * as given — that is the only configuration that survives a restart.
+ * not a secret: any value that has ever been published here is refused.
+ *
+ * The code is kept in the database as a scrypt hash, not in an environment
+ * variable, for two reasons: it survives a restart without anyone having to
+ * configure the host, and it can be changed from inside the app. The first
+ * time a database has no code, one strong code is minted and printed once in
+ * the log — after that it stays put until it is changed from the Import tab.
+ *
+ * Setting ADMIN_CODE in the environment still wins, for anyone who would
+ * rather manage it there.
  */
 const PUBLISHED_CODES = new Set(["87878787", "12345678", "password", "changeme"]);
 const envAdminCode = String(process.env.ADMIN_CODE || "").trim();
-const bootAdminCode =
-  !envAdminCode || PUBLISHED_CODES.has(envAdminCode.toLowerCase())
-    ? crypto.randomBytes(9).toString("base64url")
-    : null;
-const ADMIN_CODE = bootAdminCode || envAdminCode;
-if (bootAdminCode) {
+const envCodeUsable = !!envAdminCode && !PUBLISHED_CODES.has(envAdminCode.toLowerCase());
+
+/** The credential in force: a code we hold in clear, or a hash to check against. */
+let adminCred = null;
+
+/** scrypt with a fresh salt, in the format `scrypt$<salt>$<key>`. */
+function hashSecret(code) {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16);
+    crypto.scrypt(String(code), salt, 32, (err, key) => {
+      if (err) return reject(err);
+      resolve(`scrypt$${salt.toString("base64url")}$${key.toString("base64url")}`);
+    });
+  });
+}
+
+/** Check a code against a stored hash, in constant time for the comparison. */
+function matchesHash(code, stored) {
+  return new Promise((resolve) => {
+    const parts = String(stored || "").split("$");
+    if (parts.length !== 3 || parts[0] !== "scrypt") return resolve(false);
+    const salt = Buffer.from(parts[1], "base64url");
+    const want = Buffer.from(parts[2], "base64url");
+    crypto.scrypt(String(code), salt, want.length, (err, key) => {
+      if (err) return resolve(false);
+      resolve(key.length === want.length && crypto.timingSafeEqual(key, want));
+    });
+  });
+}
+
+/** Is this the staff sign-in code? Always does the work, right or wrong. */
+async function checkAdminCode(code) {
+  await adminCodeReady;
+  if (!adminCred) return false;
+  if (adminCred.kind === "plain") return sameSecret(code, adminCred.value);
+  return matchesHash(code, adminCred.value);
+}
+
+/** The shipped first-code hash, or null when the file is absent or unreadable. */
+function seedCodeHash() {
+  try {
+    const raw = fs.readFileSync(new URL("./data/admin-seed.json", import.meta.url), "utf8");
+    const hash = String(JSON.parse(raw).hash || "");
+    return /^scrypt\$[\w-]+\$[\w-]+$/.test(hash) ? hash : null;
+  } catch {
+    return null;
+  }
+}
+
+function announceCode(code) {
+  const kept = db ? "It is kept, so it survives every restart from now on." : "This run only — there is no database to keep it in.";
   console.warn(
     [
       "",
       "  ┌───────────────────────────────────────────────────────────────┐",
-      "  │  ADMIN_CODE is not set, or is one published in this repo.     │",
-      "  │  That code is refused. A one-time code for this run only:     │",
-      `  │      ${bootAdminCode.padEnd(57)}│`,
-      "  │  Set ADMIN_CODE in Railway to keep a code across restarts.    │",
+      "  │  No staff sign-in code was set, so one has been made:         │",
+      `  │      ${code.padEnd(57)}│`,
+      `  │  ${kept.padEnd(61)}│`,
+      "  │  Sign in with it, then change it under Two-Factor Sign-In     │",
+      "  │  on the Import tab. You never need to touch the host.         │",
       "  └───────────────────────────────────────────────────────────────┘",
       "",
     ].join("\n"),
   );
+}
+
+/**
+ * Settle on a credential before the first sign-in is answered. Every sign-in
+ * awaits this, so there is no window where the code is not yet known. It is
+ * run from boot, after the schema is in place, because on the very first
+ * deploy the table it reads is created by that migration.
+ */
+let markAdminCodeReady;
+const adminCodeReady = new Promise((r) => (markAdminCodeReady = r));
+
+async function settleAdminCode() {
+  if (envCodeUsable) {
+    adminCred = { kind: "plain", value: envAdminCode };
+    console.log("staff sign-in code: taken from ADMIN_CODE");
+    return;
+  }
+  if (envAdminCode) {
+    console.warn("ADMIN_CODE is a code published in this public repository. Refusing it.");
+  }
+  if (db) {
+    try {
+      const stored = await db.staffCodeHash(ADMIN_EMAIL);
+      if (stored) {
+        adminCred = { kind: "hash", value: stored };
+        console.log("staff sign-in code: the one set from inside the app");
+        return;
+      }
+    } catch (e) {
+      console.error("could not read the stored sign-in code:", e.message);
+    }
+  }
+  // A hash shipped with the code, so a fresh database has a way in that does
+  // not depend on anyone reading a deploy log. It cannot be reversed into a
+  // code, and it stops being used the moment a code is set from the app.
+  const seeded = seedCodeHash();
+  if (seeded) {
+    adminCred = { kind: "hash", value: seeded };
+    if (db) {
+      try {
+        await db.saveStaffCodeHash(ADMIN_EMAIL, seeded);
+      } catch (e) {
+        console.error("could not keep the seeded sign-in code:", e.message);
+      }
+    }
+    console.log("staff sign-in code: the shipped first code. Change it under Sign-In Code on the Import tab.");
+    return;
+  }
+  const minted = crypto.randomBytes(9).toString("base64url");
+  adminCred = { kind: "plain", value: minted };
+  if (db) {
+    try {
+      const hash = await hashSecret(minted);
+      await db.saveStaffCodeHash(ADMIN_EMAIL, hash);
+      adminCred = { kind: "hash", value: hash };
+    } catch (e) {
+      console.error("could not keep the minted sign-in code:", e.message);
+    }
+  }
+  announceCode(minted);
 }
 
 /**
@@ -624,7 +736,7 @@ function noteFail(key) {
 }
 const clearFails = (key) => signinFails.delete(key);
 
-app.post("/api/signin", (req, res) => {
+app.post("/api/signin", async (req, res) => {
   const body = req.body || {};
   const caller = signinKey(req);
   if (throttled(caller)) {
@@ -636,28 +748,29 @@ app.post("/api/signin", (req, res) => {
   if (body.email != null) {
     const email = String(body.email).trim().toLowerCase();
     const code = String(body.code || "").trim();
-    const ok = sameSecret(email, ADMIN_EMAIL) && sameSecret(code, ADMIN_CODE);
-    if (!ok) {
+    // Both halves are always checked, so a wrong email is not faster than a
+    // wrong code.
+    const rightEmail = sameSecret(email, ADMIN_EMAIL);
+    const rightCode = await checkAdminCode(code);
+    if (!rightEmail || !rightCode) {
       noteFail(caller);
       console.warn(`staff sign-in refused for ${email || "(no email)"} from ${caller}`);
       return res.status(401).json({ error: "invalid credentials" });
     }
     // The code is right; if two-factor is set up, it is not enough on its own.
-    return staffAuthStore
-      .get(email)
-      .then((auth) => {
-        if (auth && auth.totp_secret && auth.confirmed_at) {
-          console.log(`staff first factor accepted, second factor owed: ${email} from ${caller}`);
-          return res.json({ kind: "staff-2fa", pending: mintPending(email) });
-        }
-        clearFails(caller);
-        console.log(`staff signed in: ${email} from ${caller} (no second factor set up)`);
-        return res.json({ ...adminPayload(), token: mintSession(email), twoFactor: "not-set-up" });
-      })
-      .catch((e) => {
-        console.error("could not read two-factor enrolment:", e.message);
-        res.status(500).json({ error: "Could not check two-factor enrolment." });
-      });
+    try {
+      const auth = await staffAuthStore.get(email);
+      if (auth && auth.totp_secret && auth.confirmed_at) {
+        console.log(`staff first factor accepted, second factor owed: ${email} from ${caller}`);
+        return res.json({ kind: "staff-2fa", pending: mintPending(email) });
+      }
+      clearFails(caller);
+      console.log(`staff signed in: ${email} from ${caller} (no second factor set up)`);
+      return res.json({ ...adminPayload(), token: mintSession(email), twoFactor: "not-set-up" });
+    } catch (e) {
+      console.error("could not read two-factor enrolment:", e.message);
+      return res.status(500).json({ error: "Could not check two-factor enrolment." });
+    }
   }
 
   // A group's permanent link carries a token instead of a code.
@@ -1370,6 +1483,63 @@ app.get("/api/admin/2fa", requireStaff, async (req, res) => {
   });
 });
 
+/**
+ * Change the sign-in code from inside the app. Needs the code in force, so a
+ * session someone walked away from cannot be used to lock its owner out, and
+ * the current second factor when one is set up.
+ */
+app.post("/api/admin/code", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
+  const body = req.body || {};
+  const current = String(body.current || "").trim();
+  const next = String(body.next || "").trim();
+
+  if (!(await checkAdminCode(current))) {
+    noteFail(caller);
+    console.warn(`sign-in code change refused, wrong current code, from ${caller}`);
+    return res.status(401).json({ error: "That is not the current code." });
+  }
+
+  const auth = await staffAuthStore.get(req.staffEmail);
+  if (auth && auth.totp_secret && auth.confirmed_at) {
+    const otp = String(body.totp || "").trim();
+    if (!verifyTotp(auth.totp_secret, otp)) {
+      noteFail(caller);
+      return res.status(401).json({ error: "That code from your authenticator app is not right." });
+    }
+  }
+
+  if (PUBLISHED_CODES.has(next.toLowerCase())) {
+    return res.status(400).json({ error: "That code has been published. Choose another." });
+  }
+  if (next.length < 10) {
+    return res.status(400).json({ error: "Use at least ten characters." });
+  }
+  if (!db) {
+    return res.status(503).json({ error: "There is no database to keep the code in." });
+  }
+
+  try {
+    const hash = await hashSecret(next);
+    await db.saveStaffCodeHash(ADMIN_EMAIL, hash);
+    adminCred = { kind: "hash", value: hash };
+  } catch (e) {
+    console.error("could not save the new sign-in code:", e.message);
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  clearFails(caller);
+  console.warn(`staff sign-in code changed by ${req.staffEmail} from ${caller}`);
+  res.json({ ok: true, envOverride: envCodeUsable });
+});
+
+/** Where the sign-in code comes from, so the screen can say so. */
+app.get("/api/admin/code", requireStaff, (req, res) => {
+  res.json({ source: envCodeUsable ? "env" : db ? "app" : "memory", changeable: !envCodeUsable && !!db });
+});
+
 /** Mint a fresh link token for one group: the old address stops working. */
 app.post("/api/admin/group-link/reset", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
   const group = String((req.body || {}).group || "");
@@ -2007,6 +2177,14 @@ async function boot() {
       console.error("postgres unavailable, serving the shipped census only:", e.message);
     }
   }
+  // After the schema, so the first deploy of the code table can read it, and
+  // before anything is served, so no sign-in is answered without a credential.
+  try {
+    await settleAdminCode();
+  } catch (e) {
+    console.error("could not settle the sign-in code:", e.message);
+  }
+  markAdminCodeReady();
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.

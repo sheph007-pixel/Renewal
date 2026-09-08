@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS kennion.staff_auth (
   recovery       jsonb NOT NULL DEFAULT '[]'::jsonb,
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
+-- The sign-in code itself, kept as a scrypt hash so the row cannot be read
+-- back into a working code. Stored here rather than in an environment
+-- variable so it survives a restart without anyone having to configure the
+-- host, and so it can be changed from inside the app.
+ALTER TABLE kennion.staff_auth ADD COLUMN IF NOT EXISTS code_hash text;
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -283,10 +288,35 @@ export function createDb(url) {
     /** Two-factor enrolment for one staff member, or null. */
     async staffAuth(email) {
       const { rows } = await pool.query(
-        "SELECT email, totp_secret, confirmed_at, recovery FROM kennion.staff_auth WHERE email = $1",
+        "SELECT email, totp_secret, confirmed_at, recovery, code_hash FROM kennion.staff_auth WHERE email = $1",
         [email],
       );
       return rows[0] || null;
+    },
+
+    /** The stored sign-in code hash for one staff member, or null. */
+    async staffCodeHash(email) {
+      const { rows } = await pool.query(
+        "SELECT code_hash FROM kennion.staff_auth WHERE email = $1",
+        [email],
+      );
+      return (rows[0] && rows[0].code_hash) || null;
+    },
+
+    /**
+     * Store the sign-in code hash, leaving any two-factor enrolment alone.
+     * Written on its own so changing the code never disturbs the second
+     * factor, and vice versa.
+     */
+    async saveStaffCodeHash(email, codeHash) {
+      await pool.query(
+        `INSERT INTO kennion.staff_auth (email, code_hash, updated_at)
+         VALUES ($1,$2, now())
+         ON CONFLICT (email) DO UPDATE SET
+           code_hash = EXCLUDED.code_hash,
+           updated_at = now()`,
+        [email, codeHash || null],
+      );
     },
 
     /** Store or replace an enrolment. */

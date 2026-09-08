@@ -1,0 +1,4 @@
+{
+  "note": "A scrypt hash of the first sign-in code, so a fresh database has a way in without anyone reading a deploy log. A hash is not a credential: it cannot be turned back into the code, and this one stands in front of 60 bits of randomness. It is used only when the database holds no code of its own, and it is retired the moment the code is changed from the Import tab.",
+  "hash": "scrypt$__udgnNos4cLXhPTe9PgJw$6N5gRRaWxna54PGcC-H4y2S0851_DaZ6GFlCltEjKuc"
+}

@@ -402,11 +402,22 @@ flagged "Off schedule" and want the real rates from the carrier sheet.
 ## Staff sign-in
 
 **This repository is public, so nothing written in it is a secret.** The server
-refuses any staff code that has ever appeared here. Set `ADMIN_CODE` in Railway
-(and `ADMIN_EMAIL` if it should not be `hunter@kennion.com`) to a code of your
-own; that is the only setting that survives a restart. With none set, the
-server mints a strong one at boot and prints it once in the deploy log, so
-there is always a way in without a guessable code ever being live.
+refuses any staff code that has ever appeared here.
+
+The code lives in the database, as a scrypt hash, and is changed from the
+**Sign-In Code** panel on the Import tab. That is the whole of it: it survives
+every restart, and there is nothing to set on the host.
+
+A database with no code of its own falls back to the hash in
+`server/data/admin-seed.json`, so a fresh deploy has a way in without anyone
+reading a log. A hash is not a credential — it cannot be turned back into a
+code, and this one stands in front of sixty bits of randomness — but it is a
+first code, not a permanent one: change it from the panel and it is retired.
+With no seed and no stored code, one is minted at boot and printed once.
+
+Setting `ADMIN_CODE` in the environment still wins, for anyone who would
+rather keep it there, as does `ADMIN_EMAIL` if the address should not be
+`hunter@kennion.com`.
 
 Codes are compared in constant time, failed attempts are counted per caller
 and cut off after ten in ten minutes, and every sign-in and refusal is written
