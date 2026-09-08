@@ -20,7 +20,7 @@ import { expandUpload, prepareForModel } from "./intake.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
-import { readAuditWorkbook } from "./rates-audit.js";
+import { readAuditWorkbook, TIERS as RATE_TIERS } from "./rates-audit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "dist", "public");
@@ -1657,18 +1657,46 @@ app.get("/api/admin/rates-lock", requireStaff, (req, res) => {
 });
 
 /**
- * The rate on file for one cell, as the workbook showed it: a rate keyed by
- * hand wins, then the billed rate. `undefined` means there is no such plan,
- * which the reader reports rather than inventing a row for.
+ * The rate the workbook showed for one cell.
+ *
+ * This must match what the screen and the workbook display, derivation
+ * included: nearly half the tiers have no billed rate and are shown as the
+ * employee rate at the program factors. Comparing against the billed rate
+ * alone would read every one of those, returned untouched, as a correction.
+ *
+ * `undefined` means there is no such group and plan, which the reader reports
+ * rather than inventing a row for.
  */
-function currentRate(group, plan, censusTier) {
+function shownRate(group, plan, censusTier) {
   const g = groups.find((x) => x.name === group);
   if (!g) return undefined;
   if (!(g.plans || []).some((p) => p.plan === plan)) return undefined;
-  const ov = overrides[`${group}||${plan}||${censusTier}`];
-  if (ov != null && String(ov) !== "") return Number(ov);
-  const billed = ((g.rates || {})[plan] || {})[censusTier];
-  return billed == null ? null : Number(billed);
+
+  const billed = (g.rates || {})[plan] || {};
+  const at = (census) => {
+    const ov = overrides[`${group}||${plan}||${census}`];
+    if (ov != null && String(ov) !== "") return Number(ov);
+    return billed[census] == null ? null : Number(billed[census]);
+  };
+
+  const own = at(censusTier);
+  if (own != null) return own;
+
+  // Same base as the screen: the employee rate if there is one, else the
+  // average of the bases each known tier implies.
+  const tier = RATE_TIERS.find((t) => t.census === censusTier);
+  if (!tier) return null;
+  const ee = at("Employee");
+  let base = ee;
+  if (base == null) {
+    const implied = RATE_TIERS.map((t) => {
+      const v = at(t.census);
+      return v == null ? null : v / t.factor;
+    }).filter((v) => v != null);
+    if (!implied.length) return null;
+    base = implied.reduce((a, b) => a + b, 0) / implied.length;
+  }
+  return +(base * tier.factor).toFixed(2);
 }
 
 /**
@@ -1695,14 +1723,14 @@ app.post(
 
     let read;
     try {
-      read = readAuditWorkbook(req.body, currentRate);
+      read = readAuditWorkbook(req.body, shownRate);
     } catch (e) {
       return res.status(400).json({ error: "Could not read that workbook: " + e.message });
     }
     if (!read.sheetsRead) {
       return res.status(400).json({
         error:
-          "No audit sheet in that file. Send back the workbook this page produced, with its Row Key column intact.",
+          "No rate sheet in that file. It needs Group and Plan columns and at least one tier column — send back the workbook this page produced.",
       });
     }
 

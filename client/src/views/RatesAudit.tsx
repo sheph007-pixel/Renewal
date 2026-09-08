@@ -171,8 +171,9 @@ export default function RatesAudit({
           </>
         ) : (
           <>
-            Send back the workbook Debbie or Tracy filled in. Nothing is written until you have seen
-            what would change.
+            Send back the workbook Debbie or Tracy corrected. Rates are typed over in place, so
+            only the ones they changed count — and nothing is written until you have seen what
+            would change.
           </>
         )}
       </p>

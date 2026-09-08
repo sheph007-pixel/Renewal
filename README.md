@@ -438,32 +438,33 @@ flow against a running server.
 
 ## Auditing the current rates
 
-Nearly half the tier rates in the portal are not billed rates: they are the
-plan's employee rate at the program factors, because Employee Navigator only
-carried one or two tiers for that plan. They are shown in blue on the Rates
-tab, and they are the ones worth checking.
+Nearly half the tier rates in the portal are not billed rates: 305 of 636 are
+the plan's employee rate at the program factors, because Employee Navigator
+carried only one or two tiers for that plan. Those are the ones worth checking.
 
-**Audit Workbook For Debbie & Tracy** on the Rates tab builds an Excel file:
-a read-only *All Groups* sheet, then one worksheet per account manager holding
-only their groups. Each row is a plan, with the four tier rates, what is
-enrolled in each, the monthly premium, whether the billed tiers hold the
-program factors, and — the column the audit is really for — which tiers are
-estimated rather than billed. Beside them sit four empty **Correct** columns
-and a **Notes** column.
+**Audit Workbook For Debbie & Tracy** on the Rates tab builds an Excel file
+with one sheet per account manager, holding only their groups. Six columns:
 
-Only the manager sheets carry correction columns, so any given plan can be
-corrected in exactly one place and two sheets can never come back disagreeing.
-Each row carries a key, so sorting, filtering and re-ordering are all fine.
+| Group | Plan | Employee | Employee + Spouse | Employee + Child(ren) | Employee + Family |
+
+Nothing else. The rates are typed over in place, so an auditor changes only
+what is wrong and leaves the rest alone. A row is found again by its group and
+plan, so sorting and filtering are free. Each row is on exactly one sheet, so
+two sheets cannot come back disagreeing about the same plan.
 
 The workbook is built in the browser by the same `rateFor` that draws the Rates
 screen, so it cannot quietly disagree with the page.
 
-**Sending it back.** Drop the filled-in file on the Rates tab. Nothing is
-written on the first pass: the panel says how many rates would change, from
-what to what, and lists anything it could not read — a rate of zero, a "n/a",
-a row whose group and plan are not in the portal. Money as people type it
-("$1,234.56") is read as a rate; anything ambiguous is reported rather than
-guessed at. Applying writes the corrections as rate overrides.
+**Sending it back.** Drop the file on the Rates tab. Nothing is written on the
+first pass: the panel says how many rates would change, from what to what, and
+lists anything it could not read — a zero, an "n/a", a row naming a group and
+plan that are not in the portal. Money as people type it ("$1,234.56") is read
+as a rate; anything ambiguous is reported rather than guessed at.
+
+Because the sheet shows the rate a tier is *priced* at, the server compares
+against that same figure, derivation included — so a workbook that was only
+read and returned changes nothing. Comparing against the billed rate alone
+would have read all 305 estimates, untouched, as corrections.
 
 **Locking.** When the rates are right, lock them from the same panel. While the
 lock is on nothing can change a rate — not a workbook, not a cell typed on the
@@ -472,7 +473,7 @@ lock records who set it and when, and is lifted from the same place.
 
 `scripts/test-worksheet.mts` checks the workbook against a live server's own
 payload; `scripts/test-rates-audit.mts` drives the whole round trip, including
-the lock.
+that an untouched workbook is a no-op, and the lock.
 
 ## Privacy
 
