@@ -1,4 +1,4 @@
-import { TIERS, rateFor } from "./model";
+import { TIERS, programPlans, rateFor } from "./model";
 import type { Group, Overrides, TierKey } from "./model";
 
 /**
@@ -32,13 +32,14 @@ export interface SheetRow {
 }
 
 /**
- * One row per plan. A plan nobody is enrolled in is still listed: an empty
- * plan with a wrong rate is exactly the sort of thing an audit should catch.
+ * One row per program plan — EBPA and HealthEZ, which is what the program
+ * runs on. A plan nobody is enrolled in is still listed: an empty plan with a
+ * wrong rate is exactly the sort of thing an audit should catch.
  */
 export function rowsFor(groups: Group[], overrides: Overrides): SheetRow[] {
   const rows: SheetRow[] = [];
   for (const g of groups) {
-    for (const p of g.plans || []) {
+    for (const p of programPlans(g)) {
       const row: SheetRow = { Group: g.name, Plan: p.plan };
       for (const t of TIERS) {
         const r = rateFor(overrides, g, p.plan, t.key as TierKey);

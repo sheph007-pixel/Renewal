@@ -21,6 +21,26 @@ export interface Tier {
   short: string;
 }
 
+/**
+ * The two third-party administrators the program runs on. A plan on anything
+ * else is not Kennion's to rate-administer, so it is not on the Rates page and
+ * not in the audit workbook — one rule, read by both, so they cannot disagree.
+ */
+export const PROGRAM_TPAS = ["EBPA", "HealthEZ"];
+
+const tpaOf = (g: Group, plan: GroupPlan) => String(plan.tpa || g.tpa || "").trim();
+
+/** Is this plan on a program TPA? Matched without case, which imports vary on. */
+export function isProgramPlan(g: Group, plan: GroupPlan): boolean {
+  const t = tpaOf(g, plan).toLowerCase();
+  return PROGRAM_TPAS.some((p) => p.toLowerCase() === t);
+}
+
+/** A group's program plans, in the order they came in. */
+export function programPlans(g: Group): GroupPlan[] {
+  return (g.plans || []).filter((p) => isProgramPlan(g, p));
+}
+
 export const TIERS: Tier[] = [
   { key: "EE", label: "Employee", census: "Employee", short: "EE" },
   { key: "ES", label: "Employee + Spouse", census: "Employee + Spouse", short: "ES" },

@@ -46,6 +46,8 @@ export interface Progress {
   confirmed: number;
   calculated: number;
   offSchedule: number;
+  /** Plans on some other administrator, which this page does not rate. */
+  outside: number;
 }
 
 const money = (n: number | null) => (n == null ? "—" : n.toFixed(2));
@@ -227,7 +229,7 @@ export default function RatesAudit({
       </div>
 
       <div style={{ marginTop: 8, fontSize: 13, color: C.body, lineHeight: 1.6 }}>
-        {progress.plans} plans across {progress.groups} groups.{" "}
+        {progress.plans} EBPA and HealthEZ plans across {progress.groups} groups.{" "}
         <strong style={{ color: C.ink }}>
           {progress.confirmed} of {progress.cells} rates confirmed
         </strong>
@@ -236,6 +238,9 @@ export default function RatesAudit({
         {progress.offSchedule > 0 &&
           `, and ${progress.offSchedule} plan${progress.offSchedule === 1 ? " is" : "s are"} priced off it`}
         .{" "}
+        {progress.outside > 0 &&
+          ` ${progress.outside} plan${progress.outside === 1 ? " on another administrator is" : "s on other administrators are"} not shown — the program does not rate them.`}
+        {" "}
         {lock.locked
           ? `Locked${lock.at ? ` ${new Date(lock.at).toLocaleDateString()}` : ""}${lock.by ? ` by ${lock.by}` : ""} — no rate can change until it is unlocked.`
           : "Correct them one at a time below, or in bulk with the workbook."}
