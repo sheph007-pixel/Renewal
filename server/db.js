@@ -72,6 +72,15 @@ CREATE TABLE IF NOT EXISTS kennion.staff_auth (
 -- variable so it survives a restart without anyone having to configure the
 -- host, and so it can be changed from inside the app.
 ALTER TABLE kennion.staff_auth ADD COLUMN IF NOT EXISTS code_hash text;
+
+-- Small pieces of state that belong to the whole portal rather than to one
+-- group: whether the rates are locked, and who locked them.
+CREATE TABLE IF NOT EXISTS kennion.settings (
+  key        text PRIMARY KEY,
+  value      jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by text
+);
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -292,6 +301,23 @@ export function createDb(url) {
         [email],
       );
       return rows[0] || null;
+    },
+
+    /** One portal-wide setting, or null when it has never been set. */
+    async getSetting(key) {
+      const { rows } = await pool.query("SELECT value FROM kennion.settings WHERE key = $1", [key]);
+      return rows[0] ? rows[0].value : null;
+    },
+
+    /** Store one portal-wide setting. */
+    async setSetting(key, value, by) {
+      await pool.query(
+        `INSERT INTO kennion.settings (key, value, updated_at, updated_by)
+         VALUES ($1, $2::jsonb, now(), $3)
+         ON CONFLICT (key) DO UPDATE SET
+           value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [key, JSON.stringify(value), by || null],
+      );
     },
 
     /** The stored sign-in code hash for one staff member, or null. */

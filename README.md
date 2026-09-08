@@ -436,6 +436,44 @@ that opens nothing on its own. `scripts/test-totp.mjs` checks the generator
 against the RFC's own test vectors and `scripts/test-2fa.mjs` walks the whole
 flow against a running server.
 
+## Auditing the current rates
+
+Nearly half the tier rates in the portal are not billed rates: they are the
+plan's employee rate at the program factors, because Employee Navigator only
+carried one or two tiers for that plan. They are shown in blue on the Rates
+tab, and they are the ones worth checking.
+
+**Audit Workbook For Debbie & Tracy** on the Rates tab builds an Excel file:
+a read-only *All Groups* sheet, then one worksheet per account manager holding
+only their groups. Each row is a plan, with the four tier rates, what is
+enrolled in each, the monthly premium, whether the billed tiers hold the
+program factors, and — the column the audit is really for — which tiers are
+estimated rather than billed. Beside them sit four empty **Correct** columns
+and a **Notes** column.
+
+Only the manager sheets carry correction columns, so any given plan can be
+corrected in exactly one place and two sheets can never come back disagreeing.
+Each row carries a key, so sorting, filtering and re-ordering are all fine.
+
+The workbook is built in the browser by the same `rateFor` that draws the Rates
+screen, so it cannot quietly disagree with the page.
+
+**Sending it back.** Drop the filled-in file on the Rates tab. Nothing is
+written on the first pass: the panel says how many rates would change, from
+what to what, and lists anything it could not read — a rate of zero, a "n/a",
+a row whose group and plan are not in the portal. Money as people type it
+("$1,234.56") is read as a rate; anything ambiguous is reported rather than
+guessed at. Applying writes the corrections as rate overrides.
+
+**Locking.** When the rates are right, lock them from the same panel. While the
+lock is on nothing can change a rate — not a workbook, not a cell typed on the
+Rates page — and both are refused with a 423 rather than failing quietly. The
+lock records who set it and when, and is lifted from the same place.
+
+`scripts/test-worksheet.mts` checks the workbook against a live server's own
+payload; `scripts/test-rates-audit.mts` drives the whole round trip, including
+the lock.
+
 ## Privacy
 
 The census carries names, ages, genders, ZIPs and premiums for over 1,300

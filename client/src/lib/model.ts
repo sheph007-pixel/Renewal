@@ -86,6 +86,8 @@ export interface Group {
   plans?: GroupPlan[];
   members?: Member[];
   rates?: Record<string, Record<string, number>>;
+  /** Which account manager holds the group. Staff payloads only. */
+  manager?: string | null;
   /** Derived at load time from the group name. */
   code: string;
 }

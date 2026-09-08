@@ -20,6 +20,7 @@ import FundingPanel, { type FundingInfo } from "@/views/Funding";
 import TwoFactor from "@/views/TwoFactor";
 import SignInCode from "@/views/SignInCode";
 import AuditPanel from "@/views/AuditPanel";
+import RatesAudit from "@/views/RatesAudit";
 
 interface Props {
   data: KennionData;
@@ -121,6 +122,30 @@ export default function Admin({
   // Bumped after any upload so the audit at the top re-reads.
   const [auditVersion, setAuditVersion] = useState(0);
   const bump = () => setAuditVersion((v) => v + 1);
+
+  /**
+   * Whether the rates are locked. Seeded from the payload so a reload is
+   * right, and kept in step with the panel below that toggles it.
+   */
+  const [ratesLocked, setRatesLocked] = useState(
+    !!(data as unknown as { ratesLock?: { locked?: boolean } }).ratesLock?.locked,
+  );
+
+  // The audit workbook pulls SheetJS in on demand, so the button waits.
+  const [makingWorkbook, setMakingWorkbook] = useState(false);
+  const [workbookError, setWorkbookError] = useState("");
+  const makeWorkbook = async () => {
+    setMakingWorkbook(true);
+    setWorkbookError("");
+    try {
+      const { downloadAuditWorkbook } = await import("@/lib/worksheet");
+      await downloadAuditWorkbook(data.groups, overrides);
+    } catch (e) {
+      setWorkbookError((e as Error).message || "Could not build the workbook.");
+    } finally {
+      setMakingWorkbook(false);
+    }
+  };
 
   const activeGroups = useMemo(
     () =>
@@ -383,21 +408,44 @@ export default function Admin({
               Existing 2026 Rates &mdash; All Groups, All Plans
             </h1>
           </div>
-          <button
-            onClick={onExport}
-            style={{
-              padding: "8px 16px",
-              fontSize: 13.5,
-              fontWeight: 500,
-              color: "#fff",
-              background: C.blue,
-              border: `1px solid ${C.blue}`,
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Export rates
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <button
+              onClick={() => void makeWorkbook()}
+              disabled={makingWorkbook}
+              title="Every plan and rate, a sheet per account manager, with empty columns to key corrections into"
+              style={{
+                padding: "8px 16px",
+                fontSize: 13.5,
+                fontWeight: 500,
+                color: "#fff",
+                background: C.blue,
+                border: `1px solid ${C.blue}`,
+                borderRadius: 4,
+                cursor: makingWorkbook ? "default" : "pointer",
+                opacity: makingWorkbook ? 0.6 : 1,
+              }}
+            >
+              {makingWorkbook ? "Building…" : "Audit Workbook For Debbie & Tracy"}
+            </button>
+            <button
+              onClick={onExport}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                fontSize: 13,
+                color: C.blue,
+                cursor: "pointer",
+              }}
+            >
+              Export as JSON
+            </button>
+          </div>
+          {workbookError && (
+            <div role="alert" style={{ flexBasis: "100%", fontSize: 13, color: C.red }}>
+              {workbookError}
+            </div>
+          )}
         </div>
 
 
@@ -438,6 +486,8 @@ export default function Admin({
             : `All ${stats.nOnSchedule} plans with two or more billed tiers hold it.`}
           {stats.nUnjudged ? ` ${stats.nUnjudged} plan${stats.nUnjudged === 1 ? " has" : "s have"} fewer than two billed tiers, so there is nothing to check against.` : ""}
         </div>
+
+        <RatesAudit token={token} onOverrides={onOverrides} onLock={setRatesLocked} />
 
         <div
           style={{
@@ -553,14 +603,15 @@ export default function Admin({
                       <input
                         value={c.value}
                         placeholder={c.placeholder}
-                        title={c.title}
+                        title={ratesLocked ? "The rates are locked." : c.title}
                         aria-label={`${r.group} — ${r.plan} — ${c.census}`}
                         onChange={(e) =>
                           onSetOverride(r.group, r.plan, c.census, e.target.value)
                         }
+                        readOnly={ratesLocked}
                         inputMode="decimal"
                         autoComplete="off"
-                        style={c.style}
+                        style={ratesLocked ? { ...c.style, background: C.zebra, cursor: "not-allowed" } : c.style}
                       />
                     </td>
                   ))}
