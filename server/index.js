@@ -397,7 +397,30 @@ function requireStaff(req, res, next) {
 
 const app = express();
 app.disable("x-powered-by");
+// Railway terminates TLS, so the caller's address arrives in the forwarded
+// header; trusting one hop makes req.ip the client rather than the proxy.
+app.set("trust proxy", 1);
 app.use(compression());
+
+/**
+ * Headers every response carries. A group's address holds its token, so the
+ * referrer is kept off outbound requests entirely — otherwise a click on any
+ * external link would hand the token to whoever it went to. The rest are the
+ * ordinary defences: no framing, no MIME sniffing, HSTS once TLS is on.
+ */
+app.use((req, res, next) => {
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()");
+  if (req.secure || req.get("x-forwarded-proto") === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  // Nothing on a signed-in page belongs in a shared cache or a proxy.
+  if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store");
+  next();
+});
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => res.type("text/plain").send("ok"));
@@ -494,8 +517,44 @@ function adminPayload() {
   };
 }
 
+/**
+ * Sign-in throttle. A code is four letters from the company name plus the plan
+ * year, so it is guessable by anyone who knows the client list; without this,
+ * codes could simply be enumerated. Counted per caller and per code tried, in
+ * memory — one server, and a restart only ever forgives.
+ */
+const SIGNIN_WINDOW_MS = 10 * 60 * 1000;
+const SIGNIN_MAX_FAILS = 10;
+const signinFails = new Map();
+function signinKey(req) {
+  const fwd = String(req.get("x-forwarded-for") || "").split(",")[0].trim();
+  return fwd || req.ip || "unknown";
+}
+function throttled(key) {
+  const now = Date.now();
+  const hits = (signinFails.get(key) || []).filter((t) => now - t < SIGNIN_WINDOW_MS);
+  if (hits.length) signinFails.set(key, hits);
+  else signinFails.delete(key);
+  return hits.length >= SIGNIN_MAX_FAILS;
+}
+function noteFail(key) {
+  const now = Date.now();
+  const hits = (signinFails.get(key) || []).filter((t) => now - t < SIGNIN_WINDOW_MS);
+  hits.push(now);
+  signinFails.set(key, hits);
+  // Keep the map from growing without bound on a long-running server.
+  if (signinFails.size > 5000) {
+    for (const [k, v] of signinFails) if (!v.some((t) => now - t < SIGNIN_WINDOW_MS)) signinFails.delete(k);
+  }
+}
+const clearFails = (key) => signinFails.delete(key);
+
 app.post("/api/signin", (req, res) => {
   const body = req.body || {};
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
 
   // Staff sign-in: email + code. One generic failure for either field, so a
   // wrong guess reveals nothing about which half was right.
@@ -503,8 +562,10 @@ app.post("/api/signin", (req, res) => {
     const email = String(body.email).trim().toLowerCase();
     const code = String(body.code || "").trim();
     if (email !== ADMIN_EMAIL || code !== ADMIN_CODE) {
+      noteFail(caller);
       return res.status(401).json({ error: "invalid credentials" });
     }
+    clearFails(caller);
     return res.json({ ...adminPayload(), token: mintSession(email) });
   }
 
@@ -514,7 +575,11 @@ app.post("/api/signin", (req, res) => {
   if (!token && !code) return res.status(400).json({ error: "code required" });
 
   const g = token ? byToken.get(token) : byCode.get(code);
-  if (!g) return res.status(404).json({ error: "no such group" });
+  if (!g) {
+    noteFail(caller);
+    return res.status(404).json({ error: "no such group" });
+  }
+  clearFails(caller);
 
   return res.json({
     kind: "group",
@@ -541,8 +606,32 @@ app.post("/api/signin", (req, res) => {
  * census. The per-plan tier counts the pages price from are computed here, so
  * no employee record — name, age, ZIP, dependants — ever leaves the server.
  */
+/**
+ * The only fields an employer's own pages read. An allow-list, not a
+ * deny-list: a field added to a group later is not shipped to a client until
+ * someone puts it here on purpose. Kennion's own bookkeeping — who brokers the
+ * group, which manager holds it, where its renewal stands, its SIC and
+ * division codes — stays on the admin side.
+ */
+const CLIENT_GROUP_FIELDS = [
+  "name",
+  "code",
+  "linkToken",
+  "tpa",
+  "enrolled",
+  "lives",
+  "tiers",
+  "planTiers",
+  "monthly",
+  "annual",
+  "plans",
+  "rates",
+  "pyStart",
+  "pyEnd",
+];
+
 function clientGroupView(g) {
-  const { members, ...rest } = g;
+  const { members } = g;
   const planTiers = {};
   const tiers = { EE: 0, ES: 0, EC: 0, FAM: 0 };
   for (const m of members || []) {
@@ -552,7 +641,11 @@ function clientGroupView(g) {
     const p = (planTiers[m.plan] = planTiers[m.plan] || { EE: 0, ES: 0, EC: 0, FAM: 0 });
     p[t]++;
   }
-  return { ...rest, tiers: members ? tiers : g.tiers, planTiers };
+  const out = {};
+  for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
+  out.tiers = members ? tiers : g.tiers;
+  out.planTiers = planTiers;
+  return out;
 }
 
 /** "Employee + Spouse" → "ES". The census wording the export uses. */
