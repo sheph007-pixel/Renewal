@@ -5,7 +5,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  * browser's back and forward buttons work, a page can be bookmarked or sent
  * around as a link, and a reload lands where it started.
  *
- *   /                    group sign-in
+ *   /                    group sign-in (/?code=XXXX signs that group in)
  *   /admin               staff sign-in
  *   /current             Current Medical Plan(s)
  *   /options             2027 Medical Plan Options
