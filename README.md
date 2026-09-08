@@ -90,12 +90,22 @@ has a **view as client** link, and the CSV export carries a Client link column.
 An archived group's link is refused, as its code is. `/?code=XXXX` still works
 and redirects to the group's permanent address.
 
-**The link is the credential.** Anyone holding it sees that company's pages,
-which include its own employee census — names, ages, dependants' ages, plan and
-cost per employee, on the Employee Cost Breakdown. That is the employer's own
-data and appropriate for the employer to see, but it means these links are for
-sending to the client, not for posting publicly. If one leaks, press **New
-link**.
+**What a group's link reaches.** Its own pages, and nothing else. The census
+never leaves the server: a group's payload carries enrolled counts by tier —
+overall and per plan — and no employee record, so no name, age, ZIP, gender or
+dependant's age is ever sent to a browser. The Employee Cost Breakdown reads by
+tier rather than by person, with the same totals. Neither does any other
+company travel in it: the 2027 market data is trimmed to the carrier menu, the
+plan mapping and this group's own quoted rows, and the one cross-group number
+the pricing needs — an average employee rate used to scale a group UHC has not
+underwritten — is reduced to a single number. `scripts/test-group-payload.mjs`
+holds the line: it signs in as a group and asserts no member field and no other
+company's name appears anywhere in the payload, and that a group's credentials
+are refused by every admin route.
+
+Even so the link is the credential for that company's own rates and
+enrollment, so it is for sending to the client rather than posting publicly. If
+one leaks, press **New link**.
 
 Each group is also categorised **2-50** or **51+ (ALE)**. It defaults from
 enrolled headcount and can be set explicitly, since ALE status is a legal
@@ -561,6 +571,7 @@ Parser and pricing checks, no database or key needed:
 ```bash
 node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts/test-en-ancillary.mjs
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
+node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
 

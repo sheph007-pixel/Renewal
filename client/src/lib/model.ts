@@ -68,6 +68,8 @@ export interface GroupPlan {
 }
 
 export interface Group {
+  /** Enrolled counts by tier for each plan. The census itself stays on the server. */
+  planTiers?: Record<string, Record<TierKey, number>>;
   n: number;
   name: string;
   divisionCode?: string;
@@ -176,6 +178,8 @@ export interface KennionData {
     summary: unknown;
     menu: MenuPlan[];
     mapping: MappingRow[];
+    /** Average EE current rate of a reference group, for scaling an un-quoted group. */
+    refEE?: number | null;
   };
   splits: Record<string, GroupSplit>;
   /** The signed-in group's proposals on file (group sessions only). */
@@ -388,13 +392,7 @@ export function planRows(
   depPct: number,
 ): PlanRow[] {
   return (g.plans || []).map((p) => {
-    const counts: Record<TierKey, number> = { EE: 0, ES: 0, EC: 0, FAM: 0 };
-    (g.members || [])
-      .filter((m) => m.plan === p.plan)
-      .forEach((m) => {
-        const t = tierByCensus(m.tier);
-        if (t) counts[t.key]++;
-      });
+    const counts = planCounts(g, p.plan);
     let er = 0;
     let ee = 0;
     let total = 0;
@@ -420,11 +418,28 @@ export function planDesign(
 }
 
 export function censusCounts(g: Group): Record<TierKey, number> {
+  // Tier counts come from the server; the census they were counted from never
+  // leaves it. An admin session still holds members, so fall back to those.
+  if (g.tiers) return { EE: g.tiers.EE || 0, ES: g.tiers.ES || 0, EC: g.tiers.EC || 0, FAM: g.tiers.FAM || 0 };
   const c: Record<TierKey, number> = { EE: 0, ES: 0, EC: 0, FAM: 0 };
   (g.members || []).forEach((m) => {
     const t = tierByCensus(m.tier);
     if (t) c[t.key]++;
   });
+  return c;
+}
+
+/** One plan's enrolled counts by tier. */
+export function planCounts(g: Group, plan: string): Record<TierKey, number> {
+  const fromServer = g.planTiers?.[plan];
+  if (fromServer) return { EE: fromServer.EE || 0, ES: fromServer.ES || 0, EC: fromServer.EC || 0, FAM: fromServer.FAM || 0 };
+  const c: Record<TierKey, number> = { EE: 0, ES: 0, EC: 0, FAM: 0 };
+  (g.members || [])
+    .filter((m) => m.plan === plan)
+    .forEach((m) => {
+      const t = tierByCensus(m.tier);
+      if (t) c[t.key]++;
+    });
   return c;
 }
 
@@ -555,12 +570,16 @@ function groupFactor(data: KennionData, g: Group): number | null {
 }
 
 function benchmarkFactor(data: KennionData, g: Group): number | null {
+  // The server sends this as a single number, so a group's payload carries no
+  // other company's rows. An admin session still has the detail to work from.
   const det = (data.uhc || {}).detail || {};
-  const refName = Object.keys(det)[0];
-  if (!refName) return null;
-  const refEE = det[refName].filter((r) => r.tier === "EE" && r.currentRate);
-  if (!refEE.length) return null;
-  const refAvg = refEE.reduce((a, r) => a + r.currentRate!, 0) / refEE.length;
+  const refName = Object.keys(det).find((n) => n !== g.name);
+  let refAvg = data.uhc?.refEE ?? null;
+  if (refAvg == null && refName) {
+    const refEE = det[refName].filter((r) => r.tier === "EE" && r.currentRate);
+    if (refEE.length) refAvg = refEE.reduce((a, r) => a + r.currentRate!, 0) / refEE.length;
+  }
+  if (refAvg == null) return null;
   const own = Object.values(g.rates || {})
     .map((r) => r["Employee"])
     .filter((v) => v != null);

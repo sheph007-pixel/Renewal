@@ -519,11 +519,11 @@ app.post("/api/signin", (req, res) => {
   return res.json({
     kind: "group",
     meta: data.meta,
-    group: g,
+    group: clientGroupView(g),
     planDesigns: data.planDesigns,
-    // Carrier menu and quoted rates: no personal data, and the 2027 pricing
-    // needs the reference rows to scale un-quoted plans.
-    uhc: data.uhc,
+    // The carrier menu and this group's own quoted rows. No other company's
+    // name, enrollment, premium or notes travels in a group's payload.
+    uhc: clientUhc(g),
     // Only this group's contribution split, when Employee Navigator has one.
     splits: splitFor(g.name) ? { [g.name]: splitFor(g.name) } : {},
     overrides: overridesFor(g.name),
@@ -535,6 +535,59 @@ app.post("/api/signin", (req, res) => {
     linkToken: g.linkToken || null,
   });
 });
+
+/**
+ * What a signed-in group is allowed to see of itself: everything but the
+ * census. The per-plan tier counts the pages price from are computed here, so
+ * no employee record — name, age, ZIP, dependants — ever leaves the server.
+ */
+function clientGroupView(g) {
+  const { members, ...rest } = g;
+  const planTiers = {};
+  const tiers = { EE: 0, ES: 0, EC: 0, FAM: 0 };
+  for (const m of members || []) {
+    const t = tierKeyOfCensus(m.tier);
+    if (!t) continue;
+    tiers[t]++;
+    const p = (planTiers[m.plan] = planTiers[m.plan] || { EE: 0, ES: 0, EC: 0, FAM: 0 });
+    p[t]++;
+  }
+  return { ...rest, tiers: members ? tiers : g.tiers, planTiers };
+}
+
+/** "Employee + Spouse" → "ES". The census wording the export uses. */
+function tierKeyOfCensus(census) {
+  const s = String(census || "").toLowerCase();
+  if (/family/.test(s)) return "FAM";
+  if (/child/.test(s)) return "EC";
+  if (/spouse|partner/.test(s)) return "ES";
+  if (/employee|only|single/.test(s)) return "EE";
+  return null;
+}
+
+/**
+ * The 2027 market data a single group may see: the carrier menu and the
+ * current-to-UHC plan mapping, which name no company, and this group's own
+ * quoted rows. Other companies' quotes, premiums and notes stay on the server.
+ * `refEE` is the one cross-group number the pricing needs — an average EE rate
+ * used to scale a group UHC has not underwritten — reduced to a scalar so no
+ * other company's rows travel with it.
+ */
+function clientUhc(g) {
+  const u = data.uhc || {};
+  const det = u.detail || {};
+  const mine = det[g.name] || det[g.name.replace(/,? (Inc|LLC)\.?$/i, "")] || null;
+  const refName = Object.keys(det)[0];
+  const refRows = refName ? (det[refName] || []).filter((r) => r.tier === "EE" && r.currentRate) : [];
+  const refEE = refRows.length ? refRows.reduce((a, r) => a + r.currentRate, 0) / refRows.length : null;
+  return {
+    menu: u.menu || [],
+    mapping: u.mapping || [],
+    detail: mine ? { [g.name]: mine } : {},
+    summary: {},
+    refEE,
+  };
+}
 
 /** A group's slice of the month's billing for its own pages: counts and rates, no people. */
 function fundingSnapshot(name) {

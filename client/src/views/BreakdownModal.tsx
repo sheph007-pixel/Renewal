@@ -8,7 +8,7 @@ import {
   planDesign,
   rateFor,
   split,
-  tierByCensus,
+  planCounts,
   type Freq,
   type Group,
   type KennionData,
@@ -54,7 +54,10 @@ export default function BreakdownModal({
 
   const f = FREQS.find((x) => x.key === freq)!;
   const per = (n: number | null | undefined) => (n == null ? "—" : money(n / f.div));
-  const members = (g.members || []).filter((m) => m.plan === plan);
+  // Enrollment by tier. The census stays on the server, so these pages never
+  // hold an employee's name, age or ZIP.
+  const counts = planCounts(g, plan);
+  const enrolled = TIERS.reduce((n, t) => n + counts[t.key], 0);
   const des = planDesign(data, plan);
   const tpa = row ? row.p.tpa : g.tpa;
   const anyDerived = TIERS.some((t) => rateFor(overrides, g, plan, t.key).derived);
@@ -225,28 +228,19 @@ export default function BreakdownModal({
                       borderBottom: `1px solid ${C.border}`,
                     }}
                   >
-                    Enrolled employees ({members.length})
+                    Enrolled employees ({enrolled})
                   </th>
-                  <th style={{ ...headCell, textAlign: "left", lineHeight: 1.35 }}>
-                    Ages
-                    <br />
-                    <span style={{ fontWeight: 400, color: C.faint }}>EE | SP | CH</span>
-                  </th>
-                  <th style={{ ...headCell, textAlign: "center" }}>Tier</th>
+                  <th style={{ ...headCell, textAlign: "center" }}>Enrolled</th>
                   <th style={headCell}>Employee Cost</th>
                   <th style={headCell}>Employer Cost</th>
                   <th style={{ ...headCell, padding: "6px 0 11px 8px" }}>Total Cost</th>
                 </tr>
               </thead>
               <tbody>
-                {members.map((m, i) => {
-                  const t = tierByCensus(m.tier) || TIERS[0];
-                  const s = split(data, overrides, g, plan, t.key, eePct, depPct);
-                  const ages = [
-                    m.age,
-                    (m.spAges || []).join(", ") || "-",
-                    (m.chAges || []).join(", ") || "-",
-                  ].join("  |  ");
+                {TIERS.map((t, i) => {
+                  const n = counts[t.key];
+                  if (!n) return null;
+                  const sp = split(data, overrides, g, plan, t.key, eePct, depPct);
                   const cell = {
                     padding: "9px 8px",
                     borderBottom: `1px solid ${C.hairline}`,
@@ -255,7 +249,7 @@ export default function BreakdownModal({
                     ...num,
                   };
                   return (
-                    <tr key={i} style={{ background: i % 2 ? C.zebra : "#fff" }}>
+                    <tr key={t.key} style={{ background: i % 2 ? C.zebra : "#fff" }}>
                       <td
                         style={{
                           padding: "9px 8px 9px 0",
@@ -266,24 +260,8 @@ export default function BreakdownModal({
                       >
                         {i + 1}
                       </td>
-                      <td
-                        style={{
-                          padding: "9px 8px",
-                          borderBottom: `1px solid ${C.hairline}`,
-                          color: C.ink,
-                        }}
-                      >
-                        {`${m.first} ${m.last}`.toUpperCase()}
-                      </td>
-                      <td
-                        style={{
-                          padding: "9px 8px",
-                          borderBottom: `1px solid ${C.hairline}`,
-                          color: C.body,
-                          ...num,
-                        }}
-                      >
-                        {ages}
+                      <td style={{ padding: "9px 8px", borderBottom: `1px solid ${C.hairline}`, color: C.ink }}>
+                        {t.label}
                       </td>
                       <td
                         style={{
@@ -291,15 +269,14 @@ export default function BreakdownModal({
                           borderBottom: `1px solid ${C.hairline}`,
                           textAlign: "center",
                           color: C.body,
+                          ...num,
                         }}
                       >
-                        {t.short}
+                        {n}
                       </td>
-                      <td style={cell}>{per(s.ee)}</td>
-                      <td style={cell}>{per(s.er)}</td>
-                      <td style={{ ...cell, padding: "9px 0 9px 8px" }}>
-                        {per(m.premium != null ? m.premium : s.rate)}
-                      </td>
+                      <td style={cell}>{sp.ee == null ? "—" : per(sp.ee * n)}</td>
+                      <td style={cell}>{sp.er == null ? "—" : per(sp.er * n)}</td>
+                      <td style={{ ...cell, padding: "9px 0 9px 8px" }}>{sp.rate == null ? "—" : per(sp.rate * n)}</td>
                     </tr>
                   );
                 })}
