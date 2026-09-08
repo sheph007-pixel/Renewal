@@ -412,6 +412,19 @@ Codes are compared in constant time, failed attempts are counted per caller
 and cut off after ten in ten minutes, and every sign-in and refusal is written
 to the log with the caller's address.
 
+**Two-factor.** Turn it on from the panel on the Import tab: the app shows a
+key to type into Google Authenticator, 1Password, Authy or the like (and an
+`otpauth:` link that opens straight into the app on a phone), then asks for the
+six digits once to confirm. From then on the sign-in code alone opens nothing —
+it also asks for the code the app is showing. Ten single-use recovery codes are
+shown once at setup for a lost phone; they are stored only as hashes. Codes are
+RFC 6238, thirty-second steps, one step either side allowed for clock drift,
+checked in constant time, with the same throttle as sign-in. A session that has
+passed the code but not the second factor is a five-minute single-use ticket
+that opens nothing on its own. `scripts/test-totp.mjs` checks the generator
+against the RFC's own test vectors and `scripts/test-2fa.mjs` walks the whole
+flow against a running server.
+
 ## Privacy
 
 The census carries names, ages, genders, ZIPs and premiums for over 1,300
@@ -605,6 +618,7 @@ Parser and pricing checks, no database or key needed:
 node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts/test-en-ancillary.mjs
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
+node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
 

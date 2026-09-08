@@ -10,6 +10,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import { newSecret, verifyTotp, otpauthUrl, newRecoveryCodes, hashCode, spendRecovery } from "./totp.js";
 import { parseEnStream, premiumBreakdown, classifyPlans, newDiagnostics, mergeDiagnostics } from "./en-parse.js";
 import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
@@ -399,6 +400,40 @@ if (bootAdminCode) {
   );
 }
 
+/**
+ * Two-factor enrolment. Kept in the database so it survives a deploy; in
+ * memory when there is none, which is enough for a local run.
+ */
+const memStaffAuth = new Map();
+const staffAuthStore = {
+  async get(email) {
+    if (db) return db.staffAuth(email);
+    return memStaffAuth.get(email) || null;
+  },
+  async save(email, rec) {
+    if (db) return db.saveStaffAuth(email, rec);
+    memStaffAuth.set(email, {
+      email,
+      totp_secret: rec.totpSecret || null,
+      confirmed_at: rec.confirmedAt || null,
+      recovery: rec.recovery || [],
+    });
+  },
+};
+
+/**
+ * A sign-in that has passed the code but still owes a second factor. Short
+ * lived and single use, so the first factor cannot be replayed later.
+ */
+const pending2fa = new Map();
+const PENDING_MS = 5 * 60 * 1000;
+function mintPending(email) {
+  const id = crypto.randomBytes(18).toString("base64url");
+  pending2fa.set(id, { email, exp: Date.now() + PENDING_MS });
+  for (const [k, v] of pending2fa) if (v.exp < Date.now()) pending2fa.delete(k);
+  return id;
+}
+
 /** Compare two secrets without leaking their length or contents through timing. */
 function sameSecret(a, b) {
   const x = Buffer.from(String(a));
@@ -607,9 +642,22 @@ app.post("/api/signin", (req, res) => {
       console.warn(`staff sign-in refused for ${email || "(no email)"} from ${caller}`);
       return res.status(401).json({ error: "invalid credentials" });
     }
-    clearFails(caller);
-    console.log(`staff signed in: ${email} from ${caller}`);
-    return res.json({ ...adminPayload(), token: mintSession(email) });
+    // The code is right; if two-factor is set up, it is not enough on its own.
+    return staffAuthStore
+      .get(email)
+      .then((auth) => {
+        if (auth && auth.totp_secret && auth.confirmed_at) {
+          console.log(`staff first factor accepted, second factor owed: ${email} from ${caller}`);
+          return res.json({ kind: "staff-2fa", pending: mintPending(email) });
+        }
+        clearFails(caller);
+        console.log(`staff signed in: ${email} from ${caller} (no second factor set up)`);
+        return res.json({ ...adminPayload(), token: mintSession(email), twoFactor: "not-set-up" });
+      })
+      .catch((e) => {
+        console.error("could not read two-factor enrolment:", e.message);
+        res.status(500).json({ error: "Could not check two-factor enrolment." });
+      });
   }
 
   // A group's permanent link carries a token instead of a code.
@@ -1228,6 +1276,98 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+/**
+ * The second step of a staff sign-in: the six digits from the authenticator,
+ * or one of the recovery codes. The pending ticket is single use.
+ */
+app.post("/api/signin/2fa", express.json({ limit: "4kb" }), async (req, res) => {
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
+  const { pending, code } = req.body || {};
+  const t = pending2fa.get(String(pending || ""));
+  if (!t || t.exp < Date.now()) {
+    pending2fa.delete(String(pending || ""));
+    return res.status(401).json({ error: "That sign-in expired. Start again." });
+  }
+  const auth = await staffAuthStore.get(t.email);
+  if (!auth || !auth.totp_secret) return res.status(401).json({ error: "Two-factor is not set up." });
+
+  const given = String(code || "");
+  let ok = verifyTotp(auth.totp_secret, given);
+  let recovery = auth.recovery || [];
+  if (!ok) {
+    // A recovery code, for a lost phone. It is spent whether or not the rest
+    // of the sign-in goes on to succeed.
+    const left = spendRecovery(recovery, given);
+    if (left) {
+      ok = true;
+      recovery = left;
+      await staffAuthStore.save(t.email, {
+        totpSecret: auth.totp_secret,
+        confirmedAt: auth.confirmed_at,
+        recovery,
+      });
+      console.warn(`staff used a recovery code: ${t.email} from ${caller}, ${recovery.length} left`);
+    }
+  }
+  if (!ok) {
+    noteFail(caller);
+    console.warn(`second factor refused: ${t.email} from ${caller}`);
+    return res.status(401).json({ error: "That code is not right." });
+  }
+  pending2fa.delete(String(pending));
+  clearFails(caller);
+  console.log(`staff signed in with two factors: ${t.email} from ${caller}`);
+  res.json({ ...adminPayload(), token: mintSession(t.email), recoveryLeft: recovery.length });
+});
+
+/**
+ * Start enrolling this session's staff member in two-factor: a fresh secret to
+ * scan, kept unconfirmed until they type a code from it. Re-enrolling replaces
+ * whatever was there, so a lost phone is recoverable from a signed-in session.
+ */
+app.post("/api/admin/2fa/start", requireStaff, async (req, res) => {
+  const secret = newSecret();
+  await staffAuthStore.save(req.staffEmail, { totpSecret: secret, confirmedAt: null, recovery: [] });
+  res.json({ secret, otpauth: otpauthUrl(secret, req.staffEmail) });
+});
+
+/** Confirm enrolment with a code from the app, and hand back the recovery codes once. */
+app.post("/api/admin/2fa/confirm", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const auth = await staffAuthStore.get(req.staffEmail);
+  if (!auth || !auth.totp_secret) return res.status(400).json({ error: "Start the setup first." });
+  if (!verifyTotp(auth.totp_secret, (req.body || {}).code)) {
+    return res.status(400).json({ error: "That code is not right — check the app and try again." });
+  }
+  const codes = newRecoveryCodes();
+  await staffAuthStore.save(req.staffEmail, {
+    totpSecret: auth.totp_secret,
+    confirmedAt: new Date().toISOString(),
+    recovery: codes.map(hashCode),
+  });
+  console.log(`two-factor confirmed for ${req.staffEmail}`);
+  res.json({ ok: true, recovery: codes });
+});
+
+/** Turn two-factor off. Only from a session that is already signed in. */
+app.post("/api/admin/2fa/off", requireStaff, async (req, res) => {
+  await staffAuthStore.save(req.staffEmail, { totpSecret: null, confirmedAt: null, recovery: [] });
+  console.warn(`two-factor turned off for ${req.staffEmail}`);
+  res.json({ ok: true });
+});
+
+/** Whether this session's staff member has two-factor on, for the screen. */
+app.get("/api/admin/2fa", requireStaff, async (req, res) => {
+  const auth = await staffAuthStore.get(req.staffEmail);
+  res.json({
+    on: !!(auth && auth.totp_secret && auth.confirmed_at),
+    started: !!(auth && auth.totp_secret && !auth.confirmed_at),
+    recoveryLeft: auth ? (auth.recovery || []).length : 0,
+  });
 });
 
 /** Mint a fresh link token for one group: the old address stops working. */

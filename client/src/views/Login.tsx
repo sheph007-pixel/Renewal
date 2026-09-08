@@ -15,6 +15,12 @@ interface Props {
   onSubmit: () => void;
   onStaffSubmit: () => void;
   onMode: (m: "group" | "staff") => void;
+  /** Set once the code is accepted and the second factor is owed. */
+  twoFactor: boolean;
+  totpCode: string;
+  onTotpCode: (v: string) => void;
+  onTotpSubmit: () => void;
+  onCancelTwoFactor: () => void;
 }
 
 const labelStyle = {
@@ -39,6 +45,11 @@ export default function Login({
   onSubmit,
   onStaffSubmit,
   onMode,
+  twoFactor,
+  totpCode,
+  onTotpCode,
+  onTotpSubmit,
+  onCancelTwoFactor,
 }: Props) {
   const err = (msg: string) => (
     <div
@@ -171,6 +182,43 @@ export default function Login({
                   Kennion Staff Sign In
                 </h1>
 
+                {twoFactor ? (
+                  <>
+                    <label htmlFor="staff-totp" style={labelStyle}>
+                      Six-digit code from your authenticator app
+                    </label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        id="staff-totp"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={totpCode}
+                        onChange={(e) => onTotpCode(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") onTotpSubmit();
+                        }}
+                        placeholder="123456"
+                        autoFocus
+                        disabled={busy}
+                        style={{ ...textInput, flex: 1, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", letterSpacing: "2px" }}
+                      />
+                      <button onClick={onTotpSubmit} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
+                        {busy ? "Checking…" : "Continue"}
+                      </button>
+                    </div>
+                    {staffError && err("That code is not right. Try the next one the app shows.")}
+                    <div style={{ marginTop: 12, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
+                      No phone to hand? Type one of your recovery codes instead — each works once.{" "}
+                      <button
+                        onClick={onCancelTwoFactor}
+                        style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}
+                      >
+                        Start again
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                <>
                 <label htmlFor="staff-email" style={labelStyle}>
                   Email
                 </label>
@@ -214,6 +262,8 @@ export default function Login({
                 </div>
 
                 {staffError && err("Email or code not recognised.")}
+                </>
+                )}
               </div>
 
               <div style={{ marginTop: 16, textAlign: "center" }}>

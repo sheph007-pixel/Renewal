@@ -17,6 +17,7 @@ import GroupDetail from "@/views/GroupDetail";
 import Proposals from "@/views/Proposals";
 import Reconciliation, { type CarrierStats, type ImportDiagnostics } from "@/views/Reconciliation";
 import FundingPanel, { type FundingInfo } from "@/views/Funding";
+import TwoFactor from "@/views/TwoFactor";
 import AuditPanel from "@/views/AuditPanel";
 
 interface Props {
@@ -675,6 +676,8 @@ export default function Admin({
               }}
               onOverrides={onOverrides}
             />
+
+            <TwoFactor token={token} />
 
             <details style={{ ...panel, marginTop: 16, padding: "14px 22px" }}>
               <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 600, color: C.ink }}>

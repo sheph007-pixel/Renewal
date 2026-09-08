@@ -56,6 +56,17 @@ ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS manager text CHECK (mana
 -- the old link stops working.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS link_token text;
 CREATE UNIQUE INDEX IF NOT EXISTS group_meta_link_token_idx ON kennion.group_meta (link_token);
+
+-- Two-factor enrolment for staff. The shared secret is what an authenticator
+-- app holds; recovery codes are stored only as hashes, so the row is no use to
+-- anyone who reads it.
+CREATE TABLE IF NOT EXISTS kennion.staff_auth (
+  email          text PRIMARY KEY,
+  totp_secret    text,
+  confirmed_at   timestamptz,
+  recovery       jsonb NOT NULL DEFAULT '[]'::jsonb,
+  updated_at     timestamptz NOT NULL DEFAULT now()
+);
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -266,6 +277,29 @@ export function createDb(url) {
          ON CONFLICT (group_name) DO UPDATE SET
            ${col} = EXCLUDED.${col}, updated_at = now(), updated_by = EXCLUDED.updated_by`,
         [groupName, field === "archived" ? !!value : value || null, by || null],
+      );
+    },
+
+    /** Two-factor enrolment for one staff member, or null. */
+    async staffAuth(email) {
+      const { rows } = await pool.query(
+        "SELECT email, totp_secret, confirmed_at, recovery FROM kennion.staff_auth WHERE email = $1",
+        [email],
+      );
+      return rows[0] || null;
+    },
+
+    /** Store or replace an enrolment. */
+    async saveStaffAuth(email, { totpSecret, confirmedAt, recovery }) {
+      await pool.query(
+        `INSERT INTO kennion.staff_auth (email, totp_secret, confirmed_at, recovery, updated_at)
+         VALUES ($1,$2,$3,$4::jsonb, now())
+         ON CONFLICT (email) DO UPDATE SET
+           totp_secret = EXCLUDED.totp_secret,
+           confirmed_at = EXCLUDED.confirmed_at,
+           recovery = EXCLUDED.recovery,
+           updated_at = now()`,
+        [email, totpSecret || null, confirmedAt || null, JSON.stringify(recovery || [])],
       );
     },
 
