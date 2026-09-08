@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   TIERS,
-  factorsHold,
   money,
   money0,
   rateFor,
@@ -127,11 +126,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
   // Any tier with nobody in it has no billed rate, so it is shown at the
   // program factors. Say so once, under the table, rather than per plan.
   const anyDerived = rows.some((r) => TIERS.some((t) => rateFor(overrides, g, r.p.plan, t.key).derived));
-  const anyOffSchedule = rows.some(
-    (r) =>
-      TIERS.some((t) => rateFor(overrides, g, r.p.plan, t.key).derived) &&
-      !factorsHold(overrides, g, r.p.plan),
-  );
 
   const cell = { padding: "12px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14 };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
@@ -235,17 +229,19 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         </div>
       )}
 
+      {/*
+        Only what the table above does not already say: the annual figure, the
+        dependants behind the headcount, and where the numbers came from. The
+        headcount itself, and the factors behind a calculated rate, were being
+        said twice.
+      */}
       <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted, lineHeight: 1.7, maxWidth: 940 }}>
-        <strong style={{ color: C.body }}>{money0(totals.total * 12)}</strong> a year at today&rsquo;s
-        enrollment, covering {g.enrolled} employee{g.enrolled === 1 ? "" : "s"} and {g.lives} lives in
-        total.{" "}
+        <strong style={{ color: C.body }}>{money0(totals.total * 12)}</strong> a year at
+        today&rsquo;s enrollment · {g.lives} lives with dependents ·{" "}
         {data.funding?.month
-          ? `Rates as billed in ${monthName(data.funding.month)}; enrollment from your Employee Navigator export.`
-          : "Enrollment and rates from your Employee Navigator export."}
-        {anyDerived &&
-          (anyOffSchedule
-            ? " Tiers with nobody enrolled have no billed rate, so they are shown at the program factors (1.00 · 1.85 · 2.00 · 2.85) and are approximate. They are in no total above."
-            : " Tiers with nobody enrolled have no billed rate, so they are shown at the program factors (1.00 · 1.85 · 2.00 · 2.85). They are in no total above.")}
+          ? `rates as billed in ${monthName(data.funding.month)}, enrollment from your Employee Navigator export`
+          : "enrollment and rates from your Employee Navigator export"}
+        .{anyDerived && " Greyed rates have nobody enrolled, so they are calculated rather than billed and are in no total."}
       </div>
     </div>
   );
