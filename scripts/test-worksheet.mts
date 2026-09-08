@@ -52,12 +52,13 @@ const rows = rowsFor(active, overrides);
 
 // 1. The sheet is group, plan and the four rates. Nothing else — an auditor
 //    should not have to read past the numbers they are checking.
+// In program factor order: 1.00, 1.85, 2.00, 2.85.
 assert.deepEqual(COLUMNS, [
   "Group",
   "Plan",
   "Employee",
-  "Employee + Spouse",
   "Employee + Child(ren)",
+  "Employee + Spouse",
   "Employee + Family",
 ]);
 for (const r of rows) assert.deepEqual(Object.keys(r), COLUMNS, "every row is those six columns");

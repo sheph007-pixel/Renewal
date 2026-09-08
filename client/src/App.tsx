@@ -3,7 +3,6 @@ import {
   fmtDate,
   ovKey,
   planRows,
-  type Freq,
   type KennionData,
   type Overrides,
 } from "@/lib/model";
@@ -19,7 +18,6 @@ import type { FundingInfo } from "@/views/Funding";
 import Current, { CURRENT_SECTIONS } from "@/views/Current";
 import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
 import SectionNav from "@/views/SectionNav";
-import BreakdownModal from "@/views/BreakdownModal";
 
 /**
  * Placeholder employer-contribution percentages, used only for groups whose
@@ -83,9 +81,6 @@ export default function App() {
   const [funding, setFunding] = useState<FundingInfo | null>(null);
   const [ai, setAi] = useState(false);
   const [durable, setDurable] = useState(false);
-
-  const [modalPlan, setModalPlan] = useState<string | null>(null);
-  const [freq, setFreq] = useState<Freq["key"]>("M");
 
   const [sort, setSort] = useState<SortKey>("monthly");
   const [dir, setDir] = useState(1);
@@ -431,7 +426,6 @@ export default function App() {
     tokenRef.current = "";
     setCode(null);
     setCodeInput("");
-    setModalPlan(null);
     setAdmin(false);
     navigate(PATHS.signin);
   };
@@ -738,7 +732,6 @@ export default function App() {
             totals={totals}
             eePct={EE_PCT}
             depPct={DEP_PCT}
-            onOpenPlan={setModalPlan}
           />
         ) : (
           <Options
@@ -808,25 +801,6 @@ export default function App() {
       </div>
 
       <Footer />
-
-      {modalPlan && (
-        <BreakdownModal
-          data={data}
-          overrides={overrides}
-          g={g}
-          row={rows.find((r) => r.p.plan === modalPlan)}
-          plan={modalPlan}
-          freq={freq}
-          eePct={EE_PCT}
-          depPct={DEP_PCT}
-          onFreq={setFreq}
-          onClose={() => {
-            setModalPlan(null);
-            setFreq("M");
-          }}
-          onPrint={() => window.print()}
-        />
-      )}
     </div>
   );
 }

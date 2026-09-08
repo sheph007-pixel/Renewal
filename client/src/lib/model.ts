@@ -41,10 +41,15 @@ export function programPlans(g: Group): GroupPlan[] {
   return (g.plans || []).filter((p) => isProgramPlan(g, p));
 }
 
+/**
+ * In program factor order — 1.00, 1.85, 2.00, 2.85 — so a row of rates always
+ * climbs left to right and a tier out of step is obvious at a glance. Nothing
+ * reads this list by position, so the order is presentation only.
+ */
 export const TIERS: Tier[] = [
   { key: "EE", label: "Employee", census: "Employee", short: "EE" },
-  { key: "ES", label: "Employee + Spouse", census: "Employee + Spouse", short: "ES" },
   { key: "EC", label: "Employee + Child(ren)", census: "Employee + Child(ren)", short: "EC" },
+  { key: "ES", label: "Employee + Spouse", census: "Employee + Spouse", short: "ES" },
   { key: "FAM", label: "Employee + Family", census: "Employee + Family", short: "EF" },
 ];
 
