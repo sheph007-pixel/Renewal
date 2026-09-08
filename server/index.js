@@ -20,7 +20,7 @@ import { expandUpload, prepareForModel } from "./intake.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
-import { readAuditWorkbook, TIERS as RATE_TIERS } from "./rates-audit.js";
+import { readAuditWorkbook, TIERS as RATE_TIERS, PROGRAM_TPAS } from "./rates-audit.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "..", "dist", "public");
@@ -1670,7 +1670,12 @@ app.get("/api/admin/rates-lock", requireStaff, (req, res) => {
 function shownRate(group, plan, censusTier) {
   const g = groups.find((x) => x.name === group);
   if (!g) return undefined;
-  if (!(g.plans || []).some((p) => p.plan === plan)) return undefined;
+  // Only the program's own administrators are rate-administered here, so a
+  // workbook cannot write a rate for a plan this page would never have shown.
+  const p = (g.plans || []).find((x) => x.plan === plan);
+  if (!p) return undefined;
+  const tpa = String(p.tpa || g.tpa || "").trim().toLowerCase();
+  if (!PROGRAM_TPAS.some((t) => t.toLowerCase() === tpa)) return undefined;
 
   const billed = (g.rates || {})[plan] || {};
   const at = (census) => {

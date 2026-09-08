@@ -8,6 +8,13 @@
 // nothing.
 import xlsx from "xlsx";
 
+/**
+ * The two administrators the program runs on. A plan on anything else is not
+ * Kennion's to rate, so the workbook never carries one and a rate for one is
+ * refused rather than written.
+ */
+export const PROGRAM_TPAS = ["EBPA", "HealthEZ"];
+
 /** The four tiers, named as the workbook names them. */
 export const TIERS = [
   { key: "EE", label: "Employee", census: "Employee", factor: 1 },
@@ -111,7 +118,7 @@ export function readAuditWorkbook(buffer, shown) {
             group,
             plan,
             tier: tier.census,
-            reason: "no such group and plan in the portal",
+            reason: "not an EBPA or HealthEZ plan in the portal",
           });
           continue;
         }

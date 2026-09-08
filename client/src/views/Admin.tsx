@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import {
+  PROGRAM_TPAS,
   TIERS,
   factorsHold,
   ovKey,
+  programPlans,
   rateFor,
   type KennionData,
   type Overrides,
@@ -149,8 +151,9 @@ export default function Admin({
     let nUnjudged = 0;
     let totalCells = 0;
 
+    // Only the program's own plans are rate-administered here.
     const all = activeGroups.flatMap((g) =>
-      (g.plans || []).map((p) => {
+      programPlans(g).map((p) => {
         const billedMap = (g.rates || {})[p.plan] || {};
         const billedCount = TIERS.filter((t) => billedMap[t.census] != null).length;
         // A plan can only be judged off-schedule once two tiers are billed.
@@ -254,9 +257,16 @@ export default function Admin({
       }),
     );
 
+    // Plans on any other administrator, so the page can say what it is not
+    // showing rather than quietly dropping them.
+    const outside = activeGroups.reduce(
+      (n, g) => n + ((g.plans || []).length - programPlans(g).length),
+      0,
+    );
+
     return {
       all,
-      stats: { nBilled, nManual, nCalc, nNone, nOff, nOnSchedule, nUnjudged, totalCells },
+      stats: { nBilled, nManual, nCalc, nNone, nOff, nOnSchedule, nUnjudged, totalCells, outside },
     };
   }, [activeGroups, overrides]);
 
@@ -349,6 +359,7 @@ export default function Admin({
             confirmed: stats.nBilled + stats.nManual,
             calculated: stats.nCalc + stats.nNone,
             offSchedule: stats.nOff,
+            outside: stats.outside,
           }}
         />
 
@@ -372,7 +383,7 @@ export default function Admin({
             style={{ ...textInput, flex: 1, minWidth: 240, fontSize: 13.5, padding: "8px 11px" }}
           />
           <div style={{ display: "flex", gap: 2 }}>
-            {["All", "EBPA", "HealthEZ"].map((t) => (
+            {["All", ...PROGRAM_TPAS].map((t) => (
               <button key={t} onClick={() => onTpa(t)} style={chip(tpa === t)}>
                 {t}
               </button>
