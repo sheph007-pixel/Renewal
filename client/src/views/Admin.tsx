@@ -51,7 +51,6 @@ interface Props {
   onTpa: (v: string) => void;
   onToggleGaps: () => void;
   onSetOverride: (group: string, plan: string, census: string, raw: string) => void;
-  onExport: () => void;
   onExit: () => void;
 }
 
@@ -110,7 +109,6 @@ export default function Admin({
   onTpa,
   onToggleGaps,
   onSetOverride,
-  onExport,
   onExit,
 }: Props) {
   /**
@@ -130,22 +128,6 @@ export default function Admin({
   const [ratesLocked, setRatesLocked] = useState(
     !!(data as unknown as { ratesLock?: { locked?: boolean } }).ratesLock?.locked,
   );
-
-  // The audit workbook pulls SheetJS in on demand, so the button waits.
-  const [makingWorkbook, setMakingWorkbook] = useState(false);
-  const [workbookError, setWorkbookError] = useState("");
-  const makeWorkbook = async () => {
-    setMakingWorkbook(true);
-    setWorkbookError("");
-    try {
-      const { downloadAuditWorkbook } = await import("@/lib/worksheet");
-      await downloadAuditWorkbook(data.groups, overrides);
-    } catch (e) {
-      setWorkbookError((e as Error).message || "Could not build the workbook.");
-    } finally {
-      setMakingWorkbook(false);
-    }
-  };
 
   const activeGroups = useMemo(
     () =>
@@ -286,36 +268,6 @@ export default function Admin({
       (!q || `${r.group} ${r.plan}`.toLowerCase().includes(q)),
   );
 
-  const kpis = [
-    {
-      label: "Groups",
-      value: String(activeGroups.length),
-      note: `${all.length} plans in force`,
-    },
-    {
-      label: "Rates Billed",
-      value: String(stats.nBilled),
-      note: `of ${stats.totalCells} tier rates, from Employee Navigator`,
-    },
-    {
-      label: "Entered By Hand",
-      value: String(stats.nManual),
-      note: stats.nManual ? (storage === "postgres" ? "saved to the database" : "saved on the server") : "none yet",
-    },
-    {
-      label: "Still Calculated",
-      value: String(stats.nCalc + stats.nNone),
-      note: "at the tier schedule, until a real rate is keyed",
-    },
-    {
-      label: "On The Tier Schedule",
-      value: stats.nOff ? `${stats.nOnSchedule} of ${stats.nOnSchedule + stats.nOff}` : String(stats.nOnSchedule),
-      note: stats.nOff
-        ? `${stats.nOff} plan${stats.nOff === 1 ? "" : "s"} priced off it — key the real rates`
-        : "every plan with two billed tiers holds",
-    },
-  ];
-
   return (
     <div style={{ minHeight: "100vh", background: C.page }}>
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
@@ -384,110 +336,21 @@ export default function Admin({
       <div style={{ maxWidth: 1680, margin: "0 auto", padding: "20px 22px 60px" }}>
         {tab === "rates" && (
         <>
-        <div
-          style={{
-            ...panel,
-            padding: "20px 22px",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 20,
+        <RatesAudit
+          token={token}
+          groups={data.groups}
+          overrides={overrides}
+          onOverrides={onOverrides}
+          onLock={setRatesLocked}
+          progress={{
+            groups: activeGroups.length,
+            plans: all.length,
+            cells: stats.totalCells,
+            confirmed: stats.nBilled + stats.nManual,
+            calculated: stats.nCalc + stats.nNone,
+            offSchedule: stats.nOff,
           }}
-        >
-          <div style={{ maxWidth: 900 }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 23,
-                fontWeight: 600,
-                color: C.ink,
-                letterSpacing: "-0.2px",
-              }}
-            >
-              Existing 2026 Rates &mdash; All Groups, All Plans
-            </h1>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <button
-              onClick={() => void makeWorkbook()}
-              disabled={makingWorkbook}
-              title="Group, plan and the four tier rates — one sheet per account manager, to correct in place and send back"
-              style={{
-                padding: "8px 16px",
-                fontSize: 13.5,
-                fontWeight: 500,
-                color: "#fff",
-                background: C.blue,
-                border: `1px solid ${C.blue}`,
-                borderRadius: 4,
-                cursor: makingWorkbook ? "default" : "pointer",
-                opacity: makingWorkbook ? 0.6 : 1,
-              }}
-            >
-              {makingWorkbook ? "Building…" : "Audit Workbook For Debbie & Tracy"}
-            </button>
-            <button
-              onClick={onExport}
-              style={{
-                background: "none",
-                border: "none",
-                padding: 0,
-                fontSize: 13,
-                color: C.blue,
-                cursor: "pointer",
-              }}
-            >
-              Export as JSON
-            </button>
-          </div>
-          {workbookError && (
-            <div role="alert" style={{ flexBasis: "100%", fontSize: 13, color: C.red }}>
-              {workbookError}
-            </div>
-          )}
-        </div>
-
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(178px,1fr))",
-            gap: 14,
-            marginTop: 16,
-          }}
-        >
-          {kpis.map((k) => (
-            <div key={k.label} style={{ ...panel, padding: "15px 16px" }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: C.body }}>{k.label}</div>
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 24,
-                  fontWeight: 600,
-                  color: C.ink,
-                  letterSpacing: "-0.4px",
-                  ...num,
-                }}
-              >
-                {k.value}
-              </div>
-              <div style={{ marginTop: 3, fontSize: 12, color: C.faint }}>{k.note}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ ...panel, marginTop: 16, padding: "12px 16px", fontSize: 12.5, color: C.body, lineHeight: 1.6 }}>
-          <strong style={{ color: C.ink }}>Tier Schedule</strong> — Employee 1.00 · Employee + Child(ren) 1.85 · Employee
-          + Spouse 2.00 · Employee + Family 2.85. Every calculated rate on this page is the plan&rsquo;s employee rate at
-          these factors.{" "}
-          {stats.nOff
-            ? `${stats.nOnSchedule} of ${stats.nOnSchedule + stats.nOff} plans with two or more billed tiers hold the schedule; ${stats.nOff} do not and are marked "Off schedule".`
-            : `All ${stats.nOnSchedule} plans with two or more billed tiers hold it.`}
-          {stats.nUnjudged ? ` ${stats.nUnjudged} plan${stats.nUnjudged === 1 ? " has" : "s have"} fewer than two billed tiers, so there is nothing to check against.` : ""}
-        </div>
-
-        <RatesAudit token={token} onOverrides={onOverrides} onLock={setRatesLocked} />
+        />
 
         <div
           style={{
