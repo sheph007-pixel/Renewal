@@ -180,52 +180,55 @@ export default function RatesAudit({
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px" }}>
           Existing 2026 Rates
         </h1>
-        {lock.locked ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span
-              style={{
-                fontSize: 12.5,
-                fontWeight: 600,
-                padding: "4px 10px",
-                borderRadius: 3,
-                color: C.green,
-                background: C.greenTint,
-                border: `1px solid ${C.greenEdge}`,
-              }}
-            >
-              Locked
-            </span>
-            <button onClick={() => void setLocked(false)} disabled={!!busy} style={link}>
-              Unlock
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-            <button onClick={() => void download()} disabled={!!busy} style={solid}>
-              {busy === "Building…" ? "Building…" : "Download Workbook"}
-            </button>
-            <button onClick={() => input.current?.click()} disabled={!!busy} style={plain}>
-              Upload Corrected
-            </button>
-            <button onClick={() => void setLocked(true)} disabled={!!busy} style={plain}>
-              Lock The Rates
-            </button>
-            <input
-              ref={input}
-              type="file"
-              accept=".xlsx,.xlsm,.xls"
-              aria-label="The corrected workbook"
-              hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0] || null;
-                setFile(f);
-                setPreview(null);
-                setDone("");
-                if (f) void send(f, false);
-              }}
-            />
-          </div>
-        )}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+          {/* Taking a copy out changes nothing, so it stays available locked. */}
+          <button onClick={() => void download()} disabled={!!busy} style={solid}>
+            {busy === "Building…" ? "Building…" : "Download Workbook"}
+          </button>
+          {lock.locked ? (
+            <>
+              <span
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  padding: "4px 10px",
+                  borderRadius: 3,
+                  color: C.green,
+                  background: C.greenTint,
+                  border: `1px solid ${C.greenEdge}`,
+                }}
+              >
+                Locked
+              </span>
+              <button onClick={() => void setLocked(false)} disabled={!!busy} style={link}>
+                Unlock
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => input.current?.click()} disabled={!!busy} style={plain}>
+                Upload Corrected
+              </button>
+              <button onClick={() => void setLocked(true)} disabled={!!busy} style={plain}>
+                Lock The Rates
+              </button>
+              <input
+                ref={input}
+                type="file"
+                accept=".xlsx,.xlsm,.xls"
+                aria-label="The corrected workbook"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0] || null;
+                  setFile(f);
+                  setPreview(null);
+                  setDone("");
+                  if (f) void send(f, false);
+                }}
+              />
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ marginTop: 8, fontSize: 13, color: C.body, lineHeight: 1.6 }}>
