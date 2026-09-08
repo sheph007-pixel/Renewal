@@ -10,7 +10,7 @@ import {
   type Overrides,
 } from "@/lib/model";
 import { C, Logo, panel, smallPrimaryBtn } from "@/lib/ui";
-import { PATHS, currentPage, navigate, parsePath, useRoute } from "@/lib/router";
+import { PATHS, currentPage, linkPath, navigate, parsePath, useRoute } from "@/lib/router";
 import Link from "@/lib/Link";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import Login from "@/views/Login";
@@ -44,6 +44,13 @@ function linkCodeAtLoad(): string | null {
   return c && c.trim() ? c.trim().toUpperCase() : null;
 }
 
+/** The permanent group token in the address at load, if the address is /g/<token>. */
+function tokenAtLoad(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = window.location.pathname.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/options)?\/?$/);
+  return m ? m[1] : null;
+}
+
 export default function App() {
   const route = useRoute();
   const page = useMemo(() => parsePath(route.path), [route.path]);
@@ -54,7 +61,11 @@ export default function App() {
   // True while a session saved in this tab is being re-established, so a
   // reload does not flash the sign-in screen on its way back to the page.
   const linkCode = useMemo(linkCodeAtLoad, []);
-  const [restoring, setRestoring] = useState(() => linkCodeAtLoad() != null || loadSession() != null);
+  /** The group's permanent token, when the address is /g/<token>. */
+  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(
+    () => linkCodeAtLoad() != null || tokenAtLoad() != null || loadSession() != null,
+  );
   const restoreStarted = useRef(false);
   const [code, setCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
@@ -126,6 +137,7 @@ export default function App() {
       funding: p.funding || null,
     } as KennionData);
     setCode(group.code);
+    setLinkToken((p.linkToken as string) || null);
     saveSession({ kind: "group", code: group.code });
   }, []);
 
@@ -160,7 +172,8 @@ export default function App() {
           if (asked.kind !== "admin") navigate(PATHS.groups, { replace: true });
         } else {
           applyGroup(p);
-          if (asked.kind !== "group") navigate(PATHS.current, { replace: true });
+          const home = p.linkToken ? linkPath(p.linkToken) : PATHS.current;
+          if (asked.kind !== "group" || asked.token !== p.linkToken) navigate(home, { replace: true });
         }
       } catch {
         setLoadError(true);
@@ -180,10 +193,37 @@ export default function App() {
     if (restoreStarted.current) return;
     restoreStarted.current = true;
 
+    // A group's own address, /g/<token>: sign in with the token and stay
+    // where we are, so the address can be bookmarked and shared.
+    const asked = currentPage();
+    const tokenInPath = asked.kind === "group" ? asked.token : undefined;
+    if (tokenInPath) {
+      (async () => {
+        try {
+          const r = await fetch("/api/signin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: tokenInPath }),
+          });
+          if (!r.ok) {
+            clearSession();
+            navigate(PATHS.signin, { replace: true });
+            return;
+          }
+          applyGroup(await r.json());
+        } catch {
+          setLoadError(true);
+        } finally {
+          setRestoring(false);
+        }
+      })();
+      return;
+    }
+
     // A code in the address wins over whatever this tab had: it is a
     // deliberate "show me this group". The code is taken out of the address
     // once it is used, so it does not sit in the bar, the history or a
-    // screenshot.
+    // screenshot — the group's own /g/<token> address is the one to keep.
     if (linkCode) {
       (async () => {
         try {
@@ -198,8 +238,9 @@ export default function App() {
             navigate(PATHS.signin, { replace: true });
             return;
           }
-          applyGroup(await r.json());
-          navigate(PATHS.current, { replace: true });
+          const p = await r.json();
+          applyGroup(p);
+          navigate(p.linkToken ? linkPath(p.linkToken) : PATHS.current, { replace: true });
         } catch {
           setLoadError(true);
         } finally {
@@ -300,7 +341,8 @@ export default function App() {
   useEffect(() => {
     if (restoring) return;
     if (session === "admin" && page.kind !== "admin") navigate(PATHS.groups, { replace: true });
-    else if (session === "group" && page.kind !== "group") navigate(PATHS.current, { replace: true });
+    else if (session === "group" && page.kind !== "group")
+      navigate(linkToken ? linkPath(linkToken) : PATHS.current, { replace: true });
     else if (session === "none" && page.kind === "unknown") navigate(PATHS.signin, { replace: true });
   }, [restoring, session, page.kind]);
 
@@ -557,9 +599,11 @@ export default function App() {
       year: "numeric",
     })}`;
 
+  // With a permanent address, both tabs live under it, so the token stays in
+  // the bar wherever the client clicks.
   const pages = [
-    [PATHS.current, "current", "Current Medical Plan(s)"],
-    [PATHS.options, "options", "2027 Medical Plan Options"],
+    [linkToken ? linkPath(linkToken, "current") : PATHS.current, "current", "Current Medical Plan(s)"],
+    [linkToken ? linkPath(linkToken, "options") : PATHS.options, "options", "2027 Medical Plan Options"],
   ] as const;
 
   return (
@@ -580,7 +624,7 @@ export default function App() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center" }}>
-            <Link href={PATHS.current} aria-label="Home" style={{ display: "block" }}>
+            <Link href={linkToken ? linkPath(linkToken) : PATHS.current} aria-label="Home" style={{ display: "block" }}>
               <img
                 src={Logo}
                 alt="Kennion Benefit Advisors"
@@ -720,11 +764,11 @@ export default function App() {
           }}
         >
           {tab === "current" ? (
-            <Link href={PATHS.options} style={{ fontSize: 13.5 }}>
+            <Link href={linkToken ? linkPath(linkToken, "options") : PATHS.options} style={{ fontSize: 13.5 }}>
               Next: 2027 Medical Plan Options &rarr;
             </Link>
           ) : (
-            <Link href={PATHS.current} style={{ fontSize: 13.5 }}>
+            <Link href={linkToken ? linkPath(linkToken) : PATHS.current} style={{ fontSize: 13.5 }}>
               &larr; Back: Current Medical Plan(s)
             </Link>
           )}

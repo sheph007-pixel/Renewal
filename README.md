@@ -76,15 +76,26 @@ them can be typed over in the Groups table; a hand-assigned code wins and is
 checked for uniqueness. Codes from the previous `KEN-XXXX-9999` scheme are still
 accepted, so anything already sent out keeps working.
 
-A group can also be reached by **link**: `https://app.kennion.com/?code=AEST2027`
-signs that group in and lands on its Current page, then takes the code out of
-the address so it does not sit in the bar, the history or a screenshot. It is
-the link to send a client, and the link staff open to see a company's pages
-exactly as the client sees them without knowing its code by heart. Every
-company page shows it with a Copy button, every row in the Groups table has a
-**view as client** link, and the CSV export carries a Client link column. The
-link carries the credential, so it is treated like the code itself; an archived
-group's link is refused at sign-in like its code.
+Every group also has a **permanent address** of its own:
+`https://app.kennion.com/g/3EzxfXfLz9HWv59zqNklMQ`. The token is 22 random
+characters, minted once and kept in `group_meta.link_token`, so it survives
+deploys and imports and cannot be guessed from a company name the way a code
+can. It stays in the address bar — both tabs live under it
+(`/g/<token>/options`) — so the page can be bookmarked, reloaded and sent to a
+client with no code to type. Signing in with a code lands on the same address.
+
+Every company page shows the link with a Copy button and a **New link** button
+that mints a fresh token and kills the old one, every row in the Groups table
+has a **view as client** link, and the CSV export carries a Client link column.
+An archived group's link is refused, as its code is. `/?code=XXXX` still works
+and redirects to the group's permanent address.
+
+**The link is the credential.** Anyone holding it sees that company's pages,
+which include its own employee census — names, ages, dependants' ages, plan and
+cost per employee, on the Employee Cost Breakdown. That is the employer's own
+data and appropriate for the employer to see, but it means these links are for
+sending to the client, not for posting publicly. If one leaks, press **New
+link**.
 
 Each group is also categorised **2-50** or **51+ (ALE)**. It defaults from
 enrolled headcount and can be set explicitly, since ALE status is a legal

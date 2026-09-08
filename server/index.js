@@ -144,6 +144,13 @@ function slotsForGroup(name) {
   return SLOTS.filter((sl) => sl !== "Cobalt" || cobaltApplies(name) || hasCobalt);
 }
 
+/**
+ * A group's permanent link token: random and unguessable, so the address can
+ * be bookmarked and shared without a code being typed, and guessing a company
+ * name gets nobody in. Minted once and kept; resetting it kills the old link.
+ */
+const newLinkToken = () => crypto.randomBytes(16).toString("base64url");
+
 function defaultManager(name) {
   const k = normalizeName(name);
   if (!k) return null;
@@ -155,6 +162,8 @@ function defaultManager(name) {
 
 let groups = [];
 let byCode = new Map();
+/** Permanent link token -> group, for the /g/<token> address. */
+let byToken = new Map();
 let adminGroups = [];
 /** Proposals filed under each group, so the Groups page can show coverage. */
 let proposalCounts = {};
@@ -230,6 +239,7 @@ function rebuild() {
   );
 
   byCode = new Map();
+  byToken = new Map();
   groups.forEach((g) => {
     const m = meta[g.name] || {};
     // Hand-edited details win over whatever the export supplied, so a
@@ -250,6 +260,7 @@ function rebuild() {
     g.sizeCategory = m.sizeCategory || sizeFor(g.enrolled);
     g.broker = m.broker || defaultBroker(g.name);
     g.manager = m.manager || defaultManager(g.name);
+    g.linkToken = m.linkToken || null;
     // Renewal tracking: every group starts Open.
     g.renewal = m.renewal || "open";
     // Archived, or not on a program carrier: the row stays for staff, but the
@@ -257,6 +268,7 @@ function rebuild() {
     if (!g.archived && g.eligible) {
       byCode.set(code.toUpperCase(), g);
       byCode.set(legacyCodeFor(g.name).toUpperCase(), g);
+      if (g.linkToken) byToken.set(g.linkToken, g);
     }
   });
 
@@ -277,6 +289,7 @@ function rebuild() {
     broker: g.broker,
     brokerIsSet: !!(meta[g.name] || {}).broker,
     manager: g.manager || null,
+    linkToken: g.linkToken || null,
     /** The proposal slots this group has: Cobalt only where it is quoted. */
     slots: slotsForGroup(g.name),
     renewal: g.renewal,
@@ -321,6 +334,35 @@ function rebuild() {
     pyEnd: g.pyEnd || null,
     members: undefined,
   }));
+  // Any group without a link token gets one, once, and it is kept.
+  void mintMissingTokens();
+}
+
+/**
+ * Give every live group a permanent link token, once. Runs after a rebuild and
+ * writes through to the database, so the address a client bookmarks survives a
+ * deploy and an import.
+ */
+let mintingTokens = false;
+async function mintMissingTokens() {
+  if (mintingTokens) return;
+  const want = groups.filter((g) => !g.linkToken && !g.archived && g.eligible);
+  if (!want.length) return;
+  mintingTokens = true;
+  try {
+    for (const g of want) {
+      const token = newLinkToken();
+      meta[g.name] = { ...(meta[g.name] || {}), linkToken: token };
+      g.linkToken = token;
+      byToken.set(token, g);
+      if (db) await db.setMeta(g.name, "linkToken", token, "system");
+    }
+    rebuild();
+  } catch (e) {
+    console.error("could not mint link tokens:", e.message);
+  } finally {
+    mintingTokens = false;
+  }
 }
 
 const splitFor = (name) =>
@@ -466,10 +508,12 @@ app.post("/api/signin", (req, res) => {
     return res.json({ ...adminPayload(), token: mintSession(email) });
   }
 
+  // A group's permanent link carries a token instead of a code.
+  const token = String(body.token || "").trim();
   const code = String(body.code || "").trim().toUpperCase();
-  if (!code) return res.status(400).json({ error: "code required" });
+  if (!token && !code) return res.status(400).json({ error: "code required" });
 
-  const g = byCode.get(code);
+  const g = token ? byToken.get(token) : byCode.get(code);
   if (!g) return res.status(404).json({ error: "no such group" });
 
   return res.json({
@@ -488,6 +532,7 @@ app.post("/api/signin", (req, res) => {
     proposals: currentProposals[g.name] || [],
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
+    linkToken: g.linkToken || null,
   });
 });
 
@@ -994,6 +1039,22 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+/** Mint a fresh link token for one group: the old address stops working. */
+app.post("/api/admin/group-link/reset", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const group = String((req.body || {}).group || "");
+  const g = groups.find((x) => x.name === group);
+  if (!g) return res.status(404).json({ error: "no such group" });
+  const token = newLinkToken();
+  meta[group] = { ...(meta[group] || {}), linkToken: token };
+  try {
+    if (db) await db.setMeta(group, "linkToken", token, req.staffEmail || null);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  rebuild();
+  res.json({ ok: true, linkToken: token, groups: adminGroups });
 });
 
 /** Set a group's access code or ALE bucket. */

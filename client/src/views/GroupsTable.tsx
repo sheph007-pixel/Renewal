@@ -16,6 +16,8 @@ export interface AdminGroup {
   manager?: "debbie" | "tracy" | null;
   /** The proposal slots this group has — Cobalt only where it is quoted. */
   slots?: string[];
+  /** The group's permanent, unguessable address token. */
+  linkToken?: string | null;
   /** Where the 2027 renewal stands, for tracking. */
   renewal?: Renewal;
   /** Carrier proposals filed under this group. */
@@ -126,7 +128,14 @@ function groupsCsv(rows: AdminGroup[], blockEnrolled: number): string {
     ["Proposals on file", (g) => g.proposals || 0],
     ["Broker", (g) => BROKER_LABEL[g.broker || "kennion"]],
     ["Manager", (g) => (g.manager ? MANAGER_FULL[g.manager] : "")],
-    ["Client link", (g) => (g.archived || g.eligible === false ? "" : `${typeof window === "undefined" ? "" : window.location.origin}/?code=${encodeURIComponent(g.code)}`)],
+    [
+      "Client link",
+      (g) => {
+        if (g.archived || g.eligible === false) return "";
+        const origin = typeof window === "undefined" ? "" : window.location.origin;
+        return g.linkToken ? `${origin}/g/${g.linkToken}` : `${origin}/?code=${encodeURIComponent(g.code)}`;
+      },
+    ],
     ["Size", (g) => g.sizeCategory],
     ["Enrolled", (g) => g.enrolled],
     ["% of block (enrolled)", (g) => (blockEnrolled ? ((g.enrolled || 0) / blockEnrolled * 100).toFixed(1) : "")],
@@ -711,7 +720,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                         </span>
                         {!g.archived && g.eligible !== false && (
                         <a
-                          href={`/?code=${encodeURIComponent(g.code)}`}
+                          href={g.linkToken ? `/g/${g.linkToken}` : `/?code=${encodeURIComponent(g.code)}`}
                           target="_blank"
                           rel="noreferrer"
                           title={`Open ${g.name}'s own pages, exactly as the client sees them`}
