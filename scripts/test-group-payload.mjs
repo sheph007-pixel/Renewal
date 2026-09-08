@@ -92,11 +92,37 @@ if (other) {
   assert.equal(byToken.group.members, undefined, "and no census with it");
 }
 
-// 6. Nothing on the admin side answers to a group's credentials.
+// 6. Kennion's own bookkeeping stays on the admin side.
+for (const field of ["broker", "manager", "renewal", "sic", "sicDesc", "divisionCode", "taxId", "contacts", "archived", "eligible"]) {
+  assert.equal(payload.group[field], undefined, `${field} is not a client's business`);
+}
+
+// 7. Codes are guessable by design, so guessing is throttled.
+const guess = (code, ip) =>
+  fetch(`${base}/api/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": ip },
+    body: JSON.stringify({ code }),
+  });
+const attacker = "198.51.100.7";
+const codes = [];
+for (let i = 0; i < 12; i++) codes.push((await guess(`ZZZ${i}2027`, attacker)).status);
+assert.ok(codes.slice(0, 10).every((c) => c === 404), "the first attempts answer normally");
+assert.ok(codes.slice(10).every((c) => c === 429), "then the guessing is cut off");
+assert.equal((await guess(mine.code, attacker)).status, 429, "a real code does not slip through the block");
+assert.equal((await guess(mine.code, "203.0.113.4")).status, 200, "and another caller is unaffected");
+
+// 8. Nothing on the admin side answers to a group's credentials.
 for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/reconcile/export"]) {
   const r = await fetch(`${base}${path}`, { headers: { Authorization: `Bearer ${mine.code}` } });
   assert.equal(r.status, 401, `${path} refuses a group code as a token`);
 }
+
+// 9. Every response carries the headers that keep a token out of a referrer.
+const headers = (await fetch(`${base}/healthz`)).headers;
+assert.equal(headers.get("referrer-policy"), "no-referrer", "a group's token never rides a Referer header");
+assert.equal(headers.get("x-frame-options"), "DENY");
+assert.equal(headers.get("x-content-type-options"), "nosniff");
 
 console.log("group payload: all assertions passed", {
   group: mine.name,

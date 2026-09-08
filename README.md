@@ -103,6 +103,26 @@ holds the line: it signs in as a group and asserts no member field and no other
 company's name appears anywhere in the payload, and that a group's credentials
 are refused by every admin route.
 
+**Kennion's own bookkeeping stays on the admin side.** The fields a client's
+pages receive are an allow-list, not a deny-list — name, code, link token, TPA,
+enrolled, lives, tier counts, premium, plans, rates and the plan year — so a
+field added to a group later is not shipped to a client until someone puts it
+on that list on purpose. Broker, account manager, renewal state, SIC and
+division codes, and the archived and eligibility flags never leave the admin
+side.
+
+**Guessing is throttled.** A code is four letters from the company name plus
+the plan year, so it is guessable by anyone holding the client list. Ten failed
+sign-ins from one caller in ten minutes and that caller is cut off with a 429,
+a real code included, until the window passes; a success clears the count and
+another caller is unaffected. The same counter covers staff sign-in.
+
+**Every response carries the ordinary defences**: `Referrer-Policy: no-referrer`
+so a group's token never rides a Referer header off the site,
+`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, a cross-origin
+opener policy, a permissions policy, HSTS once TLS is on, and `no-store` on
+every API response so nothing signed-in sits in a shared cache.
+
 Even so the link is the credential for that company's own rates and
 enrollment, so it is for sending to the client rather than posting publicly. If
 one leaks, press **New link**.
