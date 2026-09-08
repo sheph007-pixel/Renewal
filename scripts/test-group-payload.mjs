@@ -132,4 +132,20 @@ console.log("group payload: all assertions passed", {
   bytes: blob.length,
   otherCompanies: 0,
 });
+// An API path no route claimed answers 404 JSON, not the app. Falling through
+// to the SPA turned a mistyped endpoint into 200 and a page of HTML, which a
+// caller can only meet as a JSON parse error.
+{
+  const r = await fetch(`${base}/api/admin/does-not-exist`);
+  assert.equal(r.status, 404, "an unknown API path is a 404");
+  assert.match(r.headers.get("content-type") || "", /application\/json/, "and it is JSON");
+  assert.match((await r.json()).error, /No such endpoint/);
+
+  const page = await fetch(`${base}/admin/groups`);
+  assert.equal(page.status, 200, "a real page still comes back");
+  assert.match(page.headers.get("content-type") || "", /text\/html/, "as the app");
+  console.log("unknown API paths 404 as JSON, pages still serve the app — ok");
+}
+
 stop();
+
