@@ -18,8 +18,8 @@ export const PROGRAM_TPAS = ["EBPA", "HealthEZ"];
 /** The four tiers, named as the workbook names them. */
 export const TIERS = [
   { key: "EE", label: "Employee", census: "Employee", factor: 1 },
-  { key: "ES", label: "Employee + Spouse", census: "Employee + Spouse", factor: 2.0 },
   { key: "EC", label: "Employee + Child(ren)", census: "Employee + Child(ren)", factor: 1.85 },
+  { key: "ES", label: "Employee + Spouse", census: "Employee + Spouse", factor: 2.0 },
   { key: "FAM", label: "Employee + Family", census: "Employee + Family", factor: 2.85 },
 ];
 

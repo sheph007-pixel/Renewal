@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import {
   TIERS,
   factorsHold,
@@ -8,6 +9,7 @@ import {
   type KennionData,
   type Overrides,
   type PlanRow,
+  type TierKey,
 } from "@/lib/model";
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
 
@@ -33,14 +35,94 @@ interface Props {
   totals: { er: number; ee: number; total: number };
   eePct: number;
   depPct: number;
-  onOpenPlan: (plan: string) => void;
+}
+
+/** What a column sorts on. Tiers sort on their rate. */
+type SortKey = "plan" | "enrolled" | "monthly" | TierKey;
+
+/** A column header that sorts. The arrow says which way, and only on the one in force. */
+function Head({
+  label,
+  k,
+  sort,
+  by,
+  left,
+  pad,
+}: {
+  label: string;
+  k: SortKey;
+  sort: { key: SortKey; desc: boolean };
+  by: (k: SortKey) => void;
+  left?: boolean;
+  pad?: string;
+}) {
+  const on = sort.key === k;
+  return (
+    <th style={{ ...th, textAlign: left ? "left" : "right", padding: pad || "11px 10px" }}>
+      <button
+        onClick={() => by(k)}
+        aria-label={`Sort by ${label}`}
+        style={{
+          background: "none",
+          border: "none",
+          padding: 0,
+          font: "inherit",
+          color: on ? C.ink : "inherit",
+          fontWeight: on ? 700 : undefined,
+          cursor: "pointer",
+        }}
+      >
+        {label}
+        <span style={{ marginLeft: 4, color: on ? C.blue : "transparent" }}>{sort.desc ? "\u2193" : "\u2191"}</span>
+      </button>
+    </th>
+  );
 }
 
 const monthName = (m: string | null) =>
   m ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : null;
 
-export default function Current({ data, overrides, g, rows, totals, onOpenPlan }: Props) {
+export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
+
+  // Biggest premium first, which is the order an employer reads it in.
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "monthly", desc: true });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const countOf = (r: PlanRow) => TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0);
+  const sorted = useMemo(() => {
+    const value = (r: PlanRow): string | number => {
+      if (sort.key === "plan") return r.p.plan.toLowerCase();
+      if (sort.key === "enrolled") return countOf(r);
+      if (sort.key === "monthly") return r.total;
+      // A tier with no rate sorts last either way rather than as zero.
+      const rate = rateFor(overrides, g, r.p.plan, sort.key).rate;
+      return rate == null ? (sort.desc ? -Infinity : Infinity) : rate;
+    };
+    return rows.slice().sort((a, b) => {
+      const x = value(a);
+      const y = value(b);
+      const c = typeof x === "string" ? x.localeCompare(y as string) : (x as number) - (y as number);
+      return sort.desc ? -c : c;
+    });
+  }, [rows, sort, overrides, g]);
+
+  const by = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "plan" }));
+
+  const download = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const { downloadPlanSheet } = await import("@/lib/plansheet");
+      await downloadPlanSheet(data, overrides, g, rows, eePct, depPct);
+    } catch (e) {
+      setSaveError((e as Error).message || "Could not build the file.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Any tier with nobody in it has no billed rate, so it is shown at the
   // program factors. Say so once, under the table, rather than per plan.
@@ -56,46 +138,48 @@ export default function Current({ data, overrides, g, rows, totals, onOpenPlan }
 
   return (
     <div>
-      <div className="anchor" style={sectionHead}>
+      <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Current Medical Plan(s)</h2>
+        <button
+          className="noprint"
+          onClick={() => void download()}
+          disabled={saving}
+          title="This table, plus what the employer and the employees each pay by tier"
+          style={{
+            padding: "6px 14px",
+            fontSize: 13,
+            fontWeight: 500,
+            color: C.ink,
+            background: "#fff",
+            border: `1px solid ${C.border}`,
+            borderRadius: 4,
+            cursor: saving ? "default" : "pointer",
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saving ? "Building…" : "Export To Excel"}
+        </button>
       </div>
 
       <div style={{ ...panel, padding: 0, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
           <thead>
             <tr>
-              <th style={{ ...th, textAlign: "left", padding: "11px 10px" }}>Plan</th>
-              <th style={{ ...th, textAlign: "right", padding: "11px 10px" }}>Enrolled</th>
+              <Head label="Plan" k="plan" left sort={sort} by={by} pad="11px 10px 11px 14px" />
+              <Head label="Enrolled" k="enrolled" sort={sort} by={by} />
               {TIERS.map((t) => (
-                <th key={t.key} style={{ ...th, textAlign: "right", padding: "11px 10px" }}>
-                  {t.label}
-                </th>
+                <Head key={t.key} label={t.label} k={t.key} sort={sort} by={by} />
               ))}
-              <th style={{ ...th, textAlign: "right", padding: "11px 14px 11px 10px" }}>Monthly</th>
+              <Head label="Monthly" k="monthly" sort={sort} by={by} pad="11px 14px 11px 10px" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
+            {sorted.map((r) => {
               const n = TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0);
               return (
                 <tr key={r.p.plan}>
-                  <td style={{ ...cell, paddingLeft: 14 }}>
-                    <div style={{ fontWeight: 600, color: C.ink }}>{r.p.plan}</div>
-                    <button
-                      className="noprint"
-                      onClick={() => onOpenPlan(r.p.plan)}
-                      style={{
-                        marginTop: 3,
-                        background: "none",
-                        border: "none",
-                        padding: 0,
-                        fontSize: 12.5,
-                        color: C.blue,
-                        cursor: "pointer",
-                      }}
-                    >
-                      What this costs you and your employees
-                    </button>
+                  <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: C.ink }}>
+                    {r.p.plan}
                   </td>
                   <td style={{ ...rateCell, fontWeight: 600, color: C.ink }}>{n}</td>
                   {TIERS.map((t) => {
@@ -144,6 +228,12 @@ export default function Current({ data, overrides, g, rows, totals, onOpenPlan }
           </tfoot>
         </table>
       </div>
+
+      {saveError && (
+        <div role="alert" style={{ marginTop: 10, fontSize: 13, color: C.red }}>
+          {saveError}
+        </div>
+      )}
 
       <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted, lineHeight: 1.7, maxWidth: 940 }}>
         <strong style={{ color: C.body }}>{money0(totals.total * 12)}</strong> a year at today&rsquo;s
