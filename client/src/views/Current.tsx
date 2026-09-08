@@ -57,7 +57,16 @@ function Head({
 }) {
   const on = sort.key === k;
   return (
-    <th style={{ ...th, textAlign: left ? "left" : "right", padding: pad || "11px 10px" }}>
+    <th
+      style={{
+        ...th,
+        textAlign: left ? "left" : "right",
+        padding: pad || "12px 10px",
+        background: C.ink,
+        color: "#fff",
+        borderBottom: "none",
+      }}
+    >
       <button
         onClick={() => by(k)}
         aria-label={`Sort by ${label}`}
@@ -66,13 +75,15 @@ function Head({
           border: "none",
           padding: 0,
           font: "inherit",
-          color: on ? C.ink : "inherit",
-          fontWeight: on ? 700 : undefined,
+          color: "#fff",
+          fontWeight: on ? 700 : 600,
           cursor: "pointer",
         }}
       >
         {label}
-        <span style={{ marginLeft: 4, color: on ? C.blue : "transparent" }}>{sort.desc ? "\u2193" : "\u2191"}</span>
+        <span style={{ marginLeft: 4, color: on ? "#fff" : "transparent" }}>
+          {sort.desc ? "\u2193" : "\u2191"}
+        </span>
       </button>
     </th>
   );
@@ -155,7 +166,8 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         </button>
       </div>
 
-      <div style={{ ...panel, padding: 0, overflowX: "auto" }}>
+      <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
           <thead>
             <tr>
@@ -221,6 +233,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
 
       {saveError && (
