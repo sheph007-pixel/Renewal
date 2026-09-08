@@ -76,6 +76,16 @@ them can be typed over in the Groups table; a hand-assigned code wins and is
 checked for uniqueness. Codes from the previous `KEN-XXXX-9999` scheme are still
 accepted, so anything already sent out keeps working.
 
+A group can also be reached by **link**: `https://app.kennion.com/?code=AEST2027`
+signs that group in and lands on its Current page, then takes the code out of
+the address so it does not sit in the bar, the history or a screenshot. It is
+the link to send a client, and the link staff open to see a company's pages
+exactly as the client sees them without knowing its code by heart. Every
+company page shows it with a Copy button, every row in the Groups table has a
+**view as client** link, and the CSV export carries a Client link column. The
+link carries the credential, so it is treated like the code itself; an archived
+group's link is refused at sign-in like its code.
+
 Each group is also categorised **2-50** or **51+ (ALE)**. It defaults from
 enrolled headcount and can be set explicitly, since ALE status is a legal
 determination rather than something an enrollment count settles.

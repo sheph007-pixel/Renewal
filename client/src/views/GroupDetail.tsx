@@ -40,6 +40,58 @@ const FIELDS: { key: string; label: string; width?: number }[] = [
   { key: "situsState", label: "Situs state", width: 90 },
 ];
 
+/**
+ * The group's own sign-in link. Opening it is exactly what the client sees, so
+ * staff can check a company's pages without knowing its code by heart — and it
+ * is the link to send the client. The code is the credential, so the link is
+ * too: anyone holding it is signed in as that group.
+ */
+function ClientLink({ code, archived }: { code: string; archived: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${typeof window === "undefined" ? "" : window.location.origin}/?code=${encodeURIComponent(code)}`;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
+        Client sign-in link
+      </label>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            fontSize: 12.5,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            color: C.blue,
+            wordBreak: "break-all",
+          }}
+        >
+          {url.replace(/^https?:\/\//, "")}
+        </a>
+        <button
+          onClick={() => {
+            void navigator.clipboard?.writeText(url).then(
+              () => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              },
+              () => undefined,
+            );
+          }}
+          style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: copied ? C.green : C.blue, cursor: "pointer" }}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <div style={{ marginTop: 5, fontSize: 11.5, color: C.faint, lineHeight: 1.5, maxWidth: 460 }}>
+        {archived
+          ? "This group is archived, so the link is refused at sign-in until it is restored."
+          : "Opens the client's own pages in a new tab. The link carries the code, so treat it like the code itself."}
+      </div>
+    </div>
+  );
+}
+
 export default function GroupDetail({ group, token, onChanged, onBack, onOpenRates, fundingMonth, onOverrides }: Props) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -191,6 +243,8 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
                 }}
               />
             </div>
+
+            <ClientLink code={group.code} archived={!!group.archived} />
 
             <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>

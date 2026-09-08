@@ -126,6 +126,7 @@ function groupsCsv(rows: AdminGroup[], blockEnrolled: number): string {
     ["Proposals on file", (g) => g.proposals || 0],
     ["Broker", (g) => BROKER_LABEL[g.broker || "kennion"]],
     ["Manager", (g) => (g.manager ? MANAGER_FULL[g.manager] : "")],
+    ["Client link", (g) => (g.archived || g.eligible === false ? "" : `${typeof window === "undefined" ? "" : window.location.origin}/?code=${encodeURIComponent(g.code)}`)],
     ["Size", (g) => g.sizeCategory],
     ["Enrolled", (g) => g.enrolled],
     ["% of block (enrolled)", (g) => (blockEnrolled ? ((g.enrolled || 0) / blockEnrolled * 100).toFixed(1) : "")],
@@ -708,7 +709,18 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                             ? `carriers found: ${(g.carriersSeen || []).join(", ") || "none"}`
                             : (g.programs || []).join(" · ")}
                         </span>
-                        {(g.proposals || 0) > 0 && (
+                        {!g.archived && g.eligible !== false && (
+                        <a
+                          href={`/?code=${encodeURIComponent(g.code)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`Open ${g.name}'s own pages, exactly as the client sees them`}
+                          style={{ fontSize: 11.5, color: C.blue, textDecoration: "none", whiteSpace: "nowrap" }}
+                        >
+                          view as client ↗
+                        </a>
+                      )}
+                      {(g.proposals || 0) > 0 && (
                           <Link
                             href={groupPath(g.name)}
                             title="Proposals on file — open the company page"

@@ -33,6 +33,17 @@ const DEP_PCT = 32;
 
 const SITE = "Kennion 2027 Renewal";
 
+/**
+ * The access code carried in the address, if any: `/?code=ABCD2027` signs that
+ * group in. It is what a client is sent, and what staff open to see exactly
+ * what the client sees.
+ */
+function linkCodeAtLoad(): string | null {
+  if (typeof window === "undefined") return null;
+  const c = new URLSearchParams(window.location.search).get("code");
+  return c && c.trim() ? c.trim().toUpperCase() : null;
+}
+
 export default function App() {
   const route = useRoute();
   const page = useMemo(() => parsePath(route.path), [route.path]);
@@ -42,7 +53,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   // True while a session saved in this tab is being re-established, so a
   // reload does not flash the sign-in screen on its way back to the page.
-  const [restoring, setRestoring] = useState(() => loadSession() != null);
+  const linkCode = useMemo(linkCodeAtLoad, []);
+  const [restoring, setRestoring] = useState(() => linkCodeAtLoad() != null || loadSession() != null);
   const restoreStarted = useRef(false);
   const [code, setCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
@@ -167,8 +179,41 @@ export default function App() {
   useEffect(() => {
     if (restoreStarted.current) return;
     restoreStarted.current = true;
+
+    // A code in the address wins over whatever this tab had: it is a
+    // deliberate "show me this group". The code is taken out of the address
+    // once it is used, so it does not sit in the bar, the history or a
+    // screenshot.
+    if (linkCode) {
+      (async () => {
+        try {
+          const r = await fetch("/api/signin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: linkCode }),
+          });
+          if (!r.ok) {
+            clearSession();
+            setCodeError(true);
+            navigate(PATHS.signin, { replace: true });
+            return;
+          }
+          applyGroup(await r.json());
+          navigate(PATHS.current, { replace: true });
+        } catch {
+          setLoadError(true);
+        } finally {
+          setRestoring(false);
+        }
+      })();
+      return;
+    }
+
     const s = loadSession();
-    if (!s) return;
+    if (!s) {
+      setRestoring(false);
+      return;
+    }
     (async () => {
       try {
         if (s.kind === "group") {
@@ -192,7 +237,7 @@ export default function App() {
         setRestoring(false);
       }
     })();
-  }, [applyAdmin, applyGroup]);
+  }, [applyAdmin, applyGroup, linkCode]);
 
   /**
    * Hand-keyed rates are saved on the server, so they are shared with everyone
