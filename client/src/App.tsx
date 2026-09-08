@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  TIERS,
   fmtDate,
   ovKey,
   planRows,
-  rateFor,
   type Freq,
   type KennionData,
   type Overrides,
@@ -443,41 +441,6 @@ export default function App() {
     setSent(false);
   };
 
-  const exportRates = () => {
-    if (!data) return;
-    const out: Record<string, Record<string, Record<string, unknown>>> = {};
-    // Same roster rule as the screen: archived and not-in-program groups are
-    // not in the portal, so they are not in the export either.
-    const active = data.groups.filter(
-      (g) =>
-        !(g as unknown as { archived?: boolean }).archived &&
-        (g as unknown as { eligible?: boolean }).eligible !== false,
-    );
-    active.forEach((grp) => {
-      (grp.plans || []).forEach((p) => {
-        TIERS.forEach((t) => {
-          const r = rateFor(overrides, grp, p.plan, t.key);
-          if (r.rate == null) return;
-          out[grp.name] = out[grp.name] || {};
-          out[grp.name][p.plan] = out[grp.name][p.plan] || {};
-          out[grp.name][p.plan][t.census] = {
-            rate: r.rate,
-            source: r.manual ? "manual" : r.derived ? "calculated" : "billed",
-          };
-        });
-      });
-    });
-    const blob = new Blob(
-      [JSON.stringify({ generated: new Date().toISOString(), rates: out }, null, 2)],
-      { type: "application/json" },
-    );
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "kennion-2026-rates.json";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  };
-
   if (loadError) {
     return (
       <div
@@ -607,7 +570,6 @@ export default function App() {
         onTpa={setAdminTpa}
         onToggleGaps={() => setGapsOnly((v) => !v)}
         onSetOverride={setOverride}
-        onExport={exportRates}
         onExit={signOut}
       />
     );
