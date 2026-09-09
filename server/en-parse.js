@@ -291,6 +291,10 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     .filter((c) => c.name || c.email);
 
   const employees = blocks(xml, "Employee");
+  // Every employee the census carries, minus a terminated (or otherwise
+  // gone) one — this export has no row at all for someone who declined
+  // medical, so this headcount is the only reliable stand-in for eligible.
+  let activeEmployees = 0;
   const members = [];
   let pyStart = null;
   let pyEnd = null;
@@ -366,6 +370,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       }
       continue;
     }
+    activeEmployees++;
     for (const en of allEnrollments) {
       const medicalLine = text(en, "Benefit") === "Medical";
       if (isWaived(en)) {
@@ -565,11 +570,14 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       tpa,
       enrolled: members.length,
       /**
-       * Active employees who had a medical election in the file at all —
-       * enrolled or waived. Terminated employees are not eligible; someone
-       * who waived still is, which is why this is not just `enrolled`.
+       * Every active employee on the census, whether or not they show up
+       * in a medical enrollment. A declined election has no row of its own
+       * in this export — an employee who waives simply never appears under
+       * Medical — so `enrolled` plus a waived count would silently equal
+       * `enrolled` on every group. The employee roster itself is the only
+       * count this file gives that does not depend on that.
        */
-      medicalEligible: members.length + diag.medical.excluded.waived.n,
+      medicalEligible: activeEmployees,
       lives,
       tiers,
       monthly,
