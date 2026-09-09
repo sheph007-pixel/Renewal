@@ -6,12 +6,14 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
- *   /g/:slug/:token      a group's own permanent address — its home page
- *   /g/:slug/:token/current   …Current Medical Plan(s)
- *   /g/:slug/:token/options   …and its 2027 options
+ *   /g/:slug/:token             a group's own permanent address — Welcome
+ *   /g/:slug/:token/current     …Current 2026 Medical Plans
+ *   /g/:slug/:token/options     …New 2027 Medical Plans
+ *   /g/:slug/:token/supplemental …Supplemental Package
+ *   /g/:slug/:token/signup      …Sign Up
  *   /admin               staff sign-in
- *   /current             Current Medical Plan(s)
- *   /options             2027 Medical Plan Options
+ *   /current             Current 2026 Medical Plans
+ *   /options             New 2027 Medical Plans
  *   /admin/groups        Rate Administration — Groups
  *   /admin/groups/:name  one company's page
  *   /admin/rates         Rate Administration — Existing Plans & Rates
@@ -32,7 +34,7 @@ export interface Route {
 }
 
 /** The pages a signed-in group has, in the order the side navigation lists them. */
-export type GroupTab = "home" | "current" | "options";
+export type GroupTab = "home" | "current" | "options" | "supplemental" | "signup";
 
 export type Page =
   | { kind: "signin"; staff: boolean }
@@ -109,12 +111,12 @@ export function parsePath(path: string): Page {
   if (path === PATHS.options) return { kind: "group", tab: "options" };
   // A group's permanent address: the token stays in the bar, so the page can
   // be bookmarked and shared without a code being typed.
-  const s = path.match(/^\/g\/([a-z0-9][a-z0-9-]{0,79})\/([A-Za-z0-9_-]{8,64})(?:\/(current|options))?$/);
+  const s = path.match(/^\/g\/([a-z0-9][a-z0-9-]{0,79})\/([A-Za-z0-9_-]{8,64})(?:\/(current|options|supplemental|signup))?$/);
   if (s) return { kind: "group", tab: (s[3] as GroupTab) || "home", token: s[2], slug: s[1] };
   // Addresses minted before the slug: the token alone. The base address is the
   // home page now, so an old bookmark lands there and is rewritten to the
   // readable spelling; nothing it used to reach has moved further than a click.
-  const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(current|options))?$/);
+  const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(current|options|supplemental|signup))?$/);
   if (t) return { kind: "group", tab: (t[2] as GroupTab) || "home", token: t[1] };
   const m = path.match(/^\/admin\/(groups|rates|proposals|import)(?:\/(.+))?$/);
   if (m) {

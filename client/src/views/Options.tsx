@@ -15,6 +15,7 @@ import {
   type TierKey,
 } from "@/lib/model";
 import { C, chip, h2, num, panel, sectionHead, textInput } from "@/lib/ui";
+import Link from "@/lib/Link";
 
 export type SortKey = TierKey | "plan" | "monthly" | "delta" | "ded" | "oop" | "copays" | "rx" | "network";
 
@@ -23,7 +24,6 @@ export const OPTIONS_SECTIONS = [
   { id: "market", label: "Market Summary" },
   { id: "recommends", label: "Kennion Recommends" },
   { id: "all-options", label: "All Options" },
-  { id: "shortlist", label: "Your Shortlist" },
 ];
 
 interface Props {
@@ -36,14 +36,12 @@ interface Props {
   gridQuery: string;
   carriers: Record<string, boolean>;
   selected: Record<string, boolean>;
-  note: string;
-  sent: boolean;
+  /** Where the shortlist is reviewed and sent — its own page now. */
+  signUpHref: string;
   onSort: (k: SortKey) => void;
   onGridQuery: (v: string) => void;
   onToggleCarrier: (c: string) => void;
   onToggleSelected: (plan: string) => void;
-  onNote: (v: string) => void;
-  onSend: () => void;
 }
 
 export default function Options({
@@ -56,14 +54,11 @@ export default function Options({
   gridQuery,
   carriers,
   selected,
-  note,
-  sent,
+  signUpHref,
   onSort,
   onGridQuery,
   onToggleCarrier,
   onToggleSelected,
-  onNote,
-  onSend,
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
   const direct = hasDirectQuote(data, g);
@@ -567,106 +562,33 @@ export default function Options({
           : " Gravie rates are in progress; Surest is quoted where UnitedHealthcare included it."}
       </div>
 
-      <div id="shortlist" className="panel anchor" style={{ ...panel, marginTop: 24, padding: "18px 20px" }}>
-        <h2 style={{ ...h2, margin: "0 0 4px" }}>Your Shortlist</h2>
-        <p style={{ margin: "0 0 12px", fontSize: 13, color: C.muted }}>
+      {/*
+        The shortlist itself, the note, and sending it are Sign Up's job now —
+        this is a pointer there, so building a shortlist has somewhere to go.
+      */}
+      <div className="panel noprint" style={{ ...panel, marginTop: 24, padding: "18px 20px" }}>
+        <h2 style={{ ...h2, margin: "0 0 4px" }}>Ready to move forward?</h2>
+        <p style={{ margin: "0 0 14px", fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
           {short.length
-            ? `${short.length} plan${short.length > 1 ? "s" : ""} selected. Add a note and send — your rep will come back with firm rates and a contribution model.`
-            : "Check any plan above to build a shortlist. Nothing is binding — this just tells us what to price for you."}
+            ? `${short.length} plan${short.length > 1 ? "s" : ""} on your shortlist. Review it, add a note, and send it in on Sign Up.`
+            : "Check any plan above to add it to your shortlist. Nothing is binding — it just tells us what to price for you."}
         </p>
-        {short.map((s) => (
-          <div
-            key={s.plan}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 14,
-              padding: "10px 0",
-              borderTop: `1px solid ${C.hairline}`,
-              fontSize: 13.5,
-            }}
-          >
-            <span style={{ color: C.ink }}>
-              <strong>{s.plan}</strong>{" "}
-              <span style={{ color: C.faint }}>
-                {s.carrier.replace(" (UnitedHealthcare)", " by UHC")}
-              </span>
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <span style={{ fontWeight: 600, color: C.ink, ...num }}>
-                {s.monthly == null ? "quote pending" : `${money0(s.monthly)} / mo`}
-              </span>
-              <button
-                onClick={() => onToggleSelected(s.plan)}
-                className="noprint"
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: C.blue,
-                  fontSize: 13,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                Remove
-              </button>
-            </span>
-          </div>
-        ))}
-
-        <textarea
-          value={note}
-          onChange={(e) => onNote(e.target.value)}
-          aria-label="Questions for your Kennion rep"
-          placeholder="Questions for your Kennion rep — anything you want quoted differently, contribution changes, timing…"
+        <Link
+          href={signUpHref}
           style={{
-            marginTop: 14,
-            width: "100%",
-            minHeight: 84,
-            padding: "10px 12px",
+            display: "inline-block",
+            padding: "9px 18px",
             fontSize: 13.5,
-            lineHeight: 1.55,
-            color: C.ink,
-            border: `1px solid ${C.inputEdge}`,
+            fontWeight: 500,
+            color: "#fff",
+            background: C.blue,
+            border: `1px solid ${C.blue}`,
             borderRadius: 4,
-            outline: "none",
-            resize: "vertical",
-          }}
-        />
-        <div
-          style={{
-            marginTop: 12,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 12,
+            textDecoration: "none",
           }}
         >
-          <button
-            onClick={onSend}
-            className="noprint"
-            style={{
-              padding: "9px 18px",
-              fontSize: 13.5,
-              fontWeight: 500,
-              color: "#fff",
-              background: C.blue,
-              border: `1px solid ${C.blue}`,
-              borderRadius: 4,
-              cursor: "pointer",
-            }}
-          >
-            Send to my Kennion rep
-          </button>
-          <span style={{ fontSize: 12.5, color: C.muted }}>
-            {sent
-              ? "Sent to Hunter Shepherd · hunter@kennion.com. We'll respond within one business day."
-              : short.length
-                ? "Goes to Hunter Shepherd, your Kennion rep."
-                : ""}
-          </span>
-        </div>
+          {short.length ? "Review your shortlist \u2192" : "Go to Sign Up \u2192"}
+        </Link>
       </div>
     </div>
   );
