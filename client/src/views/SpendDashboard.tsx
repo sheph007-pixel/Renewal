@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { money, money0, type TierContribution } from "@/lib/model";
 import { C, num, panel } from "@/lib/ui";
+import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 
 interface Props {
   totals: { er: number; ee: number; total: number };
@@ -100,11 +101,19 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
 
   return (
     <div style={{ ...panel, padding: "20px 22px", marginBottom: 16 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.5px" }}>
           Current Group Plan
         </div>
-        <span style={{ fontSize: 12, color: C.faint }}>{enrolled} enrolled</span>
+        <div style={{ textAlign: "right" }}>
+          <span style={{ fontSize: 12, color: C.faint }}>{enrolled} enrolled</span>
+          <div style={{ marginTop: 2, fontSize: 11, color: C.ghost }}>
+            Data pulled from Employee Navigator, for illustrative purposes only.{" "}
+            <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
+              View Details
+            </a>
+          </div>
+        </div>
       </div>
 
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 14 }}>

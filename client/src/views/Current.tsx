@@ -4,7 +4,6 @@ import {
   contributionByTier,
   money,
   rateFor,
-  type AccountManager,
   type Group,
   type KennionData,
   type Overrides,
@@ -12,8 +11,6 @@ import {
   type TierKey,
 } from "@/lib/model";
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
-import NavigatorCard from "@/views/NavigatorCard";
-import ContactCard from "@/views/ContactCard";
 import SpendDashboard from "@/views/SpendDashboard";
 
 /**
@@ -38,8 +35,6 @@ interface Props {
   totals: { er: number; ee: number; total: number };
   eePct: number;
   depPct: number;
-  /** Who at Kennion holds the group, for the card under the grid. */
-  manager?: AccountManager | null;
 }
 
 /** What a column sorts on. Tiers sort on their rate. */
@@ -96,7 +91,7 @@ function Head({
   );
 }
 
-export default function Current({ data, overrides, g, rows, totals, eePct, depPct, manager }: Props) {
+export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
   // Biggest premium first, which is the order an employer reads it in.
@@ -251,13 +246,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
           {saveError}
         </div>
       )}
-
-      {/* The grid is the summary; the two places an employer goes next when it
-          raises a question are the enrollment detail and a person. */}
-      <div className="cardgrid" style={{ marginTop: 22 }}>
-        <NavigatorCard />
-        <ContactCard manager={manager} />
-      </div>
     </div>
   );
 }

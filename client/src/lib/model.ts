@@ -104,6 +104,12 @@ export interface Group {
   pyEnd?: string;
   tpa: string;
   enrolled: number;
+  /**
+   * Active employees who had a medical election at all — enrolled or
+   * waived — as of the last import. Absent on a group imported before this
+   * field existed.
+   */
+  medicalEligible?: number;
   lives: number;
   tiers?: Record<TierKey, number>;
   monthly?: number;

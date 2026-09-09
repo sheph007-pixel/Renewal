@@ -32,6 +32,7 @@ import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SectionNav from "@/views/SectionNav";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
+import HrAnalytics from "@/views/HrAnalytics";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -841,6 +842,11 @@ export default function App() {
                   />
                 )}
               </div>
+              <HrAnalytics
+                eligible={g.medicalEligible}
+                enrolled={totals.enrolled}
+                contributionPct={totals.total ? (totals.er / totals.total) * 100 : 0}
+              />
             </div>
 
             {tab === "home" ? (
@@ -875,7 +881,6 @@ export default function App() {
                 totals={totals}
                 eePct={EE_PCT}
                 depPct={DEP_PCT}
-                manager={manager}
               />
             ) : tab === "options" ? (
               <Options
