@@ -714,17 +714,22 @@ export default function App() {
         ? PATHS.options
         : PATHS.current;
 
-  // Welcome and Sign Up both carry no step: Welcome is where you start, not
-  // part of the count, and Sign Up is the destination the count builds
-  // toward rather than a fifth stop along the way \u2014 a checkmark, not a "5".
-  const TAB_STEP: Partial<Record<GroupTab, number>> = { changes: 1, current: 2, options: 3, supplemental: 4 };
+  // Welcome carries no step \u2014 it is where you start, not part of the count \u2014
+  // so the five real pages run 1 through 5, Sign Up included.
+  const TAB_STEP: Partial<Record<GroupTab, number>> = {
+    changes: 1,
+    current: 2,
+    options: 3,
+    supplemental: 4,
+    signup: 5,
+  };
   const navItems: NavItem[] = (["home", "changes", "current", "options", "supplemental", "signup"] as GroupTab[]).map(
     (t) => ({
       tab: t,
       href: hrefFor(t),
       label: TAB_LABEL[t],
       step: TAB_STEP[t],
-      mark: t === "home" ? "home" : t === "signup" ? "check" : undefined,
+      mark: t === "home" ? "home" : undefined,
       cta: t === "signup",
     }),
   );
