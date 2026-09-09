@@ -1,8 +1,12 @@
+import type { ReactNode } from "react";
 import { C, Logo } from "@/lib/ui";
 import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
+
+/** Where a client opens a support ticket directly, without going through email. */
+export const SUPPORT_URL = "https://support.kennion.com/support/tickets/new";
 
 export interface NavItem {
   tab: GroupTab;
@@ -42,7 +46,100 @@ function HomeIcon({ color }: { color: string }) {
   );
 }
 
+/** A little grid — Employee Navigator's own kind of mark, so it reads as "another system." */
+function GridIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="1.2" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="1.2" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="1.2" />
+    </svg>
+  );
+}
+
+/** A support ticket. */
+function TicketIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z" />
+      <path d="M13 6v2M13 11v2M13 16v2" />
+    </svg>
+  );
+}
+
+/** A door with an arrow out — logging out. */
+function LogOutIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />
+      <path d="M19 12H10M19 12l-3-3M19 12l-3 3" />
+    </svg>
+  );
+}
+
 const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
+
+/**
+ * One row in the Links section: an icon, a label, and — only for a link that
+ * leaves the site — the same outbound arrow used everywhere else on these
+ * pages. Log Out is the one row that is a button, not a link, and carries no
+ * arrow, since it goes nowhere external.
+ */
+function LinkRow({
+  icon,
+  label,
+  href,
+  external,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  href?: string;
+  external?: boolean;
+  onClick?: () => void;
+}) {
+  const style = {
+    display: "flex",
+    alignItems: "center",
+    gap: 9,
+    padding: "8px 14px",
+    fontSize: 13,
+    fontWeight: 500,
+    color: C.body,
+    textDecoration: "none",
+    background: "none",
+    border: "none",
+    width: "100%",
+    textAlign: "left" as const,
+    cursor: "pointer",
+  };
+  const inner = (
+    <>
+      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", color: C.faint }}>
+        {icon}
+      </span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {external && (
+        <span aria-hidden style={{ color: C.faint, fontSize: 11 }}>
+          &#8599;
+        </span>
+      )}
+    </>
+  );
+  if (href) {
+    return (
+      <a href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} style={style}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button onClick={onClick} style={style}>
+      {inner}
+    </button>
+  );
+}
 
 /**
  * The site's navigation: a full-height rail down the left, which is how
@@ -227,21 +324,13 @@ export default function SideNav({
         })}
       </nav>
 
-      {/* Pinned to the bottom of the rail: where the detail lives, and who to
-          call about it. Its own block, set apart with a tint and a rule, so it
-          reads as "the people", not one more row in the page list above. */}
+      {/* Pinned to the bottom of the rail: who to call about the group, then
+          the standing links every page shares. Two blocks, not one drawer —
+          the account manager is a person and gets a card of their own; the
+          rest are destinations and read as a plain, labelled list under it. */}
       <div className="rail-foot" style={{ marginTop: "auto" }}>
         {collapsed ? (
           <div style={{ padding: 8, borderTop: `1px solid ${C.hairline}` }}>
-            <a
-              href={NAVIGATOR_URL}
-              target="_blank"
-              rel="noreferrer"
-              title="Employee Navigator"
-              style={{ display: "grid", placeItems: "center", padding: "8px 0", fontSize: 12, fontWeight: 700, color: C.blue }}
-            >
-              EN
-            </a>
             {manager?.name && (
               <a
                 href={telHref(manager.phone || "")}
@@ -251,7 +340,7 @@ export default function SideNav({
                   placeItems: "center",
                   width: 30,
                   height: 30,
-                  margin: "6px auto 0",
+                  margin: "0 auto",
                   borderRadius: "50%",
                   background: C.blueTint,
                   color: C.blueInk,
@@ -262,37 +351,48 @@ export default function SideNav({
                 {manager.name[0]}
               </a>
             )}
+            <a
+              href={NAVIGATOR_URL}
+              target="_blank"
+              rel="noreferrer"
+              title="Employee Navigator"
+              style={{ display: "grid", placeItems: "center", padding: "8px 0", color: C.faint }}
+            >
+              <GridIcon />
+            </a>
+            <a
+              href={SUPPORT_URL}
+              target="_blank"
+              rel="noreferrer"
+              title="Support Ticket"
+              style={{ display: "grid", placeItems: "center", padding: "0 0 8px", color: C.faint }}
+            >
+              <TicketIcon />
+            </a>
             <button
               onClick={onExit}
-              title="Exit"
+              title="Log Out"
               style={{
-                display: "block",
+                display: "grid",
+                placeItems: "center",
                 width: "100%",
-                marginTop: 6,
-                padding: "6px 0",
+                padding: "6px 0 0",
                 background: "none",
                 border: "none",
-                fontSize: 11.5,
                 color: C.faint,
                 cursor: "pointer",
               }}
             >
-              Exit
+              <LogOutIcon />
             </button>
           </div>
         ) : (
           <>
-            <div className="rail-links" style={{ padding: "10px 14px", borderTop: `1px solid ${C.hairline}` }}>
-              <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: C.blue }}>
-                Employee Navigator &#8599;
-              </a>
-            </div>
-
             {manager?.name && (
               <div
                 className="rail-manager"
                 style={{
-                  margin: "0 10px 10px",
+                  margin: "10px 10px 0",
                   padding: "12px 14px",
                   borderRadius: 8,
                   background: C.blueTint,
@@ -338,22 +438,14 @@ export default function SideNav({
               </div>
             )}
 
-            <button
-              onClick={onExit}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "0 14px 12px",
-                background: "none",
-                border: "none",
-                textAlign: "left",
-                fontSize: 12.5,
-                color: C.faint,
-                cursor: "pointer",
-              }}
-            >
-              Exit
-            </button>
+            <div className="rail-links" style={{ marginTop: 10, padding: "10px 0", borderTop: `1px solid ${C.hairline}` }}>
+              <div style={{ padding: "0 14px 4px", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.5px", color: C.ghost, textTransform: "uppercase" }}>
+                Links
+              </div>
+              <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
+              <LinkRow icon={<TicketIcon />} label="Support Ticket" href={SUPPORT_URL} external />
+              <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
+            </div>
           </>
         )}
       </div>
