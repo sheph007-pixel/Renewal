@@ -830,7 +830,10 @@ export default function App() {
                 >
                   {g.name}
                 </h1>
-                <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+                {/* Same wording as the side rail's current entry, so the page
+                    a client lands on after clicking a link is never in doubt. */}
+                <div style={{ marginTop: 6, fontSize: 15, fontWeight: 600, color: C.ink }}>{TAB_LABEL[tab]}</div>
+                <div style={{ marginTop: 3, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
                   {tab === "home"
                     ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
                     : subline}

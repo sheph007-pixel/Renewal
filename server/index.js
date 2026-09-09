@@ -949,6 +949,23 @@ const CLIENT_GROUP_FIELDS = [
   "lines",
 ];
 
+/**
+ * Active (non-terminated) headcount from a group's stored import
+ * diagnostics — the same figure `medicalEligible` is meant to be, but read
+ * fresh off data already on the group rather than whatever value was
+ * computed at import time. That matters because the definition changed
+ * after some groups were imported: their stored `medicalEligible` is
+ * stale, but the raw counts it should have been built from are already
+ * sitting in `diagnostics` from that same import, so there is no need to
+ * re-upload anything to correct it.
+ */
+function activeEmployeeCount(diagnostics) {
+  const employees = diagnostics && diagnostics.employees;
+  if (!employees || typeof employees.total !== "number") return null;
+  const skipped = Object.values(employees.skipped || {}).reduce((n, x) => n + x, 0);
+  return employees.total - skipped;
+}
+
 function clientGroupView(g) {
   const { members } = g;
   const planTiers = {};
@@ -964,6 +981,8 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
+  const active = activeEmployeeCount(g.diagnostics);
+  if (active != null) out.medicalEligible = active;
   // Whether supplemental has ever been read for this group, and what it
   // comes to — the same figures the Groups page shows staff.
   const breakdown = premiumBreakdown(g);

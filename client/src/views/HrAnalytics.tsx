@@ -15,11 +15,11 @@ const CONTRIBUTION_BENCHMARK = 68.6;
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div style={{ fontSize: 10, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.3px" }}>
+      <div style={{ fontSize: 9.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.3px", whiteSpace: "nowrap" }}>
         {label}
       </div>
-      <div style={{ marginTop: 2, fontSize: 16, fontWeight: 700, color: C.ink, ...num }}>{value}</div>
-      {sub && <div style={{ marginTop: 1, fontSize: 10.5, color: C.faint, ...num }}>{sub}</div>}
+      <div style={{ marginTop: 1, fontSize: 15, fontWeight: 700, color: C.ink, ...num }}>{value}</div>
+      {sub && <div style={{ marginTop: 1, fontSize: 9.5, color: C.faint, whiteSpace: "nowrap", ...num }}>{sub}</div>}
     </div>
   );
 }
@@ -45,17 +45,16 @@ export default function HrAnalytics({ eligible, enrolled, contributionPct }: Pro
     <div
       style={{
         flex: "0 0 auto",
-        width: 236,
-        padding: "12px 14px",
+        padding: "7px 14px 9px",
         borderRadius: 6,
         background: C.hairline,
         border: `1px solid ${C.border}`,
       }}
     >
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
         HR Analytics
       </div>
-      <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 10px" }}>
+      <div style={{ marginTop: 5, display: "flex", gap: 18 }}>
         <Stat label="Eligible" value={String(eligible)} />
         <Stat label="Enrolled" value={String(enrolled)} />
         <Stat label="Participation" value={`${participationPct}%`} sub={vsBenchmark(participationPct, PARTICIPATION_BENCHMARK)} />
