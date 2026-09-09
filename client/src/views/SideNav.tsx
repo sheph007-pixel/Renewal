@@ -4,6 +4,8 @@ import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
+import ThemeToggle from "@/views/ThemeToggle";
+import type { Theme } from "@/lib/theme";
 
 /** Where a client opens a support ticket directly, without going through email. */
 export const SUPPORT_URL = "https://support.kennion.com/support/tickets/new";
@@ -34,6 +36,8 @@ interface Props {
   homeHref: string;
   manager: AccountManager | null | undefined;
   onExit: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
 }
 
 /** A small house glyph for Welcome — plainer than a wordmark, clearer than a letter. */
@@ -161,11 +165,13 @@ export default function SideNav({
   homeHref,
   manager,
   onExit,
+  theme,
+  onToggleTheme,
 }: Props) {
   return (
     <div
       className="sidebar noprint"
-      style={{ background: "#fff", borderRight: `1px solid ${C.border}` }}
+      style={{ background: C.card, borderRight: `1px solid ${C.border}` }}
     >
       <div
         className="brand"
@@ -365,10 +371,11 @@ export default function SideNav({
               target="_blank"
               rel="noreferrer"
               title="Support Ticket"
-              style={{ display: "grid", placeItems: "center", padding: "0 0 8px", color: C.faint }}
+              style={{ display: "grid", placeItems: "center", padding: "0 0 6px", color: C.faint }}
             >
               <TicketIcon />
             </a>
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} compact />
             <button
               onClick={onExit}
               title="Log Out"
@@ -444,6 +451,7 @@ export default function SideNav({
               </div>
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
               <LinkRow icon={<TicketIcon />} label="Support Ticket" href={SUPPORT_URL} external />
+              <ThemeToggle theme={theme} onToggle={onToggleTheme} />
               <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
             </div>
           </>

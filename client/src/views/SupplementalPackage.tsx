@@ -48,26 +48,26 @@ export default function SupplementalPackage({ g, manager }: Props) {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
               <thead>
                 <tr>
-                  <th style={{ ...th, textAlign: "left", padding: "11px 10px 11px 14px", background: C.ink, color: "#fff", borderBottom: "none" }}>
+                  <th style={{ ...th, textAlign: "left", padding: "11px 10px 11px 14px", background: C.headerBg, color: "#fff", borderBottom: "none" }}>
                     Benefit
                   </th>
-                  <th style={{ ...th, textAlign: "left", padding: "11px 10px", background: C.ink, color: "#fff", borderBottom: "none" }}>
+                  <th style={{ ...th, textAlign: "left", padding: "11px 10px", background: C.headerBg, color: "#fff", borderBottom: "none" }}>
                     Plan
                   </th>
-                  <th style={{ ...th, textAlign: "left", padding: "11px 10px", background: C.ink, color: "#fff", borderBottom: "none" }}>
+                  <th style={{ ...th, textAlign: "left", padding: "11px 10px", background: C.headerBg, color: "#fff", borderBottom: "none" }}>
                     Carrier
                   </th>
-                  <th style={{ ...th, textAlign: "right", padding: "11px 10px", background: C.ink, color: "#fff", borderBottom: "none" }}>
+                  <th style={{ ...th, textAlign: "right", padding: "11px 10px", background: C.headerBg, color: "#fff", borderBottom: "none" }}>
                     Enrolled
                   </th>
-                  <th style={{ ...th, textAlign: "right", padding: "11px 14px 11px 10px", background: C.ink, color: "#fff", borderBottom: "none" }}>
+                  <th style={{ ...th, textAlign: "right", padding: "11px 14px 11px 10px", background: C.headerBg, color: "#fff", borderBottom: "none" }}>
                     Monthly
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {lines.map((l, i) => (
-                  <tr key={`${l.benefit}-${l.plan}-${i}`} style={{ background: i % 2 ? C.zebra : "#fff" }}>
+                  <tr key={`${l.benefit}-${l.plan}-${i}`} style={{ background: i % 2 ? C.zebra : C.card }}>
                     <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: C.ink }}>{l.benefit}</td>
                     <td style={cell}>{l.plan}</td>
                     <td style={{ ...cell, color: C.body }}>{l.carrier}</td>

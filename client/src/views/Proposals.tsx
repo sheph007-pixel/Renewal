@@ -962,7 +962,7 @@ export default function Proposals({ token, groups }: Props) {
                   borderRadius: 4,
                   cursor: "pointer",
                   ...(layout === k
-                    ? { color: "#fff", background: C.ink, border: `1px solid ${C.ink}`, fontWeight: 500 }
+                    ? { color: "#fff", background: C.headerBg, border: `1px solid ${C.headerBg}`, fontWeight: 500 }
                     : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
                 }}
               >

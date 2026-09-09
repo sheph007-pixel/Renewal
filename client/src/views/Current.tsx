@@ -66,7 +66,7 @@ function Head({
         ...th,
         textAlign: left ? "left" : "right",
         padding: pad || "12px 10px",
-        background: C.ink,
+        background: C.headerBg,
         color: "#fff",
         borderBottom: "none",
       }}
@@ -152,7 +152,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
             fontSize: 13,
             fontWeight: 500,
             color: C.ink,
-            background: "#fff",
+            background: C.card,
             border: `1px solid ${C.border}`,
             borderRadius: 4,
             cursor: saving ? "default" : "pointer",
@@ -182,7 +182,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
               return (
                 // Alternating bands, so the eye keeps its place across a wide
                 // row of rates.
-                <tr key={r.p.plan} style={{ background: i % 2 ? C.zebra : "#fff" }}>
+                <tr key={r.p.plan} style={{ background: i % 2 ? C.zebra : C.card }}>
                   <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: C.ink }}>
                     {r.p.plan}
                   </td>

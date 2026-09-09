@@ -1,11 +1,80 @@
+/*
+ * The palette, as CSS custom properties. `lib/ui.ts`'s `C` object reads these
+ * by name (`var(--ink)`, etc.), so every screen built from it — client and
+ * staff alike — repaints when the theme changes; nothing downstream needs to
+ * know light from dark. `data-theme` on <html> picks the theme; it is set by
+ * `lib/theme.ts` before paint, from what the browser last saved.
+ */
+:root,
+[data-theme="light"] {
+  --page: #eef1f2;
+  --card: #ffffff;
+  --border: #dfe3e6;
+  --hairline: #eef1f2;
+  --rule: #e6e9eb;
+  --ink: #333333;
+  --body: #5c6368;
+  --muted: #6b7276;
+  --faint: #8b9296;
+  --ghost: #a0a7ab;
+  --blue: #2166cd;
+  --blue-ink: #17479a;
+  --blue-tint: #eaf1fc;
+  --blue-edge: #cadcf6;
+  --orange: #e8781a;
+  --orange-ink: #c2631a;
+  --green: #1e7e34;
+  --green-tint: #eaf6ec;
+  --green-edge: #c7e6cd;
+  --amber: #8a6d1f;
+  --amber-tint: #fdf6e3;
+  --amber-edge: #ecdcae;
+  --red: #a3241c;
+  --red-tint: #fdf0ef;
+  --red-edge: #f0c8c4;
+  --input-edge: #b6bfc4;
+  --zebra: #fafbfc;
+  --header-bg: #202429;
+}
+[data-theme="dark"] {
+  --page: #14161a;
+  --card: #1d2025;
+  --border: #33373d;
+  --hairline: #282c32;
+  --rule: #2c3036;
+  --ink: #eceef0;
+  --body: #b7bcc2;
+  --muted: #9aa0a7;
+  --faint: #767c84;
+  --ghost: #5c6169;
+  --blue: #4a8fe0;
+  --blue-ink: #9dc4f5;
+  --blue-tint: #17263d;
+  --blue-edge: #2c4a72;
+  --orange: #f0954a;
+  --orange-ink: #f6b57e;
+  --green: #45a860;
+  --green-tint: #16281c;
+  --green-edge: #2c4f36;
+  --amber: #d0aa4a;
+  --amber-tint: #302a18;
+  --amber-edge: #564a26;
+  --red: #e0685c;
+  --red-tint: #331c1a;
+  --red-edge: #5e332e;
+  --input-edge: #4a4f56;
+  --zebra: #202329;
+  --header-bg: #0c0d10;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
 }
 body {
-  background: #eef1f2;
-  color: #333333;
+  background: var(--page);
+  color: var(--ink);
   font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -13,11 +82,11 @@ body {
   box-sizing: border-box;
 }
 a {
-  color: #2166cd;
+  color: var(--blue);
   text-decoration: none;
 }
 a:hover {
-  color: #17479a;
+  color: var(--blue-ink);
   text-decoration: underline;
 }
 input,
@@ -35,6 +104,18 @@ textarea {
 }
 
 @media print {
+  /* Paper is light regardless of what the screen was showing — dark mode is a
+     screen preference, not something worth spending toner on. */
+  :root {
+    --page: #eef1f2;
+    --card: #ffffff;
+    --border: #dfe3e6;
+    --hairline: #eef1f2;
+    --ink: #333333;
+    --body: #5c6368;
+    --muted: #6b7276;
+    --faint: #8b9296;
+  }
   @page {
     margin: 0.45in;
   }
