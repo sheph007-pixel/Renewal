@@ -197,7 +197,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
           2027 Medical Options, but muted and disabled: this is what today's
           plan already fixed, not something to type over. */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
-        <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: C.ink }}>Illustrative Employer Contribution</div>
+        <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: C.ink }}>Estimated Employer Contribution (PEPM)</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (
             <div key={t.key} style={{ flex: "1 1 130px", minWidth: 130 }}>
