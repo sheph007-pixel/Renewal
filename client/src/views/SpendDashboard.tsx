@@ -87,11 +87,12 @@ function SpendTile({
 }
 
 /**
- * The dashboard a client actually opens this page to see: what does the
- * company pay, what do employees pay, and what does the whole thing come to
- * — the way an ICHRA budget tool shows a monthly number, not a grid of rates
- * to add up by hand. Read straight off the current grid's own totals, so it
- * can never disagree with the table underneath it.
+ * The dashboard a client actually opens this page to see: Employer Cost,
+ * Employee Cost and Monthly Premium — the same three names the grid below
+ * uses for its own totals, on a group basis rather than broken out by plan,
+ * since two plans under one contribution strategy do not each get their own
+ * "the employer's share." Read straight off the grid's own totals, so the
+ * two can never disagree.
  */
 export default function SpendDashboard({ totals, contribution, enrolled }: Props) {
   const erPct = totals.total ? Math.round((totals.er / totals.total) * 100) : 0;
@@ -109,7 +110,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 14 }}>
         <SpendTile
           icon={<BuildingIcon color="#fff" />}
-          label="Employer Pays"
+          label="Employer Cost"
           amount={totals.er}
           pct={erPct}
           bg={C.blueTint}
@@ -118,7 +119,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         />
         <SpendTile
           icon={<PersonIcon color="#fff" />}
-          label="Employees Pay"
+          label="Employee Cost"
           amount={totals.ee}
           pct={eePct}
           bg={C.amberTint}
@@ -127,7 +128,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         />
         <SpendTile
           icon={<StackIcon color="#fff" />}
-          label="Total Monthly Bill"
+          label="Monthly Premium"
           amount={totals.total}
           bg={C.greenTint}
           edge={C.greenEdge}
@@ -174,11 +175,11 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <div style={{ marginTop: 6, display: "flex", gap: 16, fontSize: 11.5, color: C.faint }}>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.blue, marginRight: 5 }} />
-            Employer {money(totals.er)}
+            Employer Cost {money(totals.er)}
           </span>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.orange, marginRight: 5 }} />
-            Employee {money(totals.ee)}
+            Employee Cost {money(totals.ee)}
           </span>
         </div>
       </div>
@@ -188,7 +189,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
           plan already fixed, not something to type over. */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>
-          Employer contribution by tier
+          Employer Cost by tier
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (

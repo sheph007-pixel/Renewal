@@ -43,7 +43,7 @@ interface Props {
 }
 
 /** What a column sorts on. Tiers sort on their rate. */
-type SortKey = "plan" | "enrolled" | "employer" | "employee" | "monthly" | TierKey;
+type SortKey = "plan" | "enrolled" | "monthly" | TierKey;
 
 /** A column header that sorts. The arrow says which way, and only on the one in force. */
 function Head({
@@ -71,6 +71,7 @@ function Head({
         background: C.headerBg,
         color: "#fff",
         borderBottom: "none",
+        borderRight: "1px solid rgba(255,255,255,0.12)",
       }}
     >
       <button
@@ -108,8 +109,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
     const value = (r: PlanRow): string | number => {
       if (sort.key === "plan") return r.p.plan.toLowerCase();
       if (sort.key === "enrolled") return countOf(r);
-      if (sort.key === "employer") return r.er;
-      if (sort.key === "employee") return r.ee;
       if (sort.key === "monthly") return r.total;
       // A tier with no rate sorts last either way rather than as zero.
       const rate = rateFor(overrides, g, r.p.plan, sort.key).rate;
@@ -139,7 +138,9 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
     }
   };
 
-  const cell = { padding: "12px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14 };
+  // Excel-style grid: a thin light line around every cell, plain white rows —
+  // not alternating bands, which read as color-coding when there is none here.
+  const cell = { padding: "10px 10px", border: `1px solid ${C.rule}`, fontSize: 14, background: C.card };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
 
   const contribution = useMemo(
@@ -184,18 +185,14 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
               {TIERS.map((t) => (
                 <Head key={t.key} label={t.label} k={t.key} sort={sort} by={by} />
               ))}
-              <Head label="Employer Cost" k="employer" sort={sort} by={by} />
-              <Head label="Employee Cost" k="employee" sort={sort} by={by} />
               <Head label="Monthly Premium" k="monthly" sort={sort} by={by} pad="11px 14px 11px 10px" />
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r, i) => {
+            {sorted.map((r) => {
               const n = TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0);
               return (
-                // Alternating bands, so the eye keeps its place across a wide
-                // row of rates.
-                <tr key={r.p.plan} style={{ background: i % 2 ? C.zebra : C.card }}>
+                <tr key={r.p.plan}>
                   <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: C.ink }}>
                     {r.p.plan}
                   </td>
@@ -214,12 +211,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
                       </td>
                     );
                   })}
-                  <td style={rateCell}>
-                    <span style={{ fontWeight: 600, color: C.blue }}>{money(r.er)}</span>
-                  </td>
-                  <td style={rateCell}>
-                    <span style={{ fontWeight: 600, color: C.orange }}>{money(r.ee)}</span>
-                  </td>
                   <td style={{ ...rateCell, paddingRight: 14, fontWeight: 600, color: C.ink }}>
                     {money(r.total)}
                   </td>
@@ -228,20 +219,14 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
             })}
           </tbody>
           <tfoot>
-            <tr>
-              <td style={{ padding: "12px 10px 12px 14px", fontSize: 14, fontWeight: 600, color: C.ink }}>
+            <tr style={{ background: C.hairline }}>
+              <td style={{ padding: "12px 10px 12px 14px", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}` }}>
                 {rows.length === 1 ? "Total" : `Total — ${rows.length} plans`}
               </td>
-              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.ink, ...num }}>
+              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}`, ...num }}>
                 {enrolled}
               </td>
-              <td colSpan={TIERS.length} />
-              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.blue, ...num }}>
-                {money(totals.er)}
-              </td>
-              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.orange, ...num }}>
-                {money(totals.ee)}
-              </td>
+              <td colSpan={TIERS.length} style={{ border: `1px solid ${C.rule}` }} />
               <td
                 style={{
                   padding: "12px 14px 12px 10px",
@@ -249,6 +234,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
                   fontSize: 16,
                   fontWeight: 600,
                   color: C.ink,
+                  border: `1px solid ${C.rule}`,
                   ...num,
                 }}
               >
