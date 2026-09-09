@@ -56,7 +56,7 @@ export default function Home({
       <div className="cardgrid">
         <Link href={currentHref} style={card}>
           <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            Current Medical Plan(s) &rarr;
+            Current 2026 Medical Plans &rarr;
           </div>
           <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             What your group has today: every plan in force, the rate at each tier, who is enrolled
@@ -71,7 +71,7 @@ export default function Home({
 
         <Link href={optionsHref} style={card}>
           <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            2027 Medical Plan Options &rarr;
+            New 2027 Medical Plans &rarr;
           </div>
           <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             What is on the table for January 1, 2027 — the plans quoted for {g.name}, side by side

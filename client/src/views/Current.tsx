@@ -141,7 +141,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
   return (
     <div>
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <h2 style={h2}>Current Medical Plan(s)</h2>
+        <h2 style={h2}>Current 2026 Medical Plans</h2>
         <button
           className="noprint"
           onClick={() => void download()}
