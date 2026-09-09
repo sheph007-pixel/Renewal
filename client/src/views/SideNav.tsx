@@ -331,7 +331,7 @@ export default function SideNav({
                       rel="noreferrer"
                       style={{ fontSize: 12.5, color: C.blueInk, fontWeight: 700 }}
                     >
-                      Book a time &#8599;
+                      Schedule a Meeting &#8599;
                     </a>
                   )}
                 </div>
