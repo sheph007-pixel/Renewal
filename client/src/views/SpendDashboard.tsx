@@ -96,8 +96,8 @@ function SpendTile({
  * two can never disagree.
  */
 export default function SpendDashboard({ totals, contribution, enrolled }: Props) {
-  const erPct = totals.total ? Math.round((totals.er / totals.total) * 100) : 0;
-  const eePct = 100 - erPct;
+  const erPct = totals.total ? Math.round((totals.er / totals.total) * 1000) / 10 : 0;
+  const eePct = totals.total ? Math.round((100 - erPct) * 10) / 10 : 0;
 
   return (
     <div style={{ ...panel, padding: "20px 22px", marginBottom: 16 }}>
