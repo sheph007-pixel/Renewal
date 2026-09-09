@@ -10,7 +10,6 @@ import {
   type Overrides,
 } from "@/lib/model";
 import { C, chip, Logo, num, panel, pill, textInput, th } from "@/lib/ui";
-import ThemeToggle, { useTheme } from "@/views/ThemeToggle";
 import Link from "@/lib/Link";
 import { PATHS, navigate } from "@/lib/router";
 import Footer from "@/views/Footer";
@@ -279,8 +278,6 @@ export default function Admin({
       (!q || `${r.group} ${r.plan}`.toLowerCase().includes(q)),
   );
 
-  const [theme, toggleTheme] = useTheme();
-
   return (
     <div style={{ minHeight: "100vh", background: C.page }}>
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
@@ -306,22 +303,19 @@ export default function Admin({
               Rate Administration
             </Link>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <ThemeToggle theme={theme} onToggle={toggleTheme} compact bordered />
-            <button
-              onClick={onExit}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: 13.5,
-                color: C.blue,
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              Exit
-            </button>
-          </div>
+          <button
+            onClick={onExit}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: 13.5,
+              color: C.blue,
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            Exit
+          </button>
         </div>
 
         <nav

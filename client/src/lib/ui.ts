@@ -1,44 +1,36 @@
 import type { CSSProperties } from "react";
 
-/**
- * Employee Navigator chrome — the palette the design settled on. Every value
- * is a CSS custom property, defined for light in `:root` and overridden for
- * dark under `[data-theme="dark"]` (styles.css) — so light/dark is one
- * palette swap, not two copies of every screen that uses it.
- */
+/** Employee Navigator chrome — the palette the design settled on. */
 export const C = {
-  page: "var(--page)",
-  card: "var(--card)",
-  border: "var(--border)",
-  hairline: "var(--hairline)",
-  rule: "var(--rule)",
-  ink: "var(--ink)",
-  body: "var(--body)",
-  muted: "var(--muted)",
-  faint: "var(--faint)",
-  ghost: "var(--ghost)",
-  blue: "var(--blue)",
-  blueInk: "var(--blue-ink)",
-  blueTint: "var(--blue-tint)",
-  blueEdge: "var(--blue-edge)",
-  orange: "var(--orange)",
-  orangeInk: "var(--orange-ink)",
-  green: "var(--green)",
-  greenTint: "var(--green-tint)",
-  greenEdge: "var(--green-edge)",
-  amber: "var(--amber)",
-  amberTint: "var(--amber-tint)",
-  amberEdge: "var(--amber-edge)",
-  red: "var(--red)",
-  redTint: "var(--red-tint)",
-  redEdge: "var(--red-edge)",
-  inputEdge: "var(--input-edge)",
-  zebra: "var(--zebra)",
-  /** A dark stripe — a grid's header row, a small round badge — that stays
-   *  dark in both themes rather than flipping with the page around it. */
-  headerBg: "var(--header-bg)",
-  /** Always white / always near-black, regardless of theme — text on a
-   *  solidly-coloured chip (a blue button, a green badge) never flips. */
+  page: "#eef1f2",
+  card: "#fff",
+  border: "#dfe3e6",
+  hairline: "#eef1f2",
+  rule: "#e6e9eb",
+  ink: "#333",
+  body: "#5c6368",
+  muted: "#6b7276",
+  faint: "#8b9296",
+  ghost: "#a0a7ab",
+  blue: "#2166cd",
+  blueInk: "#17479a",
+  blueTint: "#eaf1fc",
+  blueEdge: "#cadcf6",
+  orange: "#e8781a",
+  orangeInk: "#c2631a",
+  green: "#1e7e34",
+  greenTint: "#eaf6ec",
+  greenEdge: "#c7e6cd",
+  amber: "#8a6d1f",
+  amberTint: "#fdf6e3",
+  amberEdge: "#ecdcae",
+  red: "#a3241c",
+  redTint: "#fdf0ef",
+  redEdge: "#f0c8c4",
+  inputEdge: "#b6bfc4",
+  zebra: "#fafbfc",
+  /** A dark stripe — a grid's header row, a small round badge. */
+  headerBg: "#202429",
   onColor: "#fff",
 } as const;
 

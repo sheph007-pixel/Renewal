@@ -6,26 +6,6 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" href="/assets/kennion-logo.png" />
     <title>Kennion Benefit Advisors — 2027 Renewal</title>
-    <script>
-      // Paint the right theme before the page's own CSS and JS have even
-      // loaded, so a dark-mode visitor never sees a flash of the light page
-      // first. Kept in lockstep with lib/theme.ts by hand — small enough that
-      // duplicating the two lines beats bundling a module for this alone.
-      (function () {
-        try {
-          var saved = localStorage.getItem("kennion.theme");
-          var theme =
-            saved === "light" || saved === "dark"
-              ? saved
-              : window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light";
-          document.documentElement.dataset.theme = theme;
-        } catch (e) {
-          // Storage or matchMedia blocked: the light default in CSS stands.
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -8,13 +8,13 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /                    group sign-in (/?code=XXXX signs that group in)
  *   /g/:slug/:token             a group's own permanent address — Welcome
  *   /g/:slug/:token/changes     …What's Changing For 2027
- *   /g/:slug/:token/current     …Your 2026 Plan
- *   /g/:slug/:token/options     …Your 2027 Options
+ *   /g/:slug/:token/current     …Your 2026 Medical Plans
+ *   /g/:slug/:token/options     …New 2027 Medical Options
  *   /g/:slug/:token/supplemental …Supplemental Package
  *   /g/:slug/:token/signup      …Sign Up
  *   /admin               staff sign-in
- *   /current             Current 2026 Medical Plans
- *   /options             New 2027 Medical Plans
+ *   /current             Your 2026 Medical Plans
+ *   /options             New 2027 Medical Options
  *   /admin/groups        Rate Administration — Groups
  *   /admin/groups/:name  one company's page
  *   /admin/rates         Rate Administration — Existing Plans & Rates

@@ -1,6 +1,5 @@
 import { C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
 import Footer from "@/views/Footer";
-import ThemeToggle, { useTheme } from "@/views/ThemeToggle";
 
 interface Props {
   mode: "group" | "staff";
@@ -71,23 +70,13 @@ export default function Login({
     </div>
   );
 
-  const [theme, toggleTheme] = useTheme();
-
   return (
     <div style={{ minHeight: "100vh", background: C.page, display: "flex", flexDirection: "column" }}>
       <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
         <div
-          style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            height: 56,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
+          style={{ maxWidth: 1400, margin: "0 auto", height: 56, display: "flex", alignItems: "center" }}
         >
           <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 30, display: "block" }} />
-          <ThemeToggle theme={theme} onToggle={toggleTheme} compact bordered />
         </div>
       </div>
 

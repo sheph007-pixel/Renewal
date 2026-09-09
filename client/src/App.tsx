@@ -30,7 +30,6 @@ import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SectionNav from "@/views/SectionNav";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
-import { useTheme } from "@/views/ThemeToggle";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -47,8 +46,8 @@ const SITE = "Kennion 2027 Renewal";
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
   changes: "What's Changing For 2027",
-  current: "Your 2026 Plan",
-  options: "Your 2027 Options",
+  current: "Your 2026 Medical Plans",
+  options: "New 2027 Medical Options",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
 };
@@ -92,7 +91,6 @@ function tokenAtLoad(): string | null {
 }
 
 export default function App() {
-  const [theme, toggleTheme] = useTheme();
   const route = useRoute();
   const page = useMemo(() => parsePath(route.path), [route.path]);
 
@@ -759,8 +757,6 @@ export default function App() {
           homeHref={hrefFor("home")}
           manager={manager}
           onExit={signOut}
-          theme={theme}
-          onToggleTheme={toggleTheme}
         />
 
         <div className="main">
