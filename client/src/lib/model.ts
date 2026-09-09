@@ -105,9 +105,9 @@ export interface Group {
   tpa: string;
   enrolled: number;
   /**
-   * Active employees who had a medical election at all — enrolled or
-   * waived — as of the last import. Absent on a group imported before this
-   * field existed.
+   * Active employees on the census as of the last import, whether or not
+   * they took medical. Absent on a group imported before this field
+   * existed.
    */
   medicalEligible?: number;
   lives: number;
