@@ -564,6 +564,12 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       pyEnd: day(pyEnd),
       tpa,
       enrolled: members.length,
+      /**
+       * Active employees who had a medical election in the file at all —
+       * enrolled or waived. Terminated employees are not eligible; someone
+       * who waived still is, which is why this is not just `enrolled`.
+       */
+      medicalEligible: members.length + diag.medical.excluded.waived.n,
       lives,
       tiers,
       monthly,

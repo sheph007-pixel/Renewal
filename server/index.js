@@ -932,6 +932,7 @@ const CLIENT_GROUP_FIELDS = [
   "linkToken",
   "tpa",
   "enrolled",
+  "medicalEligible",
   "lives",
   "tiers",
   "planTiers",

@@ -1,7 +1,5 @@
 import { money, money0, type AccountManager, type Group } from "@/lib/model";
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
-import NavigatorCard from "@/views/NavigatorCard";
-import ContactCard from "@/views/ContactCard";
 
 interface Props {
   g: Group;
@@ -90,11 +88,6 @@ export default function SupplementalPackage({ g, manager }: Props) {
           </div>
         </div>
       )}
-
-      <div className="cardgrid" style={{ marginTop: 22 }}>
-        <NavigatorCard />
-        <ContactCard manager={manager} />
-      </div>
     </div>
   );
 }
