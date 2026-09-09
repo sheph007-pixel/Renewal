@@ -84,6 +84,18 @@ CREATE TABLE IF NOT EXISTS kennion.settings (
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
+-- What a group submitted on its own Sign Up page: the plans it shortlisted
+-- and any note, timestamped. One row per submission, so a second submission
+-- does not erase the first — staff see the history, not just the latest.
+CREATE TABLE IF NOT EXISTS kennion.group_signups (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  plans         jsonb NOT NULL DEFAULT '[]'::jsonb,
+  note          text,
+  submitted_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS group_signups_group_idx ON kennion.group_signups (group_name);
+
 -- One row per upload, so the admin screen can say when data last came in and
 -- from which file.
 CREATE TABLE IF NOT EXISTS kennion.imports (
@@ -292,6 +304,27 @@ export function createDb(url) {
            ${col} = EXCLUDED.${col}, updated_at = now(), updated_by = EXCLUDED.updated_by`,
         [groupName, field === "archived" ? !!value : value || null, by || null],
       );
+    },
+
+    /** A group's own submission: its shortlisted plans and note. One row kept per submission. */
+    async addSignup(groupName, plans, note) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.group_signups (group_name, plans, note)
+         VALUES ($1, $2::jsonb, $3)
+         RETURNING id, group_name, plans, note, submitted_at`,
+        [groupName, JSON.stringify(plans || []), note || null],
+      );
+      return rows[0];
+    },
+
+    /** Every submission a group has made, newest first. */
+    async listSignups(groupName) {
+      const { rows } = await pool.query(
+        `SELECT id, group_name, plans, note, submitted_at FROM kennion.group_signups
+         WHERE group_name = $1 ORDER BY submitted_at DESC, id DESC`,
+        [groupName],
+      );
+      return rows;
     },
 
     /** Two-factor enrolment for one staff member, or null. */

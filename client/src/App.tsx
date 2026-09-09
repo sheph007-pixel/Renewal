@@ -25,6 +25,8 @@ import type { FundingInfo } from "@/views/Funding";
 import Current, { CURRENT_SECTIONS } from "@/views/Current";
 import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
 import Home from "@/views/Home";
+import SupplementalPackage from "@/views/SupplementalPackage";
+import SignUp from "@/views/SignUp";
 import SectionNav from "@/views/SectionNav";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import type { AccountManager } from "@/lib/model";
@@ -38,6 +40,15 @@ const EE_PCT = 80;
 const DEP_PCT = 32;
 
 const SITE = "Kennion 2027 Renewal";
+
+/** Every client page's name, said the same way everywhere it appears. */
+const TAB_LABEL: Record<GroupTab, string> = {
+  home: "Welcome",
+  current: "Current 2026 Medical Plans",
+  options: "New 2027 Medical Plans",
+  supplemental: "Supplemental Package",
+  signup: "Sign Up",
+};
 
 /** Where the collapsed/expanded rail is remembered. */
 const NAV_KEY = "kennion.nav.collapsed";
@@ -130,6 +141,8 @@ export default function App() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
+  const [signupBusy, setSignupBusy] = useState(false);
+  const [signupError, setSignupError] = useState("");
 
   const [admin, setAdmin] = useState(false);
   const [adminQuery, setAdminQuery] = useState("");
@@ -453,14 +466,7 @@ export default function App() {
   useEffect(() => {
     let t = SITE;
     if (page.kind === "signin") t = `${page.staff ? "Staff sign in" : "Sign in"} — ${SITE}`;
-    else if (page.kind === "group" && g)
-      t = `${
-        page.tab === "home"
-          ? "Welcome"
-          : page.tab === "current"
-            ? "Current 2026 Medical Plans"
-            : "New 2027 Medical Plans"
-      } — ${g.name}`;
+    else if (page.kind === "group" && g) t = `${TAB_LABEL[page.tab]} — ${g.name}`;
     else if (page.kind === "admin")
       t = `${
         page.group
@@ -496,6 +502,38 @@ export default function App() {
   const toggleSelected = (plan: string) => {
     setSelected((prev) => ({ ...prev, [plan]: !prev[plan] }));
     setSent(false);
+  };
+
+  /**
+   * Send the shortlist and note to Kennion. This used to just flip a flag in
+   * the browser; it now actually reaches the server, which is what makes
+   * Sign Up worth its own page rather than a promise at the bottom of one.
+   */
+  const submitSignup = async () => {
+    const plans = Object.keys(selected).filter((p) => selected[p]);
+    if (!plans.length || signupBusy) return;
+    setSignupBusy(true);
+    setSignupError("");
+    try {
+      const r = await fetch("/api/group/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, plans, note: note.trim() }),
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error || "Could not send that. Try again.");
+      }
+      const p = await r.json();
+      setSent(true);
+      setData((d) =>
+        d ? ({ ...d, signup: { plans, note: note.trim() || null, submittedAt: p.submittedAt } } as KennionData) : d,
+      );
+    } catch (e) {
+      setSignupError((e as Error).message || "Could not send that. Try again.");
+    } finally {
+      setSignupBusy(false);
+    }
   };
 
   if (loadError) {
@@ -647,14 +685,18 @@ export default function App() {
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
-    tab === "options"
+    tab === "options" || tab === "signup"
       ? "Effective January 1, 2027"
-      : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
+      : tab === "supplemental"
+        ? "What Employee Navigator has on file besides medical"
+        : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
 
   const printLine =
-    (tab === "options"
+    (tab === "options" || tab === "signup"
       ? "2027 renewal options, effective January 1, 2027"
-      : `Current group health plans and cost, calendar year ${planYear}`) +
+      : tab === "supplemental"
+        ? "Supplemental benefits on file, besides medical"
+        : `Current group health plans and cost, calendar year ${planYear}`) +
     ` · data as of 7/31/2026 · printed ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
@@ -670,11 +712,13 @@ export default function App() {
         ? PATHS.options
         : PATHS.current;
 
-  const navItems: NavItem[] = [
-    { tab: "home", href: hrefFor("home"), label: "Welcome", mark: "W" },
-    { tab: "current", href: hrefFor("current"), label: "Current 2026 Medical Plans", mark: "C" },
-    { tab: "options", href: hrefFor("options"), label: "New 2027 Medical Plans", mark: "27" },
-  ];
+  const TAB_MARK: Record<GroupTab, string> = { home: "W", current: "C", options: "27", supplemental: "S", signup: "\u2713" };
+  const navItems: NavItem[] = (["home", "current", "options", "supplemental", "signup"] as GroupTab[]).map((t) => ({
+    tab: t,
+    href: hrefFor(t),
+    label: TAB_LABEL[t],
+    mark: TAB_MARK[t],
+  }));
 
   const here = navItems.findIndex((it) => it.tab === tab);
   const prev = here > 0 ? navItems[here - 1] : null;
@@ -750,7 +794,7 @@ export default function App() {
                     ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
                     : subline}
                 </div>
-                {tab !== "home" && (
+                {(tab === "current" || tab === "options") && (
                   <SectionNav
                     sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
                     current={route.hash}
@@ -767,7 +811,10 @@ export default function App() {
                 monthly={totals.total}
                 currentHref={hrefFor("current")}
                 optionsHref={hrefFor("options")}
+                supplementalHref={hrefFor("supplemental")}
+                signUpHref={hrefFor("signup")}
                 manager={manager}
+                lastSignup={data.signup || null}
               />
             ) : tab === "current" ? (
               <Current
@@ -780,7 +827,7 @@ export default function App() {
                 depPct={DEP_PCT}
                 manager={manager}
               />
-            ) : (
+            ) : tab === "options" ? (
               <Options
                 data={data}
                 g={g}
@@ -791,8 +838,7 @@ export default function App() {
                 gridQuery={gridQuery}
                 carriers={carriers}
                 selected={selected}
-                note={note}
-                sent={sent}
+                signUpHref={hrefFor("signup")}
                 onSort={(k) => {
                   setDir((d) => (sort === k ? -d : 1));
                   setSort(k);
@@ -800,11 +846,27 @@ export default function App() {
                 onGridQuery={setGridQuery}
                 onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
                 onToggleSelected={toggleSelected}
+              />
+            ) : tab === "supplemental" ? (
+              <SupplementalPackage g={g} manager={manager} />
+            ) : (
+              <SignUp
+                data={data}
+                g={g}
+                selected={selected}
+                note={note}
+                sent={sent}
+                submitting={signupBusy}
+                submitError={signupError}
+                lastSignup={data.signup || null}
+                optionsHref={hrefFor("options")}
+                manager={manager}
+                onToggleSelected={toggleSelected}
                 onNote={(v) => {
                   setNote(v);
                   setSent(false);
                 }}
-                onSend={() => setSent(true)}
+                onSubmit={() => void submitSignup()}
               />
             )}
 

@@ -72,6 +72,23 @@ function saveImports() {
   fs.writeFileSync(IMPORTS_FILE, JSON.stringify(imported, null, 2));
 }
 
+/** What each group has submitted on its own Sign Up page, without a database. */
+const SIGNUPS_FILE = path.join(DATA_DIR, "group-signups.json");
+function loadSignups() {
+  try {
+    return JSON.parse(fs.readFileSync(SIGNUPS_FILE, "utf8"));
+  } catch {
+    return [];
+  }
+}
+/** Every submission, newest first, kept when there is no database. */
+let signups = loadSignups();
+function saveSignups() {
+  if (db) return; // Postgres holds it; no file to write.
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SIGNUPS_FILE, JSON.stringify(signups, null, 2));
+}
+
 /** Overrides for one group, in the `group||plan||tier` shape the client uses. */
 function overridesFor(name) {
   const out = {};
@@ -379,6 +396,15 @@ async function mintMissingTokens() {
 
 const splitFor = (name) =>
   (imported.splits || {})[name] || data.splits[name] || null;
+
+/** A group's most recent Sign Up submission, or null if it has never sent one. */
+async function latestSignup(name) {
+  if (db) {
+    const rows = await db.listSignups(name);
+    return rows[0] || null;
+  }
+  return signups.find((s) => s.group_name === name) || null;
+}
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toLowerCase();
 
@@ -797,6 +823,8 @@ app.post("/api/signin", async (req, res) => {
   }
   clearFails(caller);
 
+  const signup = await latestSignup(g.name);
+
   return res.json({
     kind: "group",
     meta: data.meta,
@@ -817,7 +845,73 @@ app.post("/api/signin", async (req, res) => {
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
     // contact details travel to the client.
     accountManager: managerContact(g.manager),
+    // The group's most recent submission, if it has ever sent one, so the
+    // Sign Up page can say so instead of showing a blank form again.
+    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
   });
+});
+
+/**
+ * A group's own Sign Up page: which of the 2027 options it shortlisted, and
+ * any note, submitted back to Kennion. No staff token — the same code or
+ * token that gets a group its data is what lets it submit, same as sign-in —
+ * so it shares that endpoint's rate limit against guessing.
+ *
+ * Submitting also moves a group's renewal from Open to Sent, the one status
+ * change a client rather than staff can make, and only that one step: a
+ * group already marked Renewed or Non-renewed is not moved backwards by a
+ * second submission.
+ */
+app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) => {
+  const body = req.body || {};
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
+  const token = String(body.token || "").trim();
+  const code = String(body.code || "").trim().toUpperCase();
+  if (!token && !code) return res.status(400).json({ error: "code required" });
+
+  const g = token ? byToken.get(token) : byCode.get(code);
+  if (!g) {
+    noteFail(caller);
+    return res.status(404).json({ error: "no such group" });
+  }
+  clearFails(caller);
+
+  const plans = Array.isArray(body.plans)
+    ? [...new Set(body.plans.map((p) => String(p || "").trim()).filter(Boolean))].slice(0, 50).map((p) => p.slice(0, 200))
+    : [];
+  if (!plans.length) return res.status(400).json({ error: "Select at least one plan." });
+  const note = String(body.note || "").trim().slice(0, 4000) || null;
+
+  let record;
+  try {
+    if (db) {
+      record = await db.addSignup(g.name, plans, note);
+    } else {
+      record = { id: signups.length + 1, group_name: g.name, plans, note, submitted_at: new Date().toISOString() };
+      signups = [record, ...signups];
+      saveSignups();
+    }
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+
+  // Open -> Sent, and nothing else: a group already marked Renewed or
+  // Non-renewed keeps that status.
+  if (!g.renewal || g.renewal === "open") {
+    meta[g.name] = { ...(meta[g.name] || {}), renewal: "sent" };
+    try {
+      if (db) await db.setMeta(g.name, "renewal", "sent", `${g.name} (client sign-up)`);
+    } catch (e) {
+      console.error("could not record renewal status from sign-up:", e.message);
+    }
+    rebuild();
+  }
+
+  console.log(`sign-up received: ${g.name} — ${plans.length} plan(s)`);
+  res.json({ ok: true, submittedAt: record.submitted_at });
 });
 
 /**
@@ -847,6 +941,11 @@ const CLIENT_GROUP_FIELDS = [
   "rates",
   "pyStart",
   "pyEnd",
+  // Dental, vision, life, disability … — the same shape the Groups page
+  // shows staff, with no member detail: benefit, carrier, plan, enrolled,
+  // monthly. Present only once an Employee Navigator export has been read
+  // for supplemental lines; `linesLoaded` below says whether it has.
+  "lines",
 ];
 
 function clientGroupView(g) {
@@ -864,6 +963,11 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
+  // Whether supplemental has ever been read for this group, and what it
+  // comes to — the same figures the Groups page shows staff.
+  const breakdown = premiumBreakdown(g);
+  out.linesLoaded = breakdown.linesLoaded;
+  out.supplementalMonthly = breakdown.supplementalMonthly;
   return out;
 }
 

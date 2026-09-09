@@ -115,6 +115,23 @@ export interface Group {
   manager?: string | null;
   /** Derived at load time from the group name. */
   code: string;
+  /**
+   * Dental, vision, life, disability … — every benefit besides medical.
+   * Present only once an Employee Navigator export has been read for
+   * supplemental lines; `linesLoaded` says whether it has been.
+   */
+  lines?: SupplementalLine[];
+  linesLoaded?: boolean;
+  supplementalMonthly?: number;
+}
+
+/** One supplemental benefit in force: no member detail, group totals only. */
+export interface SupplementalLine {
+  benefit: string;
+  carrier: string;
+  plan: string;
+  enrolled: number;
+  monthly: number;
 }
 
 export interface MenuPlan {
@@ -217,6 +234,15 @@ export interface KennionData {
   funding?: GroupFundingSnapshot | null;
   /** Who at Kennion looks after this group (group sessions only). */
   accountManager?: AccountManager | null;
+  /** This group's most recent Sign Up submission, if it has ever sent one. */
+  signup?: GroupSignup | null;
+}
+
+/** What a group most recently submitted on its own Sign Up page. */
+export interface GroupSignup {
+  plans: string[];
+  note: string | null;
+  submittedAt: string;
 }
 
 /** The Kennion contact shown on a client's pages. */

@@ -1,6 +1,6 @@
 import { C, h2, num, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { money, type AccountManager, type Group } from "@/lib/model";
+import { money, type AccountManager, type Group, type GroupSignup } from "@/lib/model";
 import NavigatorCard from "@/views/NavigatorCard";
 import ContactCard from "@/views/ContactCard";
 
@@ -11,7 +11,10 @@ interface Props {
   monthly: number;
   currentHref: string;
   optionsHref: string;
+  supplementalHref: string;
+  signUpHref: string;
   manager: AccountManager | null | undefined;
+  lastSignup: GroupSignup | null;
 }
 
 /** One headline figure, with what it is under it. */
@@ -25,9 +28,9 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * The landing page a client's link now opens. The two report pages used to be
- * the whole site, which left a bookmarked link opening a rate grid with no
- * word about what it was, who sent it, or where to go next. This page says
+ * The landing page a client's link now opens. A rate grid used to be the
+ * whole site, which left a bookmarked link opening straight into one with no
+ * word about what it was, who sent it, or where else to go. This page says
  * that once — what is here, what it costs today, who to call, and where the
  * enrollment detail lives — and then gets out of the way.
  */
@@ -38,7 +41,10 @@ export default function Home({
   monthly,
   currentHref,
   optionsHref,
+  supplementalHref,
+  signUpHref,
   manager,
+  lastSignup,
 }: Props) {
   const card = {
     ...panel,
@@ -50,7 +56,7 @@ export default function Home({
   return (
     <div>
       <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>Your renewal, in two pages</h2>
+        <h2 style={h2}>Your renewal</h2>
       </div>
 
       <div className="cardgrid">
@@ -80,6 +86,23 @@ export default function Home({
           <div style={{ fontSize: 12.5, color: C.faint }}>
             Pick the ones you want to talk through and send them over with a note.
           </div>
+        </Link>
+
+        <Link href={supplementalHref} style={card}>
+          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>Supplemental Package &rarr;</div>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
+            Dental, vision, life, disability — whatever else Employee Navigator has {g.name} enrolled in,
+            besides medical.
+          </p>
+        </Link>
+
+        <Link href={signUpHref} style={card}>
+          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>Sign Up &rarr;</div>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
+            {lastSignup
+              ? `Submitted ${new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })} — ${lastSignup.plans.length} plan${lastSignup.plans.length === 1 ? "" : "s"}. Send an update any time.`
+              : "Shortlist the plans you want to move forward with and send them to your account manager."}
+          </p>
         </Link>
       </div>
 
