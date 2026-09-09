@@ -769,3 +769,49 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
   }
   return out;
 }
+
+/** The headline comparison — today's total against 2027, plans mapped 1-for-1 — reused wherever the site needs it in one line rather than the full grid. */
+export interface MarketSummary {
+  todayTotal: number;
+  /** Null while every plan a group's members are on is still unpriced. */
+  mappedTotal: number | null;
+  delta: number | null;
+  /** Whether UnitedHealthcare has underwritten this group directly, or the figures above are indicative. */
+  direct: boolean;
+  /** How many 2027 options carry a real price at this group's census. */
+  pricedCount: number;
+}
+
+/**
+ * The same "today vs. 2027, mapped 1-for-1" figure Options.tsx builds for its
+ * own summary card, factored out so a page that only needs the headline number
+ * — not the whole grid — does not have to recompute it by hand and risk it
+ * drifting out of step with the grid's own math.
+ */
+export function marketSummary(data: KennionData, g: Group, rows: PlanRow[], todayTotal: number): MarketSummary {
+  const plans = marketPlans(data, g);
+  const mapping = (data.uhc || {}).mapping || [];
+  let sum = 0;
+  let any = false;
+  rows.forEach((r) => {
+    const mp = mapping.find((m) => m.currentPlan && r.p.plan.indexOf(m.currentPlan) !== -1);
+    if (!mp) return;
+    const p = plans.find((x) => x.plan === mp.uhcPlan);
+    if (!p) return;
+    TIERS.forEach((t) => {
+      const v = p.rates[t.key];
+      if (v != null) {
+        sum += v * r.counts[t.key];
+        any = true;
+      }
+    });
+  });
+  const mappedTotal = any ? sum : null;
+  return {
+    todayTotal,
+    mappedTotal,
+    delta: mappedTotal == null ? null : mappedTotal - todayTotal,
+    direct: hasDirectQuote(data, g),
+    pricedCount: plans.filter((p) => p.monthly != null).length,
+  };
+}

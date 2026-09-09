@@ -1,11 +1,11 @@
 import { useMemo } from "react";
 import {
   PROPOSAL_SLOTS,
-  TIERS,
   fmtDate,
   fmtDed,
   hasDirectQuote,
   marketPlans,
+  marketSummary,
   money,
   money0,
   type Group,
@@ -79,24 +79,11 @@ export default function Options({
 
   // "Mapped 1-for-1" — each current plan costed on its closest 2027 match at
   // that plan's own tier counts. Deliberately a different figure from the
-  // recommendation cards, which put every employee on a single plan.
-  const closest = useMemo(() => {
-    const mapping = (data.uhc || {}).mapping || [];
-    let sum = 0;
-    rows.forEach((r) => {
-      const mp = mapping.find((m) => m.currentPlan && r.p.plan.indexOf(m.currentPlan) !== -1);
-      if (!mp) return;
-      const p = plans.find((x) => x.plan === mp.uhcPlan);
-      if (!p) return;
-      TIERS.forEach((t) => {
-        const v = p.rates[t.key];
-        if (v != null) sum += v * r.counts[t.key];
-      });
-    });
-    return sum;
-  }, [data, rows, plans]);
-
-  const delta = closest ? closest - totals.total : null;
+  // recommendation cards, which put every employee on a single plan. Shared
+  // with What's Changing For 2027, so the two pages never disagree.
+  const summary = useMemo(() => marketSummary(data, g, rows, totals.total), [data, g, rows, totals.total]);
+  const closest = summary.mappedTotal;
+  const delta = summary.delta;
   const priced = plans.filter((p) => p.monthly != null);
 
   const recs = useMemo(() => {

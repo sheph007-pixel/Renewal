@@ -13,6 +13,7 @@ interface Props {
   optionsHref: string;
   supplementalHref: string;
   signUpHref: string;
+  changesHref: string;
   manager: AccountManager | null | undefined;
   lastSignup: GroupSignup | null;
 }
@@ -43,6 +44,7 @@ export default function Home({
   optionsHref,
   supplementalHref,
   signUpHref,
+  changesHref,
   manager,
   lastSignup,
 }: Props) {
@@ -60,9 +62,19 @@ export default function Home({
       </div>
 
       <div className="cardgrid">
+        <Link href={changesHref} style={card}>
+          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
+            What&rsquo;s Changing For 2027 &rarr;
+          </div>
+          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
+            Start here: the headline number, today against 2027, before the full grid of every
+            priced option.
+          </p>
+        </Link>
+
         <Link href={currentHref} style={card}>
           <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            Current 2026 Medical Plans &rarr;
+            Your 2026 Plan &rarr;
           </div>
           <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             What your group has today: every plan in force, the rate at each tier, who is enrolled
@@ -77,7 +89,7 @@ export default function Home({
 
         <Link href={optionsHref} style={card}>
           <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            New 2027 Medical Plans &rarr;
+            Your 2027 Options &rarr;
           </div>
           <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             What is on the table for January 1, 2027 — the plans quoted for {g.name}, side by side
@@ -96,8 +108,8 @@ export default function Home({
           </p>
         </Link>
 
-        <Link href={signUpHref} style={card}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>Sign Up &rarr;</div>
+        <Link href={signUpHref} style={{ ...card, background: C.greenTint, borderColor: C.greenEdge }}>
+          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.green }}>Sign Up &rarr;</div>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             {lastSignup
               ? `Submitted ${new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })} — ${lastSignup.plans.length} plan${lastSignup.plans.length === 1 ? "" : "s"}. Send an update any time.`

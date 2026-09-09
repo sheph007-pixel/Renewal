@@ -25,6 +25,7 @@ import type { FundingInfo } from "@/views/Funding";
 import Current, { CURRENT_SECTIONS } from "@/views/Current";
 import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
 import Home from "@/views/Home";
+import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SectionNav from "@/views/SectionNav";
@@ -45,8 +46,9 @@ const SITE = "Kennion 2027 Renewal";
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
-  current: "Current 2026 Medical Plans",
-  options: "New 2027 Medical Plans",
+  changes: "What's Changing For 2027",
+  current: "Your 2026 Plan",
+  options: "Your 2027 Options",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
 };
@@ -687,14 +689,14 @@ export default function App() {
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
-    tab === "options" || tab === "signup"
+    tab === "options" || tab === "signup" || tab === "changes"
       ? "Effective January 1, 2027"
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
         : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
 
   const printLine =
-    (tab === "options" || tab === "signup"
+    (tab === "options" || tab === "signup" || tab === "changes"
       ? "2027 renewal options, effective January 1, 2027"
       : tab === "supplemental"
         ? "Supplemental benefits on file, besides medical"
@@ -714,16 +716,20 @@ export default function App() {
         ? PATHS.options
         : PATHS.current;
 
-  // Welcome carries no step \u2014 it is the home icon, not part of the count \u2014
-  // so Sign Up reads as step 4 of 4, the last thing to do, not a fifth item.
-  const TAB_STEP: Partial<Record<GroupTab, number>> = { current: 1, options: 2, supplemental: 3, signup: 4 };
-  const navItems: NavItem[] = (["home", "current", "options", "supplemental", "signup"] as GroupTab[]).map((t) => ({
-    tab: t,
-    href: hrefFor(t),
-    label: TAB_LABEL[t],
-    step: TAB_STEP[t],
-    cta: t === "signup",
-  }));
+  // Welcome and Sign Up both carry no step: Welcome is where you start, not
+  // part of the count, and Sign Up is the destination the count builds
+  // toward rather than a fifth stop along the way \u2014 a checkmark, not a "5".
+  const TAB_STEP: Partial<Record<GroupTab, number>> = { changes: 1, current: 2, options: 3, supplemental: 4 };
+  const navItems: NavItem[] = (["home", "changes", "current", "options", "supplemental", "signup"] as GroupTab[]).map(
+    (t) => ({
+      tab: t,
+      href: hrefFor(t),
+      label: TAB_LABEL[t],
+      step: TAB_STEP[t],
+      mark: t === "home" ? "home" : t === "signup" ? "check" : undefined,
+      cta: t === "signup",
+    }),
+  );
 
   const here = navItems.findIndex((it) => it.tab === tab);
   const prev = here > 0 ? navItems[here - 1] : null;
@@ -820,8 +826,18 @@ export default function App() {
                 optionsHref={hrefFor("options")}
                 supplementalHref={hrefFor("supplemental")}
                 signUpHref={hrefFor("signup")}
+                changesHref={hrefFor("changes")}
                 manager={manager}
                 lastSignup={data.signup || null}
+              />
+            ) : tab === "changes" ? (
+              <WhatsChanging
+                data={data}
+                g={g}
+                rows={rows}
+                totals={totals}
+                optionsHref={hrefFor("options")}
+                signUpHref={hrefFor("signup")}
               />
             ) : tab === "current" ? (
               <Current
