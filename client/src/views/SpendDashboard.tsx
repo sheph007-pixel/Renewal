@@ -99,27 +99,11 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
 
   return (
     <div style={{ ...panel, padding: "20px 22px", marginBottom: 16 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-        <div>
-          <div style={{ fontSize: 15.5, fontWeight: 700, color: C.ink }}>Your Monthly Health Bill</div>
-          <div style={{ marginTop: 2, fontSize: 12.5, color: C.muted }}>
-            What the company pays, what employees pay, and the total — at today&rsquo;s {enrolled} enrolled.
-          </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Current Group Plan
         </div>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            letterSpacing: "0.3px",
-            color: C.faint,
-            textTransform: "uppercase",
-            padding: "3px 8px",
-            border: `1px solid ${C.border}`,
-            borderRadius: 3,
-          }}
-        >
-          From your current plan
-        </span>
+        <span style={{ fontSize: 12, color: C.faint }}>{enrolled} enrolled</span>
       </div>
 
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 14 }}>
@@ -199,7 +183,9 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         </div>
       </div>
 
-      {/* Same split, one row per tier, for anyone who wants it broken down that far. */}
+      {/* Same split, one figure per tier — styled like the editable fields on New
+          2027 Medical Options, but muted and disabled: this is what today's
+          plan already fixed, not something to type over. */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>
           Employer contribution by tier
@@ -207,11 +193,28 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (
             <div key={t.key} style={{ flex: "1 1 130px", minWidth: 130 }}>
-              <div style={{ fontSize: 12, color: C.faint, marginBottom: 4 }}>{TIER_LABEL[t.key]}</div>
-              <div style={{ fontSize: 17, fontWeight: 600, color: t.count ? C.ink : C.faint, ...num }}>
-                {t.er == null ? "—" : money0(t.er)}
+              <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>{TIER_LABEL[t.key]}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 14, color: C.ghost }}>$</span>
+                <input
+                  value={t.er == null ? "" : Math.round(t.er).toLocaleString("en-US")}
+                  disabled
+                  readOnly
+                  aria-label={`${TIER_LABEL[t.key]}, current employer contribution`}
+                  style={{
+                    width: "100%",
+                    padding: "8px 9px",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: t.count ? C.body : C.faint,
+                    background: C.hairline,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 4,
+                    ...num,
+                  }}
+                />
               </div>
-              <div style={{ marginTop: 2, fontSize: 11.5, color: C.faint }}>
+              <div style={{ marginTop: 3, fontSize: 11.5, color: C.faint }}>
                 {t.count ? `${t.count} enrolled` : "none enrolled"}
               </div>
             </div>

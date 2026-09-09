@@ -43,7 +43,7 @@ interface Props {
 }
 
 /** What a column sorts on. Tiers sort on their rate. */
-type SortKey = "plan" | "enrolled" | "monthly" | TierKey;
+type SortKey = "plan" | "enrolled" | "employer" | "employee" | "monthly" | TierKey;
 
 /** A column header that sorts. The arrow says which way, and only on the one in force. */
 function Head({
@@ -108,6 +108,8 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
     const value = (r: PlanRow): string | number => {
       if (sort.key === "plan") return r.p.plan.toLowerCase();
       if (sort.key === "enrolled") return countOf(r);
+      if (sort.key === "employer") return r.er;
+      if (sort.key === "employee") return r.ee;
       if (sort.key === "monthly") return r.total;
       // A tier with no rate sorts last either way rather than as zero.
       const rate = rateFor(overrides, g, r.p.plan, sort.key).rate;
@@ -182,7 +184,9 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
               {TIERS.map((t) => (
                 <Head key={t.key} label={t.label} k={t.key} sort={sort} by={by} />
               ))}
-              <Head label="Monthly" k="monthly" sort={sort} by={by} pad="11px 14px 11px 10px" />
+              <Head label="Employer Cost" k="employer" sort={sort} by={by} />
+              <Head label="Employee Cost" k="employee" sort={sort} by={by} />
+              <Head label="Monthly Premium" k="monthly" sort={sort} by={by} pad="11px 14px 11px 10px" />
             </tr>
           </thead>
           <tbody>
@@ -210,6 +214,12 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
                       </td>
                     );
                   })}
+                  <td style={rateCell}>
+                    <span style={{ fontWeight: 600, color: C.blue }}>{money(r.er)}</span>
+                  </td>
+                  <td style={rateCell}>
+                    <span style={{ fontWeight: 600, color: C.orange }}>{money(r.ee)}</span>
+                  </td>
                   <td style={{ ...rateCell, paddingRight: 14, fontWeight: 600, color: C.ink }}>
                     {money(r.total)}
                   </td>
@@ -226,6 +236,12 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
                 {enrolled}
               </td>
               <td colSpan={TIERS.length} />
+              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.blue, ...num }}>
+                {money(totals.er)}
+              </td>
+              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.orange, ...num }}>
+                {money(totals.ee)}
+              </td>
               <td
                 style={{
                   padding: "12px 14px 12px 10px",
