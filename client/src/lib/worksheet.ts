@@ -19,7 +19,7 @@ import type { Group, Overrides, TierKey } from "./model";
  */
 const MANAGER_FULL: Record<string, string> = {
   debbie: "Debbie Bostic",
-  tracy: "Tracy Sanders",
+  tracy: "Tracy Hayden",
 };
 export const managerName = (g: Group): string =>
   (g.manager && (MANAGER_FULL[g.manager] || g.manager)) || "Unassigned";
