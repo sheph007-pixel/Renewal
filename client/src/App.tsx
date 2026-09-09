@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  contributionByTier,
   ovKey,
   planRows,
   type KennionData,
   type Overrides,
+  type TierKey,
 } from "@/lib/model";
 import { C, Logo, panel } from "@/lib/ui";
 import {
@@ -422,6 +424,30 @@ export default function App() {
       ),
     [rows],
   );
+
+  /**
+   * What the group puts toward each tier today, read off its own rates and
+   * enrollment — the number New 2027 Medical Options starts an employer's own
+   * contribution choice from, rather than from zero.
+   */
+  const contribution = useMemo(
+    () => (data && g ? contributionByTier(data, overrides, g, EE_PCT, DEP_PCT) : []),
+    [data, overrides, g],
+  );
+
+  /**
+   * The employer's own choice for 2027, per tier. Null until they touch a
+   * field, at which point it starts as an exact copy of today's numbers —
+   * keeping spend flat is the default, changing it is a deliberate edit.
+   */
+  const [contributionOverride, setContributionOverride] = useState<Partial<Record<TierKey, number>> | null>(null);
+  const contributionValues: Record<TierKey, number> = useMemo(() => {
+    const base = {} as Record<TierKey, number>;
+    contribution.forEach((t) => {
+      base[t.key] = t.er ?? 0;
+    });
+    return { ...base, ...(contributionOverride || {}) };
+  }, [contribution, contributionOverride]);
 
   const session: "none" | "group" | "admin" = admin ? "admin" : g ? "group" : "none";
 
@@ -863,6 +889,13 @@ export default function App() {
                 carriers={carriers}
                 selected={selected}
                 signUpHref={hrefFor("signup")}
+                contribution={contribution}
+                contributionValues={contributionValues}
+                contributionChanged={contributionOverride != null}
+                onContributionChange={(key, v) =>
+                  setContributionOverride((prev) => ({ ...(prev || contributionValues), [key]: v }))
+                }
+                onContributionReset={() => setContributionOverride(null)}
                 onSort={(k) => {
                   setDir((d) => (sort === k ? -d : 1));
                   setSort(k);

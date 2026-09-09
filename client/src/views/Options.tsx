@@ -12,10 +12,12 @@ import {
   type KennionData,
   type MarketPlan,
   type PlanRow,
+  type TierContribution,
   type TierKey,
 } from "@/lib/model";
 import { C, chip, h2, num, panel, sectionHead, textInput } from "@/lib/ui";
 import Link from "@/lib/Link";
+import ContributionCard from "@/views/ContributionCard";
 
 export type SortKey = TierKey | "plan" | "monthly" | "delta" | "ded" | "oop" | "copays" | "rx" | "network";
 
@@ -38,6 +40,12 @@ interface Props {
   selected: Record<string, boolean>;
   /** Where the shortlist is reviewed and sent — its own page now. */
   signUpHref: string;
+  /** Today's employer contribution by tier, and the employer's own editable 2027 figures. */
+  contribution: TierContribution[];
+  contributionValues: Record<TierKey, number>;
+  contributionChanged: boolean;
+  onContributionChange: (key: TierKey, value: number) => void;
+  onContributionReset: () => void;
   onSort: (k: SortKey) => void;
   onGridQuery: (v: string) => void;
   onToggleCarrier: (c: string) => void;
@@ -55,6 +63,11 @@ export default function Options({
   carriers,
   selected,
   signUpHref,
+  contribution,
+  contributionValues,
+  contributionChanged,
+  onContributionChange,
+  onContributionReset,
   onSort,
   onGridQuery,
   onToggleCarrier,
@@ -176,6 +189,16 @@ export default function Options({
 
   return (
     <div>
+      <ContributionCard
+        tiers={contribution}
+        editable={{
+          values: contributionValues,
+          onChange: onContributionChange,
+          onReset: onContributionReset,
+          changed: contributionChanged,
+        }}
+      />
+
       <div
         id="market"
         className="panel anchor"
