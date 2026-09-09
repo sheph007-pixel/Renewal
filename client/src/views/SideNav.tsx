@@ -15,11 +15,12 @@ export interface NavItem {
   href: string;
   label: string;
   /**
-   * This page's step number, 1 through 4 — Welcome carries none, it is the
-   * home icon instead. The numbering says what a tab strip cannot: there is
-   * an order here, and Sign Up is where it ends.
+   * This page's step number, 1 through 4 — Welcome and Sign Up carry none.
+   * The numbering says what a tab strip cannot: there is an order here.
    */
   step?: number;
+  /** What the badge shows in place of a number, when there is no step. */
+  mark?: "home" | "check";
   /** True only for Sign Up: the one page that is an action rather than a read. */
   cta?: boolean;
 }
@@ -46,6 +47,15 @@ function HomeIcon({ color }: { color: string }) {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3.5 11.5 12 4l8.5 7.5" />
       <path d="M6 10v9a1 1 0 0 0 1 1h3.5v-6h3v6H17a1 1 0 0 0 1-1v-9" />
+    </svg>
+  );
+}
+
+/** Sign Up's badge — a destination reached, not one more numbered stop. */
+function CheckIcon({ color }: { color: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
     </svg>
   );
 }
@@ -306,7 +316,13 @@ export default function SideNav({
                   background: badgeBg,
                 }}
               >
-                {it.step == null ? <HomeIcon color={badgeFg} /> : it.step}
+                {it.step != null ? (
+                  it.step
+                ) : it.mark === "check" ? (
+                  <CheckIcon color={badgeFg} />
+                ) : (
+                  <HomeIcon color={badgeFg} />
+                )}
               </span>
               {!collapsed && (
                 <span
