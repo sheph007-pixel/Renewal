@@ -1,34 +1,45 @@
 import type { CSSProperties } from "react";
 
-/** Employee Navigator chrome — the palette the design settled on. */
+/**
+ * Employee Navigator chrome — the palette the design settled on. Every value
+ * is a CSS custom property, defined for light in `:root` and overridden for
+ * dark under `[data-theme="dark"]` (styles.css) — so light/dark is one
+ * palette swap, not two copies of every screen that uses it.
+ */
 export const C = {
-  page: "#eef1f2",
-  card: "#fff",
-  border: "#dfe3e6",
-  hairline: "#eef1f2",
-  rule: "#e6e9eb",
-  ink: "#333",
-  body: "#5c6368",
-  muted: "#6b7276",
-  faint: "#8b9296",
-  ghost: "#a0a7ab",
-  blue: "#2166cd",
-  blueInk: "#17479a",
-  blueTint: "#eaf1fc",
-  blueEdge: "#cadcf6",
-  orange: "#e8781a",
-  orangeInk: "#c2631a",
-  green: "#1e7e34",
-  greenTint: "#eaf6ec",
-  greenEdge: "#c7e6cd",
-  amber: "#8a6d1f",
-  amberTint: "#fdf6e3",
-  amberEdge: "#ecdcae",
-  red: "#a3241c",
-  redTint: "#fdf0ef",
-  redEdge: "#f0c8c4",
-  inputEdge: "#b6bfc4",
-  zebra: "#fafbfc",
+  page: "var(--page)",
+  card: "var(--card)",
+  border: "var(--border)",
+  hairline: "var(--hairline)",
+  rule: "var(--rule)",
+  ink: "var(--ink)",
+  body: "var(--body)",
+  muted: "var(--muted)",
+  faint: "var(--faint)",
+  ghost: "var(--ghost)",
+  blue: "var(--blue)",
+  blueInk: "var(--blue-ink)",
+  blueTint: "var(--blue-tint)",
+  blueEdge: "var(--blue-edge)",
+  orange: "var(--orange)",
+  orangeInk: "var(--orange-ink)",
+  green: "var(--green)",
+  greenTint: "var(--green-tint)",
+  greenEdge: "var(--green-edge)",
+  amber: "var(--amber)",
+  amberTint: "var(--amber-tint)",
+  amberEdge: "var(--amber-edge)",
+  red: "var(--red)",
+  redTint: "var(--red-tint)",
+  redEdge: "var(--red-edge)",
+  inputEdge: "var(--input-edge)",
+  zebra: "var(--zebra)",
+  /** A dark stripe — a grid's header row, a small round badge — that stays
+   *  dark in both themes rather than flipping with the page around it. */
+  headerBg: "var(--header-bg)",
+  /** Always white / always near-black, regardless of theme — text on a
+   *  solidly-coloured chip (a blue button, a green badge) never flips. */
+  onColor: "#fff",
 } as const;
 
 export const panel: CSSProperties = {
@@ -41,7 +52,7 @@ export const primaryBtn: CSSProperties = {
   padding: "9px 20px",
   fontSize: 14,
   fontWeight: 500,
-  color: "#fff",
+  color: C.onColor,
   background: C.blue,
   border: `1px solid ${C.blue}`,
   borderRadius: 4,
@@ -71,7 +82,7 @@ export const textInput: CSSProperties = {
   border: `1px solid ${C.inputEdge}`,
   borderRadius: 4,
   outline: "none",
-  background: "#fff",
+  background: C.card,
 };
 
 export const num: CSSProperties = { fontVariantNumeric: "tabular-nums" };
@@ -105,8 +116,8 @@ export const chip = (on: boolean): CSSProperties => ({
   cursor: "pointer",
   whiteSpace: "nowrap",
   ...(on
-    ? { color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }
-    : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
+    ? { color: C.onColor, background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }
+    : { color: C.body, background: C.card, border: `1px solid ${C.inputEdge}` }),
 });
 
 /** Coloured status pill: [foreground, background, border]. */

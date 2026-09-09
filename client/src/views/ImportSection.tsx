@@ -55,7 +55,7 @@ export default function ImportSection({ step, title, what, accept, ariaLabel, in
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
         <span
           aria-hidden
-          style={{ width: 26, height: 26, borderRadius: 13, background: C.ink, color: "#fff", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          style={{ width: 26, height: 26, borderRadius: 13, background: C.headerBg, color: "#fff", fontSize: 13, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
         >
           {step}
         </span>

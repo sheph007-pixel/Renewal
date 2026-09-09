@@ -29,6 +29,7 @@ import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SectionNav from "@/views/SectionNav";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
+import { useTheme } from "@/views/ThemeToggle";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -89,6 +90,7 @@ function tokenAtLoad(): string | null {
 }
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme();
   const route = useRoute();
   const page = useMemo(() => parsePath(route.path), [route.path]);
 
@@ -563,7 +565,7 @@ export default function App() {
   if (restoring) {
     return (
       <div style={{ minHeight: "100vh", background: C.page }}>
-        <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
+        <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
           <div
             style={{ maxWidth: 1400, margin: "0 auto", height: 56, display: "flex", alignItems: "center" }}
           >
@@ -751,6 +753,8 @@ export default function App() {
           homeHref={hrefFor("home")}
           manager={manager}
           onExit={signOut}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         <div className="main">

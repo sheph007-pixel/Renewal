@@ -465,7 +465,7 @@ export default function Options({
                 <tr
                   key={p.plan}
                   style={{
-                    background: selected[p.plan] ? C.blueTint : i % 2 ? C.zebra : "#fff",
+                    background: selected[p.plan] ? C.blueTint : i % 2 ? C.zebra : C.card,
                   }}
                 >
                   <td
