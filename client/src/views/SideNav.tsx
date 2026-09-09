@@ -13,12 +13,13 @@ export interface NavItem {
   href: string;
   label: string;
   /**
-   * This page's step number, 1 through 4 — Welcome and Sign Up carry none.
-   * The numbering says what a tab strip cannot: there is an order here.
+   * This page's step number, 1 through 5 — Welcome carries none, it is
+   * where you start rather than a stop along the way. The numbering says
+   * what a tab strip cannot: there is an order here.
    */
   step?: number;
-  /** What the badge shows in place of a number, when there is no step. */
-  mark?: "home" | "check";
+  /** Welcome's badge shows a house instead of a number. */
+  mark?: "home";
   /** True only for Sign Up: the one page that is an action rather than a read. */
   cta?: boolean;
 }
@@ -43,15 +44,6 @@ function HomeIcon({ color }: { color: string }) {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3.5 11.5 12 4l8.5 7.5" />
       <path d="M6 10v9a1 1 0 0 0 1 1h3.5v-6h3v6H17a1 1 0 0 0 1-1v-9" />
-    </svg>
-  );
-}
-
-/** Sign Up's badge — a destination reached, not one more numbered stop. */
-function CheckIcon({ color }: { color: string }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
     </svg>
   );
 }
@@ -267,7 +259,7 @@ export default function SideNav({
       )}
 
       <nav className="rail-nav" aria-label="Pages" style={{ padding: 10 }}>
-        {items.map((it) => {
+        {items.map((it, i) => {
           const on = it.tab === current;
           // Every badge is filled when it is the current page. Sign Up's badge
           // is filled green always — the one step that is an action, not a
@@ -275,26 +267,26 @@ export default function SideNav({
           const badgeBg = it.cta ? C.green : on ? C.blue : C.hairline;
           const badgeFg = it.cta || on ? "#fff" : C.faint;
           return (
-            <Link
-              key={it.tab}
-              href={it.href}
-              aria-current={on ? "page" : undefined}
-              title={collapsed ? it.label : undefined}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: collapsed ? "center" : "flex-start",
-                gap: 12,
-                padding: collapsed ? "13px 0" : "13px 12px",
-                marginBottom: 4,
-                borderRadius: 6,
-                border: `1px solid ${it.cta && !on ? C.greenEdge : "transparent"}`,
-                borderLeft: `3px solid ${on ? C.orange : it.cta ? C.green : "transparent"}`,
-                background: on ? C.blueTint : it.cta ? C.greenTint : "transparent",
-                color: on ? C.ink : C.body,
-                textDecoration: "none",
-              }}
-            >
+            <div key={it.tab}>
+              {i > 0 && <div aria-hidden style={{ height: 1, margin: collapsed ? "4px 4px" : "4px 12px", background: C.hairline }} />}
+              <Link
+                href={it.href}
+                aria-current={on ? "page" : undefined}
+                title={collapsed ? it.label : undefined}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  gap: 12,
+                  padding: collapsed ? "13px 0" : "13px 12px",
+                  borderRadius: 6,
+                  border: `1px solid ${it.cta && !on ? C.greenEdge : "transparent"}`,
+                  borderLeft: `3px solid ${on ? C.orange : it.cta ? C.green : "transparent"}`,
+                  background: on ? C.blueTint : it.cta ? C.greenTint : "transparent",
+                  color: on ? C.ink : C.body,
+                  textDecoration: "none",
+                }}
+              >
               <span
                 aria-hidden
                 style={{
@@ -310,13 +302,7 @@ export default function SideNav({
                   background: badgeBg,
                 }}
               >
-                {it.step != null ? (
-                  it.step
-                ) : it.mark === "check" ? (
-                  <CheckIcon color={badgeFg} />
-                ) : (
-                  <HomeIcon color={badgeFg} />
-                )}
+                {it.step != null ? it.step : <HomeIcon color={badgeFg} />}
               </span>
               {!collapsed && (
                 <span
@@ -335,7 +321,8 @@ export default function SideNav({
                   {it.label}
                 </span>
               )}
-            </Link>
+              </Link>
+            </div>
           );
         })}
       </nav>
