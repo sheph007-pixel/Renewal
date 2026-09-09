@@ -199,7 +199,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Employer Contribution</div>
         <div style={{ marginTop: 1, marginBottom: 10, fontSize: 11.5, color: C.faint, textTransform: "uppercase", letterSpacing: "0.3px" }}>
-          Monthly Defined Amount
+          Monthly Defined Amount*
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (
@@ -234,6 +234,10 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
               </div>
             </div>
           ))}
+        </div>
+        <div style={{ marginTop: 10, fontSize: 11, color: C.ghost }}>
+          * Rounded to the nearest dollar. Employer Cost above is calculated to the exact cent, so multiplying
+          these figures by enrollment will come out a few dollars off.
         </div>
         {!contribution.some((t) => t.actual) && contribution.some((t) => t.count) && (
           <div style={{ marginTop: 12, fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
