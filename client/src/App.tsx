@@ -6,7 +6,15 @@ import {
   type Overrides,
 } from "@/lib/model";
 import { C, Logo, panel } from "@/lib/ui";
-import { PATHS, currentPage, linkPath, navigate, parsePath, useRoute } from "@/lib/router";
+import {
+  PATHS,
+  currentPage,
+  linkPath,
+  navigate,
+  parsePath,
+  useRoute,
+  type GroupTab,
+} from "@/lib/router";
 import Link from "@/lib/Link";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import Login from "@/views/Login";
@@ -16,7 +24,10 @@ import type { CarrierStats } from "@/views/Reconciliation";
 import type { FundingInfo } from "@/views/Funding";
 import Current, { CURRENT_SECTIONS } from "@/views/Current";
 import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
+import Home from "@/views/Home";
 import SectionNav from "@/views/SectionNav";
+import SideNav, { type NavItem } from "@/views/SideNav";
+import type { AccountManager } from "@/lib/model";
 
 /**
  * Placeholder employer-contribution percentages, used only for groups whose
@@ -27,6 +38,26 @@ const EE_PCT = 80;
 const DEP_PCT = 32;
 
 const SITE = "Kennion 2027 Renewal";
+
+/** Where the collapsed/expanded rail is remembered. */
+const NAV_KEY = "kennion.nav.collapsed";
+
+/** Below this the rail stops being a column, so collapsing it means nothing. */
+const RAIL_WIDTH = "(max-width: 860px)";
+
+/** True while the viewport is too narrow for a side rail. */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(RAIL_WIDTH).matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(RAIL_WIDTH);
+    const on = () => setNarrow(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return narrow;
+}
 
 /**
  * The access code carried in the address, if any: `/?code=ABCD2027` signs that
@@ -42,8 +73,8 @@ function linkCodeAtLoad(): string | null {
 /** The permanent group token in the address at load, if the address is /g/<token>. */
 function tokenAtLoad(): string | null {
   if (typeof window === "undefined") return null;
-  const m = window.location.pathname.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/options)?\/?$/);
-  return m ? m[1] : null;
+  const asked = parsePath(window.location.pathname.replace(/\/+$/, "") || "/");
+  return asked.kind === "group" ? asked.token || null : null;
 }
 
 export default function App() {
@@ -58,6 +89,17 @@ export default function App() {
   const linkCode = useMemo(linkCodeAtLoad, []);
   /** The group's permanent token, when the address is /g/<token>. */
   const [linkToken, setLinkToken] = useState<string | null>(null);
+  /** Who at Kennion holds this group, for the contact card and the rail. */
+  const [manager, setManager] = useState<AccountManager | null>(null);
+  /** The rail, collapsed or not. Remembered per browser, so it stays that way. */
+  const narrow = useNarrow();
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(NAV_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [restoring, setRestoring] = useState(
     () => linkCodeAtLoad() != null || tokenAtLoad() != null || loadSession() != null,
   );
@@ -133,6 +175,7 @@ export default function App() {
     } as KennionData);
     setCode(group.code);
     setLinkToken((p.linkToken as string) || null);
+    setManager((p.accountManager as AccountManager) || null);
     saveSession({ kind: "group", code: group.code });
   }, []);
 
@@ -173,7 +216,7 @@ export default function App() {
           if (asked.kind !== "admin") navigate(PATHS.groups, { replace: true });
         } else {
           applyGroup(p);
-          const home = p.linkToken ? linkPath(p.linkToken) : PATHS.current;
+          const home = p.linkToken ? linkPath(p.linkToken, "home", p.group) : PATHS.current;
           if (asked.kind !== "group" || asked.token !== p.linkToken) navigate(home, { replace: true });
         }
       } catch {
@@ -272,7 +315,9 @@ export default function App() {
           }
           const p = await r.json();
           applyGroup(p);
-          navigate(p.linkToken ? linkPath(p.linkToken) : PATHS.current, { replace: true });
+          navigate(p.linkToken ? linkPath(p.linkToken, "home", p.group) : PATHS.current, {
+            replace: true,
+          });
         } catch {
           setLoadError(true);
         } finally {
@@ -374,9 +419,22 @@ export default function App() {
     if (restoring) return;
     if (session === "admin" && page.kind !== "admin") navigate(PATHS.groups, { replace: true });
     else if (session === "group" && page.kind !== "group")
-      navigate(linkToken ? linkPath(linkToken) : PATHS.current, { replace: true });
+      navigate(linkToken ? linkPath(linkToken, "home", g) : PATHS.current, { replace: true });
     else if (session === "none" && page.kind === "unknown") navigate(PATHS.signin, { replace: true });
-  }, [restoring, session, page.kind]);
+  }, [restoring, session, page.kind, linkToken, g]);
+
+  /**
+   * Rewrite a group address to its canonical spelling — the company and its
+   * plan-year code beside the token — once the group is known. A link that was
+   * minted before the slug existed, or one whose company has since been
+   * renamed, still opens; the bar just ends up reading the current way.
+   */
+  useEffect(() => {
+    if (restoring || session !== "group" || !g || !linkToken) return;
+    if (page.kind !== "group") return;
+    const want = linkPath(linkToken, page.tab, g);
+    if (route.path !== want) navigate(want + (route.hash ? `#${route.hash}` : ""), { replace: true });
+  }, [restoring, session, g, linkToken, page, route.path, route.hash]);
 
   /** Scroll: to the named section when there is a hash, else to the top. */
   useEffect(() => {
@@ -396,7 +454,13 @@ export default function App() {
     let t = SITE;
     if (page.kind === "signin") t = `${page.staff ? "Staff sign in" : "Sign in"} — ${SITE}`;
     else if (page.kind === "group" && g)
-      t = `${page.tab === "current" ? "Current Medical Plan(s)" : "2027 Medical Plan Options"} — ${g.name}`;
+      t = `${
+        page.tab === "home"
+          ? "Renewal home"
+          : page.tab === "current"
+            ? "Current Medical Plan(s)"
+            : "2027 Medical Plan Options"
+      } — ${g.name}`;
     else if (page.kind === "admin")
       t = `${
         page.group
@@ -575,22 +639,6 @@ export default function App() {
 
   const tab = page.tab;
 
-  const tabBase = {
-    display: "flex",
-    alignItems: "center",
-    borderBottom: "3px solid transparent",
-    padding: "0 15px",
-    fontSize: 13.5,
-    color: C.body,
-    textDecoration: "none",
-  };
-  const tabOn = {
-    ...tabBase,
-    borderBottom: `3px solid ${C.orange}`,
-    fontWeight: 600,
-    color: C.ink,
-  };
-
   /**
    * The program runs on the calendar year, so every group's page says the same
    * thing. A handful of groups carry a mid-year date because that is when they
@@ -604,21 +652,45 @@ export default function App() {
       : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
 
   const printLine =
-    (tab === "current"
-      ? `Current group health plans and cost, calendar year ${planYear}`
-      : "2027 renewal options, effective January 1, 2027") +
+    (tab === "options"
+      ? "2027 renewal options, effective January 1, 2027"
+      : `Current group health plans and cost, calendar year ${planYear}`) +
     ` · data as of 7/31/2026 · printed ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
     })}`;
 
-  // With a permanent address, both tabs live under it, so the token stays in
+  // With a permanent address, every page lives under it, so the token stays in
   // the bar wherever the client clicks.
-  const pages = [
-    [linkToken ? linkPath(linkToken, "current") : PATHS.current, "current", "Current Medical Plan(s)"],
-    [linkToken ? linkPath(linkToken, "options") : PATHS.options, "options", "2027 Medical Plan Options"],
-  ] as const;
+  const hrefFor = (t: GroupTab) =>
+    linkToken
+      ? linkPath(linkToken, t, g)
+      : t === "options"
+        ? PATHS.options
+        : PATHS.current;
+
+  const navItems: NavItem[] = [
+    { tab: "home", href: hrefFor("home"), label: "Home", note: "Where to start", mark: "H" },
+    {
+      tab: "current",
+      href: hrefFor("current"),
+      label: "Current Medical Plan(s)",
+      note: "What you have today",
+      mark: "C",
+    },
+    {
+      tab: "options",
+      href: hrefFor("options"),
+      label: "2027 Medical Plan Options",
+      note: "What is on the table",
+      mark: "27",
+    },
+  ];
+
+  const here = navItems.findIndex((it) => it.tab === tab);
+  const prev = here > 0 ? navItems[here - 1] : null;
+  const next = here >= 0 && here < navItems.length - 1 ? navItems[here + 1] : null;
 
   return (
     <div>
@@ -632,33 +704,16 @@ export default function App() {
             margin: "0 auto",
             height: 48,
             display: "flex",
-            alignItems: "stretch",
+            alignItems: "center",
             justifyContent: "space-between",
             gap: 24,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center" }}>
-            <Link href={linkToken ? linkPath(linkToken) : PATHS.current} aria-label="Home" style={{ display: "block" }}>
-              <img
-                src={Logo}
-                alt="Kennion Benefit Advisors"
-                style={{ height: 28, display: "block" }}
-              />
-            </Link>
-          </div>
-          <nav aria-label="Pages" style={{ display: "flex", alignItems: "stretch", gap: 2 }}>
-            {pages.map(([href, key, label]) => (
-              <Link
-                key={key}
-                href={href}
-                aria-current={tab === key ? "page" : undefined}
-                style={tab === key ? tabOn : tabBase}
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <Link href={hrefFor("home")} aria-label="Home" style={{ display: "block" }}>
+            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 28, display: "block" }} />
+          </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <span style={{ fontSize: 13, color: C.faint }}>{g.name}</span>
             <button
               onClick={signOut}
               style={{
@@ -676,129 +731,165 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "20px 22px 60px" }}>
-        <div
-          className="printonly"
-          style={{
-            marginBottom: 14,
-            paddingBottom: 8,
-            borderBottom: "1px solid #cfd6da",
-            fontSize: 11,
-            color: C.muted,
-          }}
-        >
-          Kennion Benefit Advisors &middot; {g.name} &middot; {printLine}
-        </div>
+      <div className="shell">
+        <SideNav
+          items={navItems}
+          current={tab}
+          collapsed={navCollapsed && !narrow}
+          onToggle={() =>
+            setNavCollapsed((v) => {
+              try {
+                localStorage.setItem(NAV_KEY, v ? "0" : "1");
+              } catch {
+                // Storage blocked: the rail still toggles for this page load.
+              }
+              return !v;
+            })
+          }
+          manager={manager}
+        />
 
-        <div
-          className="panel"
-          style={{
-            ...panel,
-            padding: "20px 22px",
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 20,
-          }}
-        >
-          <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 23,
-                fontWeight: 600,
-                color: C.ink,
-                letterSpacing: "-0.2px",
-              }}
-            >
-              {g.name}
-            </h1>
-            <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
-              {subline}
-            </div>
-            <SectionNav
-              sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
-              current={route.hash}
-            />
+        <div style={{ minWidth: 0 }}>
+          <div
+            className="printonly"
+            style={{
+              marginBottom: 14,
+              paddingBottom: 8,
+              borderBottom: "1px solid #cfd6da",
+              fontSize: 11,
+              color: C.muted,
+            }}
+          >
+            Kennion Benefit Advisors &middot; {g.name} &middot; {printLine}
           </div>
 
-        </div>
-
-        {tab === "current" ? (
-          <Current
-            data={data}
-            overrides={overrides}
-            g={g}
-            rows={rows}
-            totals={totals}
-            eePct={EE_PCT}
-            depPct={DEP_PCT}
-          />
-        ) : (
-          <Options
-            data={data}
-            g={g}
-            rows={rows}
-            totals={totals}
-            sort={sort}
-            dir={dir}
-            gridQuery={gridQuery}
-            carriers={carriers}
-            selected={selected}
-            note={note}
-            sent={sent}
-            onSort={(k) => {
-              setDir((d) => (sort === k ? -d : 1));
-              setSort(k);
+          <div
+            className="panel"
+            style={{
+              ...panel,
+              padding: "20px 22px",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 20,
             }}
-            onGridQuery={setGridQuery}
-            onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
-            onToggleSelected={toggleSelected}
-            onNote={(v) => {
-              setNote(v);
-              setSent(false);
-            }}
-            onSend={() => setSent(true)}
-          />
-        )}
+          >
+            <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: 23,
+                  fontWeight: 600,
+                  color: C.ink,
+                  letterSpacing: "-0.2px",
+                }}
+              >
+                {g.name}
+              </h1>
+              <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+                {tab === "home"
+                  ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
+                  : subline}
+              </div>
+              {tab !== "home" && (
+                <SectionNav
+                  sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
+                  current={route.hash}
+                />
+              )}
+            </div>
+          </div>
 
-        <nav
-          aria-label="Next page"
-          className="noprint"
-          style={{
-            marginTop: 26,
-            display: "flex",
-            justifyContent: tab === "current" ? "flex-end" : "flex-start",
-          }}
-        >
-          {tab === "current" ? (
-            <Link href={linkToken ? linkPath(linkToken, "options") : PATHS.options} style={{ fontSize: 13.5 }}>
-              Next: 2027 Medical Plan Options &rarr;
-            </Link>
+          {tab === "home" ? (
+            <Home
+              g={g}
+              planCount={rows.length}
+              enrolled={totals.enrolled}
+              monthly={totals.total}
+              currentHref={hrefFor("current")}
+              optionsHref={hrefFor("options")}
+              manager={manager}
+            />
+          ) : tab === "current" ? (
+            <Current
+              data={data}
+              overrides={overrides}
+              g={g}
+              rows={rows}
+              totals={totals}
+              eePct={EE_PCT}
+              depPct={DEP_PCT}
+              manager={manager}
+            />
           ) : (
-            <Link href={linkToken ? linkPath(linkToken) : PATHS.current} style={{ fontSize: 13.5 }}>
-              &larr; Back: Current Medical Plan(s)
-            </Link>
+            <Options
+              data={data}
+              g={g}
+              rows={rows}
+              totals={totals}
+              sort={sort}
+              dir={dir}
+              gridQuery={gridQuery}
+              carriers={carriers}
+              selected={selected}
+              note={note}
+              sent={sent}
+              onSort={(k) => {
+                setDir((d) => (sort === k ? -d : 1));
+                setSort(k);
+              }}
+              onGridQuery={setGridQuery}
+              onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
+              onToggleSelected={toggleSelected}
+              onNote={(v) => {
+                setNote(v);
+                setSent(false);
+              }}
+              onSend={() => setSent(true)}
+            />
           )}
-        </nav>
 
-        <div
-          className="noprint"
-          style={{
-            marginTop: 26,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 9,
-          }}
-        >
-          <span style={{ fontSize: 11, color: C.ghost }}>powered by</span>
-          <img
-            src={Logo}
-            alt="Kennion Benefit Advisors"
-            style={{ height: 24, display: "block" }}
-          />
+          <nav
+            aria-label="Nearby pages"
+            className="noprint"
+            style={{
+              marginTop: 26,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <span>
+              {prev && (
+                <Link href={prev.href} style={{ fontSize: 13.5 }}>
+                  &larr; Back: {prev.label}
+                </Link>
+              )}
+            </span>
+            <span>
+              {next && (
+                <Link href={next.href} style={{ fontSize: 13.5 }}>
+                  Next: {next.label} &rarr;
+                </Link>
+              )}
+            </span>
+          </nav>
+
+          <div
+            className="noprint"
+            style={{
+              marginTop: 26,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 9,
+            }}
+          >
+            <span style={{ fontSize: 11, color: C.ghost }}>powered by</span>
+            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 24, display: "block" }} />
+          </div>
         </div>
       </div>
 

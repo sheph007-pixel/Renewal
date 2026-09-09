@@ -122,6 +122,16 @@ const MANAGER_LIST = JSON.parse(
 );
 export const MANAGERS = MANAGER_LIST.managers;
 const MANAGER_BY_NAME = new Map(MANAGER_LIST.list.map((r) => [normalizeName(r.group), r.manager]));
+
+/**
+ * The account manager a client may see: name, direct line, email and booking
+ * link, and nothing else. A group with no manager on the list falls back to the
+ * office, so the card on a client's page is never empty.
+ */
+function managerContact(key) {
+  const c = (MANAGER_LIST.contacts || {})[key];
+  return c ? { ...c } : { ...(MANAGER_LIST.fallback || {}) };
+}
 /**
  * Cobalt quotes a self-funded plan for a handful of groups, not the whole
  * book, so its slot only applies to those — plus any group that already has a
@@ -804,6 +814,9 @@ app.post("/api/signin", async (req, res) => {
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
     linkToken: g.linkToken || null,
+    // Who to call. The manager key itself is Kennion's bookkeeping; only the
+    // contact details travel to the client.
+    accountManager: managerContact(g.manager),
   });
 });
 

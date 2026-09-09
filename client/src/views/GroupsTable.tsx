@@ -1,7 +1,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { C, money0, panel } from "@/lib/importui";
 import Link from "@/lib/Link";
-import { groupPath } from "@/lib/router";
+import { groupPath, linkPath } from "@/lib/router";
 
 export interface AdminGroup {
   name: string;
@@ -133,7 +133,9 @@ function groupsCsv(rows: AdminGroup[], blockEnrolled: number): string {
       (g) => {
         if (g.archived || g.eligible === false) return "";
         const origin = typeof window === "undefined" ? "" : window.location.origin;
-        return g.linkToken ? `${origin}/g/${g.linkToken}` : `${origin}/?code=${encodeURIComponent(g.code)}`;
+        return g.linkToken
+          ? origin + linkPath(g.linkToken, "home", g)
+          : `${origin}/?code=${encodeURIComponent(g.code)}`;
       },
     ],
     ["Size", (g) => g.sizeCategory],
@@ -720,7 +722,11 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                         </span>
                         {!g.archived && g.eligible !== false && (
                         <a
-                          href={g.linkToken ? `/g/${g.linkToken}` : `/?code=${encodeURIComponent(g.code)}`}
+                          href={
+                            g.linkToken
+                              ? linkPath(g.linkToken, "home", g)
+                              : `/?code=${encodeURIComponent(g.code)}`
+                          }
                           target="_blank"
                           rel="noreferrer"
                           title={`Open ${g.name}'s own pages, exactly as the client sees them`}

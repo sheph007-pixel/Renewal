@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { C, money0, panel } from "@/lib/importui";
 import Link from "@/lib/Link";
-import { PATHS } from "@/lib/router";
+import { PATHS, linkPath } from "@/lib/router";
 import { BROKER_LABEL, RENEWALS, RENEWAL_LABEL, RENEWAL_TONE, type AdminGroup } from "@/views/GroupsTable";
 import { GroupProposals } from "@/views/Proposals";
 import { GroupBilling } from "@/views/Funding";
@@ -47,11 +47,13 @@ const FIELDS: { key: string; label: string; width?: number }[] = [
  * too: anyone holding it is signed in as that group.
  */
 function ClientLink({
+  name,
   code,
   token,
   archived,
   onReset,
 }: {
+  name: string;
   code: string;
   token: string | null;
   archived: boolean;
@@ -60,7 +62,11 @@ function ClientLink({
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  const url = token ? `${origin}/g/${token}` : `${origin}/?code=${encodeURIComponent(code)}`;
+  // The readable address — company, plan-year code, then the token — so the
+  // link a client is sent says whose pages it opens.
+  const url = token
+    ? origin + linkPath(token, "home", { name, code })
+    : `${origin}/?code=${encodeURIComponent(code)}`;
   return (
     <div style={{ marginTop: 14 }}>
       <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
@@ -285,6 +291,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
 
             <ClientLink
               code={group.code}
+              name={group.name}
               token={group.linkToken || null}
               archived={!!group.archived}
               onReset={async () => {
