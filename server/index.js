@@ -1443,6 +1443,12 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
       if (prior && prior.name !== g.name) g.enName = g.name;
       g.name = key;
 
+      // Every count that went into medicalEligible — and everything else the
+      // parser tallied but had no field for — kept on the group itself, not
+      // just rolled into this one import's batch-wide total, so a later
+      // question about this company doesn't require re-uploading the file.
+      g.diagnostics = parsed.stats.diagnostics;
+
       imported.groups[key] = g;
       if (parsed.split) imported.splits[key] = parsed.split;
       if (db) await db.saveGroup(g, parsed.split, req.staffEmail || null);
