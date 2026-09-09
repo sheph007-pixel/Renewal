@@ -100,8 +100,14 @@ export default function ImportPanel({ token, onImported, last }: Props) {
       }
       setPreview(j);
       setChosen(Object.fromEntries(j.companies.map((c: Company) => [c.name, true])));
-    } catch {
-      setError("The upload did not complete. Check your connection and try again.");
+    } catch (e) {
+      // A network-level failure carries no server error body — a timed-out
+      // or reset connection on a hundred-megabyte upload looks identical to
+      // the browser either way — so say what actually threw, not just that
+      // something did, or a real cause (an expired session, a dropped
+      // connection partway through) reads as generic advice to "try again."
+      const reason = e instanceof Error && e.message ? e.message : String(e);
+      setError(`The upload did not complete (${reason}). Check your connection and try again.`);
     } finally {
       setBusy("");
     }
