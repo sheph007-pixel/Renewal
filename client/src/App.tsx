@@ -456,10 +456,10 @@ export default function App() {
     else if (page.kind === "group" && g)
       t = `${
         page.tab === "home"
-          ? "Renewal home"
+          ? "Welcome"
           : page.tab === "current"
-            ? "Current Medical Plan(s)"
-            : "2027 Medical Plan Options"
+            ? "Current 2026 Medical Plans"
+            : "New 2027 Medical Plans"
       } — ${g.name}`;
     else if (page.kind === "admin")
       t = `${
@@ -671,21 +671,9 @@ export default function App() {
         : PATHS.current;
 
   const navItems: NavItem[] = [
-    { tab: "home", href: hrefFor("home"), label: "Home", note: "Where to start", mark: "H" },
-    {
-      tab: "current",
-      href: hrefFor("current"),
-      label: "Current Medical Plan(s)",
-      note: "What you have today",
-      mark: "C",
-    },
-    {
-      tab: "options",
-      href: hrefFor("options"),
-      label: "2027 Medical Plan Options",
-      note: "What is on the table",
-      mark: "27",
-    },
+    { tab: "home", href: hrefFor("home"), label: "Welcome", mark: "W" },
+    { tab: "current", href: hrefFor("current"), label: "Current 2026 Medical Plans", mark: "C" },
+    { tab: "options", href: hrefFor("options"), label: "New 2027 Medical Plans", mark: "27" },
   ];
 
   const here = navItems.findIndex((it) => it.tab === tab);

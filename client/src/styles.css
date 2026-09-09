@@ -114,7 +114,6 @@ textarea {
     flex: 1 1 220px;
   }
   .shell > .sidebar .collapse-btn,
-  .shell > .sidebar .rail-note,
   .shell > .sidebar .rail-head {
     display: none !important;
   }

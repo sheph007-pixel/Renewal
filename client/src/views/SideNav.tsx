@@ -8,8 +8,6 @@ export interface NavItem {
   tab: GroupTab;
   href: string;
   label: string;
-  /** One line under the label saying what the page answers. */
-  note: string;
   /** The mark shown when the rail is collapsed. */
   mark: string;
 }
@@ -35,8 +33,9 @@ interface Props {
  * middle and who to call at the bottom, and it stays put while a long rate
  * grid scrolls past it.
  *
- * A column has room for a line under each page saying what it answers, which a
- * tab strip does not, and room to grow: another page is another row. It
+ * A column has room to grow that a tab strip does not — another page is
+ * another row — and each row is the page name itself, set big and bold, so
+ * the five pages read as a list rather than a row of small print. It
  * collapses to marks for anyone who wants the width back, and the choice is
  * remembered by the caller. Collapsed or not, the links are the same links, so
  * nothing is reachable in only one state.
@@ -140,12 +139,12 @@ export default function SideNav({
               title={collapsed ? it.label : undefined}
               style={{
                 display: "flex",
-                alignItems: collapsed ? "center" : "flex-start",
+                alignItems: "center",
                 justifyContent: collapsed ? "center" : "flex-start",
-                gap: 10,
-                padding: collapsed ? "10px 0" : "9px 10px",
-                marginBottom: 2,
-                borderRadius: 4,
+                gap: 12,
+                padding: collapsed ? "13px 0" : "13px 12px",
+                marginBottom: 3,
+                borderRadius: 5,
                 borderLeft: `3px solid ${on ? C.orange : "transparent"}`,
                 background: on ? C.blueTint : "transparent",
                 color: on ? C.ink : C.body,
@@ -156,12 +155,12 @@ export default function SideNav({
                 aria-hidden
                 style={{
                   flex: "none",
-                  width: 22,
-                  height: 22,
+                  width: 26,
+                  height: 26,
                   display: "grid",
                   placeItems: "center",
-                  borderRadius: 3,
-                  fontSize: 11,
+                  borderRadius: 4,
+                  fontSize: 11.5,
                   fontWeight: 700,
                   color: on ? "#fff" : C.faint,
                   background: on ? C.blue : C.hairline,
@@ -170,13 +169,8 @@ export default function SideNav({
                 {it.mark}
               </span>
               {!collapsed && (
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 13.5, fontWeight: on ? 600 : 500 }}>
-                    {it.label}
-                  </span>
-                  <span className="rail-note" style={{ display: "block", marginTop: 2, fontSize: 11.5, color: C.faint, lineHeight: 1.45 }}>
-                    {it.note}
-                  </span>
+                <span style={{ minWidth: 0, fontSize: 15, fontWeight: 700, letterSpacing: "-0.1px" }}>
+                  {it.label}
                 </span>
               )}
             </Link>
