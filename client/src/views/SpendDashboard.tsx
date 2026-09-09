@@ -197,15 +197,20 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
           2027 Medical Options, but muted and disabled: this is what today's
           plan already fixed, not something to type over. */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>
-          Employer Cost by tier
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Employer Contribution</div>
+        <div style={{ marginTop: 1, marginBottom: 10, fontSize: 11.5, color: C.faint, textTransform: "uppercase", letterSpacing: "0.3px" }}>
+          Monthly Defined Amount
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (
             <div key={t.key} style={{ flex: "1 1 130px", minWidth: 130 }}>
-              <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>{TIER_LABEL[t.key]}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 14, color: C.ghost }}>$</span>
+              {/* paddingLeft matches the input's own left padding, so the label
+                  sits over the digits rather than the $ sign beside them. */}
+              <div style={{ fontSize: 12, color: C.faint, marginBottom: 6, paddingLeft: 9 }}>{TIER_LABEL[t.key]}</div>
+              <div style={{ position: "relative" }}>
+                <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: C.ghost }}>
+                  $
+                </span>
                 <input
                   value={t.er == null ? "" : Math.round(t.er).toLocaleString("en-US")}
                   disabled
@@ -213,7 +218,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
                   aria-label={`${TIER_LABEL[t.key]}, current employer contribution`}
                   style={{
                     width: "100%",
-                    padding: "8px 9px",
+                    padding: "8px 9px 8px 22px",
                     fontSize: 15,
                     fontWeight: 600,
                     color: t.count ? C.body : C.faint,
@@ -224,7 +229,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
                   }}
                 />
               </div>
-              <div style={{ marginTop: 3, fontSize: 11.5, color: C.faint }}>
+              <div style={{ marginTop: 3, fontSize: 11.5, color: C.faint, paddingLeft: 9 }}>
                 {t.count ? `${t.count} enrolled` : "none enrolled"}
               </div>
             </div>
