@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   TIERS,
+  contributionByTier,
   money,
   rateFor,
   type AccountManager,
@@ -13,6 +14,7 @@ import {
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
 import NavigatorCard from "@/views/NavigatorCard";
 import ContactCard from "@/views/ContactCard";
+import ContributionCard from "@/views/ContributionCard";
 
 /**
  * What a group has today: one row per plan, the four tier rates, and what that
@@ -138,8 +140,15 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
   const cell = { padding: "12px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14 };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
 
+  const contribution = useMemo(
+    () => contributionByTier(data, overrides, g, eePct, depPct),
+    [data, overrides, g, eePct, depPct],
+  );
+
   return (
     <div>
+      <ContributionCard tiers={contribution} />
+
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Your 2026 Medical Plans</h2>
         <button

@@ -472,6 +472,61 @@ export function planRows(
   });
 }
 
+/** What the employer puts toward one tier, on average per enrolled member. */
+export interface TierContribution {
+  key: TierKey;
+  label: string;
+  count: number;
+  /** Null when nobody in this tier has a priced plan to average from. */
+  er: number | null;
+  ee: number | null;
+  /** True only when every member counted here came off a real Employee Navigator split — not the placeholder estimate. */
+  actual: boolean;
+}
+
+/**
+ * The employer's contribution today, one figure per tier rather than one per
+ * plan — what "Employee Only", "Employee + Spouse", etc. actually cost the
+ * company on average, blended across however many plans a group runs. This is
+ * the number a group already spends, read off its own current rates and
+ * enrollment; New 2027 Medical Options starts an employer's own contribution
+ * choice from here rather than from zero.
+ */
+export function contributionByTier(
+  data: KennionData,
+  overrides: Overrides,
+  g: Group,
+  eePct: number,
+  depPct: number,
+): TierContribution[] {
+  return TIERS.map((t) => {
+    let count = 0;
+    let erSum = 0;
+    let eeSum = 0;
+    let allActual = true;
+    let any = false;
+    (g.plans || []).forEach((p) => {
+      const n = planCounts(g, p.plan)[t.key];
+      if (!n) return;
+      const s = split(data, overrides, g, p.plan, t.key, eePct, depPct);
+      if (s.rate == null) return;
+      any = true;
+      count += n;
+      erSum += (s.er ?? 0) * n;
+      eeSum += (s.ee ?? 0) * n;
+      if (!s.actual) allActual = false;
+    });
+    return {
+      key: t.key,
+      label: t.label,
+      count,
+      er: count ? +(erSum / count).toFixed(2) : null,
+      ee: count ? +(eeSum / count).toFixed(2) : null,
+      actual: any && allActual,
+    };
+  });
+}
+
 export function planDesign(
   data: KennionData,
   planName: string,
