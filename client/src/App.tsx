@@ -712,12 +712,15 @@ export default function App() {
         ? PATHS.options
         : PATHS.current;
 
-  const TAB_MARK: Record<GroupTab, string> = { home: "W", current: "C", options: "27", supplemental: "S", signup: "\u2713" };
+  // Welcome carries no step \u2014 it is the home icon, not part of the count \u2014
+  // so Sign Up reads as step 4 of 4, the last thing to do, not a fifth item.
+  const TAB_STEP: Partial<Record<GroupTab, number>> = { current: 1, options: 2, supplemental: 3, signup: 4 };
   const navItems: NavItem[] = (["home", "current", "options", "supplemental", "signup"] as GroupTab[]).map((t) => ({
     tab: t,
     href: hrefFor(t),
     label: TAB_LABEL[t],
-    mark: TAB_MARK[t],
+    step: TAB_STEP[t],
+    cta: t === "signup",
   }));
 
   const here = navItems.findIndex((it) => it.tab === tab);
