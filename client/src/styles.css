@@ -59,52 +59,100 @@ textarea {
   }
 }
 
-/* The client shell: a side navigation beside the page. Below 860px the sidebar
-   stops being a column and sits above the page, so a phone gets the full width
-   for the rate grid rather than a rail it has to scroll past. */
+/* The client shell: a full-height rail down the left, the page beside it. The
+   rail is fixed, so it stays put while a long rate grid scrolls, and its width
+   is set from JS (--rail) so collapsing it moves the page over with it. */
 .shell {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 22px;
+  display: block;
+  min-height: 100vh;
+}
+.shell > .sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--rail);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.shell > .main {
+  margin-left: var(--rail);
+  min-width: 0;
+}
+.shell > .main > .inner {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px 22px 60px;
 }
-.shell > .sidebar {
-  position: sticky;
-  top: 16px;
-}
+
+/* Below 860px there is no room for a column: the rail sits above the page as a
+   row of pages, so a phone gets the full width for the rate grid. */
 @media (max-width: 860px) {
-  .shell {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
-  }
-  /* Above the page rather than beside it: the pages sit in a row, and the
-     collapse control is pointless when the rail is not a column. */
   .shell > .sidebar {
     position: static;
-    width: auto !important;
+    width: auto;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+  }
+  .shell > .sidebar > .brand,
+  .shell > .sidebar > .rail-foot {
+    flex: 1 1 100%;
+  }
+  .shell > .sidebar > .rail-nav {
     display: flex;
+    flex: 1 1 100%;
     flex-wrap: wrap;
     gap: 4px;
   }
-  .shell > .sidebar > a {
+  .shell > .sidebar > .rail-nav > a {
     flex: 1 1 220px;
   }
-  .shell > .sidebar > button {
+  .shell > .sidebar .collapse-btn,
+  .shell > .sidebar .rail-note,
+  .shell > .sidebar .rail-head {
     display: none !important;
   }
-  .shell > .sidebar > div {
-    flex: 1 1 100%;
+  /* The foot becomes one compact line of contacts rather than a stack. */
+  .shell > .sidebar > .rail-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 16px;
+    padding: 8px 12px;
+  }
+  .shell > .sidebar > .rail-foot > a,
+  .shell > .sidebar > .rail-foot > button {
+    padding: 0;
+  }
+  .shell > .sidebar .rail-manager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .shell > .main {
+    margin-left: 0;
   }
 }
+
 @media print {
-  .shell {
-    display: block;
+  .shell > .main {
+    margin-left: 0;
+  }
+  .shell > .main > .inner {
     padding: 0 22px 20px;
   }
 }
+
 /* Two-up cards (Employee Navigator, account manager) that stack when narrow. */
 .cardgrid {
   display: grid;
