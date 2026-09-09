@@ -26,7 +26,7 @@ import Current, { CURRENT_SECTIONS } from "@/views/Current";
 import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
 import Home from "@/views/Home";
 import SectionNav from "@/views/SectionNav";
-import SideNav, { type NavItem } from "@/views/SideNav";
+import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -691,51 +691,18 @@ export default function App() {
   const here = navItems.findIndex((it) => it.tab === tab);
   const prev = here > 0 ? navItems[here - 1] : null;
   const next = here >= 0 && here < navItems.length - 1 ? navItems[here + 1] : null;
+  const shut = navCollapsed && !narrow;
 
   return (
     <div>
       <div
-        className="noprint"
-        style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}
+        className="shell"
+        style={{ ["--rail" as string]: `${shut ? RAIL_SHUT : RAIL_OPEN}px` }}
       >
-        <div
-          style={{
-            maxWidth: 1400,
-            margin: "0 auto",
-            height: 48,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 24,
-          }}
-        >
-          <Link href={hrefFor("home")} aria-label="Home" style={{ display: "block" }}>
-            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 28, display: "block" }} />
-          </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ fontSize: 13, color: C.faint }}>{g.name}</span>
-            <button
-              onClick={signOut}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: 13.5,
-                color: C.blue,
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              Exit
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="shell">
         <SideNav
           items={navItems}
           current={tab}
-          collapsed={navCollapsed && !narrow}
+          collapsed={shut}
           onToggle={() =>
             setNavCollapsed((v) => {
               try {
@@ -746,154 +713,144 @@ export default function App() {
               return !v;
             })
           }
+          homeHref={hrefFor("home")}
           manager={manager}
+          onExit={signOut}
         />
 
-        <div style={{ minWidth: 0 }}>
-          <div
-            className="printonly"
-            style={{
-              marginBottom: 14,
-              paddingBottom: 8,
-              borderBottom: "1px solid #cfd6da",
-              fontSize: 11,
-              color: C.muted,
-            }}
-          >
-            Kennion Benefit Advisors &middot; {g.name} &middot; {printLine}
-          </div>
-
-          <div
-            className="panel"
-            style={{
-              ...panel,
-              padding: "20px 22px",
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 20,
-            }}
-          >
-            <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 23,
-                  fontWeight: 600,
-                  color: C.ink,
-                  letterSpacing: "-0.2px",
-                }}
-              >
-                {g.name}
-              </h1>
-              <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
-                {tab === "home"
-                  ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
-                  : subline}
-              </div>
-              {tab !== "home" && (
-                <SectionNav
-                  sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
-                  current={route.hash}
-                />
-              )}
+        <div className="main">
+          <div className="inner">
+            <div
+              className="printonly"
+              style={{
+                marginBottom: 14,
+                paddingBottom: 8,
+                borderBottom: "1px solid #cfd6da",
+                fontSize: 11,
+                color: C.muted,
+              }}
+            >
+              Kennion Benefit Advisors &middot; {g.name} &middot; {printLine}
             </div>
-          </div>
 
-          {tab === "home" ? (
-            <Home
-              g={g}
-              planCount={rows.length}
-              enrolled={totals.enrolled}
-              monthly={totals.total}
-              currentHref={hrefFor("current")}
-              optionsHref={hrefFor("options")}
-              manager={manager}
-            />
-          ) : tab === "current" ? (
-            <Current
-              data={data}
-              overrides={overrides}
-              g={g}
-              rows={rows}
-              totals={totals}
-              eePct={EE_PCT}
-              depPct={DEP_PCT}
-              manager={manager}
-            />
-          ) : (
-            <Options
-              data={data}
-              g={g}
-              rows={rows}
-              totals={totals}
-              sort={sort}
-              dir={dir}
-              gridQuery={gridQuery}
-              carriers={carriers}
-              selected={selected}
-              note={note}
-              sent={sent}
-              onSort={(k) => {
-                setDir((d) => (sort === k ? -d : 1));
-                setSort(k);
+            <div
+              className="panel"
+              style={{
+                ...panel,
+                padding: "20px 22px",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 20,
               }}
-              onGridQuery={setGridQuery}
-              onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
-              onToggleSelected={toggleSelected}
-              onNote={(v) => {
-                setNote(v);
-                setSent(false);
+            >
+              <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
+                <h1
+                  style={{
+                    margin: 0,
+                    fontSize: 23,
+                    fontWeight: 600,
+                    color: C.ink,
+                    letterSpacing: "-0.2px",
+                  }}
+                >
+                  {g.name}
+                </h1>
+                <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
+                  {tab === "home"
+                    ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
+                    : subline}
+                </div>
+                {tab !== "home" && (
+                  <SectionNav
+                    sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
+                    current={route.hash}
+                  />
+                )}
+              </div>
+            </div>
+
+            {tab === "home" ? (
+              <Home
+                g={g}
+                planCount={rows.length}
+                enrolled={totals.enrolled}
+                monthly={totals.total}
+                currentHref={hrefFor("current")}
+                optionsHref={hrefFor("options")}
+                manager={manager}
+              />
+            ) : tab === "current" ? (
+              <Current
+                data={data}
+                overrides={overrides}
+                g={g}
+                rows={rows}
+                totals={totals}
+                eePct={EE_PCT}
+                depPct={DEP_PCT}
+                manager={manager}
+              />
+            ) : (
+              <Options
+                data={data}
+                g={g}
+                rows={rows}
+                totals={totals}
+                sort={sort}
+                dir={dir}
+                gridQuery={gridQuery}
+                carriers={carriers}
+                selected={selected}
+                note={note}
+                sent={sent}
+                onSort={(k) => {
+                  setDir((d) => (sort === k ? -d : 1));
+                  setSort(k);
+                }}
+                onGridQuery={setGridQuery}
+                onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
+                onToggleSelected={toggleSelected}
+                onNote={(v) => {
+                  setNote(v);
+                  setSent(false);
+                }}
+                onSend={() => setSent(true)}
+              />
+            )}
+
+            <nav
+              aria-label="Nearby pages"
+              className="noprint"
+              style={{
+                marginTop: 26,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
               }}
-              onSend={() => setSent(true)}
-            />
-          )}
+            >
+              <span>
+                {prev && (
+                  <Link href={prev.href} style={{ fontSize: 13.5 }}>
+                    &larr; Back: {prev.label}
+                  </Link>
+                )}
+              </span>
+              <span>
+                {next && (
+                  <Link href={next.href} style={{ fontSize: 13.5 }}>
+                    Next: {next.label} &rarr;
+                  </Link>
+                )}
+              </span>
+            </nav>
 
-          <nav
-            aria-label="Nearby pages"
-            className="noprint"
-            style={{
-              marginTop: 26,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-            }}
-          >
-            <span>
-              {prev && (
-                <Link href={prev.href} style={{ fontSize: 13.5 }}>
-                  &larr; Back: {prev.label}
-                </Link>
-              )}
-            </span>
-            <span>
-              {next && (
-                <Link href={next.href} style={{ fontSize: 13.5 }}>
-                  Next: {next.label} &rarr;
-                </Link>
-              )}
-            </span>
-          </nav>
-
-          <div
-            className="noprint"
-            style={{
-              marginTop: 26,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 9,
-            }}
-          >
-            <span style={{ fontSize: 11, color: C.ghost }}>powered by</span>
-            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 24, display: "block" }} />
+            <Footer />
           </div>
         </div>
       </div>
-
-      <Footer />
     </div>
   );
 }
