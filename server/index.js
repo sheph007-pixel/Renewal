@@ -394,8 +394,47 @@ async function mintMissingTokens() {
   }
 }
 
-const splitFor = (name) =>
-  (imported.splits || {})[name] || data.splits[name] || null;
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * The employer/employee split, built fresh from each member's own cost —
+ * not the value frozen on the group at the time of its last import. Once a
+ * member carries employerCost/employeeCost (every import from here on),
+ * a fix to how the split is derived applies immediately to every group
+ * already in the database, the same way Eligible now does, with nothing
+ * further to re-upload.
+ */
+function splitFromMembers(g) {
+  const agg = {};
+  for (const m of g.members || []) {
+    if (m.employerCost == null || m.employeeCost == null || m.premium == null || !m.tier || !m.plan) continue;
+    const planAgg = (agg[m.plan] = agg[m.plan] || {});
+    const a = (planAgg[m.tier] = planAgg[m.tier] || { totalSum: 0, erSum: 0, eeSum: 0, n: 0 });
+    a.totalSum += m.premium;
+    a.erSum += m.employerCost;
+    a.eeSum += m.employeeCost;
+    a.n++;
+  }
+  const plans = Object.fromEntries(
+    Object.entries(agg).map(([plan, tiers]) => [
+      plan,
+      Object.fromEntries(
+        Object.entries(tiers).map(([tier, a]) => [
+          tier,
+          { total: round2(a.totalSum / a.n), er: round2(a.erSum / a.n), ee: round2(a.eeSum / a.n) },
+        ]),
+      ),
+    ]),
+  );
+  if (!Object.keys(plans).length) return null;
+  return {
+    source: "Employee Navigator XML import — employer/employee cost as configured in payroll, averaged across everyone on a plan and tier",
+    plans,
+  };
+}
+
+const splitFor = (g) =>
+  splitFromMembers(g) || (imported.splits || {})[g.name] || data.splits[g.name] || null;
 
 /** A group's most recent Sign Up submission, or null if it has never sent one. */
 async function latestSignup(name) {
@@ -834,7 +873,7 @@ app.post("/api/signin", async (req, res) => {
     // name, enrollment, premium or notes travels in a group's payload.
     uhc: clientUhc(g),
     // Only this group's contribution split, when Employee Navigator has one.
-    splits: splitFor(g.name) ? { [g.name]: splitFor(g.name) } : {},
+    splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     overrides: overridesFor(g.name),
     // The carrier proposals on file for this group — plans and tier rates as
     // read off the documents — and this month's billing, counts and rates only.

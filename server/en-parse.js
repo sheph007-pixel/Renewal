@@ -552,7 +552,12 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
         y.monthly - x.monthly,
     );
 
-  // Strip the working fields the portal does not consume.
+  // Strip the working fields the portal does not consume — but keep each
+  // person's own employer/employee cost. A tier-level split is a figure
+  // derived from these, and derived figures are exactly what needs fixing
+  // without notice: keeping the ingredients means a correction to how they
+  // are combined applies to every group already imported, not just the
+  // next one.
   const cleanMembers = members.map((m) => ({
     first: m.first,
     last: m.last,
@@ -563,6 +568,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     plan: m.plan,
     tpa: carriers.get(m.plan) || tpa,
     premium: m.premium,
+    employerCost: m.employerCost,
+    employeeCost: m.employeeCost,
     spAges: m.spAges,
     chAges: m.chAges,
   }));
