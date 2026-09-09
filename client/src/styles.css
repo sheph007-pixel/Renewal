@@ -124,12 +124,23 @@ textarea {
     gap: 6px 16px;
     padding: 8px 12px;
   }
-  .shell > .sidebar > .rail-foot > button {
-    padding: 0 !important;
-  }
   .shell > .sidebar .rail-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 14px;
+    margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
+  }
+  .shell > .sidebar .rail-links > div:first-child {
+    display: none;
+  }
+  .shell > .sidebar .rail-links > a,
+  .shell > .sidebar .rail-links > button {
+    width: auto;
+    padding: 0 !important;
+    font-size: 12.5px;
   }
   .shell > .sidebar .rail-manager {
     display: flex;
