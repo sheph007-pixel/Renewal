@@ -492,19 +492,38 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   const splitPlans = {};
   const planAgg = new Map();
 
+  // Employer/employee split, averaged over everyone on a plan + tier — not
+  // just whoever happened to come first. Contribution can differ member to
+  // member even within one tier (a class, a raise mid-year, a payroll
+  // rounding difference), and taking the first person's figures applied
+  // that one person's split to the whole tier.
+  const splitAgg = {};
+
   for (const m of members) {
     (rates[m.plan] = rates[m.plan] || {});
     if (m.tierKnown && m.premium != null && rates[m.plan][m.tier] == null) rates[m.plan][m.tier] = m.premium;
 
     if (m.tierKnown && m.employerCost != null && m.employeeCost != null && m.premium != null) {
-      const sp = (splitPlans[m.plan] = splitPlans[m.plan] || {});
-      if (!sp[m.tier]) sp[m.tier] = { total: m.premium, er: m.employerCost, ee: m.employeeCost };
+      const agg = (splitAgg[m.plan] = splitAgg[m.plan] || {});
+      const a = (agg[m.tier] = agg[m.tier] || { totalSum: 0, erSum: 0, eeSum: 0, n: 0 });
+      a.totalSum += m.premium;
+      a.erSum += m.employerCost;
+      a.eeSum += m.employeeCost;
+      a.n++;
     }
 
     const a = planAgg.get(m.plan) || { enrolled: 0, monthly: 0 };
     a.enrolled++;
     a.monthly += m.premium || 0;
     planAgg.set(m.plan, a);
+  }
+
+  for (const plan of Object.keys(splitAgg)) {
+    const sp = (splitPlans[plan] = splitPlans[plan] || {});
+    for (const tierKey of Object.keys(splitAgg[plan])) {
+      const a = splitAgg[plan][tierKey];
+      sp[tierKey] = { total: round2(a.totalSum / a.n), er: round2(a.erSum / a.n), ee: round2(a.eeSum / a.n) };
+    }
   }
 
   const tiers = { EE: 0, ES: 0, EC: 0, FAM: 0 };
@@ -595,7 +614,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     },
     split: Object.keys(splitPlans).length
       ? {
-          source: `Employee Navigator XML import — employer/employee cost as configured in payroll`,
+          source: `Employee Navigator XML import — employer/employee cost as configured in payroll, averaged across everyone on a plan and tier`,
           plans: splitPlans,
         }
       : null,
