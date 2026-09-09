@@ -23,7 +23,7 @@ interface Props {
 /**
  * The first stop after Welcome: what actually changes on January 1, 2027,
  * before the full grid of every priced option. Same headline figure Your
- * 2027 Options builds (`marketSummary`, shared rather than recomputed), read
+ * New 2027 Medical Options builds (`marketSummary`, shared rather than recomputed), read
  * in one line instead of found by scanning a table.
  */
 export default function WhatsChanging({ data, g, rows, totals, optionsHref, signUpHref }: Props) {
@@ -84,7 +84,7 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
 
       <div className="cardgrid" style={{ marginTop: 16 }}>
         <Link href={optionsHref} style={{ ...card, display: "block", color: "inherit", textDecoration: "none" }}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>See Your 2027 Options &rarr;</div>
+          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>See New 2027 Medical Options &rarr;</div>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             Every priced plan, side by side with what you pay now, plus what we&rsquo;d recommend for {g.name}.
           </p>

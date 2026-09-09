@@ -31,7 +31,7 @@ const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 /**
- * Where a shortlist built on New 2027 Medical Plans is reviewed, noted, and
+ * Where a shortlist built on New 2027 Medical Options is reviewed, noted, and
  * actually sent. This used to be a panel at the bottom of the options page
  * that only pretended to send — the button just flipped a flag in the
  * browser. It now posts to Kennion and is kept: your account manager sees
@@ -129,7 +129,7 @@ export default function SignUp({
             <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
               Nothing shortlisted yet. Check any plan on{" "}
               <Link href={optionsHref} style={{ color: C.blue }}>
-                New 2027 Medical Plans
+                New 2027 Medical Options
               </Link>{" "}
               to add it here.
             </p>
