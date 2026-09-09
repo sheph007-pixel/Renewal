@@ -82,7 +82,7 @@ type Broker = keyof typeof BROKER_LABEL;
 
 /** Kennion's account managers, as the roster names them. */
 export const MANAGER_LABEL = { debbie: "Debbie", tracy: "Tracy" } as const;
-const MANAGER_FULL = { debbie: "Debbie Bostic", tracy: "Tracy Sanders" } as const;
+const MANAGER_FULL = { debbie: "Debbie Bostic", tracy: "Tracy Hayden" } as const;
 type Manager = keyof typeof MANAGER_LABEL;
 
 export const RENEWALS = ["open", "sent", "renewed", "non-renewed"] as const;
