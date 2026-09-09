@@ -6,8 +6,9 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
- *   /g/:token            a group's own permanent address — Current
- *   /g/:token/options    …and its 2027 options
+ *   /g/:slug/:token      a group's own permanent address — its home page
+ *   /g/:slug/:token/current   …Current Medical Plan(s)
+ *   /g/:slug/:token/options   …and its 2027 options
  *   /admin               staff sign-in
  *   /current             Current Medical Plan(s)
  *   /options             2027 Medical Plan Options
@@ -17,6 +18,12 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /admin/proposals     Rate Administration — Proposals
  *   /admin/import        Rate Administration — Import
  *
+ * The slug in a group address is the company and its plan-year code — say
+ * `johnson-storage-moving-jsmh2027` — so a link a client bookmarks or forwards
+ * says whose page it opens. The token beside it is the credential; the slug is
+ * cosmetic and any spelling of it is accepted, then rewritten to the canonical
+ * one. Addresses minted before the slug existed (`/g/:token`) still work.
+ *
  * Sections within a page are plain `#hash` anchors.
  */
 export interface Route {
@@ -24,9 +31,12 @@ export interface Route {
   hash: string;
 }
 
+/** The pages a signed-in group has, in the order the side navigation lists them. */
+export type GroupTab = "home" | "current" | "options";
+
 export type Page =
   | { kind: "signin"; staff: boolean }
-  | { kind: "group"; tab: "current" | "options"; token?: string }
+  | { kind: "group"; tab: GroupTab; token?: string; slug?: string }
   | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import"; group: string | null }
   | { kind: "unknown" };
 
@@ -43,9 +53,46 @@ export const PATHS = {
 
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
 
-/** A group's own address, by its permanent token. */
-export const linkPath = (token: string, tab: "current" | "options" = "current") =>
-  `/g/${encodeURIComponent(token)}${tab === "options" ? "/options" : ""}`;
+/**
+ * The readable half of a group's address: the company name and its plan-year
+ * code, e.g. "Johnson Storage & Moving Co. Holdings, LLC" + "JSMH2027" ->
+ * `johnson-storage-moving-jsmh2027`. Nothing is looked up by it, so a rename
+ * only changes what the address reads like, never who it opens.
+ */
+export function groupSlug(name: string, code?: string | null): string {
+  const words = String(name || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w && !SKIP_WORDS.has(w));
+  const stem = words.slice(0, 5).join("-").slice(0, 60).replace(/-+$/, "");
+  const tail = String(code || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return [stem, tail].filter(Boolean).join("-") || "group";
+}
+
+/** Legal forms and filler, which say nothing about which company a link opens. */
+const SKIP_WORDS = new Set([
+  "llc", "lc", "inc", "incorporated", "corp", "corporation", "co", "company",
+  "companies", "ltd", "limited", "lp", "llp", "pc", "pllc", "plc", "pa",
+  "the", "of", "and", "a", "an",
+]);
+
+/**
+ * A group's own address. With a name and code it carries the readable slug;
+ * without them it falls back to the bare token, which is still accepted.
+ */
+export const linkPath = (
+  token: string,
+  tab: GroupTab = "home",
+  group?: { name?: string; code?: string | null } | null,
+) => {
+  const head = group && group.name
+    ? `/g/${groupSlug(group.name, group.code)}/${encodeURIComponent(token)}`
+    : `/g/${encodeURIComponent(token)}`;
+  return tab === "home" ? head : `${head}/${tab}`;
+};
 
 function safeDecode(s: string): string {
   try {
@@ -62,8 +109,13 @@ export function parsePath(path: string): Page {
   if (path === PATHS.options) return { kind: "group", tab: "options" };
   // A group's permanent address: the token stays in the bar, so the page can
   // be bookmarked and shared without a code being typed.
-  const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(options))?$/);
-  if (t) return { kind: "group", tab: t[2] === "options" ? "options" : "current", token: t[1] };
+  const s = path.match(/^\/g\/([a-z0-9][a-z0-9-]{0,79})\/([A-Za-z0-9_-]{8,64})(?:\/(current|options))?$/);
+  if (s) return { kind: "group", tab: (s[3] as GroupTab) || "home", token: s[2], slug: s[1] };
+  // Addresses minted before the slug: the token alone. The base address is the
+  // home page now, so an old bookmark lands there and is rewritten to the
+  // readable spelling; nothing it used to reach has moved further than a click.
+  const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(current|options))?$/);
+  if (t) return { kind: "group", tab: (t[2] as GroupTab) || "home", token: t[1] };
   const m = path.match(/^\/admin\/(groups|rates|proposals|import)(?:\/(.+))?$/);
   if (m) {
     const tab = m[1] as "groups" | "rates" | "proposals" | "import";

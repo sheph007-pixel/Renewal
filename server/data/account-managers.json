@@ -4,6 +4,27 @@
     "debbie": "Debbie Bostic",
     "tracy": "Tracy Sanders"
   },
+  "contacts": {
+    "debbie": {
+      "name": "Debbie Bostic",
+      "title": "Account Manager",
+      "phone": "205-972-0111",
+      "email": "support@kennion.com",
+      "calendly": "https://calendly.com/debbie-bostic"
+    },
+    "tracy": {
+      "name": "Tracy Sanders",
+      "title": "Account Manager",
+      "phone": "205-972-0125",
+      "email": "support@kennion.com",
+      "calendly": "https://calendly.com/tracy-hayden"
+    }
+  },
+  "fallback": {
+    "name": "Kennion Benefit Advisors",
+    "title": "Client Services",
+    "email": "support@kennion.com"
+  },
   "list": [
     {
       "group": "Adobe HVAC Supply LLC",

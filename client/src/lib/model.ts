@@ -215,6 +215,17 @@ export interface KennionData {
   slots?: string[];
   /** The signed-in group's billing this month (group sessions only). */
   funding?: GroupFundingSnapshot | null;
+  /** Who at Kennion looks after this group (group sessions only). */
+  accountManager?: AccountManager | null;
+}
+
+/** The Kennion contact shown on a client's pages. */
+export interface AccountManager {
+  name: string;
+  title?: string;
+  phone?: string;
+  email?: string;
+  calendly?: string;
 }
 
 /** Rate overrides keyed by `group||plan||censusTier`, persisted per browser. */
