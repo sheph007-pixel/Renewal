@@ -63,6 +63,50 @@ export default function SignUp({
         <h2 style={h2}>Sign Up</h2>
       </div>
 
+      {manager?.calendly && (
+        <div
+          style={{
+            ...panel,
+            padding: "16px 18px",
+            marginBottom: 18,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            background: C.greenTint,
+            borderColor: C.greenEdge,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Get your kickoff call on the calendar</div>
+            <div style={{ marginTop: 3, fontSize: 12.5, color: C.body, lineHeight: 1.5 }}>
+              Talk through your shortlist, contribution strategy, and timing with {managerFirst} — no need to wait
+              until you've picked plans below.
+            </div>
+          </div>
+          <a
+            href={manager.calendly}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              flex: "none",
+              padding: "9px 16px",
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: "#fff",
+              background: C.green,
+              border: `1px solid ${C.green}`,
+              borderRadius: 4,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Book your kickoff call &#8599;
+          </a>
+        </div>
+      )}
+
       {lastSignup && (
         <div style={{ ...panel, padding: "14px 18px", marginBottom: 18, background: C.blueTint, borderColor: C.blueEdge }}>
           <div style={{ fontSize: 13.5, color: C.ink, fontWeight: 600 }}>

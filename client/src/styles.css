@@ -113,8 +113,7 @@ textarea {
   .shell > .sidebar > .rail-nav > a {
     flex: 1 1 220px;
   }
-  .shell > .sidebar .collapse-btn,
-  .shell > .sidebar .rail-head {
+  .shell > .sidebar .collapse-btn {
     display: none !important;
   }
   /* The foot becomes one compact line of contacts rather than a stack. */
@@ -125,9 +124,12 @@ textarea {
     gap: 6px 16px;
     padding: 8px 12px;
   }
-  .shell > .sidebar > .rail-foot > a,
   .shell > .sidebar > .rail-foot > button {
-    padding: 0;
+    padding: 0 !important;
+  }
+  .shell > .sidebar .rail-links {
+    padding: 0 !important;
+    border: 0 !important;
   }
   .shell > .sidebar .rail-manager {
     display: flex;
@@ -137,6 +139,11 @@ textarea {
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
+    background: none !important;
+  }
+  .shell > .sidebar .rail-manager > div:first-child {
+    flex: 1 1 100%;
+    display: none;
   }
   .shell > .main {
     margin-left: 0;

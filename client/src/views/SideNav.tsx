@@ -8,12 +8,18 @@ export interface NavItem {
   tab: GroupTab;
   href: string;
   label: string;
-  /** The mark shown when the rail is collapsed. */
-  mark: string;
+  /**
+   * This page's step number, 1 through 4 — Welcome carries none, it is the
+   * home icon instead. The numbering says what a tab strip cannot: there is
+   * an order here, and Sign Up is where it ends.
+   */
+  step?: number;
+  /** True only for Sign Up: the one page that is an action rather than a read. */
+  cta?: boolean;
 }
 
 /** The rail's width, which the shell reads as `--rail` to move the page over. */
-export const RAIL_OPEN = 248;
+export const RAIL_OPEN = 296;
 export const RAIL_SHUT = 64;
 
 interface Props {
@@ -26,19 +32,29 @@ interface Props {
   onExit: () => void;
 }
 
+/** A small house glyph for Welcome — plainer than a wordmark, clearer than a letter. */
+function HomeIcon({ color }: { color: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 11.5 12 4l8.5 7.5" />
+      <path d="M6 10v9a1 1 0 0 0 1 1h3.5v-6h3v6H17a1 1 0 0 0 1-1v-9" />
+    </svg>
+  );
+}
+
+const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
+
 /**
  * The site's navigation: a full-height rail down the left, which is how
  * software this shape is normally laid out and what an employer already knows
  * from Employee Navigator. It carries the brand at the top, the pages in the
- * middle and who to call at the bottom, and it stays put while a long rate
- * grid scrolls past it.
+ * middle — numbered, since there is a real order to Welcome through Sign Up —
+ * and who to call at the bottom, in a block of its own rather than folded
+ * into the same list. It stays put while a long rate grid scrolls past it.
  *
- * A column has room to grow that a tab strip does not — another page is
- * another row — and each row is the page name itself, set big and bold, so
- * the five pages read as a list rather than a row of small print. It
- * collapses to marks for anyone who wants the width back, and the choice is
- * remembered by the caller. Collapsed or not, the links are the same links, so
- * nothing is reachable in only one state.
+ * It collapses to marks for anyone who wants the width back, and the choice
+ * is remembered by the caller. Collapsed or not, the links are the same
+ * links, so nothing is reachable in only one state.
  */
 export default function SideNav({
   items,
@@ -49,9 +65,6 @@ export default function SideNav({
   manager,
   onExit,
 }: Props) {
-  const quiet = { fontSize: 11, fontWeight: 600, letterSpacing: "0.4px", color: C.ghost, textTransform: "uppercase" as const };
-  const quickLink = { display: "block", padding: "6px 12px", fontSize: 12.5, color: C.blue };
-
   return (
     <div
       className="sidebar noprint"
@@ -64,7 +77,7 @@ export default function SideNav({
           alignItems: "center",
           justifyContent: collapsed ? "center" : "space-between",
           gap: 8,
-          padding: collapsed ? "14px 8px" : "14px 12px",
+          padding: collapsed ? "14px 8px" : "16px 14px",
           borderBottom: `1px solid ${C.hairline}`,
         }}
       >
@@ -101,7 +114,20 @@ export default function SideNav({
             onClick={onToggle}
             aria-expanded
             title="Collapse navigation"
-            style={{ background: "none", border: "none", padding: 4, fontSize: 15, color: C.faint, cursor: "pointer" }}
+            style={{
+              display: "grid",
+              placeItems: "center",
+              width: 30,
+              height: 30,
+              flex: "none",
+              background: "none",
+              border: `1px solid ${C.border}`,
+              borderRadius: 5,
+              fontSize: 17,
+              lineHeight: 1,
+              color: C.body,
+              cursor: "pointer",
+            }}
           >
             &laquo;
           </button>
@@ -115,12 +141,17 @@ export default function SideNav({
           aria-expanded={false}
           title="Expand navigation"
           style={{
-            margin: "8px auto 0",
+            display: "grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            margin: "10px auto 0",
             background: "none",
-            border: "none",
-            padding: 4,
-            fontSize: 15,
-            color: C.faint,
+            border: `1px solid ${C.border}`,
+            borderRadius: 5,
+            fontSize: 17,
+            lineHeight: 1,
+            color: C.body,
             cursor: "pointer",
           }}
         >
@@ -128,9 +159,14 @@ export default function SideNav({
         </button>
       )}
 
-      <nav className="rail-nav" aria-label="Pages" style={{ padding: 8 }}>
+      <nav className="rail-nav" aria-label="Pages" style={{ padding: 10 }}>
         {items.map((it) => {
           const on = it.tab === current;
+          // Every badge is filled when it is the current page. Sign Up's badge
+          // is filled green always — the one step that is an action, not a
+          // read — so it stands out from the list even when you are not on it.
+          const badgeBg = it.cta ? C.green : on ? C.blue : C.hairline;
+          const badgeFg = it.cta || on ? "#fff" : C.faint;
           return (
             <Link
               key={it.tab}
@@ -143,10 +179,11 @@ export default function SideNav({
                 justifyContent: collapsed ? "center" : "flex-start",
                 gap: 12,
                 padding: collapsed ? "13px 0" : "13px 12px",
-                marginBottom: 3,
-                borderRadius: 5,
-                borderLeft: `3px solid ${on ? C.orange : "transparent"}`,
-                background: on ? C.blueTint : "transparent",
+                marginBottom: 4,
+                borderRadius: 6,
+                border: `1px solid ${it.cta && !on ? C.greenEdge : "transparent"}`,
+                borderLeft: `3px solid ${on ? C.orange : it.cta ? C.green : "transparent"}`,
+                background: on ? C.blueTint : it.cta ? C.greenTint : "transparent",
                 color: on ? C.ink : C.body,
                 textDecoration: "none",
               }}
@@ -159,17 +196,29 @@ export default function SideNav({
                   height: 26,
                   display: "grid",
                   placeItems: "center",
-                  borderRadius: 4,
-                  fontSize: 11.5,
+                  borderRadius: "50%",
+                  fontSize: 12.5,
                   fontWeight: 700,
-                  color: on ? "#fff" : C.faint,
-                  background: on ? C.blue : C.hairline,
+                  color: badgeFg,
+                  background: badgeBg,
                 }}
               >
-                {it.mark}
+                {it.step == null ? <HomeIcon color={badgeFg} /> : it.step}
               </span>
               {!collapsed && (
-                <span style={{ minWidth: 0, fontSize: 15, fontWeight: 700, letterSpacing: "-0.1px" }}>
+                <span
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    fontSize: 14.5,
+                    fontWeight: 700,
+                    letterSpacing: "-0.1px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    color: it.cta && !on ? C.green : undefined,
+                  }}
+                >
                   {it.label}
                 </span>
               )}
@@ -179,13 +228,11 @@ export default function SideNav({
       </nav>
 
       {/* Pinned to the bottom of the rail: where the detail lives, and who to
-          call about it. On every page, not just the one that mentions them. */}
-      <div
-        className="rail-foot"
-        style={{ marginTop: "auto", padding: collapsed ? 8 : 12, borderTop: `1px solid ${C.hairline}` }}
-      >
+          call about it. Its own block, set apart with a tint and a rule, so it
+          reads as "the people", not one more row in the page list above. */}
+      <div className="rail-foot" style={{ marginTop: "auto" }}>
         {collapsed ? (
-          <>
+          <div style={{ padding: 8, borderTop: `1px solid ${C.hairline}` }}>
             <a
               href={NAVIGATOR_URL}
               target="_blank"
@@ -195,12 +242,33 @@ export default function SideNav({
             >
               EN
             </a>
+            {manager?.name && (
+              <a
+                href={telHref(manager.phone || "")}
+                title={manager.name}
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: 30,
+                  height: 30,
+                  margin: "6px auto 0",
+                  borderRadius: "50%",
+                  background: C.blueTint,
+                  color: C.blueInk,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {manager.name[0]}
+              </a>
+            )}
             <button
               onClick={onExit}
               title="Exit"
               style={{
                 display: "block",
                 width: "100%",
+                marginTop: 6,
                 padding: "6px 0",
                 background: "none",
                 border: "none",
@@ -211,46 +279,74 @@ export default function SideNav({
             >
               Exit
             </button>
-          </>
+          </div>
         ) : (
           <>
-            <div className="rail-head" style={{ ...quiet, padding: "0 12px 4px" }}>Quick links</div>
-            <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={quickLink}>
-              Employee Navigator &#8599;
-            </a>
+            <div className="rail-links" style={{ padding: "10px 14px", borderTop: `1px solid ${C.hairline}` }}>
+              <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: C.blue }}>
+                Employee Navigator &#8599;
+              </a>
+            </div>
+
             {manager?.name && (
-              <div className="rail-manager" style={{ marginTop: 10, padding: "10px 12px 0", borderTop: `1px solid ${C.hairline}` }}>
-                <div className="rail-head" style={quiet}>Your account manager</div>
-                <div style={{ marginTop: 5, fontSize: 13, fontWeight: 600, color: C.ink }}>
+              <div
+                className="rail-manager"
+                style={{
+                  margin: "0 10px 10px",
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  background: C.blueTint,
+                  border: `1px solid ${C.blueEdge}`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.5px",
+                    color: C.blueInk,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Your account manager
+                </div>
+                <div style={{ marginTop: 6, fontSize: 15, fontWeight: 700, color: C.ink }}>
                   {manager.name}
                 </div>
-                {manager.phone && (
-                  <a
-                    href={`tel:${manager.phone.replace(/[^0-9+]/g, "")}`}
-                    style={{ display: "block", marginTop: 2, fontSize: 12.5, color: C.blue }}
-                  >
-                    {manager.phone}
-                  </a>
-                )}
-                {manager.calendly && (
-                  <a
-                    href={manager.calendly}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ display: "block", marginTop: 2, fontSize: 12.5, color: C.blue }}
-                  >
-                    Book a time &#8599;
-                  </a>
-                )}
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {manager.phone && (
+                    <a href={telHref(manager.phone)} style={{ fontSize: 12.5, color: C.blueInk, fontWeight: 500 }}>
+                      {manager.phone}
+                    </a>
+                  )}
+                  {manager.email && (
+                    <a href={`mailto:${manager.email}`} style={{ fontSize: 12.5, color: C.blueInk, fontWeight: 500 }}>
+                      {manager.email}
+                    </a>
+                  )}
+                  {manager.calendly && (
+                    <a
+                      href={manager.calendly}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12.5, color: C.blueInk, fontWeight: 700 }}
+                    >
+                      Book a time &#8599;
+                    </a>
+                  )}
+                </div>
               </div>
             )}
+
             <button
               onClick={onExit}
               style={{
-                margin: "12px 0 0",
-                padding: "0 12px",
+                display: "block",
+                width: "100%",
+                padding: "0 14px 12px",
                 background: "none",
                 border: "none",
+                textAlign: "left",
                 fontSize: 12.5,
                 color: C.faint,
                 cursor: "pointer",
