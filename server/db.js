@@ -457,7 +457,7 @@ export function createDb(url) {
     /** Most recent uploads, newest first, for the import history panel. */
     async recentImports(limit = 8) {
       const { rows } = await pool.query(
-        `SELECT filename, uploaded_at, uploaded_by, companies_found, companies_applied, diagnostics
+        `SELECT filename, uploaded_at, uploaded_by, companies_found, companies_applied, diagnostics, raw_size
            FROM kennion.imports ORDER BY uploaded_at DESC LIMIT $1`,
         [limit],
       );
