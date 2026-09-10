@@ -162,3 +162,53 @@ export function groupFromInvoiceFilename(base) {
   if (!name || name === base.replace(/\.pdf$/i, "")) return null;
   return name;
 }
+
+/** First words too common to identify a company on their own. */
+const GENERIC_FIRST = new Set([
+  "the", "first", "new", "south", "north", "east", "west", "alabama", "birmingham",
+  "american", "united", "national", "southern", "greater", "central", "st", "saint",
+  "mount", "city", "county", "group", "family", "medical", "clinic", "church", "school",
+]);
+
+/** Normalised words, with runs of single letters joined so "R E" and "RE" agree. */
+function words(name, normalize) {
+  return normalize(name).replace(/\b([a-z]) (?=[a-z]\b)/g, "$1").split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Which roster group an invoice belongs to, from the short name on the file.
+ * The file says "Ashley Mac's" where the roster says "Ashley Mac's Holdings,
+ * LLC", "Ursa Group" for "Ursa Logistics, LLC", "R E Garrison - 1099" for
+ * "R.E. Garrison Trucking 1099". In order:
+ *
+ *   1. the same name once normalised;
+ *   2. the one group whose name carries every word of the file's name — with
+ *      several, the one with the fewest words left over, if that is unique;
+ *   3. the one group sharing a distinctive first word (four letters or more,
+ *      not a common opener), when no other group starts with it.
+ *
+ * Anything still ambiguous is left unmatched rather than filed under the wrong
+ * company. Returns the roster name, or null.
+ */
+export function matchInvoiceName(name, roster, normalize) {
+  const want = words(name, normalize);
+  if (!want.length) return null;
+  const key = want.join(" ");
+  const cands = roster.map((r) => ({ name: r, words: words(r, normalize) }));
+  const exact = cands.find((c) => c.words.join(" ") === key);
+  if (exact) return exact.name;
+  // A name made only of common words identifies nothing, whatever contains it.
+  if (!want.some((w) => w.length >= 3 && !GENERIC_FIRST.has(w) && !/^\d+$/.test(w))) return null;
+  // Every word of the file's name, in the roster name.
+  const superset = cands
+    .filter((c) => want.every((w) => c.words.includes(w)))
+    .map((c) => ({ ...c, extra: c.words.length - want.length }))
+    .sort((a, b) => a.extra - b.extra);
+  if (superset.length === 1 || (superset.length > 1 && superset[0].extra < superset[1].extra)) return superset[0].name;
+  if (superset.length > 1) return null;
+  // A distinctive first word nobody else starts with.
+  const first = want[0];
+  if (first.length < 4 || GENERIC_FIRST.has(first) || /^\d+$/.test(first)) return null;
+  const starts = cands.filter((c) => c.words[0] === first);
+  return starts.length === 1 ? starts[0].name : null;
+}
