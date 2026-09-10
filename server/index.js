@@ -2497,23 +2497,6 @@ async function boot() {
       await db.init();
       const state = await db.load();
       imported = { groups: state.groups, splits: state.splits };
-      // TEMP DIAGNOSTIC — remove after next deploy.
-      {
-        const bg = imported.groups["Boss Logistics, LLC"];
-        console.log(
-          "TEMP-DIAG Boss Logistics:",
-          JSON.stringify({
-            found: !!bg,
-            medicalEligible: bg && bg.medicalEligible,
-            enrolled: bg && bg.enrolled,
-            diagnostics: bg && bg.diagnostics,
-            firstMemberHasCost:
-              bg && bg.members && bg.members[0]
-                ? { employerCost: bg.members[0].employerCost, employeeCost: bg.members[0].employeeCost }
-                : null,
-          }),
-        );
-      }
       overrides = state.overrides;
       meta = state.meta || {};
       importedAt = state.importedAt || {};
