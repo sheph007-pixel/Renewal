@@ -845,11 +845,13 @@ export default function App() {
                   />
                 )}
               </div>
-              <HrAnalytics
-                eligible={g.medicalEligible}
-                enrolled={totals.enrolled}
-                contributionPct={totals.total ? (totals.er / totals.total) * 100 : 0}
-              />
+              {tab === "current" && (
+                <HrAnalytics
+                  eligible={g.medicalEligible}
+                  enrolled={totals.enrolled}
+                  contributionPct={totals.total ? (totals.er / totals.total) * 100 : 0}
+                />
+              )}
             </div>
 
             {tab === "home" ? (
