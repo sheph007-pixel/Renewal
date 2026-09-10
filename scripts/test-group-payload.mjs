@@ -160,6 +160,14 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
     body: "{}",
   });
   assert.equal(forged.status, 401, "a cookie with a bad signature is no session");
+  // The invoice link is cookie-only: no cookie, no file; with one, the
+  // group's own invoice or a plain 404 when none is filed.
+  const noInv = await fetch(`${base}/api/group/invoice`);
+  assert.equal(noInv.status, 401, "the invoice needs the session cookie");
+  const inv = await fetch(`${base}/api/group/invoice`, { headers: { cookie } });
+  assert.ok([200, 404].includes(inv.status), "with the cookie, the invoice or a clean 404");
+  if (inv.status === 200) assert.match(inv.headers.get("content-type") || "", /pdf/);
+  assert.equal("invoice" in p2, true, "the payload says whether an invoice is on file");
   const out = await fetch(`${base}/api/signout`, { method: "POST", headers: { cookie } });
   assert.match(out.headers.get("set-cookie") || "", /kennion_group=;.*Max-Age=0/, "sign-out clears the cookie");
   console.log("cookie session: sign-in sets it, it signs in alone, forgeries and absence do not — ok");

@@ -24,6 +24,13 @@ import SpendDashboard from "@/views/SpendDashboard";
  * understate any group with families on the book.
  */
 
+/** "2026-09" as "September 2026"; anything else as given. */
+function monthLabel(month: string): string {
+  const m = month.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return month;
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
 /** The page is one section now, so there is nothing to jump between. */
 export const CURRENT_SECTIONS: { id: string; label: string }[] = [];
 
@@ -96,8 +103,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
 
   // Biggest premium first, which is the order an employer reads it in.
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "monthly", desc: true });
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
 
   const countOf = (r: PlanRow) => TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0);
   const sorted = useMemo(() => {
@@ -120,19 +125,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
   const by = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "plan" }));
 
-  const download = async () => {
-    setSaving(true);
-    setSaveError("");
-    try {
-      const { downloadPlanSheet } = await import("@/lib/plansheet");
-      await downloadPlanSheet(data, overrides, g, rows, eePct, depPct);
-    } catch (e) {
-      setSaveError((e as Error).message || "Could not build the file.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // Excel-style grid: a thin light line around every cell, plain white rows —
   // not alternating bands, which read as color-coding when there is none here.
   const cell = { padding: "10px 10px", border: `1px solid ${C.rule}`, fontSize: 14, background: C.card };
@@ -149,25 +141,29 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
 
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Your 2026 Medical Plans</h2>
-        <button
-          className="noprint"
-          onClick={() => void download()}
-          disabled={saving}
-          title="This table, plus what the employer and the employees each pay by tier"
-          style={{
-            padding: "6px 14px",
-            fontSize: 13,
-            fontWeight: 500,
-            color: C.ink,
-            background: C.card,
-            border: `1px solid ${C.border}`,
-            borderRadius: 4,
-            cursor: saving ? "default" : "pointer",
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          {saving ? "Building…" : "Export To Excel"}
-        </button>
+        {data.invoice && (
+          // The group's own invoice, served against the session cookie, so
+          // the link carries nothing secret and opens in its own tab.
+          <a
+            className="noprint"
+            href="/api/group/invoice"
+            target="_blank"
+            rel="noreferrer"
+            title={`${data.invoice.filename} — opens in a new tab`}
+            style={{
+              padding: "6px 14px",
+              fontSize: 13,
+              fontWeight: 500,
+              color: C.ink,
+              background: C.card,
+              border: `1px solid ${C.border}`,
+              borderRadius: 4,
+              textDecoration: "none",
+            }}
+          >
+            View Invoice{data.invoice.month ? ` · ${monthLabel(data.invoice.month)}` : ""}
+          </a>
+        )}
       </div>
 
       <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
@@ -240,12 +236,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         </table>
         </div>
       </div>
-
-      {saveError && (
-        <div role="alert" style={{ marginTop: 10, fontSize: 13, color: C.red }}>
-          {saveError}
-        </div>
-      )}
     </div>
   );
 }

@@ -181,6 +181,7 @@ export default function App() {
       proposals: p.proposals || [],
       slots: p.slots || undefined,
       funding: p.funding || null,
+      invoice: p.invoice || null,
     } as KennionData);
     setCode(group.code);
     setManager((p.accountManager as AccountManager) || null);

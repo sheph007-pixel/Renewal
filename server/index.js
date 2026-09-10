@@ -953,6 +953,7 @@ app.post("/api/signin", async (req, res) => {
   setGroupCookie(req, res, g);
 
   const signup = await latestSignup(g.name);
+  const invoice = await latestInvoiceFor(g.name).catch(() => null);
 
   return res.json({
     kind: "group",
@@ -970,6 +971,10 @@ app.post("/api/signin", async (req, res) => {
     proposals: currentProposals[g.name] || [],
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
+    // This month's invoice, if one is filed: enough to offer the link, not the file.
+    invoice: invoice
+      ? { month: (invoice.context && invoice.context.month) || null, filename: invoice.filename, uploadedAt: invoice.uploaded_at }
+      : null,
     linkToken: g.linkToken || null,
     slug: g.slug,
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
@@ -979,6 +984,22 @@ app.post("/api/signin", async (req, res) => {
     // Sign Up page can say so instead of showing a blank form again.
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
   });
+});
+
+/**
+ * A group's own invoice, the PDF itself, opened in a new tab from Your 2026
+ * Medical Plans. The session cookie is the only credential accepted, so the
+ * address carries nothing secret and can be a plain link.
+ */
+app.get("/api/group/invoice", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const inv = await latestInvoiceFor(g.name).catch(() => null);
+  const f = inv ? await proposalStore.getProposalFile(inv.id).catch(() => null) : null;
+  if (!f) return res.status(404).json({ error: "No invoice on file." });
+  res.setHeader("Content-Type", f.mime || "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${f.filename.replace(/"/g, "")}"`);
+  res.send(f.data);
 });
 
 /** End a group's cookie session. */
@@ -1156,6 +1177,12 @@ function clientUhc(g) {
     summary: {},
     refEE,
   };
+}
+
+/** The newest client invoice filed under a group, without its bytes; null if none. */
+async function latestInvoiceFor(name) {
+  const rows = await proposalStore.listProposals();
+  return rows.find((r) => r.kind === "invoice" && r.group_name === name) || null;
 }
 
 /** A group's slice of the month's billing for its own pages: counts and rates, no people. */
