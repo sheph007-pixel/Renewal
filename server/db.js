@@ -108,6 +108,11 @@ CREATE TABLE IF NOT EXISTS kennion.imports (
   applied_names text[]
 );
 ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS diagnostics jsonb;
+-- The export itself, gzip-compressed (XML compresses to a fraction of its
+-- size), so the source of every import is on hand for anything a later fix
+-- needs to recompute — no one has to go find the file and upload it again.
+ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS raw_gzip bytea;
+ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS raw_size integer;
 
 -- Carrier proposals, one row per uploaded file. The file itself lives here so
 -- a proposal is never lost to an ephemeral container; the extraction is what
@@ -421,14 +426,32 @@ export function createDb(url) {
       );
     },
 
-    async logImport(filename, by, found, applied, names, diagnostics) {
+    async logImport(filename, by, found, applied, names, diagnostics, rawGzip) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.imports
-           (filename, uploaded_by, companies_found, companies_applied, applied_names, diagnostics)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING uploaded_at`,
-        [filename || null, by || null, found, applied, names || [], diagnostics ? JSON.stringify(diagnostics) : null],
+           (filename, uploaded_by, companies_found, companies_applied, applied_names, diagnostics, raw_gzip, raw_size)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING uploaded_at`,
+        [
+          filename || null,
+          by || null,
+          found,
+          applied,
+          names || [],
+          diagnostics ? JSON.stringify(diagnostics) : null,
+          rawGzip || null,
+          rawGzip ? rawGzip.length : null,
+        ],
       );
       return rows[0].uploaded_at;
+    },
+
+    /** The gzip-compressed export behind one import, to reprocess without asking for the file again. */
+    async importRaw(id) {
+      const { rows } = await pool.query(
+        `SELECT filename, raw_gzip, raw_size FROM kennion.imports WHERE id = $1`,
+        [id],
+      );
+      return rows[0] || null;
     },
 
     /** Most recent uploads, newest first, for the import history panel. */

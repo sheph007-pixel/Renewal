@@ -10,6 +10,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import zlib from "node:zlib";
+import { PassThrough } from "node:stream";
 import { newSecret, verifyTotp, otpauthUrl, newRecoveryCodes, hashCode, spendRecovery } from "./totp.js";
 import { parseEnStream, premiumBreakdown, classifyPlans, newDiagnostics, mergeDiagnostics } from "./en-parse.js";
 import { createDb } from "./db.js";
@@ -1100,6 +1102,31 @@ async function readUpload(req) {
 }
 
 /**
+ * Same as `readUpload`, but also keeps the file — gzip-compressed, so a
+ * ~100MB export lands in the database at a fraction of its size — for the
+ * import this actually applies. XML compresses well, and it's streamed
+ * through the compressor alongside parsing rather than buffered whole, so
+ * this carries none of the memory cost the streaming parser was built to
+ * avoid. Once this is in the database, no import ever needs the original
+ * file handed back to it again — the source Postgres already trusts, not a
+ * copy anyone has to keep track of.
+ */
+async function readUploadWithRaw(req) {
+  const forParsing = new PassThrough();
+  const gzip = zlib.createGzip();
+  req.pipe(forParsing);
+  req.pipe(gzip);
+  const compressedChunks = [];
+  gzip.on("data", (c) => compressedChunks.push(c));
+  const rawGzip = new Promise((resolve, reject) => {
+    gzip.on("end", () => resolve(Buffer.concat(compressedChunks)));
+    gzip.on("error", reject);
+  });
+  const parsed = await parseEnStream(forParsing);
+  return { ...parsed, rawGzip: await rawGzip };
+}
+
+/**
  * The existing group an imported company corresponds to. Exact name first, then
  * the normalised form, so "Aesto Health, LLC" updates "Aesto Health" instead of
  * landing beside it as a second copy of the same client.
@@ -1481,7 +1508,7 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
   const only = String(req.query.only || "").trim();
   const wanted = only ? new Set(only.split("\n").filter(Boolean)) : null;
   try {
-    const { companies, failures } = await readUpload(req);
+    const { companies, failures, rawGzip } = await readUploadWithRaw(req);
     imported.groups = imported.groups || {};
     imported.splits = imported.splits || {};
     const applied = [];
@@ -1533,6 +1560,7 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
         applied.length,
         applied.map((a) => a.name),
         diagnostics,
+        rawGzip,
       );
       applied.forEach((a) => {
         importedAt[a.name] = at;
