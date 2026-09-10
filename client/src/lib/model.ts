@@ -238,6 +238,8 @@ export interface KennionData {
   slots?: string[];
   /** The signed-in group's billing this month (group sessions only). */
   funding?: GroupFundingSnapshot | null;
+  /** The signed-in group's own invoice on file, if any (group sessions only). */
+  invoice?: { month: string | null; filename: string; uploadedAt: string } | null;
   /** Who at Kennion looks after this group (group sessions only). */
   accountManager?: AccountManager | null;
   /** This group's most recent Sign Up submission, if it has ever sent one. */

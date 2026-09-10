@@ -120,6 +120,59 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
   assert.equal(r.status, 401, `${path} refuses a group code as a token`);
 }
 
+// 8b. The cookie session behind a group's short address. Signing in sets an
+// HttpOnly cookie; that cookie alone signs the browser in again, with the
+// slug its short address is built from; without it there is no session, and
+// a guessless miss is not counted against the caller; sign-out clears it.
+{
+  const r = await fetch(`${base}/api/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: mine.code }),
+  });
+  const setCookie = r.headers.get("set-cookie") || "";
+  assert.match(setCookie, /^kennion_group=/, "sign-in sets the group session cookie");
+  assert.match(setCookie, /HttpOnly/, "the cookie is HttpOnly");
+  assert.match(setCookie, /SameSite=Lax/, "and SameSite");
+  const cookie = setCookie.split(";")[0];
+  const again = await fetch(`${base}/api/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie },
+    body: "{}",
+  });
+  assert.equal(again.status, 200, "the cookie alone signs the group in again");
+  const p2 = await again.json();
+  assert.equal(p2.group.name, mine.name, "as the same group");
+  assert.match(p2.slug, /^[a-z0-9-]+$/, "with the slug its short address is built from");
+  assert.ok(p2.slug.endsWith(mine.code.toLowerCase()), "the slug ends in the group's code");
+  const page = await fetch(`${base}/${p2.slug}/options`);
+  assert.equal(page.status, 200, "the short address serves the app");
+  assert.match(page.headers.get("content-type") || "", /text\/html/);
+  const none = await fetch(`${base}/api/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(none.status, 401, "no cookie, no session");
+  const forged = await fetch(`${base}/api/signin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie: `kennion_group=${mine.linkToken}.forged` },
+    body: "{}",
+  });
+  assert.equal(forged.status, 401, "a cookie with a bad signature is no session");
+  // The invoice link is cookie-only: no cookie, no file; with one, the
+  // group's own invoice or a plain 404 when none is filed.
+  const noInv = await fetch(`${base}/api/group/invoice`);
+  assert.equal(noInv.status, 401, "the invoice needs the session cookie");
+  const inv = await fetch(`${base}/api/group/invoice`, { headers: { cookie } });
+  assert.ok([200, 404].includes(inv.status), "with the cookie, the invoice or a clean 404");
+  if (inv.status === 200) assert.match(inv.headers.get("content-type") || "", /pdf/);
+  assert.equal("invoice" in p2, true, "the payload says whether an invoice is on file");
+  const out = await fetch(`${base}/api/signout`, { method: "POST", headers: { cookie } });
+  assert.match(out.headers.get("set-cookie") || "", /kennion_group=;.*Max-Age=0/, "sign-out clears the cookie");
+  console.log("cookie session: sign-in sets it, it signs in alone, forgeries and absence do not — ok");
+}
+
 // 9. Every response carries the headers that keep a token out of a referrer.
 const headers = (await fetch(`${base}/healthz`)).headers;
 assert.equal(headers.get("referrer-policy"), "no-referrer", "a group's token never rides a Referer header");

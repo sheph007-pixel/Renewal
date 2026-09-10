@@ -16,6 +16,7 @@ import { newSecret, verifyTotp, otpauthUrl, newRecoveryCodes, hashCode, spendRec
 import { parseEnStream, premiumBreakdown, classifyPlans, newDiagnostics, mergeDiagnostics } from "./en-parse.js";
 import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
+import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { expandUpload, prepareForModel } from "./intake.js";
@@ -198,6 +199,8 @@ let groups = [];
 let byCode = new Map();
 /** Permanent link token -> group, for the /g/<token> address. */
 let byToken = new Map();
+/** Address slug (company + code) -> group, for the short /<slug>/<tab> address. */
+let bySlug = new Map();
 let adminGroups = [];
 /** Proposals filed under each group, so the Groups page can show coverage. */
 let proposalCounts = {};
@@ -274,6 +277,7 @@ function rebuild() {
 
   byCode = new Map();
   byToken = new Map();
+  bySlug = new Map();
   groups.forEach((g) => {
     const m = meta[g.name] || {};
     // Hand-edited details win over whatever the export supplied, so a
@@ -295,6 +299,7 @@ function rebuild() {
     g.broker = m.broker || defaultBroker(g.name);
     g.manager = m.manager || defaultManager(g.name);
     g.linkToken = m.linkToken || null;
+    g.slug = groupSlug(g.name, code);
     // Renewal tracking: every group starts Open.
     g.renewal = m.renewal || "open";
     // Archived, or not on a program carrier: the row stays for staff, but the
@@ -303,6 +308,7 @@ function rebuild() {
       byCode.set(code.toUpperCase(), g);
       byCode.set(legacyCodeFor(g.name).toUpperCase(), g);
       if (g.linkToken) byToken.set(g.linkToken, g);
+      bySlug.set(g.slug, g);
     }
   });
 
@@ -792,6 +798,86 @@ function adminPayload() {
  * codes could simply be enumerated. Counted per caller and per code tried, in
  * memory — one server, and a restart only ever forgives.
  */
+/**
+ * A group's session is a cookie, so its address can be short — the company
+ * and its code, `/johnson-storage-moving-jsmh2027/options` — with no token in
+ * the bar. The cookie holds the group's link token signed with a secret kept
+ * in settings (or made per process without a database); HttpOnly, so no
+ * script reads it, SameSite=Lax, so no other site sends it, and it dies with
+ * the link token when a new link is minted.
+ */
+const GROUP_COOKIE = "kennion_group";
+const GROUP_COOKIE_DAYS = 30;
+let groupCookieSecret = crypto.randomBytes(32).toString("base64url");
+async function loadGroupCookieSecret() {
+  if (!db) return;
+  try {
+    let secret = await db.getSetting("groupCookieSecret");
+    if (!secret || typeof secret !== "string") {
+      secret = groupCookieSecret;
+      await db.setSetting("groupCookieSecret", secret, "system");
+    }
+    groupCookieSecret = secret;
+  } catch (e) {
+    console.error("could not read the session secret; group sessions will not survive a deploy:", e.message);
+  }
+}
+const signToken = (token) => crypto.createHmac("sha256", groupCookieSecret).update(token).digest("base64url");
+function readCookies(req) {
+  const out = {};
+  String(req.get("cookie") || "").split(";").forEach((part) => {
+    const i = part.indexOf("=");
+    if (i < 0) return;
+    const k = part.slice(0, i).trim();
+    if (k) out[k] = decodeURIComponent(part.slice(i + 1).trim());
+  });
+  return out;
+}
+/** The group whose session cookie the request carries, if it is intact and still valid. */
+function groupFromCookie(req) {
+  const raw = readCookies(req)[GROUP_COOKIE];
+  if (!raw) return null;
+  const dot = raw.lastIndexOf(".");
+  if (dot < 1) return null;
+  const token = raw.slice(0, dot);
+  const sig = raw.slice(dot + 1);
+  const want = signToken(token);
+  if (sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return null;
+  return byToken.get(token) || null;
+}
+const isSecure = (req) => req.secure || req.get("x-forwarded-proto") === "https";
+function setGroupCookie(req, res, g) {
+  if (!g.linkToken) return;
+  const attrs = [
+    `${GROUP_COOKIE}=${g.linkToken}.${signToken(g.linkToken)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${GROUP_COOKIE_DAYS * 24 * 3600}`,
+  ];
+  if (isSecure(req)) attrs.push("Secure");
+  res.setHeader("Set-Cookie", attrs.join("; "));
+}
+function clearGroupCookie(req, res) {
+  const attrs = [`${GROUP_COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
+  if (isSecure(req)) attrs.push("Secure");
+  res.setHeader("Set-Cookie", attrs.join("; "));
+}
+
+/**
+ * The group a client request speaks for: a permanent-link token, an access
+ * code, or — with neither — the session cookie. Only a token or a code is a
+ * guess worth counting against the caller.
+ */
+function groupFromRequest(req) {
+  const body = req.body || {};
+  const token = String(body.token || "").trim();
+  const code = String(body.code || "").trim().toUpperCase();
+  if (token) return { g: byToken.get(token) || null, guessed: true };
+  if (code) return { g: byCode.get(code) || null, guessed: true };
+  return { g: groupFromCookie(req), guessed: false };
+}
+
 const SIGNIN_WINDOW_MS = 10 * 60 * 1000;
 const SIGNIN_MAX_FAILS = 10;
 const signinFails = new Map();
@@ -855,19 +941,19 @@ app.post("/api/signin", async (req, res) => {
     }
   }
 
-  // A group's permanent link carries a token instead of a code.
-  const token = String(body.token || "").trim();
-  const code = String(body.code || "").trim().toUpperCase();
-  if (!token && !code) return res.status(400).json({ error: "code required" });
-
-  const g = token ? byToken.get(token) : byCode.get(code);
+  // A group's permanent link carries a token instead of a code; a browser
+  // that already signed in carries neither, just the session cookie.
+  const { g, guessed } = groupFromRequest(req);
   if (!g) {
+    if (!guessed) return res.status(401).json({ error: "no session" });
     noteFail(caller);
     return res.status(404).json({ error: "no such group" });
   }
   clearFails(caller);
+  setGroupCookie(req, res, g);
 
   const signup = await latestSignup(g.name);
+  const invoice = await latestInvoiceFor(g.name).catch(() => null);
 
   return res.json({
     kind: "group",
@@ -885,7 +971,12 @@ app.post("/api/signin", async (req, res) => {
     proposals: currentProposals[g.name] || [],
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
+    // This month's invoice, if one is filed: enough to offer the link, not the file.
+    invoice: invoice
+      ? { month: (invoice.context && invoice.context.month) || null, filename: invoice.filename, uploadedAt: invoice.uploaded_at }
+      : null,
     linkToken: g.linkToken || null,
+    slug: g.slug,
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
     // contact details travel to the client.
     accountManager: managerContact(g.manager),
@@ -893,6 +984,28 @@ app.post("/api/signin", async (req, res) => {
     // Sign Up page can say so instead of showing a blank form again.
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
   });
+});
+
+/**
+ * A group's own invoice, the PDF itself, opened in a new tab from Your 2026
+ * Medical Plans. The session cookie is the only credential accepted, so the
+ * address carries nothing secret and can be a plain link.
+ */
+app.get("/api/group/invoice", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const inv = await latestInvoiceFor(g.name).catch(() => null);
+  const f = inv ? await proposalStore.getProposalFile(inv.id).catch(() => null) : null;
+  if (!f) return res.status(404).json({ error: "No invoice on file." });
+  res.setHeader("Content-Type", f.mime || "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${f.filename.replace(/"/g, "")}"`);
+  res.send(f.data);
+});
+
+/** End a group's cookie session. */
+app.post("/api/signout", (req, res) => {
+  clearGroupCookie(req, res);
+  res.json({ ok: true });
 });
 
 /**
@@ -912,12 +1025,9 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
   if (throttled(caller)) {
     return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
   }
-  const token = String(body.token || "").trim();
-  const code = String(body.code || "").trim().toUpperCase();
-  if (!token && !code) return res.status(400).json({ error: "code required" });
-
-  const g = token ? byToken.get(token) : byCode.get(code);
+  const { g, guessed } = groupFromRequest(req);
   if (!g) {
+    if (!guessed) return res.status(401).json({ error: "no session" });
     noteFail(caller);
     return res.status(404).json({ error: "no such group" });
   }
@@ -1067,6 +1177,12 @@ function clientUhc(g) {
     summary: {},
     refEE,
   };
+}
+
+/** The newest client invoice filed under a group, without its bytes; null if none. */
+async function latestInvoiceFor(name) {
+  const rows = await proposalStore.listProposals();
+  return rows.find((r) => r.kind === "invoice" && r.group_name === name) || null;
 }
 
 /** A group's slice of the month's billing for its own pages: counts and rates, no people. */
@@ -2649,6 +2765,7 @@ async function boot() {
   }
   markAdminCodeReady();
   await loadRatesLock();
+  await loadGroupCookieSecret();
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.
