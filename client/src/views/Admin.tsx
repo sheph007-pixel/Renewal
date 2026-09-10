@@ -18,6 +18,7 @@ import GroupsTable, { type AdminGroup } from "@/views/GroupsTable";
 import GroupDetail from "@/views/GroupDetail";
 import Proposals from "@/views/Proposals";
 import Reconciliation, { type CarrierStats, type ImportDiagnostics } from "@/views/Reconciliation";
+import InvoicesPanel from "@/views/InvoicesPanel";
 import FundingPanel, { type FundingInfo } from "@/views/Funding";
 import TwoFactor from "@/views/TwoFactor";
 import SignInCode from "@/views/SignInCode";
@@ -602,6 +603,8 @@ export default function Admin({
               }}
               onOverrides={onOverrides}
             />
+
+            <InvoicesPanel token={token} />
 
             <TwoFactor token={token} />
             <SignInCode token={token} />
