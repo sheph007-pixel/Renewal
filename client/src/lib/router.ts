@@ -6,12 +6,14 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
- *   /g/:slug/:token             a group's own permanent address — Welcome
- *   /g/:slug/:token/changes     …What's Changing For 2027
- *   /g/:slug/:token/current     …Your 2026 Medical Plans
- *   /g/:slug/:token/options     …New 2027 Medical Options
- *   /g/:slug/:token/supplemental …Supplemental Package
- *   /g/:slug/:token/signup      …Sign Up
+ *   /:slug               a signed-in group's own pages — Welcome
+ *   /:slug/changes       …What's Changing For 2027
+ *   /:slug/current       …Your 2026 Medical Plans
+ *   /:slug/options       …New 2027 Medical Options
+ *   /:slug/supplemental  …Supplemental Package
+ *   /:slug/signup        …Sign Up
+ *   /g/:slug/:token      a group's permanent link: signs the browser in and
+ *                        lands on /:slug (a tab after the token is kept)
  *   /admin               staff sign-in
  *   /current             Your 2026 Medical Plans
  *   /options             New 2027 Medical Options
@@ -22,10 +24,12 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /admin/import        Rate Administration — Import
  *
  * The slug in a group address is the company and its plan-year code — say
- * `johnson-storage-moving-jsmh2027` — so a link a client bookmarks or forwards
- * says whose page it opens. The token beside it is the credential; the slug is
- * cosmetic and any spelling of it is accepted, then rewritten to the canonical
- * one. Addresses minted before the slug existed (`/g/:token`) still work.
+ * `johnson-storage-moving-jsmh2027` — so the address says whose page it is.
+ * The session itself is a cookie the server sets at sign-in, so nothing
+ * secret rides in the bar: a group's everyday address is just `/:slug/:tab`.
+ * The permanent link, `/g/:slug/:token`, is the credential a client is sent;
+ * opening it signs the browser in and the bar is rewritten to the short form.
+ * Addresses minted before the slug existed (`/g/:token`) still work.
  *
  * Sections within a page are plain `#hash` anchors.
  */
@@ -56,6 +60,10 @@ export const PATHS = {
 
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
 
+/** First path segments that are pages of their own, never a group's slug. */
+const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz"]);
+const TABS = "changes|current|options|supplemental|signup";
+
 /**
  * The readable half of a group's address: the company name and its plan-year
  * code, e.g. "Johnson Storage & Moving Co. Holdings, LLC" + "JSMH2027" ->
@@ -82,9 +90,16 @@ const SKIP_WORDS = new Set([
   "the", "of", "and", "a", "an",
 ]);
 
+/** A signed-in group's short address: its slug, then the tab. */
+export const groupHome = (group: { name?: string; code?: string | null }, tab: GroupTab = "home") => {
+  const head = `/${groupSlug(group.name || "", group.code)}`;
+  return tab === "home" ? head : `${head}/${tab}`;
+};
+
 /**
- * A group's own address. With a name and code it carries the readable slug;
- * without them it falls back to the bare token, which is still accepted.
+ * A group's permanent link — the one a client is sent. With a name and code
+ * it carries the readable slug; without them it falls back to the bare token,
+ * which is still accepted.
  */
 export const linkPath = (
   token: string,
@@ -119,6 +134,9 @@ export function parsePath(path: string): Page {
   // readable spelling; nothing it used to reach has moved further than a click.
   const t = path.match(/^\/g\/([A-Za-z0-9_-]{8,64})(?:\/(changes|current|options|supplemental|signup))?$/);
   if (t) return { kind: "group", tab: (t[2] as GroupTab) || "home", token: t[1] };
+  // The short address: the slug alone, the session being a cookie.
+  const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})(?:\\/(${TABS}))?$`));
+  if (g && !RESERVED.has(g[1])) return { kind: "group", tab: (g[2] as GroupTab) || "home", slug: g[1] };
   const m = path.match(/^\/admin\/(groups|rates|proposals|import)(?:\/(.+))?$/);
   if (m) {
     const tab = m[1] as "groups" | "rates" | "proposals" | "import";

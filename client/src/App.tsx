@@ -11,7 +11,7 @@ import { C, Logo, panel } from "@/lib/ui";
 import {
   PATHS,
   currentPage,
-  linkPath,
+  groupHome,
   navigate,
   parsePath,
   useRoute,
@@ -86,13 +86,6 @@ function linkCodeAtLoad(): string | null {
   return c && c.trim() ? c.trim().toUpperCase() : null;
 }
 
-/** The permanent group token in the address at load, if the address is /g/<token>. */
-function tokenAtLoad(): string | null {
-  if (typeof window === "undefined") return null;
-  const asked = parsePath(window.location.pathname.replace(/\/+$/, "") || "/");
-  return asked.kind === "group" ? asked.token || null : null;
-}
-
 export default function App() {
   const route = useRoute();
   const page = useMemo(() => parsePath(route.path), [route.path]);
@@ -103,8 +96,6 @@ export default function App() {
   // True while a session saved in this tab is being re-established, so a
   // reload does not flash the sign-in screen on its way back to the page.
   const linkCode = useMemo(linkCodeAtLoad, []);
-  /** The group's permanent token, when the address is /g/<token>. */
-  const [linkToken, setLinkToken] = useState<string | null>(null);
   /** Who at Kennion holds this group, for the contact card and the rail. */
   const [manager, setManager] = useState<AccountManager | null>(null);
   /** The rail, collapsed or not. Remembered per browser, so it stays that way. */
@@ -116,9 +107,9 @@ export default function App() {
       return false;
     }
   });
-  const [restoring, setRestoring] = useState(
-    () => linkCodeAtLoad() != null || tokenAtLoad() != null || loadSession() != null,
-  );
+  // Always true at first: even a bare "/" may hold a session cookie, and the
+  // server is asked before the sign-in form is shown.
+  const [restoring, setRestoring] = useState(true);
   const restoreStarted = useRef(false);
   const [code, setCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
@@ -192,7 +183,6 @@ export default function App() {
       funding: p.funding || null,
     } as KennionData);
     setCode(group.code);
-    setLinkToken((p.linkToken as string) || null);
     setManager((p.accountManager as AccountManager) || null);
     saveSession({ kind: "group", code: group.code });
   }, []);
@@ -234,8 +224,10 @@ export default function App() {
           if (asked.kind !== "admin") navigate(PATHS.groups, { replace: true });
         } else {
           applyGroup(p);
-          const home = p.linkToken ? linkPath(p.linkToken, "home", p.group) : PATHS.current;
-          if (asked.kind !== "group" || asked.token !== p.linkToken) navigate(home, { replace: true });
+          // Signed in at one of this group's own addresses: stay there (the
+          // bar is rewritten to the short form). Anywhere else: its home.
+          const own = asked.kind === "group" && (asked.token === p.linkToken || asked.slug === p.slug);
+          if (!own) navigate(groupHome(p.group), { replace: true });
         }
       } catch {
         setLoadError(true);
@@ -333,9 +325,7 @@ export default function App() {
           }
           const p = await r.json();
           applyGroup(p);
-          navigate(p.linkToken ? linkPath(p.linkToken, "home", p.group) : PATHS.current, {
-            replace: true,
-          });
+          navigate(groupHome(p.group), { replace: true });
         } catch {
           setLoadError(true);
         } finally {
@@ -345,21 +335,25 @@ export default function App() {
       return;
     }
 
+    // Otherwise the session this tab saved, or — with nothing saved — the
+    // cookie the server set the last time this browser signed in as a group.
+    // A cookie for one group at another group's short address does not sign
+    // anyone in: the address wins, and that group's code is asked for.
     const s = loadSession();
-    if (!s) {
-      setRestoring(false);
-      return;
-    }
     (async () => {
       try {
-        if (s.kind === "group") {
+        if (!s || s.kind === "group") {
           const r = await fetch("/api/signin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: s.code }),
+            body: JSON.stringify(s ? { code: s.code } : {}),
           });
           if (!r.ok) throw new Error("expired");
-          applyGroup(await r.json());
+          const p = await r.json();
+          if (asked.kind === "group" && asked.slug && !asked.token && p.slug && asked.slug !== p.slug) {
+            throw new Error("another group's address");
+          }
+          applyGroup(p);
         } else {
           const r = await fetch("/api/admin/session", {
             headers: { Authorization: `Bearer ${s.token}` },
@@ -460,23 +454,23 @@ export default function App() {
   useEffect(() => {
     if (restoring) return;
     if (session === "admin" && page.kind !== "admin") navigate(PATHS.groups, { replace: true });
-    else if (session === "group" && page.kind !== "group")
-      navigate(linkToken ? linkPath(linkToken, "home", g) : PATHS.current, { replace: true });
+    else if (session === "group" && page.kind !== "group") navigate(groupHome(g!), { replace: true });
     else if (session === "none" && page.kind === "unknown") navigate(PATHS.signin, { replace: true });
-  }, [restoring, session, page.kind, linkToken, g]);
+  }, [restoring, session, page.kind, g]);
 
   /**
-   * Rewrite a group address to its canonical spelling — the company and its
-   * plan-year code beside the token — once the group is known. A link that was
-   * minted before the slug existed, or one whose company has since been
-   * renamed, still opens; the bar just ends up reading the current way.
+   * Rewrite a group address to its short, canonical form — the company and
+   * its plan-year code, then the tab — once the group is known. A permanent
+   * link (`/g/…/<token>`) that signed the browser in, one minted before the
+   * slug existed, or a slug whose company has since been renamed all open;
+   * the bar just ends up reading the current way, with no token in it.
    */
   useEffect(() => {
-    if (restoring || session !== "group" || !g || !linkToken) return;
+    if (restoring || session !== "group" || !g) return;
     if (page.kind !== "group") return;
-    const want = linkPath(linkToken, page.tab, g);
+    const want = groupHome(g, page.tab);
     if (route.path !== want) navigate(want + (route.hash ? `#${route.hash}` : ""), { replace: true });
-  }, [restoring, session, g, linkToken, page, route.path, route.hash]);
+  }, [restoring, session, g, page, route.path, route.hash]);
 
   /** Scroll: to the named section when there is a hash, else to the top. */
   useEffect(() => {
@@ -516,6 +510,8 @@ export default function App() {
 
   const signOut = () => {
     clearSession();
+    // The group session cookie is the server's to clear.
+    void fetch("/api/signout", { method: "POST" }).catch(() => undefined);
     setData(null);
     setEmail("");
     setStaffCode("");
@@ -732,14 +728,8 @@ export default function App() {
       year: "numeric",
     })}`;
 
-  // With a permanent address, every page lives under it, so the token stays in
-  // the bar wherever the client clicks.
-  const hrefFor = (t: GroupTab) =>
-    linkToken
-      ? linkPath(linkToken, t, g)
-      : t === "options"
-        ? PATHS.options
-        : PATHS.current;
+  // Every page lives under the group's short address.
+  const hrefFor = (t: GroupTab) => (g ? groupHome(g, t) : t === "options" ? PATHS.options : PATHS.current);
 
   // Welcome carries no step — it is where you start, not part of the count —
   // so the five real pages run 1 through 5, Sign Up included.

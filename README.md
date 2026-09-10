@@ -25,6 +25,9 @@ as a link, and a reload comes back to the same place.
 | Address | Page |
 | --- | --- |
 | `/` | Group sign-in |
+| `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
+| `/<group-slug>/<tab>` | …its other pages: `changes`, `current`, `options`, `supplemental`, `signup` |
+| `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
 | `/current` | Current Medical Plan(s) |
 | `/options` | 2027 Medical Plan Options |
 | `/admin` | Staff sign-in |
@@ -76,19 +79,32 @@ them can be typed over in the Groups table; a hand-assigned code wins and is
 checked for uniqueness. Codes from the previous `KEN-XXXX-9999` scheme are still
 accepted, so anything already sent out keeps working.
 
-Every group also has a **permanent address** of its own:
-`https://app.kennion.com/g/3EzxfXfLz9HWv59zqNklMQ`. The token is 22 random
-characters, minted once and kept in `group_meta.link_token`, so it survives
-deploys and imports and cannot be guessed from a company name the way a code
-can. It stays in the address bar — both tabs live under it
-(`/g/<token>/options`) — so the page can be bookmarked, reloaded and sent to a
-client with no code to type. Signing in with a code lands on the same address.
+Every group also has a **permanent link** of its own:
+`https://app.kennion.com/g/johnson-storage-moving-jsmh2027/3EzxfXfLz9HWv59zqNklMQ`.
+The token is 22 random characters, minted once and kept in
+`group_meta.link_token`, so it survives deploys and imports and cannot be
+guessed from a company name the way a code can. Opening the link signs the
+browser in with no code to type, and signing in — by link or by code — sets a
+**session cookie**: the token signed with a secret kept in `kennion.settings`,
+HttpOnly and SameSite so no script reads it and no other site sends it, good
+for thirty days, and dead the moment a new link is minted.
+
+With the session in a cookie, a group's everyday address is short — the
+company and its plan-year code, then the tab: `/johnson-storage-moving-jsmh2027`,
+`/johnson-storage-moving-jsmh2027/options`. Nothing secret rides in the bar,
+so the address can be bookmarked, reloaded, pasted in a screenshot or read out
+over the phone, and a permanent link is rewritten to it as soon as it has done
+its work. A short address with no session behind it shows the sign-in form and
+lands there afterwards; a cookie for one group does not open another group's
+address. The slug is `groupSlug()` in `client/src/lib/router.ts` and
+`server/slug.js`, the same function on both sides, and it ends in the group's
+code so every slug is unique.
 
 Every company page shows the link with a Copy button and a **New link** button
 that mints a fresh token and kills the old one, every row in the Groups table
 has a **view as client** link, and the CSV export carries a Client link column.
 An archived group's link is refused, as its code is. `/?code=XXXX` still works
-and redirects to the group's permanent address.
+and redirects to the group's short address.
 
 **What a group's link reaches.** Its own pages, and nothing else. The census
 never leaves the server: a group's payload carries enrolled counts by tier —
