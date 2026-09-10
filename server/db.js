@@ -159,6 +159,9 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_stats (
   uploaded_by   text,
   uploaded_at   timestamptz NOT NULL DEFAULT now()
 );
+-- The report file itself, gzip-compressed, same reasoning as an import's
+-- raw_gzip: on hand for good, nothing to re-upload if a fix ever needs it.
+ALTER TABLE kennion.carrier_stats ADD COLUMN IF NOT EXISTS raw_gzip bytea;
 
 -- A month's funding workbook: every billed line (participant names included —
 -- server-side only, like the members), which invoice went to which group,
@@ -175,6 +178,7 @@ CREATE TABLE IF NOT EXISTS kennion.funding (
   uploaded_at   timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE kennion.funding ADD COLUMN IF NOT EXISTS raw_gzip bytea;
 
 -- The audit that runs itself once the three files are in: the computed
 -- result and Claude's read of it, keyed by which uploads it covered, so a
@@ -551,10 +555,17 @@ export function createDb(url) {
 
     async saveCarrierStats(rec) {
       const { rows } = await pool.query(
-        `INSERT INTO kennion.carrier_stats (filename, report_date, rows, total, uploaded_by)
-         VALUES ($1,$2,$3,$4,$5)
+        `INSERT INTO kennion.carrier_stats (filename, report_date, rows, total, uploaded_by, raw_gzip)
+         VALUES ($1,$2,$3,$4,$5,$6)
          RETURNING filename, report_date, rows, total, uploaded_by, uploaded_at`,
-        [rec.filename || null, rec.reportDate || null, JSON.stringify(rec.rows), rec.total ? JSON.stringify(rec.total) : null, rec.uploadedBy || null],
+        [
+          rec.filename || null,
+          rec.reportDate || null,
+          JSON.stringify(rec.rows),
+          rec.total ? JSON.stringify(rec.total) : null,
+          rec.uploadedBy || null,
+          rec.rawGzip || null,
+        ],
       );
       return shapeStats(rows[0]);
     },
@@ -569,10 +580,19 @@ export function createDb(url) {
 
     async saveFunding(rec) {
       const { rows } = await pool.query(
-        `INSERT INTO kennion.funding (month, filename, file_stamp, lines, by_invoice, summary, uploaded_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `INSERT INTO kennion.funding (month, filename, file_stamp, lines, by_invoice, summary, uploaded_by, raw_gzip)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          RETURNING id, month, filename, file_stamp, by_invoice, summary, uploaded_by, uploaded_at`,
-        [rec.month, rec.filename, rec.fileStamp, JSON.stringify(rec.lines), JSON.stringify(rec.byInvoice), JSON.stringify(rec.summary), rec.uploadedBy || null],
+        [
+          rec.month,
+          rec.filename,
+          rec.fileStamp,
+          JSON.stringify(rec.lines),
+          JSON.stringify(rec.byInvoice),
+          JSON.stringify(rec.summary),
+          rec.uploadedBy || null,
+          rec.rawGzip || null,
+        ],
       );
       return rows[0];
     },

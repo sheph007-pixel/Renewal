@@ -1184,7 +1184,7 @@ app.post(
     } catch (e) {
       return res.status(400).json({ error: e.message });
     }
-    const rec = { ...parsed, filename, uploadedBy: req.staffEmail || null };
+    const rec = { ...parsed, filename, uploadedBy: req.staffEmail || null, rawGzip: zlib.gzipSync(req.body) };
     try {
       carrierStats = db
         ? await db.saveCarrierStats(rec)
@@ -1281,6 +1281,7 @@ app.post(
         byInvoice,
         summary,
         uploadedBy: req.staffEmail || null,
+        rawGzip: zlib.gzipSync(req.body),
       });
     } catch (e) {
       return res.status(500).json({ error: "Could not save the workbook: " + e.message });
