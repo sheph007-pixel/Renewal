@@ -19,6 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { expandUpload, prepareForModel } from "./intake.js";
+import JSZip from "jszip";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
@@ -2387,6 +2388,67 @@ app.post(
     } catch (e) {
       res.status(500).json({ error: "Could not store the file: " + e.message });
     }
+  },
+);
+
+/**
+ * A month's client invoices, all at once: a zip with one PDF per group,
+ * named "<Group Name> <Month> Invoice.pdf" (Employee Navigator's own naming).
+ * Stored the same way a single proposal file is — group, filename, bytes,
+ * kind "invoice" — but never queued for AI analysis: an invoice isn't a
+ * carrier quote to extract plan terms from, just a record to keep and
+ * hand back. Anything not inside a per-group PDF (a combined summary, a
+ * roster CSV) or whose name doesn't match a live group by name is skipped
+ * and reported back rather than guessed at.
+ */
+app.post(
+  "/api/admin/invoices/batch",
+  requireStaff,
+  express.raw({ type: () => true, limit: "60mb" }),
+  async (req, res) => {
+    const month = String(req.query.month || "").trim();
+    if (!month) return res.status(400).json({ error: "A month is required, e.g. 2026-09." });
+    if (!Buffer.isBuffer(req.body) || !req.body.length) {
+      return res.status(400).json({ error: "No file received." });
+    }
+    let zip;
+    try {
+      zip = await JSZip.loadAsync(req.body);
+    } catch (e) {
+      return res.status(400).json({ error: "Not a valid zip file: " + e.message });
+    }
+    const by = req.staffEmail || null;
+    const stored = [];
+    const unmatched = [];
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir) continue;
+      const base = entry.name.split("/").pop() || "";
+      if (!/\.pdf$/i.test(base)) continue;
+      // The per-group files live one folder in; the two combined PDFs sit
+      // at the top of the zip and carry no single group's name to match.
+      const name = base.replace(/\s+[A-Za-z]+ Invoice\.pdf$/i, "").trim();
+      if (!name || name === base.replace(/\.pdf$/i, "")) continue;
+      const g = matchExisting(name);
+      if (!g) {
+        unmatched.push(base);
+        continue;
+      }
+      const buf = Buffer.from(await entry.async("nodebuffer"));
+      const row = await proposalStore.addProposal({
+        group_name: g.name,
+        filename: base,
+        mime: "application/pdf",
+        size: buf.length,
+        data: buf,
+        kind: "invoice",
+        context: { month },
+        status: "stored",
+        uploaded_by: by,
+      });
+      stored.push({ group: g.name, id: row.id });
+    }
+    await proposalsChanged();
+    res.json({ ok: true, month, stored: stored.length, groups: stored.map((s) => s.group), unmatched });
   },
 );
 
