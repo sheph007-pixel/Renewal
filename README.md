@@ -644,6 +644,30 @@ those to survive. The admin screen states which of the three modes is in effect.
 A database that is configured but unreachable is logged and the site serves the
 shipped census rather than failing to boot.
 
+### The inbox
+
+Files too large or too binary to travel through a chat or an env var — a zip
+of client invoices, a carrier report — reach the app through its **inbox**:
+the app fetches them at boot and ingests them into Postgres. `server/inbox.js`
+reads three variables, all optional:
+
+| Variable | Does |
+| --- | --- |
+| `INBOX_PRESIGN=inbox/a.zip,inbox/b.xls` | logs a one-hour upload URL per key in the storage bucket (`S3_BUCKET` and friends) |
+| `INBOX_INGEST=inbox/a.zip,https://…/b.xls.enc` | fetches each entry — a bucket key or a URL — and ingests it by extension: `.zip` as a month of invoices, `.xls`/`.xlsx` as a carrier stats report |
+| `INBOX_MONTH=2026-09` | the invoice month for any zip ingested |
+
+Every boot makes sure the app has an **inbox key pair** — RSA, made once and
+kept in `kennion.settings` under `inboxKey` — and prints its public half as one
+line, `[inbox] PUBLIC KEY …`. A file **sealed** to that key can sit anywhere
+public until the app picks it up: `node scripts/inbox-seal.mjs <public key> <file>`
+writes `<file>.enc`, a random AES-256-GCM key wrapped with RSA-OAEP to the
+app, and only the app can open it. An `.enc` entry in `INBOX_INGEST` is opened
+before ingest. Each ingested file is archived to the bucket under `archive/`,
+and the result of every entry is logged, never thrown, so a bad file cannot
+keep the site from booting. Clear `INBOX_INGEST` once the log shows the file
+landed, or the next boot ingests it again.
+
 ## Known gaps
 
 - The EBPA and HealthEZ 2026 rate sheets would replace every `calc.` label with

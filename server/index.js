@@ -21,7 +21,7 @@ import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from 
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename } from "./invoice-parse.js";
-import { logPresignedUploads, ingestInbox } from "./inbox.js";
+import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
@@ -2659,10 +2659,13 @@ async function boot() {
   }
   await proposalsChanged();
   await refreshAudit();
-  // Files placed in the private bucket inbox, once every group is known to
+  // The inbox: first the key pair a file can be sealed to (made on the first
+  // boot, kept in settings, its public half in every deploy log), then any
+  // files placed in the bucket or at a URL, once every group is known to
   // match against. Logged, never fatal.
   if (db) {
     try {
+      await logInboxKey();
       await logPresignedUploads();
       await ingestInbox({
         zip: (buf) => ingestInvoiceZip(buf, process.env.INBOX_MONTH || new Date().toISOString().slice(0, 7), "inbox"),

@@ -5,7 +5,7 @@
 // INBOX_INGEST set.
 //
 //   INBOX_PRESIGN=inbox/a.zip,inbox/b.xls   log a presigned bucket PUT URL per key (one hour)
-//   INBOX_PUBKEY=1                          log the inbox public key (see envelope below)
+//   (the inbox public key is logged at every boot — see envelope below)
 //   INBOX_INGEST=inbox/a.zip,https://…/b.xls.enc
 //                                           fetch each entry (bucket key or URL) and ingest it
 //   INBOX_MONTH=2026-09                     the invoice month for any zip ingested
@@ -82,21 +82,26 @@ export async function ensureInboxKey() {
 }
 
 /**
- * Print a one-hour upload URL for each key in INBOX_PRESIGN, and the inbox
- * public key (one base64 line of SPKI DER) when INBOX_PUBKEY is set.
+ * Make sure the inbox key pair exists and print its public half (one base64
+ * line of SPKI DER), so anyone reading the deploy log can seal a file to the
+ * app. Called at boot; logged, never thrown.
  */
-export async function logPresignedUploads() {
-  if (process.env.INBOX_PUBKEY) {
-    try {
-      const rec = await ensureInboxKey();
-      if (rec) {
-        const der = crypto.createPublicKey(rec.publicKey).export({ type: "spki", format: "der" });
-        console.log(`[inbox] PUBLIC KEY ${der.toString("base64")}`);
-      }
-    } catch (e) {
-      console.log(`[inbox] key: FAILED ${e.message}`);
-    }
+export async function logInboxKey() {
+  try {
+    const rec = await ensureInboxKey();
+    if (!rec) return null;
+    const der = crypto.createPublicKey(rec.publicKey).export({ type: "spki", format: "der" });
+    const b64 = der.toString("base64");
+    console.log(`[inbox] PUBLIC KEY ${b64} (since ${rec.createdAt})`);
+    return b64;
+  } catch (e) {
+    console.log(`[inbox] key: FAILED ${e.message}`);
+    return null;
   }
+}
+
+/** Print a one-hour upload URL for each key in INBOX_PRESIGN. */
+export async function logPresignedUploads() {
   const s3 = client();
   const list = keys(process.env.INBOX_PRESIGN);
   if (!s3 || !list.length) return;
