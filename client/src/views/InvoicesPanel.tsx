@@ -7,6 +7,8 @@ interface BatchResult {
   stored: number;
   groups: string[];
   unmatched: string[];
+  /** Groups whose invoice did not tie out: product rows vs. Total Due vs. the amount billed. */
+  check: string[];
 }
 
 interface Props {
@@ -63,12 +65,12 @@ export default function InvoicesPanel({ token }: Props) {
       status={
         !result
           ? { kind: "none", label: "Not uploaded yet" }
-          : result.unmatched.length
-            ? { kind: "warn", label: `${result.unmatched.length} unmatched` }
+          : result.unmatched.length || result.check.length
+            ? { kind: "warn", label: `${result.unmatched.length + result.check.length} to check` }
             : { kind: "ok", label: `${result.stored} filed` }
       }
       error={error}
-      open={!!result?.unmatched.length}
+      open={!!(result?.unmatched.length || result?.check.length)}
     >
       <div style={{ marginBottom: 10, fontSize: 13, color: C.body }}>
         Month this invoice covers:{" "}
@@ -89,6 +91,18 @@ export default function InvoicesPanel({ token }: Props) {
               </div>
               <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
                 {result.unmatched.map((u) => (
+                  <li key={u}>{u}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.check.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontWeight: 600, color: C.amber }}>
+                {result.check.length} invoice{result.check.length === 1 ? "" : "s"} did not tie out (product rows vs. the amount billed):
+              </div>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {result.check.map((u) => (
                   <li key={u}>{u}</li>
                 ))}
               </ul>

@@ -20,6 +20,8 @@ import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
+import { parseInvoicePdf, groupFromInvoiceFilename } from "./invoice-parse.js";
+import { logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
 import { parseFunding, assignInvoices, summariseFunding, bandTier } from "./funding.js";
@@ -1179,24 +1181,34 @@ app.post(
     if (!Buffer.isBuffer(req.body) || !req.body.length) {
       return res.status(400).json({ error: "No file received." });
     }
-    let parsed;
     try {
-      parsed = parseCarrierStats(req.body, filename);
+      await ingestCarrierStats(req.body, filename, req.staffEmail || null);
     } catch (e) {
-      return res.status(400).json({ error: e.message });
+      return res.status(e.status || 500).json({ error: e.message });
     }
-    const rec = { ...parsed, filename, uploadedBy: req.staffEmail || null, rawGzip: zlib.gzipSync(req.body) };
-    try {
-      carrierStats = db
-        ? await db.saveCarrierStats(rec)
-        : { filename, reportDate: parsed.reportDate, rows: parsed.rows, total: parsed.total, uploadedAt: new Date().toISOString(), uploadedBy: rec.uploadedBy };
-    } catch (e) {
-      return res.status(500).json({ error: "Could not save the report: " + e.message });
-    }
-    await refreshAudit();
     res.json({ ok: true, stats: carrierStats, audit });
   },
 );
+
+/** Parse a carrier stats workbook, keep the file and its rows, refresh the audit. */
+async function ingestCarrierStats(buf, filename, by) {
+  let parsed;
+  try {
+    parsed = parseCarrierStats(buf, filename);
+  } catch (e) {
+    throw Object.assign(new Error(e.message), { status: 400 });
+  }
+  const rec = { ...parsed, filename, uploadedBy: by, rawGzip: zlib.gzipSync(buf) };
+  try {
+    carrierStats = db
+      ? await db.saveCarrierStats(rec)
+      : { filename, reportDate: parsed.reportDate, rows: parsed.rows, total: parsed.total, uploadedAt: new Date().toISOString(), uploadedBy: by };
+  } catch (e) {
+    throw new Error("Could not save the report: " + e.message);
+  }
+  await refreshAudit();
+  return { reportDate: parsed.reportDate, rows: parsed.rows.length };
+}
 
 /** Every company's diagnostics added up into one picture of the file. */
 function rollupDiagnostics(companies) {
@@ -2411,46 +2423,69 @@ app.post(
     if (!Buffer.isBuffer(req.body) || !req.body.length) {
       return res.status(400).json({ error: "No file received." });
     }
-    let zip;
     try {
-      zip = await JSZip.loadAsync(req.body);
+      res.json({ ok: true, ...(await ingestInvoiceZip(req.body, month, req.staffEmail || null)) });
     } catch (e) {
-      return res.status(400).json({ error: "Not a valid zip file: " + e.message });
+      res.status(e.status || 500).json({ error: e.message });
     }
-    const by = req.staffEmail || null;
-    const stored = [];
-    const unmatched = [];
-    for (const entry of Object.values(zip.files)) {
-      if (entry.dir) continue;
-      const base = entry.name.split("/").pop() || "";
-      if (!/\.pdf$/i.test(base)) continue;
-      // The per-group files live one folder in; the two combined PDFs sit
-      // at the top of the zip and carry no single group's name to match.
-      const name = base.replace(/\s+[A-Za-z]+ Invoice\.pdf$/i, "").trim();
-      if (!name || name === base.replace(/\.pdf$/i, "")) continue;
-      const g = matchExisting(name);
-      if (!g) {
-        unmatched.push(base);
-        continue;
-      }
-      const buf = Buffer.from(await entry.async("nodebuffer"));
-      const row = await proposalStore.addProposal({
-        group_name: g.name,
-        filename: base,
-        mime: "application/pdf",
-        size: buf.length,
-        data: buf,
-        kind: "invoice",
-        context: { month },
-        status: "stored",
-        uploaded_by: by,
-      });
-      stored.push({ group: g.name, id: row.id });
-    }
-    await proposalsChanged();
-    res.json({ ok: true, month, stored: stored.length, groups: stored.map((s) => s.group), unmatched });
   },
 );
+
+/**
+ * A zip of Employee Navigator client invoices, one PDF per group: each is
+ * matched to its group by filename, its header and Charge Summary pulled out,
+ * and both the PDF and the extracted facts stored against the group.
+ */
+async function ingestInvoiceZip(buf, month, by) {
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(buf);
+  } catch (e) {
+    throw Object.assign(new Error("Not a valid zip file: " + e.message), { status: 400 });
+  }
+  const stored = [];
+  const unmatched = [];
+  const check = [];
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const base = entry.name.split("/").pop() || "";
+    if (!/\.pdf$/i.test(base)) continue;
+    // The per-group files live one folder in; the two combined PDFs sit
+    // at the top of the zip and carry no single group's name to match.
+    const name = groupFromInvoiceFilename(base);
+    if (!name) continue;
+    const g = matchExisting(name);
+    if (!g) {
+      unmatched.push(base);
+      continue;
+    }
+    const pdf = Buffer.from(await entry.async("nodebuffer"));
+    let extracted = null;
+    let error = null;
+    try {
+      extracted = await parseInvoicePdf(pdf);
+    } catch (e) {
+      error = e.message;
+    }
+    const row = await proposalStore.addProposal({
+      group_name: g.name,
+      filename: base,
+      mime: "application/pdf",
+      size: pdf.length,
+      data: pdf,
+      kind: "invoice",
+      context: { month },
+      status: error ? "error" : "stored",
+      uploaded_by: by,
+    });
+    if (extracted) await proposalStore.updateProposal(row.id, { extracted });
+    else if (error) await proposalStore.updateProposal(row.id, { error });
+    stored.push({ group: g.name, id: row.id });
+    if (!extracted || !extracted.reconciles) check.push(g.name);
+  }
+  await proposalsChanged();
+  return { month, stored: stored.length, groups: stored.map((s) => s.group), unmatched, check };
+}
 
 app.get("/api/admin/proposals", requireStaff, async (req, res) => {
   try {
@@ -2624,6 +2659,20 @@ async function boot() {
   }
   await proposalsChanged();
   await refreshAudit();
+  // Files placed in the private bucket inbox, once every group is known to
+  // match against. Logged, never fatal.
+  if (db) {
+    try {
+      await logPresignedUploads();
+      await ingestInbox({
+        zip: (buf) => ingestInvoiceZip(buf, process.env.INBOX_MONTH || new Date().toISOString().slice(0, 7), "inbox"),
+        xls: (buf, name) => ingestCarrierStats(buf, name, "inbox"),
+        xlsx: (buf, name) => ingestCarrierStats(buf, name, "inbox"),
+      });
+    } catch (e) {
+      console.error("inbox:", e.message);
+    }
+  }
 }
 
 await boot();
