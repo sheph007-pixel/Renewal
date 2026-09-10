@@ -21,7 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
-import { parseInvoicePdf, groupFromInvoiceFilename } from "./invoice-parse.js";
+import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -1258,6 +1258,18 @@ function matchExisting(name) {
   if (exact) return exact;
   const key = normalizeName(name);
   return groups.find((x) => normalizeName(x.name) === key) || null;
+}
+
+/**
+ * The group an invoice file belongs to. The exact roster name first; failing
+ * that, the short name Employee Navigator puts on an invoice is matched to the
+ * one roster name it can only mean (see matchInvoiceName).
+ */
+function matchInvoiceGroup(name) {
+  const exact = matchExisting(name);
+  if (exact) return exact;
+  const hit = matchInvoiceName(name, groups.map((x) => x.name), normalizeName);
+  return hit ? groups.find((x) => x.name === hit) || null : null;
 }
 
 const summarise = (parsed) => {
@@ -2582,7 +2594,14 @@ async function ingestInvoiceZip(buf, month, by) {
   }
   const stored = [];
   const unmatched = [];
+  const skipped = [];
   const check = [];
+  // What is already filed, so the same batch run twice files nothing twice.
+  const onFile = new Set(
+    (await proposalStore.listProposals())
+      .filter((r) => r.kind === "invoice" && r.group_name)
+      .map((r) => `${r.group_name}||${r.filename}||${(r.context && r.context.month) || ""}`),
+  );
   for (const entry of Object.values(zip.files)) {
     if (entry.dir) continue;
     const base = entry.name.split("/").pop() || "";
@@ -2591,9 +2610,13 @@ async function ingestInvoiceZip(buf, month, by) {
     // at the top of the zip and carry no single group's name to match.
     const name = groupFromInvoiceFilename(base);
     if (!name) continue;
-    const g = matchExisting(name);
+    const g = matchInvoiceGroup(name);
     if (!g) {
       unmatched.push(base);
+      continue;
+    }
+    if (onFile.has(`${g.name}||${base}||${month}`)) {
+      skipped.push(g.name);
       continue;
     }
     const pdf = Buffer.from(await entry.async("nodebuffer"));
@@ -2621,7 +2644,7 @@ async function ingestInvoiceZip(buf, month, by) {
     if (!extracted || !extracted.reconciles) check.push(g.name);
   }
   await proposalsChanged();
-  return { month, stored: stored.length, groups: stored.map((s) => s.group), unmatched, check };
+  return { month, stored: stored.length, groups: stored.map((s) => s.group), unmatched, skipped: skipped.length, check };
 }
 
 app.get("/api/admin/proposals", requireStaff, async (req, res) => {
