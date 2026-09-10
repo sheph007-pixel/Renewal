@@ -857,15 +857,11 @@ export default function App() {
             {tab === "home" ? (
               <Home
                 g={g}
-                planCount={rows.length}
-                enrolled={totals.enrolled}
-                monthly={totals.total}
                 currentHref={hrefFor("current")}
                 optionsHref={hrefFor("options")}
                 supplementalHref={hrefFor("supplemental")}
                 signUpHref={hrefFor("signup")}
                 changesHref={hrefFor("changes")}
-                manager={manager}
                 lastSignup={data.signup || null}
               />
             ) : tab === "changes" ? (

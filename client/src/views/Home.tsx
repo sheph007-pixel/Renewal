@@ -1,129 +1,79 @@
-import { C, h2, num, panel, sectionHead } from "@/lib/ui";
+import { C, h2, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { money, type AccountManager, type Group, type GroupSignup } from "@/lib/model";
-import NavigatorCard from "@/views/NavigatorCard";
-import ContactCard from "@/views/ContactCard";
+import type { Group, GroupSignup } from "@/lib/model";
+
+const CALENDLY = "https://calendly.com/kennion/call";
 
 interface Props {
   g: Group;
-  planCount: number;
-  enrolled: number;
-  monthly: number;
   currentHref: string;
   optionsHref: string;
   supplementalHref: string;
   signUpHref: string;
   changesHref: string;
-  manager: AccountManager | null | undefined;
   lastSignup: GroupSignup | null;
 }
 
-/** One headline figure, with what it is under it. */
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: 20, fontWeight: 600, color: C.ink, ...num }}>{value}</div>
-      <div style={{ marginTop: 2, fontSize: 12.5, color: C.faint }}>{label}</div>
-    </div>
-  );
-}
-
 /**
- * The landing page a client's link now opens. A rate grid used to be the
- * whole site, which left a bookmarked link opening straight into one with no
- * word about what it was, who sent it, or where else to go. This page says
- * that once — what is here, what it costs today, who to call, and where the
- * enrollment detail lives — and then gets out of the way.
+ * The Welcome tab: a short note from the President of Kennion Benefit
+ * Advisors to the employer, saying what is happening for 2027, how this site
+ * is laid out, and how to get a call on the calendar. Nothing else lives here.
  */
-export default function Home({
-  g,
-  planCount,
-  enrolled,
-  monthly,
-  currentHref,
-  optionsHref,
-  supplementalHref,
-  signUpHref,
-  changesHref,
-  manager,
-  lastSignup,
-}: Props) {
-  const card = {
-    ...panel,
-    padding: "18px 20px",
-    display: "block",
-    color: "inherit",
-    textDecoration: "none",
-  };
+export default function Home({ g, currentHref, optionsHref, supplementalHref, signUpHref, changesHref, lastSignup }: Props) {
+  const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body } as const;
+  const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   return (
     <div>
       <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>Your renewal</h2>
+        <h2 style={h2}>A note from Hunter</h2>
       </div>
 
-      <div className="cardgrid">
-        <Link href={changesHref} style={card}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            What&rsquo;s Changing For 2027 &rarr;
-          </div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            Start here: the headline number, today against 2027, before the full grid of every
-            priced option.
-          </p>
-        </Link>
-
-        <Link href={currentHref} style={card}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            Your 2026 Medical Plans &rarr;
-          </div>
-          <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            What your group has today: every plan in force, the rate at each tier, who is enrolled
-            on it, and what that comes to a month.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 26 }}>
-            <Stat label={planCount === 1 ? "plan in force" : "plans in force"} value={String(planCount)} />
-            <Stat label="enrolled" value={String(enrolled)} />
-            <Stat label="per month" value={money(monthly)} />
-          </div>
-        </Link>
-
-        <Link href={optionsHref} style={card}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>
-            New 2027 Medical Options &rarr;
-          </div>
-          <p style={{ margin: "6px 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            What is on the table for January 1, 2027 — the plans quoted for {g.name}, side by side
-            with what you pay now, so the difference is the thing you are reading.
-          </p>
-          <div style={{ fontSize: 12.5, color: C.faint }}>
-            Pick the ones you want to talk through and send them over with a note.
-          </div>
-        </Link>
-
-        <Link href={supplementalHref} style={card}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>Supplemental Package &rarr;</div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            Dental, vision, life, disability — whatever else Employee Navigator has {g.name} enrolled in,
-            besides medical.
-          </p>
-        </Link>
-
-        <Link href={signUpHref} style={{ ...card, background: C.greenTint, borderColor: C.greenEdge }}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.green }}>Sign Up &rarr;</div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            {lastSignup
-              ? `Submitted ${new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })} — ${lastSignup.plans.length} plan${lastSignup.plans.length === 1 ? "" : "s"}. Send an update any time.`
-              : "Shortlist the plans you want to move forward with and send them to your account manager."}
-          </p>
-        </Link>
-      </div>
-
-      <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>Anything else</h2>
-      </div>
-      <div className="cardgrid">
-        <NavigatorCard />
-        <ContactCard manager={manager} />
+      <div style={{ ...panel, padding: "26px 28px", maxWidth: 760 }}>
+        <p style={p}>Hello {g.name} team,</p>
+        <p style={p}>
+          Thank you for being a Kennion client. Due to our continued growth and demand, our program is
+          moving to a number of major national partners and networks for 2027, and that opens up an
+          expanded set of options for your group.
+        </p>
+        <p style={p}>
+          This site organizes everything for your 2027 Employee Benefits Program:
+        </p>
+        <ul style={{ margin: "0 0 14px", paddingLeft: 22, fontSize: 15, lineHeight: 1.8, color: C.body }}>
+          <li>
+            <Link href={changesHref} style={link}>What&rsquo;s Changing For 2027</Link> &mdash; the headline, today against 2027.
+          </li>
+          <li>
+            <Link href={currentHref} style={link}>Your 2026 Medical Plans</Link> &mdash; what your group has in force today.
+          </li>
+          <li>
+            <Link href={optionsHref} style={link}>New 2027 Medical Options</Link> &mdash; the plans quoted for {g.name}, side by side.
+          </li>
+          <li>
+            <Link href={supplementalHref} style={link}>Supplemental Package</Link> &mdash; dental, vision, life, and disability.
+          </li>
+        </ul>
+        <p style={p}>
+          Once you are ready, <Link href={signUpHref} style={link}>Sign Up</Link> starts the setup process with your
+          account manager, so everything is in place for open enrollment and a January 1, 2027 effective date.
+          {lastSignup && (
+            <>
+              {" "}You submitted on{" "}
+              {new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}; you can
+              send an update any time.
+            </>
+          )}
+        </p>
+        <p style={p}>
+          If you would like to talk any of it through, I would be glad to.{" "}
+          <a href={CALENDLY} target="_blank" rel="noreferrer" style={link}>
+            Schedule a call with me &rarr;
+          </a>
+        </p>
+        <p style={{ ...p, marginTop: 22, marginBottom: 0 }}>
+          Hunter Shepherd
+          <br />
+          <span style={{ fontSize: 13.5, color: C.muted }}>President, Kennion Benefit Advisors</span>
+        </p>
       </div>
     </div>
   );
