@@ -2525,32 +2525,10 @@ async function boot() {
       await db.init();
       const state = await db.load();
       imported = { groups: state.groups, splits: state.splits };
-      // TEMP DIAGNOSTIC — remove after next deploy.
-      {
-        const bg = imported.groups["Boss Logistics, LLC"];
-        const m0 = bg && bg.members && bg.members[0];
-        console.log(
-          "TEMP-DIAG2:",
-          JSON.stringify({
-            bossFound: !!bg,
-            medicalEligible: bg && bg.medicalEligible,
-            enrolled: bg && bg.enrolled,
-            firstMemberCost: m0 ? { employerCost: m0.employerCost, employeeCost: m0.employeeCost, premium: m0.premium } : null,
-          }),
-        );
-      }
       overrides = state.overrides;
       meta = state.meta || {};
       importedAt = state.importedAt || {};
       recentImports = await db.recentImports();
-      // TEMP DIAGNOSTIC 2 — remove after next deploy.
-      {
-        const last = recentImports && recentImports[0];
-        console.log(
-          "TEMP-DIAG2-raw:",
-          JSON.stringify({ filename: last && last.filename, uploaded_at: last && last.uploaded_at, raw_size: last && last.raw_size }),
-        );
-      }
       carrierStats = await db.latestCarrierStats();
       const fr = await db.latestFunding();
       if (fr) {
