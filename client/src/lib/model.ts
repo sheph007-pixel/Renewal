@@ -612,7 +612,7 @@ function slotPresentation(slot: string, carrier: string | null, planType: string
   if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "UHC Choice Plus" };
   if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "UHC Choice Plus" };
   if (slot === "Surest") return { carrier: "Surest (UnitedHealthcare)", label: "Copay-only", network: "UHC Choice Plus" };
-  if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Gravie / Aetna" };
+  if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Gravie / Cigna" };
   if (slot === "Nationwide") return { carrier: "Nationwide", label: planType || "Level Funded", network: "Nationwide" };
   if (slot === "Angle") return { carrier: "Angle Health", label: planType || "Level Funded", network: "Angle / Cigna PPO" };
   if (slot === "Cobalt") return { carrier: "Cobalt", label: planType || "Self Funded", network: "On the proposal" };
@@ -813,7 +813,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     oop: null,
     copays: "$0 on most services",
     rx: "Included on preventive+",
-    network: "Gravie / Aetna",
+    network: "Gravie / Cigna",
     rates: { EE: null, ES: null, EC: null, FAM: null },
     monthly: null,
     indicative: false,
