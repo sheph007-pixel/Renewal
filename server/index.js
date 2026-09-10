@@ -204,6 +204,8 @@ let bySlug = new Map();
 let adminGroups = [];
 /** Proposals filed under each group, so the Groups page can show coverage. */
 let proposalCounts = {};
+/** The newest client invoice filed under each group — month, when, whether it tied out. */
+let invoiceByGroup = {};
 /**
  * Each group's current proposals — the newest assigned one per slot, with
  * what Claude read off it (plans and tier rates) — keyed by group name. This
@@ -334,6 +336,7 @@ function rebuild() {
     slots: slotsForGroup(g.name),
     renewal: g.renewal,
     proposals: proposalCounts[g.name] || 0,
+    invoice: invoiceByGroup[g.name] || null,
     address1: g.address1 || null,
     city: g.city || null,
     state: g.state || null,
@@ -2275,9 +2278,26 @@ async function proposalsChanged() {
     }
     if (remapped) rows = await proposalStore.listProposals();
     const counts = {};
+    const invoices = {};
     const bySlot = new Map();
     rows.forEach((r) => {
       if (r.status === "container" || !r.group_name) return;
+      // An invoice is filed under its group but is not a proposal; the Groups
+      // page shows it in its own column. Rows come newest first.
+      if (r.kind === "invoice") {
+        if (!invoices[r.group_name]) {
+          const x = r.extracted || {};
+          invoices[r.group_name] = {
+            id: r.id,
+            month: (r.context && r.context.month) || null,
+            filename: r.filename,
+            uploadedAt: r.uploaded_at,
+            reconciles: typeof x.reconciles === "boolean" ? x.reconciles : null,
+            error: r.error || null,
+          };
+        }
+        return;
+      }
       counts[r.group_name] = (counts[r.group_name] || 0) + 1;
       if (r.status !== "assigned" || !r.slot) return;
       const k = `${r.group_name}||${r.slot}`;
@@ -2329,6 +2349,7 @@ async function proposalsChanged() {
       Object.entries(current).map(([g, list]) => [g, Object.fromEntries(list.filter((p) => p.slot === "Cobalt").map((p) => [p.slot, true]))]),
     );
     proposalCounts = counts;
+    invoiceByGroup = invoices;
     rebuild();
   } catch (e) {
     console.error("could not settle proposals:", e.message);

@@ -22,6 +22,8 @@ export interface AdminGroup {
   renewal?: Renewal;
   /** Carrier proposals filed under this group. */
   proposals?: number;
+  /** The newest client invoice filed under this group, if any. */
+  invoice?: { id: number; month: string | null; filename: string; uploadedAt: string; reconciles: boolean | null; error: string | null } | null;
   /** Billed rates from the XML, plan → tier → rate. */
   rates?: Record<string, Record<string, number>>;
   /** This month's billing for the group, from the funding workbook. */
@@ -103,7 +105,15 @@ export const RENEWAL_TONE: Record<Renewal, [string, string, string]> = {
 
 type Field = "companyId" | "sizeCategory" | "broker" | "renewal" | "manager";
 
-type SortKey = "name" | "location" | "contact" | "enrolled" | "share" | "sizeCategory" | "broker" | "manager" | "renewal";
+type SortKey = "name" | "location" | "contact" | "enrolled" | "share" | "sizeCategory" | "broker" | "manager" | "renewal" | "invoice";
+
+/** "2026-09" as "Sep 2026"; anything else as given. */
+function invoiceMonth(month: string | null): string {
+  if (!month) return "";
+  const m = month.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return month;
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
 /** Share of the block, as "4.2%". */
 const pct = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : "—");
@@ -126,6 +136,8 @@ function groupsCsv(rows: AdminGroup[], blockEnrolled: number): string {
     ["Employee Navigator name", (g) => g.enName],
     ["Renewal", (g) => RENEWAL_LABEL[g.renewal || "open"]],
     ["Proposals on file", (g) => g.proposals || 0],
+    ["Invoice", (g) => (g.invoice ? invoiceMonth(g.invoice.month) || g.invoice.filename : "")],
+    ["Invoice ties out", (g) => (g.invoice ? (g.invoice.reconciles == null ? "not read" : g.invoice.reconciles ? "yes" : "no") : "")],
     ["Broker", (g) => BROKER_LABEL[g.broker || "kennion"]],
     ["Manager", (g) => (g.manager ? MANAGER_FULL[g.manager] : "")],
     [
@@ -244,6 +256,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
   const [manager, setManager] = useState<"All" | Manager | "none">("All");
   const [renewal, setRenewal] = useState<"All" | Renewal>("All");
   const [proposalsFilter, setProposalsFilter] = useState<"All" | "with" | "without">("All");
+  const [invoiceFilter, setInvoiceFilter] = useState<"All" | "with" | "without" | "check">("All");
   const [view, setView] = useState<"live" | "all" | "excluded" | "archived">("live");
   const [sort, setSort] = useState<SortKey>("name");
   const [dir, setDir] = useState(1);
@@ -320,6 +333,8 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
       (broker === "All" || (g.broker || "kennion") === broker) &&
       (manager === "All" || (manager === "none" ? !g.manager : g.manager === manager)) &&
       (proposalsFilter === "All" || (proposalsFilter === "with" ? (g.proposals || 0) > 0 : !(g.proposals || 0))) &&
+      (invoiceFilter === "All" ||
+        (invoiceFilter === "with" ? !!g.invoice : invoiceFilter === "without" ? !g.invoice : !!g.invoice && g.invoice.reconciles !== true)) &&
       (!q ||
         `${g.name} ${g.enName ?? ""} ${g.code} ${g.city ?? ""} ${g.state ?? ""} ${g.zip ?? ""} ${g.sic ?? ""} ${g.sicDesc ?? ""} ${g.taxId ?? ""} ${g.tpa ?? ""} ${BROKER_LABEL[g.broker || "kennion"]} ${g.manager ? MANAGER_FULL[g.manager] : ""} ${RENEWAL_LABEL[g.renewal || "open"]} ${(g.contacts ?? []).map((c) => `${c.name} ${c.email}`).join(" ")}`
           .toLowerCase()
@@ -337,6 +352,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
     if (sort === "broker") return BROKER_LABEL[g.broker || "kennion"].toLowerCase();
     if (sort === "manager") return g.manager ? MANAGER_LABEL[g.manager].toLowerCase() : "";
     if (sort === "renewal") return RENEWALS.indexOf(g.renewal || "open");
+    if (sort === "invoice") return g.invoice ? `${g.invoice.month || ""} ${g.invoice.uploadedAt}` : "";
     const v = (g as unknown as Record<string, unknown>)[sort];
     return String(v ?? "").toLowerCase();
   };
@@ -352,7 +368,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
   });
 
   const filtering =
-    !!q || size !== "All" || broker !== "All" || manager !== "All" || renewal !== "All" || proposalsFilter !== "All" || view !== "live";
+    !!q || size !== "All" || broker !== "All" || manager !== "All" || renewal !== "All" || proposalsFilter !== "All" || invoiceFilter !== "All" || view !== "live";
 
   // Totals for what is on screen. They follow every search, filter and sort.
   const shown = {
@@ -395,6 +411,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
     setManager("All");
     setRenewal("All");
     setProposalsFilter("All");
+    setInvoiceFilter("All");
     setView("live");
   };
 
@@ -562,6 +579,12 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
             <option value="with">With a proposal</option>
             <option value="without">No proposal yet</option>
           </select>
+          <select aria-label="Invoice" value={invoiceFilter} onChange={(e) => setInvoiceFilter(e.target.value as typeof invoiceFilter)} style={filterSelect}>
+            <option value="All">Invoice: any</option>
+            <option value="with">Invoice attached ({live.filter((g) => g.invoice).length})</option>
+            <option value="without">No invoice ({live.filter((g) => !g.invoice).length})</option>
+            <option value="check">Invoice needs a look ({live.filter((g) => g.invoice && g.invoice.reconciles !== true).length})</option>
+          </select>
           {(counts.excluded > 0 || counts.archived > 0) && (
             <select aria-label="Which groups" value={view} onChange={(e) => setView(e.target.value as typeof view)} style={filterSelect}>
               {/* Widest first, then the parts of it, so the counts read as a sum. */}
@@ -661,6 +684,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                 <H k="broker" label="Broker" width={150} />
                 <H k="manager" label="Manager" width={120} />
                 <H k="renewal" label="Renewal" width={140} />
+                <H k="invoice" label="Invoice" width={110} />
               </tr>
             </thead>
             <tbody>
@@ -844,12 +868,33 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                         ))}
                       </select>
                     </td>
+                    <td style={{ ...td, whiteSpace: "nowrap" }}>
+                      {g.invoice ? (
+                        <Link
+                          href={groupPath(g.name)}
+                          title={`${g.invoice.filename}${
+                            g.invoice.reconciles === true
+                              ? " — ties out"
+                              : g.invoice.reconciles === false
+                                ? " — does not tie out to the plans on file"
+                                : g.invoice.error
+                                  ? ` — could not be read: ${g.invoice.error}`
+                                  : " — not read"
+                          } — open the company page`}
+                          style={{ color: g.invoice.reconciles === true ? C.green : C.amber, textDecoration: "none", fontWeight: 500 }}
+                        >
+                          {g.invoice.reconciles === true ? "✓" : "⚠"} {invoiceMonth(g.invoice.month) || "on file"}
+                        </Link>
+                      ) : (
+                        <span style={{ color: C.ghost }}>—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {!rows.length && (
                 <tr>
-                  <td colSpan={8} style={{ ...td, padding: "26px 10px", textAlign: "center", color: C.faint }}>
+                  <td colSpan={9} style={{ ...td, padding: "26px 10px", textAlign: "center", color: C.faint }}>
                     No groups match.{" "}
                     {filtering && (
                       <button onClick={clear} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 13, padding: 0 }}>
@@ -882,7 +927,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                   {pct(shown.enrolled, counts.enrolled)}
                   <div style={{ fontSize: 11.5, fontWeight: 400, color: C.ghost }}>of block</div>
                 </td>
-                <td colSpan={3} style={{ borderTop: `1px solid ${C.border}` }} />
+                <td colSpan={4} style={{ borderTop: `1px solid ${C.border}` }} />
               </tr>
             </tfoot>
           </table>
