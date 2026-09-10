@@ -2596,18 +2596,27 @@ async function boot() {
       // TEMP SEED — remove after next deploy. A carrier stats report carried
       // in through service config (gzip + base64), so it never touches a
       // public git history.
-      if (process.env.SEED_CARRIER_STATS_GZ_B64) {
+      if (process.env.SEED_CARRIER_STATS_JSON) {
         try {
-          const buf = zlib.gunzipSync(Buffer.from(process.env.SEED_CARRIER_STATS_GZ_B64, "base64"));
           const filename = process.env.SEED_CARRIER_STATS_NAME || "carrier_stats_report.xls";
-          const parsedStats = parseCarrierStats(buf, filename);
-          carrierStats = await db.saveCarrierStats({
-            ...parsedStats,
-            filename,
-            uploadedBy: "seed",
-            rawGzip: zlib.gzipSync(buf),
-          });
-          console.log("SEED-CARRIER-STATS: saved", JSON.stringify({ filename, reportDate: carrierStats.reportDate, rows: (carrierStats.rows || []).length }));
+          const parsedStats = JSON.parse(process.env.SEED_CARRIER_STATS_JSON);
+          // The source file rides along only if it arrived intact: a long
+          // base64 string is easy to corrupt in transit, and a checksum
+          // says so before anything is stored.
+          let rawGzip = null;
+          const gzB64 = process.env.SEED_CARRIER_STATS_GZ_B64 || "";
+          const want = process.env.SEED_CARRIER_STATS_SHA256 || "";
+          if (gzB64 && want) {
+            const got = crypto.createHash("sha256").update(gzB64).digest("hex");
+            if (got === want) {
+              rawGzip = Buffer.from(gzB64, "base64");
+              zlib.gunzipSync(rawGzip);
+            } else {
+              console.warn("SEED-CARRIER-STATS: source file checksum mismatch, storing rows without it");
+            }
+          }
+          carrierStats = await db.saveCarrierStats({ ...parsedStats, filename, uploadedBy: "seed", rawGzip });
+          console.log("SEED-CARRIER-STATS: saved", JSON.stringify({ filename, reportDate: carrierStats.reportDate, rows: (carrierStats.rows || []).length, withFile: !!rawGzip }));
         } catch (e) {
           console.error("SEED-CARRIER-STATS failed:", e.message);
         }
