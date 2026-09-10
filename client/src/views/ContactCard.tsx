@@ -6,21 +6,26 @@ import type { AccountManager } from "@/lib/model";
  * question an employer has on these pages — "is this rate right?", "how do I
  * add someone?" — is answered by that person, not by a general inbox. So the
  * card names them, and gives the three ways to reach them: the direct line,
- * email, and a time on their calendar.
+ * email, and a time on their calendar. The same card, with its own label and
+ * note, introduces anyone else at Kennion a client should know.
  */
 export default function ContactCard({
   manager,
   compact,
+  label = "Your account manager",
+  note = "Anything about your group — rates, enrollment, a question on these pages — reach out any time.",
 }: {
   manager: AccountManager | null | undefined;
   compact?: boolean;
+  label?: string;
+  note?: string | null;
 }) {
   if (!manager || !manager.name) return null;
   const line = { fontSize: 13.5, color: C.body, lineHeight: 1.9 };
   return (
     <div className="noprint" style={{ ...panel, padding: compact ? "14px 16px" : "18px 20px" }}>
       <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" }}>
-        Your account manager
+        {label}
       </div>
       <div style={{ marginTop: 8, fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink }}>
         {manager.name}
@@ -48,9 +53,7 @@ export default function ContactCard({
           </div>
         )}
       </div>
-      <div style={{ marginTop: 10, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-        Anything about your group — rates, enrollment, a question on these pages — reach out any time.
-      </div>
+      {note && <div style={{ marginTop: 10, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>{note}</div>}
     </div>
   );
 }
