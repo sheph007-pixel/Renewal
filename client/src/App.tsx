@@ -718,7 +718,7 @@ export default function App() {
       ? "Effective January 1, 2027"
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
-        : `Calendar Year (January 1 \u2013 December 31, ${planYear})`;
+        : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup" || tab === "changes"
@@ -741,7 +741,7 @@ export default function App() {
         ? PATHS.options
         : PATHS.current;
 
-  // Welcome carries no step \u2014 it is where you start, not part of the count \u2014
+  // Welcome carries no step — it is where you start, not part of the count —
   // so the five real pages run 1 through 5, Sign Up included.
   const TAB_STEP: Partial<Record<GroupTab, number>> = {
     changes: 1,
@@ -835,7 +835,7 @@ export default function App() {
                 <div style={{ marginTop: 6, fontSize: 15, fontWeight: 600, color: C.ink }}>{TAB_LABEL[tab]}</div>
                 <div style={{ marginTop: 3, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
                   {tab === "home"
-                    ? `Your 2027 renewal with Kennion Benefit Advisors \u00b7 ${subline}`
+                    ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}`
                     : subline}
                 </div>
                 {(tab === "current" || tab === "options") && (
@@ -862,6 +862,7 @@ export default function App() {
                 supplementalHref={hrefFor("supplemental")}
                 signUpHref={hrefFor("signup")}
                 changesHref={hrefFor("changes")}
+                manager={manager}
                 lastSignup={data.signup || null}
               />
             ) : tab === "changes" ? (
