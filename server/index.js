@@ -22,6 +22,7 @@ import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from 
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
+import { parseGravieWorkbook, gravieExtracted } from "./gravie-parse.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -2647,6 +2648,106 @@ async function ingestInvoiceZip(buf, month, by) {
   return { month, stored: stored.length, groups: stored.map((s) => s.group), unmatched, skipped: skipped.length, check };
 }
 
+/**
+ * A zip of Gravie rate workbooks, one per group: each is parsed, matched to
+ * its group by the name in the sheet header, and filed as that group's Gravie
+ * proposal — assigned, in the Gravie slot, with every priced plan in the
+ * extracted shape the Options page reads — so the quote prices on the client's
+ * pages the moment it lands. A workbook whose quote number is already on file
+ * for the group is skipped, so a batch can be run again.
+ */
+async function ingestGravieZip(buf, by) {
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(buf);
+  } catch (e) {
+    throw Object.assign(new Error("Not a valid zip file: " + e.message), { status: 400 });
+  }
+  const stored = [];
+  const unmatched = [];
+  const skipped = [];
+  const failed = [];
+  const onFile = new Set(
+    (await proposalStore.listProposals())
+      .filter((r) => r.slot === "Gravie" && r.group_name && r.context && r.context.quoteNumber)
+      .map((r) => `${r.group_name}||${r.context.quoteNumber}`),
+  );
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const base = entry.name.split("/").pop() || "";
+    if (!/\.xlsx$/i.test(base) || base.startsWith("._")) continue;
+    const bytes = Buffer.from(await entry.async("nodebuffer"));
+    let parsed;
+    try {
+      parsed = parseGravieWorkbook(bytes);
+    } catch (e) {
+      failed.push(`${base}: ${e.message}`);
+      continue;
+    }
+    const g = matchInvoiceGroup(parsed.group);
+    if (!g) {
+      unmatched.push(`${base} (${parsed.group})`);
+      continue;
+    }
+    if (parsed.quoteNumber && onFile.has(`${g.name}||${parsed.quoteNumber}`)) {
+      skipped.push(g.name);
+      continue;
+    }
+    const extracted = { ...gravieExtracted(parsed), matched_group: g.name };
+    const row = await proposalStore.addProposal({
+      group_name: g.name,
+      carrier: "Gravie",
+      filename: base,
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: bytes.length,
+      data: bytes,
+      kind: "file",
+      context: { source: "gravie-workbook", quoteNumber: parsed.quoteNumber || null, generated: parsed.generated || null },
+      status: "assigned",
+      assigned_by: by || "gravie-workbook",
+      uploaded_by: by,
+    });
+    await proposalStore.updateProposal(row.id, {
+      extracted,
+      summary: extracted.summary,
+      confidence: 1,
+      slot: "Gravie",
+    });
+    stored.push({ group: g.name, id: row.id, plans: extracted.plans.length });
+  }
+  await proposalsChanged();
+  return { stored: stored.length, groups: stored.map((s) => `${s.group} (${s.plans})`), unmatched, skipped: skipped.length, failed };
+}
+
+/**
+ * A zip dropped in the inbox: invoice PDFs go to the invoice ingest, Gravie
+ * rate workbooks to the Gravie one, and both can share a zip.
+ */
+async function ingestZip(buf, month, by) {
+  const zip = await JSZip.loadAsync(buf);
+  const names = Object.values(zip.files).filter((e) => !e.dir).map((e) => e.name.split("/").pop() || "");
+  const out = {};
+  if (names.some((n) => /\.pdf$/i.test(n))) out.invoices = await ingestInvoiceZip(buf, month, by);
+  if (names.some((n) => /\.xlsx$/i.test(n) && !n.startsWith("._"))) out.gravie = await ingestGravieZip(buf, by);
+  return out;
+}
+
+app.post(
+  "/api/admin/proposals/gravie-batch",
+  requireStaff,
+  express.raw({ type: () => true, limit: "60mb" }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || !req.body.length) {
+      return res.status(400).json({ error: "No file received." });
+    }
+    try {
+      res.json({ ok: true, ...(await ingestGravieZip(req.body, req.staffEmail || null)) });
+    } catch (e) {
+      res.status(e.status || 500).json({ error: e.message });
+    }
+  },
+);
+
 app.get("/api/admin/proposals", requireStaff, async (req, res) => {
   try {
     let rows = await proposalStore.listProposals();
@@ -2829,7 +2930,7 @@ async function boot() {
       await logInboxKey();
       await logPresignedUploads();
       await ingestInbox({
-        zip: (buf) => ingestInvoiceZip(buf, process.env.INBOX_MONTH || new Date().toISOString().slice(0, 7), "inbox"),
+        zip: (buf) => ingestZip(buf, process.env.INBOX_MONTH || new Date().toISOString().slice(0, 7), "inbox"),
         xls: (buf, name) => ingestCarrierStats(buf, name, "inbox"),
         xlsx: (buf, name) => ingestCarrierStats(buf, name, "inbox"),
       });
