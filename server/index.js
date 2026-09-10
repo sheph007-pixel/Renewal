@@ -2593,6 +2593,25 @@ async function boot() {
       importedAt = state.importedAt || {};
       recentImports = await db.recentImports();
       carrierStats = await db.latestCarrierStats();
+      // TEMP SEED — remove after next deploy. A carrier stats report carried
+      // in through service config (gzip + base64), so it never touches a
+      // public git history.
+      if (process.env.SEED_CARRIER_STATS_GZ_B64) {
+        try {
+          const buf = zlib.gunzipSync(Buffer.from(process.env.SEED_CARRIER_STATS_GZ_B64, "base64"));
+          const filename = process.env.SEED_CARRIER_STATS_NAME || "carrier_stats_report.xls";
+          const parsedStats = parseCarrierStats(buf, filename);
+          carrierStats = await db.saveCarrierStats({
+            ...parsedStats,
+            filename,
+            uploadedBy: "seed",
+            rawGzip: zlib.gzipSync(buf),
+          });
+          console.log("SEED-CARRIER-STATS: saved", JSON.stringify({ filename, reportDate: carrierStats.reportDate, rows: (carrierStats.rows || []).length }));
+        } catch (e) {
+          console.error("SEED-CARRIER-STATS failed:", e.message);
+        }
+      }
       const fr = await db.latestFunding();
       if (fr) {
         funding = { id: fr.id, month: fr.month, filename: fr.filename, fileStamp: fr.file_stamp, lines: fr.lines, byInvoice: fr.by_invoice, summary: fr.summary, uploadedBy: fr.uploaded_by, uploadedAt: fr.uploaded_at };
