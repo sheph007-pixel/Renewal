@@ -1,16 +1,16 @@
 /**
- * The 2027 options grid as an Excel file: the rows on screen, in the order
- * shown, plus a Compare sheet when plans are being compared side by side.
- * Loaded on demand, since the xlsx library is the largest thing in the app.
+ * The 2027 options as an Excel file: the Employer Contribution, the grid as
+ * shown, and a Proposal sheet with one block per chosen plan laid out the way
+ * the plan card reads. Loaded on demand, since xlsx is the largest library.
  */
 import * as XLSX from "xlsx";
-import { TIERS, fmtDed, type Group, type MarketPlan, type TierKey } from "@/lib/model";
-import { costSplit } from "@/views/OptionsGrid";
+import { TIERS, costSplit, fmtDed, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { cardModel } from "@/views/PlanCard";
 
 const carrierOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", " by UHC");
 
-function optionRow(p: MarketPlan, today: number, budget: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const sp = costSplit(p, budget, counts);
+function optionRow(p: MarketPlan, today: number, contribution: Record<TierKey, number>, counts: Record<TierKey, number>) {
+  const sp = costSplit(p, contribution, counts);
   return {
     Carrier: carrierOf(p),
     Plan: p.plan,
@@ -19,7 +19,10 @@ function optionRow(p: MarketPlan, today: number, budget: Record<TierKey, number>
     Network: p.network,
     Deductible: p.ded == null ? "" : fmtDed(p.ded),
     "OOP Max": p.oop ?? "",
+    Coinsurance: p.coins ?? "",
     "PCP / SPC": p.copays,
+    "Urgent Care": p.uc ?? "",
+    "Emergency Room": p.er ?? "",
     Rx: p.rx,
     Employee: p.rates.EE ?? "",
     "EE + Spouse": p.rates.ES ?? "",
@@ -29,51 +32,56 @@ function optionRow(p: MarketPlan, today: number, budget: Record<TierKey, number>
     "Employees Pay": sp ? sp.ee : "",
     "Monthly Premium": p.monthly ?? "",
     "Vs Today": p.monthly == null ? "" : +(p.monthly - today).toFixed(2),
-    Basis: p.quoted ? `Quoted ${p.quoted.date || ""}`.trim() : p.indicative ? "Indicative" : p.pending ? "Quote requested" : "Menu rate",
+    Basis: p.quoted ? `Quoted ${p.quoted.date || ""}`.trim() : p.indicative ? "Illustrative" : p.pending ? "Quote requested" : "Menu rate",
   };
 }
 
 export function downloadOptions(
   g: Group,
   list: MarketPlan[],
-  compare: MarketPlan[],
+  proposed: MarketPlan[],
   today: number,
-  budget: Record<TierKey, number>,
+  contribution: Record<TierKey, number>,
   counts: Record<TierKey, number>,
+  todayByTier: TierContribution[],
 ) {
   const book = XLSX.utils.book_new();
-  const rows = list.map((p) => optionRow(p, today, budget, counts));
-  const sheet = XLSX.utils.json_to_sheet(rows);
-  sheet["!cols"] = [18, 40, 14, 12, 26, 12, 10, 22, 30, 11, 12, 14, 12, 14, 14, 16, 12, 18].map((wch) => ({ wch }));
-  const bsheet = XLSX.utils.aoa_to_sheet([
-    ["Tier", "Enrolled", "Monthly budget each"],
-    ...TIERS.map((t) => [t.label, counts[t.key] || 0, budget[t.key] || 0]),
-    ["Total", TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0), TIERS.reduce((n, t) => n + (counts[t.key] || 0) * (budget[t.key] || 0), 0)],
+
+  const csheet = XLSX.utils.aoa_to_sheet([
+    ["Tier", "Enrolled", "Monthly contribution each", "Today"],
+    ...TIERS.map((t) => [t.label, counts[t.key] || 0, contribution[t.key] || 0, todayByTier.find((c) => c.key === t.key)?.er ?? ""]),
+    ["Total", TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0), TIERS.reduce((n, t) => n + (counts[t.key] || 0) * (contribution[t.key] || 0), 0), ""],
   ]);
-  bsheet["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 20 }];
-  XLSX.utils.book_append_sheet(book, bsheet, "Budget");
+  csheet["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 26 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(book, csheet, "Employer Contribution");
+
+  const sheet = XLSX.utils.json_to_sheet(list.map((p) => optionRow(p, today, contribution, counts)));
+  sheet["!cols"] = [18, 40, 14, 12, 26, 12, 10, 12, 22, 22, 16, 30, 11, 12, 14, 12, 14, 14, 16, 12, 18].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(book, sheet, "2027 Options");
-  if (compare.length) {
-    // Attributes down the side, one column per plan — the way the page shows it.
-    const attrs: [string, (p: MarketPlan) => string | number][] = [
-      ["Carrier", carrierOf],
-      ["Funding", (p) => p.label],
-      ["Type", (p) => p.type],
-      ["Network", (p) => p.network],
-      ["Deductible", (p) => (p.ded == null ? "" : fmtDed(p.ded))],
-      ["OOP Max", (p) => p.oop ?? ""],
-      ["PCP / SPC", (p) => p.copays],
-      ["Rx", (p) => p.rx],
-      ...TIERS.map((t): [string, (p: MarketPlan) => string | number] => [t.label, (p) => p.rates[t.key] ?? ""]),
-      ["Employer Cost", (p) => costSplit(p, budget, counts)?.er ?? ""],
-      ["Employees Pay", (p) => costSplit(p, budget, counts)?.ee ?? ""],
-      ["Monthly Premium", (p) => p.monthly ?? ""],
-      ["Vs Today", (p) => (p.monthly == null ? "" : +(p.monthly - today).toFixed(2))],
+
+  if (proposed.length) {
+    const rows: (string | number)[][] = [
+      [`${g.name} · 2027 Medical Options Proposal`],
+      [`Priced at ${TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0)} enrolled · employer contribution ${TIERS.map((t) => `${t.short} $${(contribution[t.key] || 0).toFixed(2)}`).join(" · ")} per month`],
+      [],
     ];
-    const aoa = [["", ...compare.map((p) => p.plan)], ...attrs.map(([label, f]) => [label, ...compare.map(f)])];
-    const cs = XLSX.utils.aoa_to_sheet(aoa);
-    cs["!cols"] = [{ wch: 18 }, ...compare.map(() => ({ wch: 34 }))];
-    XLSX.utils.book_append_sheet(book, cs, "Compare");
+    for (const p of proposed) {
+      const m = cardModel(p, contribution, counts, today);
+      rows.push([`${m.carrier} · ${m.plan}`, m.funding + (m.type ? ` · ${m.type}` : "")]);
+      rows.push(["Total Monthly Cost", m.monthly ?? ""]);
+      rows.push(["Basis", m.basis]);
+      for (const [label, value] of m.benefits) rows.push([label, value]);
+      rows.push(["Monthly Composite Rates", "Rate", "Employer", "Employee"]);
+      for (const t of m.tiers) rows.push([`${t.label} (${t.count})`, t.rate ?? "", t.er ?? "", t.ee ?? ""]);
+      rows.push(["Total Monthly Employer Cost", m.er ?? ""]);
+      rows.push(["Total Monthly Employee Cost", m.ee ?? ""]);
+      rows.push(["Monthly Premium", m.premium ?? ""]);
+      if (m.vsToday != null) rows.push(["Vs today", m.vsToday]);
+      rows.push([]);
+    }
+    const ps = XLSX.utils.aoa_to_sheet(rows);
+    ps["!cols"] = [{ wch: 30 }, { wch: 44 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(book, ps, "Proposal");
   }
   const safe = g.name.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
   XLSX.writeFile(book, `${safe}-2027-options.xlsx`);

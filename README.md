@@ -10,13 +10,18 @@ with its access code and sees two things:
    between monthly, semi-monthly, bi-weekly and weekly.
 2. **2027 Medical Plan Options** — the shopped market (UnitedHealthcare Level
    Funded, Gravie, Nationwide, Angle, Cobalt), every plan costed at the group's own census,
-   with three Kennion recommendations above one grid of every plan from every
-   carrier, lowest monthly premium first. Filter tabs along the top — Carrier,
-   Deductible and OOP Max by range, Funding, Total Cost ($ to $$$$, sorted
-   either way) — and a search; each row is carrier, plan, deductible, OOP max
-   and monthly premium, and clicking it opens every detail. A heart shortlists
-   a plan (the shortlist Sign Up sends); + adds it to a proposal shown side by
-   side that downloads as Excel or prints to PDF.
+   as one grid of every plan from every carrier, lowest cost first. Above it,
+   **Employer Contribution**: four monthly figures by tier and Apply, which
+   drive an Employer Cost column (contribution × enrolled per tier, never more
+   than the premium). Filter tabs — Carrier, Deductible and OOP Max by range,
+   Funding, Total Cost ($ to $$$$, sorted either way) — and a search; each row
+   is carrier, plan, deductible, OOP max, employer cost and total monthly, and
+   clicking it opens a plan card: total monthly cost, benefits, composite
+   rates with the enrolled count per tier and the employer / employee split,
+   then the totals. A heart shortlists a plan (the shortlist Sign Up sends);
+   + adds it to a proposal of those same cards that downloads as Excel or
+   prints to PDF. Gravie's benefits come from its static Benefits Grid, by
+   plan family; UnitedHealthcare's from its menu.
 
 Both sections print to a clean report, and every page carries the carrier
 disclaimer footer — including in print.

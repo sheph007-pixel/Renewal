@@ -882,9 +882,7 @@ export default function App() {
                 contribution={contribution}
                 contributionValues={contributionValues}
                 contributionChanged={contributionOverride != null}
-                onContributionChange={(key, v) =>
-                  setContributionOverride((prev) => ({ ...(prev || contributionValues), [key]: v }))
-                }
+                onContributionApply={(values) => setContributionOverride(values)}
                 onContributionReset={() => setContributionOverride(null)}
                 onToggleSelected={toggleSelected}
               />

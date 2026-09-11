@@ -6,7 +6,7 @@ import OptionsGrid from "@/views/OptionsGrid";
 
 /** Sections on this page, in order, for the "On this page" links. */
 export const OPTIONS_SECTIONS = [
-  { id: "budget", label: "Your Budget" },
+  { id: "contribution", label: "Employer Contribution" },
   { id: "all-options", label: "All Options" },
 ];
 
@@ -22,7 +22,7 @@ interface Props {
   contribution: TierContribution[];
   contributionValues: Record<TierKey, number>;
   contributionChanged: boolean;
-  onContributionChange: (key: TierKey, value: number) => void;
+  onContributionApply: (values: Record<TierKey, number>) => void;
   onContributionReset: () => void;
   onToggleSelected: (plan: string) => void;
 }
@@ -43,7 +43,7 @@ export default function Options({
   contribution,
   contributionValues,
   contributionChanged,
-  onContributionChange,
+  onContributionApply,
   onContributionReset,
   onToggleSelected,
 }: Props) {
@@ -56,8 +56,7 @@ export default function Options({
     <div>
       <p style={{ margin: "0 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body, textWrap: "pretty" }}>
         Your 2026 program plans end December 31, 2026. We priced {priced} plans from every carrier at your enrollment
-        of {totals.enrolled}. Set what you want to put in each month, by tier, and Employer Cost shows what each
-        plan would cost you at that budget — employees pick up the rest.
+        of {totals.enrolled}. Enter what you&rsquo;ll contribute per tier and Apply; Employer Cost shows what each plan costs you.
         {rows.length ? ` Today you spend ${money(totals.total)} a month.` : ""}
       </p>
 
@@ -69,10 +68,10 @@ export default function Options({
         onToggleSelected={onToggleSelected}
         direct={direct}
         contribution={contribution}
-        budget={contributionValues}
-        budgetChanged={contributionChanged}
-        onBudgetChange={onContributionChange}
-        onBudgetReset={onContributionReset}
+        applied={contributionValues}
+        appliedChanged={contributionChanged}
+        onApply={onContributionApply}
+        onReset={onContributionReset}
       />
 
       <div className="panel noprint" style={{ ...panel, marginTop: 24, padding: "18px 20px" }}>

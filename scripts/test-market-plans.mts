@@ -3,7 +3,7 @@
 // plan they also price. Runs with `node --experimental-strip-types`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { marketPlans, proposalPlans, moneyNum, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
+import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 const seed = JSON.parse(readFileSync(new URL("../server/data/kennion.json", import.meta.url), "utf8"));
 const g0 = seed.groups.find((x: Group) => x.name === "Aesto Health") as Group;
@@ -75,6 +75,25 @@ assert.ok(!after.some((p) => p.carrier === "Gravie" && p.pending), "the Gravie p
 assert.equal(after.filter((p) => p.plan === uhc.plan).length, 1, "the menu copy of a plan the proposal prices is replaced");
 assert.equal(after.find((p) => p.plan === uhc.plan)!.rates.EE, 700);
 assert.equal(after.length, menuCount + 3 - 2, "three quoted rows in, the Gravie placeholder and one menu duplicate out");
+
+// Benefits: a Gravie plan carries its family's benefits; a UHC menu plan its coinsurance, urgent care and ER.
+assert.match(comfort.copays, /No cost \/ No cost/, "a Gravie Comfort plan gets the Comfort family's PCP / specialist");
+assert.equal(comfort.er, "$500 copay");
+assert.equal(comfort.hospital, "No cost after OOPM");
+assert.match(comfort.rx, /generic/);
+const menuPlan = before.find((p) => p.carrier === "UnitedHealthcare" && !p.quoted)!;
+assert.ok(menuPlan.coins && menuPlan.uc && menuPlan.er, "UHC menu plans carry coinsurance, urgent care and ER");
+
+// Employer contribution: each tier pays the lower of the contribution and the rate; totals follow the census.
+const contrib = { EE: 500, ES: 2000, EC: 0, FAM: 1000 };
+assert.deepEqual(tierSplit(comfort, contrib, "EE"), { rate: 600, er: 500, ee: 100 });
+assert.deepEqual(tierSplit(comfort, contrib, "ES"), { rate: 1200, er: 1200, ee: 0 }, "a contribution above the premium pays the premium, no more");
+assert.deepEqual(tierSplit(comfort, contrib, "EC"), { rate: 1110, er: 0, ee: 1110 });
+const cs = costSplit(comfort, contrib, counts as Record<"EE" | "ES" | "EC" | "FAM", number>)!;
+assert.equal(cs.total, comfort.monthly);
+assert.equal(cs.er, +(500 * counts.EE + 1200 * counts.ES + 0 * counts.EC + 1000 * counts.FAM).toFixed(2));
+assert.equal(+(cs.er + cs.ee).toFixed(2), cs.total);
+assert.equal(costSplit(pp.find((p) => p.plan === "Gravie Comfort 3000")!, contrib, { EE: 0, ES: 0, EC: 0, FAM: 0 }), null, "nobody enrolled: no split");
 
 assert.equal(moneyNum("$1,500 individual / $3,000 family"), 1500);
 assert.equal(moneyNum("n/a"), null);

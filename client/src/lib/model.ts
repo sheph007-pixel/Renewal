@@ -582,6 +582,12 @@ export interface MarketPlan {
   copays: string;
   rx: string;
   network: string;
+  /** Further in-network benefits where the carrier gave them; null where it did not. */
+  coins?: string | null;
+  uc?: string | null;
+  er?: string | null;
+  labs?: string | null;
+  hospital?: string | null;
   rates: Record<TierKey, number | null>;
   monthly: number | null;
   /** Rate scaled from comparable groups rather than quoted for this one. */
@@ -643,6 +649,9 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         else if (monthly != null) monthly += v * counts[t.key];
       });
       const show = slotPresentation(pr.slot, pr.carrier, pl.planType);
+      // Gravie's benefits are by plan family and the same for every group.
+      const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
+      const gb = fam ? GRAVIE_BENEFITS[fam] : null;
       out.push({
         carrier: show.carrier,
         label: show.label,
@@ -650,8 +659,13 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         type: pl.planType || show.label,
         ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
         oop: moneyNum(pl.oopMax),
-        copays: "On the proposal",
-        rx: "On the proposal",
+        copays: gb ? `${gb.pcp} / ${gb.specialist}` : "On the proposal",
+        rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : "On the proposal",
+        coins: null,
+        uc: gb ? gb.uc : null,
+        er: gb ? gb.er : null,
+        labs: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : null,
+        hospital: gb ? gb.hospital : null,
         network: pl.network || show.network,
         rates,
         monthly,
@@ -770,6 +784,9 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       oop: m.oop,
       copays: m.copays,
       rx: (m.rx || "").replace(/,.*$/, ""),
+      coins: m.coins ?? null,
+      uc: m.uc ?? null,
+      er: m.er ?? null,
       network: m.type === "EPO" ? "UHC Choice" : "UHC Choice Plus",
       rates,
       monthly: baseEE != null ? monthly : null,
@@ -877,4 +894,158 @@ export function marketSummary(data: KennionData, g: Group, rows: PlanRow[], toda
     direct: hasDirectQuote(data, g),
     pricedCount: plans.filter((p) => p.monthly != null).length,
   };
+}
+
+/**
+ * What the employer pays toward one tier of a plan at a monthly contribution:
+ * the contribution, but never more than that tier's premium.
+ */
+export function tierSplit(p: MarketPlan, contribution: Record<TierKey, number>, t: TierKey): { rate: number; er: number; ee: number } | null {
+  const rate = p.rates[t];
+  if (rate == null) return null;
+  const er = Math.min(Math.max(contribution[t] || 0, 0), rate);
+  return { rate, er: +er.toFixed(2), ee: +(rate - er).toFixed(2) };
+}
+
+/**
+ * A plan's monthly split at the employer's contribution: each tier's
+ * headcount times the lower of the contribution and that tier's rate, the
+ * rest to employees. Null when no enrolled tier has a rate.
+ */
+export function costSplit(
+  p: MarketPlan,
+  contribution: Record<TierKey, number>,
+  counts: Record<TierKey, number>,
+): { er: number; ee: number; total: number } | null {
+  let er = 0;
+  let total = 0;
+  let any = false;
+  for (const t of TIERS) {
+    const n = counts[t.key] || 0;
+    const s = tierSplit(p, contribution, t.key);
+    if (!n || !s) continue;
+    any = true;
+    er += s.er * n;
+    total += s.rate * n;
+  }
+  return any ? { er: +er.toFixed(2), ee: +(total - er).toFixed(2), total: +total.toFixed(2) } : null;
+}
+
+// ---- Gravie benefits by plan family -------------------------------------
+// (Kept in this file rather than its own module so the model stays runnable
+// under node --experimental-strip-types for scripts/test-market-plans.mts.)
+/**
+ * Gravie's benefits by plan family — the static "Benefits Grid" sheet that
+ * is the same in every rate workbook, transcribed once. A plan's family
+ * (Comfort, ComfortFit, Copay, QHDHP, HDHP) is in its name and plan type;
+ * its deductible and out-of-pocket max are on the rate row. In-network
+ * benefits; EPO versions cover nothing out of network. Teladoc visits are
+ * free on QHDHP, Copay, Comfort and ComfortFit plans.
+ */
+export interface GravieBenefits {
+  preventive: string;
+  pcp: string;
+  specialist: string;
+  uc: string;
+  er: string;
+  basicLabs: string;
+  advancedLabs: string;
+  hospital: string;
+  rxGeneric: string;
+  rxPreferredBrand: string;
+  rxNonPreferredBrand: string;
+  rxNonPreferredSpecialty: string;
+}
+
+export type GravieFamily = "Comfort" | "ComfortFit" | "Copay" | "QHDHP" | "HDHP";
+
+const COINS = "0–20% coins after ded";
+
+export const GRAVIE_BENEFITS: Record<GravieFamily, GravieBenefits> = {
+  Comfort: {
+    preventive: "No cost",
+    pcp: "No cost",
+    specialist: "No cost",
+    uc: "No cost",
+    er: "$500 copay",
+    basicLabs: "No cost",
+    advancedLabs: "No cost",
+    hospital: "No cost after OOPM",
+    rxGeneric: "No cost",
+    rxPreferredBrand: "$75 copay",
+    rxNonPreferredBrand: "$100 copay",
+    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $250 copay",
+  },
+  ComfortFit: {
+    preventive: "No cost",
+    pcp: "No cost",
+    specialist: "No cost",
+    uc: "No cost",
+    er: "$950 copay",
+    basicLabs: "No cost",
+    advancedLabs: "No cost after OOPM",
+    hospital: "No cost after OOPM",
+    rxGeneric: "No cost",
+    rxPreferredBrand: "$75 copay",
+    rxNonPreferredBrand: "$150 copay",
+    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $500 copay",
+  },
+  Copay: {
+    preventive: "No cost",
+    pcp: "No cost through Teladoc; otherwise $25 copay",
+    specialist: "$75 copay",
+    uc: "No cost through Teladoc; otherwise $75 copay",
+    er: "$500 copay",
+    basicLabs: COINS,
+    advancedLabs: COINS,
+    hospital: "0–30% coins after ded",
+    rxGeneric: "$10 copay",
+    rxPreferredBrand: "$50 copay",
+    rxNonPreferredBrand: "$125 copay",
+    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $350 copay",
+  },
+  QHDHP: {
+    preventive: "No cost",
+    pcp: `No cost through Teladoc; otherwise ${COINS}`,
+    specialist: COINS,
+    uc: `No cost through Teladoc; otherwise ${COINS}`,
+    er: COINS,
+    basicLabs: COINS,
+    advancedLabs: COINS,
+    hospital: COINS,
+    rxGeneric: COINS,
+    rxPreferredBrand: COINS,
+    rxNonPreferredBrand: "0–50% coins after ded",
+    rxNonPreferredSpecialty: COINS,
+  },
+  HDHP: {
+    preventive: "No cost",
+    pcp: "No cost after ded",
+    specialist: "No cost after ded",
+    uc: "No cost after ded",
+    er: "No cost after ded",
+    basicLabs: "No cost after ded",
+    advancedLabs: "No cost after ded",
+    hospital: "No cost after ded",
+    rxGeneric: "No cost after ded",
+    rxPreferredBrand: "No cost after ded",
+    rxNonPreferredBrand: "No cost after ded",
+    rxNonPreferredSpecialty: "No cost if enrolled in SaveOnSP; otherwise no cost after ded",
+  },
+};
+
+export const GRAVIE_BENEFIT_NOTES = [
+  "In-network benefits. EPO versions of Gravie plans do not cover out-of-network services.",
+  "Teladoc visits are free on QHDHP, Copay, Comfort and ComfortFit plans.",
+];
+
+/** The family a Gravie plan belongs to, from its plan type or, failing that, its name. */
+export function gravieFamily(planType: string | null | undefined, name: string): GravieFamily | null {
+  const t = `${planType || ""} ${name}`;
+  if (/\bQHDHP\b/i.test(t)) return "QHDHP";
+  if (/\bHDHP\b/i.test(t)) return "HDHP";
+  if (/Comfort\s?Fit/i.test(t)) return "ComfortFit";
+  if (/\bComfort\b/i.test(t)) return "Comfort";
+  if (/\bCopay\b/i.test(t)) return "Copay";
+  return null;
 }
