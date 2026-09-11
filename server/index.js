@@ -2505,7 +2505,8 @@ async function backfillPlanBenefits() {
   for (const r of want) {
     const f = await proposalStore.getProposalFile(r.id).catch(() => null);
     if (!f) continue;
-    const keep = !!(r.group_name && r.assigned_by && r.assigned_by !== "ai" && r.assigned_by !== "filename");
+    // A re-read for benefits never moves a proposal off its group.
+    const keep = !!r.group_name;
     await proposalStore.updateProposal(r.id, { status: "analyzing", error: null });
     await runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, keep);
   }
@@ -2574,8 +2575,11 @@ async function runAnalysis(id, file, keepAssignment) {
     await proposalStore.updateProposal(id, fields);
   } catch (e) {
     console.error(`proposal ${id} analysis failed:`, e.message);
+    // A failed read leaves a proposal where it was filed; only one that was
+    // never filed stays unassigned.
+    const prev = (await proposalStore.listProposals().catch(() => [])).find((r) => r.id === id);
     await proposalStore.updateProposal(id, {
-      status: keepAssignment ? "assigned" : "unassigned",
+      status: keepAssignment || (prev && prev.group_name) ? "assigned" : "unassigned",
       error: e.message,
     });
   }

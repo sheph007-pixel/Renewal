@@ -87,11 +87,11 @@ assert.ok(menuPlan.coins && menuPlan.uc && menuPlan.er, "UHC menu plans carry co
 // Flat-dollar defined contribution: the employer pays the same per tier on every plan; the employee pays the rest.
 const contrib = { EE: 500, ES: 2000, EC: 0, FAM: 1000 };
 assert.deepEqual(tierSplit(comfort, contrib, "EE"), { rate: 600, er: 500, ee: 100 });
-assert.deepEqual(tierSplit(comfort, contrib, "ES"), { rate: 1200, er: 2000, ee: 0 }, "a contribution above the premium: employee pays nothing");
+assert.deepEqual(tierSplit(comfort, contrib, "ES"), { rate: 1200, er: 1200, ee: 0 }, "a contribution above the premium: the employer pays the premium, never more");
 assert.deepEqual(tierSplit(comfort, contrib, "EC"), { rate: 1110, er: 0, ee: 1110 });
 const cs = costSplit(comfort, contrib, counts as Record<"EE" | "ES" | "EC" | "FAM", number>)!;
 assert.equal(cs.total, comfort.monthly);
-assert.equal(cs.er, +(500 * counts.EE + 2000 * counts.ES + 0 * counts.EC + 1000 * counts.FAM).toFixed(2), "contribution × enrolled, whatever the plan");
+assert.equal(cs.er, +(500 * counts.EE + 1200 * counts.ES + 0 * counts.EC + 1000 * counts.FAM).toFixed(2), "contribution × enrolled, whatever the plan");
 assert.equal(cs.ee, +(100 * counts.EE + 0 * counts.ES + 1110 * counts.EC + Math.max(0, 1710 - 1000) * counts.FAM).toFixed(2));
 const flat = { EE: 100, ES: 100, EC: 100, FAM: 100 };
 const c3 = costSplit(pp.find((p) => p.plan === "Gravie Comfort 3000")!, flat, { EE: 5, ES: 0, EC: 0, FAM: 0 })!;

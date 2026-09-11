@@ -943,8 +943,10 @@ export function tierSplit(
 ): { rate: number; er: number; ee: number } | null {
   const rate = p.rates[t];
   if (rate == null) return null;
-  const er = Math.max(contribution[t] || 0, 0);
-  return { rate, er: +er.toFixed(2), ee: +Math.max(0, rate - er).toFixed(2) };
+  // The employer pays its contribution, never more than the premium: on a
+  // plan cheaper than the allowance the employer cost is the premium itself.
+  const er = Math.min(Math.max(contribution[t] || 0, 0), rate);
+  return { rate, er: +er.toFixed(2), ee: +(rate - er).toFixed(2) };
 }
 
 /**
