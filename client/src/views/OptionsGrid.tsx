@@ -295,7 +295,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                         style={{ fontWeight: 400, color: belowFloor ? C.red : C.faint, marginLeft: 8 }}
                         title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan"
                       >
-                        min {money0(floorEE)}
+                        Minimum {money0(floorEE)}
                       </span>
                     )}
                   </div>
