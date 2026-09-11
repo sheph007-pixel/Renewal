@@ -49,18 +49,10 @@ export default function Options({
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
   const direct = hasDirectQuote(data, g);
-  const priced = plans.filter((p) => p.monthly != null).length;
   const short = plans.filter((p) => selected[p.plan]);
 
   return (
     <div>
-      <p style={{ margin: "0 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body, textWrap: "pretty" }}>
-        Your 2026 program plans end December 31, 2026. We priced {priced} plans from every carrier at your enrollment
-        of {totals.enrolled}. Set what you want to put in each month, by tier, and Employer Cost shows what each
-        plan would cost you at that budget — employees pick up the rest.
-        {rows.length ? ` Today you spend ${money(totals.total)} a month.` : ""}
-      </p>
-
       <OptionsGrid
         g={g}
         plans={plans}
@@ -101,8 +93,4 @@ export default function Options({
       </div>
     </div>
   );
-}
-
-function money(n: number): string {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
