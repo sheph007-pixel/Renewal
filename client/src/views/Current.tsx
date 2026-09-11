@@ -12,7 +12,7 @@ import {
 } from "@/lib/model";
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
 import SpendDashboard from "@/views/SpendDashboard";
-import Link from "@/lib/Link";
+import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 
 /**
  * What a group has today: one row per plan, the four tier rates, and what that
@@ -40,8 +40,6 @@ interface Props {
   totals: { er: number; ee: number; total: number };
   eePct: number;
   depPct: number;
-  /** The Supplemental Package page, for the 2027 rates link under Other Benefits. */
-  supplementalHref: string;
 }
 
 /**
@@ -133,7 +131,7 @@ function Head({
   );
 }
 
-export default function Current({ data, overrides, g, rows, totals, eePct, depPct, supplementalHref }: Props) {
+export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
   // Biggest premium first, which is the order an employer reads it in.
@@ -170,6 +168,19 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
     [data, overrides, g, eePct, depPct],
   );
 
+  // Every section header button — View Invoice, Employee Navigator — reads
+  // the same way, so the page never looks like it has two button styles.
+  const headerBtn = {
+    padding: "6px 14px",
+    fontSize: 13,
+    fontWeight: 500,
+    color: C.ink,
+    background: C.card,
+    border: `1px solid ${C.border}`,
+    borderRadius: 4,
+    textDecoration: "none",
+  } as const;
+
   return (
     <div>
       <SpendDashboard totals={totals} contribution={contribution} enrolled={enrolled} />
@@ -185,16 +196,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
             target="_blank"
             rel="noreferrer"
             title={`${data.invoice.filename} — opens in a new tab`}
-            style={{
-              padding: "6px 14px",
-              fontSize: 13,
-              fontWeight: 500,
-              color: C.ink,
-              background: C.card,
-              border: `1px solid ${C.border}`,
-              borderRadius: 4,
-              textDecoration: "none",
-            }}
+            style={headerBtn}
           >
             View Invoice{data.invoice.month ? ` · ${monthLabel(data.invoice.month)}` : ""}
           </a>
@@ -279,16 +281,16 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         return (
           <>
             <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={h2}>Other Benefits</h2>
-              <div className="noprint" style={{ display: "flex", gap: 14, fontSize: 13 }}>
+              <h2 style={h2}>Your 2026 Supplemental Package</h2>
+              <div className="noprint" style={{ display: "flex", gap: 8 }}>
                 {data.invoice && (
-                  <a href="/api/group/invoice" target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
-                    View invoice ↗
+                  <a href="/api/group/invoice" target="_blank" rel="noreferrer" title={`${data.invoice.filename} — opens in a new tab`} style={headerBtn}>
+                    View Invoice
                   </a>
                 )}
-                <Link href={supplementalHref} style={{ color: C.blue, textDecoration: "none" }}>
-                  2027 supplemental rates →
-                </Link>
+                <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
+                  Employee Navigator
+                </a>
               </div>
             </div>
             <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
