@@ -889,7 +889,7 @@ export default function App() {
                 onToggleSelected={toggleSelected}
               />
             ) : tab === "supplemental" ? (
-              <SupplementalPackage g={g} manager={manager} />
+              <SupplementalPackage />
             ) : (
               <SignUp
                 data={data}
