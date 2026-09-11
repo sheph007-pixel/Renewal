@@ -1,4 +1,4 @@
-import { TIERS, splitCopays, costSplit, fmtDate, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { TIERS, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 
 /**
@@ -36,8 +36,7 @@ export function fundingOf(p: MarketPlan): string {
   return p.label || "Quoted";
 }
 
-export const basisOf = (p: MarketPlan) =>
-  p.quoted ? `Quoted for you · ${fmtDate(p.quoted.date || undefined)}` : p.indicative ? "Illustrative rate" : p.pending ? "Quote requested" : "Carrier menu rate";
+export const basisOf = (_p: MarketPlan) => "Illustrative Quote";
 
 export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
   const sp = costSplit(p, contribution, counts);

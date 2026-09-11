@@ -31,16 +31,16 @@ export interface GridProps {
   onReset: () => void;
 }
 
-type Tab = "carrier" | "ded" | "oop" | "funding" | "cost";
+type Tab = "carrier" | "network" | "ded" | "oop" | "cost";
 type SortKey = "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
 /** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 const TABS: [Tab, string][] = [
   ["carrier", "Carrier"],
+  ["network", "Network"],
   ["ded", "Deductible"],
   ["oop", "OOP Max"],
-  ["funding", "Funding"],
-  ["cost", "Total Cost"],
+  ["cost", "Total Monthly Cost"],
 ];
 const DED_BANDS: [string, (v: number) => boolean][] = [
   ["$0", (v) => v === 0],
@@ -84,9 +84,9 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
+  const [networks, setNetworks] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
   const [oops, setOops] = useState<Set<string>>(new Set());
-  const [fundings, setFundings] = useState<Set<string>>(new Set());
   const [costs, setCosts] = useState<Set<string>>(new Set());
   const [costDir, setCostDir] = useState<1 | -1>(1);
   const [sortBy, setSortBy] = useState<SortKey>("total");
@@ -131,7 +131,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const card = (p: MarketPlan) => cardModel(p, applied, counts);
 
   const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
-  const fundingList = useMemo(() => Array.from(new Set(plans.map(fundingOf))), [plans]);
+  const networkList = useMemo(() => Array.from(new Set(plans.map(networkOf).filter(Boolean))), [plans]);
   // Quartile cutoffs off this group's own priced plans, so "Show" reads as
   // real dollar ranges for this group rather than a generic $ / $$$$ scale.
   const costCuts = useMemo(() => {
@@ -166,9 +166,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       .filter(
         (p) =>
           (!carriers.size || carriers.has(carrierOf(p))) &&
+          (!networks.size || networks.has(networkOf(p))) &&
           dedOk(p) &&
           oopOk(p) &&
-          (!fundings.size || fundings.has(fundingOf(p))) &&
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
           (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
@@ -191,15 +191,15 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         return (va > vb ? 1 : -1) * costDir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
+  }, [plans, carriers, networks, deds, oops, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
-  const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
+  const filtering = carriers.size + networks.size + deds.size + oops.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
   const clearAll = () => {
     setCarriers(new Set());
+    setNetworks(new Set());
     setDeds(new Set());
     setOops(new Set());
-    setFundings(new Set());
     setCosts(new Set());
     setQuery("");
     setFavoritesOnly(false);
@@ -212,7 +212,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       setCostDir(1);
     }
   };
-  const count = (t: Tab) => ({ carrier: carriers.size, ded: deds.size, oop: oops.size, funding: fundings.size, cost: costs.size })[t];
+  const count = (t: Tab) => ({ carrier: carriers.size, network: networks.size, ded: deds.size, oop: oops.size, cost: costs.size })[t];
   const MAX_FAVORITES = 8;
   const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
@@ -439,9 +439,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         {tab && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.hairline}` }}>
             {tab === "carrier" && chips(carrierList, carriers, setCarriers)}
+            {tab === "network" && chips(networkList, networks, setNetworks)}
             {tab === "ded" && chips(DED_BANDS.map(([l]) => l), deds, setDeds)}
             {tab === "oop" && chips(OOP_BANDS.map(([l]) => l), oops, setOops)}
-            {tab === "funding" && chips(fundingList, fundings, setFundings)}
             {tab === "cost" && (
               <>
                 <span style={{ fontSize: 12.5, color: C.muted }}>Sort</span>
