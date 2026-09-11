@@ -150,14 +150,15 @@ const SCHEMA = {
             additionalProperties: false,
             required: ["doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"],
             description:
-              "The in-network member cost for each service as printed on the benefit summary for this plan, short and verbatim (\"$30 copay\", \"20% after deductible\", \"$10 / $40 / $80\"). Null where the document does not say.",
+              "The in-network member cost for each service as printed on the benefit summary for this plan, short and verbatim (\"$30 copay\", \"20% after deductible\", \"$10 / $40 / $80\"). An empty string where the document does not say.",
+            // Plain strings, empty where unknown: the API caps a schema at 16 nullable fields.
             properties: {
-              doctor_visit: { ...nullable("string"), description: "Primary care office visit." },
-              specialist: { ...nullable("string"), description: "Specialist office visit." },
-              imaging: { ...nullable("string"), description: "Labs, X-ray and advanced imaging (MRI, CT)." },
-              urgent_care: nullable("string"),
-              hospital: { ...nullable("string"), description: "Inpatient hospital stay." },
-              rx: { ...nullable("string"), description: "Prescription drug copays or coinsurance by tier." },
+              doctor_visit: { type: "string", description: "Primary care office visit." },
+              specialist: { type: "string", description: "Specialist office visit." },
+              imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
+              urgent_care: { type: "string" },
+              hospital: { type: "string", description: "Inpatient hospital stay." },
+              rx: { type: "string", description: "Prescription drug copays or coinsurance by tier." },
             },
           },
           rates: {
