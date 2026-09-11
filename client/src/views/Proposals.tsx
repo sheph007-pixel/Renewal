@@ -437,7 +437,6 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
               value={p.group_name || ""}
               onChange={(e) => void post(`/api/admin/proposals/${p.id}`, { group: e.target.value || null })}
               aria-label={`Group for ${p.filename}`}
-              disabled={p.status === "analyzing"}
               style={{
                 ...selectStyle,
                 borderColor: p.status === "suggested" ? C.amberEdge : p.group_name ? C.inputEdge : C.amber,
