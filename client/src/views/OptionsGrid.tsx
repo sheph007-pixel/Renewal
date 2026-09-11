@@ -70,6 +70,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const [sortBy, setSortBy] = useState<SortKey>("total");
   const [contribOpen, setContribOpen] = useState(true);
   const [query, setQuery] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [proposal, setProposal] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -119,6 +120,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           dedOk(p) &&
           oopOk(p) &&
           (!fundings.size || fundings.has(fundingOf(p))) &&
+          (!favoritesOnly || !!selected[p.plan]) &&
           (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
           (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network}`.toLowerCase().includes(q)),
       )
@@ -139,9 +141,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         return (va > vb ? 1 : -1) * costDir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts]);
+  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected]);
 
-  const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q;
+  const favorites = plans.filter((p) => selected[p.plan]).length;
+  const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q || favoritesOnly;
   const clearAll = () => {
     setCarriers(new Set());
     setDeds(new Set());
@@ -149,6 +152,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setFundings(new Set());
     setCosts(new Set());
     setQuery("");
+    setFavoritesOnly(false);
   };
   const sortOn = (k: SortKey) => {
     if (sortBy === k) setCostDir((d) => (d > 0 ? -1 : 1));
@@ -296,6 +300,23 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               </button>
             );
           })}
+          <button
+            onClick={() => setFavoritesOnly((v) => !v)}
+            aria-pressed={favoritesOnly}
+            title={favoritesOnly ? "Show all plans" : "Show only your favorites"}
+            style={{
+              padding: "7px 13px",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 4,
+              cursor: "pointer",
+              color: favoritesOnly ? "#fff" : favorites ? C.red : C.ink,
+              background: favoritesOnly ? C.red : favorites ? C.redTint : C.card,
+              border: `1px solid ${favoritesOnly || favorites ? C.red : C.border}`,
+            }}
+          >
+            {favoritesOnly || favorites ? "♥" : "♡"} {favorites}
+          </button>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -356,6 +377,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               <PlanCard
                 key={p.plan}
                 m={card(p)}
+                compact
                 actions={
                   <>
                     <button onClick={() => onToggleSelected(p.plan)} style={chip(!!selected[p.plan])}>
@@ -442,7 +464,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from your shortlist` : `Shortlist ${p.plan}`} title={heart ? "On your shortlist — click to remove" : "Shortlist this plan"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
+                    <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
                       {heart ? "♥" : "♡"}
                     </button>
                   </td>
@@ -457,14 +479,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             {!list.length && (
               <tr>
                 <td colSpan={9} style={{ padding: "26px 10px", textAlign: "center", color: C.faint }}>
-                  No plan matches those filters.
+                  {favoritesOnly && !favorites ? "No favorites yet — press ♡ on a plan to add one." : "No plan matches those filters."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ shortlists it for Sign Up; + adds it to a proposal you can download.
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (the list Sign Up sends); + adds it to a proposal you can download.
         </div>
       </div>
 
