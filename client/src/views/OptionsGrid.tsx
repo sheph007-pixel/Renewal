@@ -211,7 +211,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   return (
     <div>
       {/* Employer Contribution: four figures, Apply; collapses to one line once set. */}
-      <div id="contribution" className="panel anchor noprint" style={{ ...panel, marginBottom: 12, padding: 0 }}>
+      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.page, border: `2px solid ${C.border}`, marginBottom: 12, padding: 0 }}>
         <button
           onClick={() => setContribOpen((v) => !v)}
           aria-expanded={contribOpen}
@@ -467,7 +467,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {sp?.underBudget && <div style={{ fontSize: 10.5, fontWeight: 400, color: C.faint }}>under budget</div>}
                   </td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
-                    {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
+                    {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
@@ -498,8 +498,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
       <div style={{ marginTop: 10, fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
         {direct
-          ? "† Illustrative rate — scaled from the plans UnitedHealthcare quoted directly for your group. Un-marked rows are your quoted rates."
-          : "† Illustrative rate — your current rate level applied to the UnitedHealthcare menu quoted for comparable Kennion groups; your own underwriting is still open."}{" "}
+          ? "Illustrative rate — scaled from the plans UnitedHealthcare quoted directly for your group. Un-marked rows are your quoted rates."
+          : "Illustrative rate — your current rate level applied to the UnitedHealthcare menu quoted for comparable Kennion groups; your own underwriting is still open."}{" "}
         Total Monthly is that plan&rsquo;s rates × your current enrollment by tier. Rows marked quoted are read off the proposal the carrier sent for your group. Final rates confirm at enrollment and underwriting approval.
       </div>
 

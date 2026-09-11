@@ -139,22 +139,23 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13, borderTop: `1px solid ${C.hairline}`, paddingTop: 4 }}>
         <tbody>
           {(
-            compact
-              ? ([
-                  ["Employer Cost", m.er, true],
-                  ["Employee Cost", m.ee, true],
-                ] as [string, number | null, boolean][])
-              : ([
-                  ["Total Monthly Employer Cost", m.er, true],
-                  ["Total Monthly Employee Cost", m.ee, true],
-                  ["Monthly Premium", m.premium, false],
-                ] as [string, number | null, boolean][])
-          ).map(([label, v, strong]) => (
-            <tr key={label}>
-              <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
-              <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>{v == null ? "—" : money(v)}</td>
-            </tr>
-          ))}
+            [
+              ["Employer Cost", m.er, true],
+              ["Employee Cost", m.ee, true],
+              ["Monthly Premium", m.premium, false],
+            ] as [string, number | null, boolean][]
+          ).map(([label, v, strong]) => {
+            const pct = strong && v != null && m.premium ? Math.round((v / m.premium) * 100) : null;
+            return (
+              <tr key={label}>
+                <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
+                <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>
+                  {v == null ? "—" : money(v)}
+                  {pct != null && <span style={{ color: C.faint, fontWeight: 400 }}> ({pct}%)</span>}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       {m.underBudget && (
