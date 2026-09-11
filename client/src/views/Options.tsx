@@ -4,12 +4,6 @@ import { C, h2, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
 
-/** Sections on this page, in order, for the "On this page" links. */
-export const OPTIONS_SECTIONS = [
-  { id: "contribution", label: "Employer Contribution" },
-  { id: "all-options", label: "All Options" },
-];
-
 interface Props {
   data: KennionData;
   g: Group;

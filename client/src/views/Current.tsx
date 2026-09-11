@@ -31,9 +31,6 @@ function monthLabel(month: string): string {
   return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-/** The page is one section now, so there is nothing to jump between. */
-export const CURRENT_SECTIONS: { id: string; label: string }[] = [];
-
 interface Props {
   data: KennionData;
   overrides: Overrides;
