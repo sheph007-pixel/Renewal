@@ -24,13 +24,12 @@ import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
 import type { CarrierStats } from "@/views/Reconciliation";
 import type { FundingInfo } from "@/views/Funding";
-import Current, { CURRENT_SECTIONS } from "@/views/Current";
-import Options, { OPTIONS_SECTIONS } from "@/views/Options";
+import Current from "@/views/Current";
+import Options from "@/views/Options";
 import Home from "@/views/Home";
 import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
-import SectionNav from "@/views/SectionNav";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import HrAnalytics from "@/views/HrAnalytics";
 import type { AccountManager } from "@/lib/model";
@@ -825,12 +824,6 @@ export default function App() {
                     ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}`
                     : subline}
                 </div>
-                {(tab === "current" || tab === "options") && (
-                  <SectionNav
-                    sections={tab === "current" ? CURRENT_SECTIONS : OPTIONS_SECTIONS}
-                    current={route.hash}
-                  />
-                )}
               </div>
               {tab === "current" && (
                 <HrAnalytics
