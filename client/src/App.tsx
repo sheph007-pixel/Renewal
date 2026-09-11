@@ -31,7 +31,7 @@ import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
-import HrAnalytics from "@/views/HrAnalytics";
+import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -826,11 +826,27 @@ export default function App() {
                 </div>
               </div>
               {tab === "current" && (
-                <HrAnalytics
-                  eligible={g.medicalEligible}
-                  enrolled={totals.enrolled}
-                  contributionPct={totals.total ? (totals.er / totals.total) * 100 : 0}
-                />
+                <div className="noprint" style={{ flex: "0 0 auto", textAlign: "center" }}>
+                  <a
+                    href={NAVIGATOR_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-block",
+                      padding: "9px 18px",
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      color: "#fff",
+                      background: C.blue,
+                      border: `1px solid ${C.blue}`,
+                      borderRadius: 4,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Employee Navigator
+                  </a>
+                  <div style={{ marginTop: 6, fontSize: 11.5, color: C.faint }}>View Group Details</div>
+                </div>
               )}
             </div>
 
