@@ -31,6 +31,7 @@ export interface GridProps {
 }
 
 type Tab = "carrier" | "ded" | "oop" | "funding" | "cost";
+type SortKey = "carrier" | "plan" | "ded" | "oop" | "er" | "total";
 const TABS: [Tab, string][] = [
   ["carrier", "Carrier"],
   ["ded", "Deductible"],
@@ -53,7 +54,8 @@ const OOP_BANDS: [string, (v: number) => boolean][] = [
 ];
 const COST_TIERS = ["$", "$$", "$$$", "$$$$"];
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
-const fmtDraft = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+/** Whole dollars in the fields: nobody sets a contribution to the cent. */
+const fmtDraft = (v: number) => String(Math.round(v));
 
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
@@ -63,7 +65,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const [fundings, setFundings] = useState<Set<string>>(new Set());
   const [costs, setCosts] = useState<Set<string>>(new Set());
   const [costDir, setCostDir] = useState<1 | -1>(1);
-  const [sortBy, setSortBy] = useState<"total" | "er">("total");
+  const [sortBy, setSortBy] = useState<SortKey>("total");
+  const [contribOpen, setContribOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [proposal, setProposal] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -75,6 +78,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const parsed = TIERS.reduce((acc, t) => ({ ...acc, [t.key]: Number(draft[t.key]) }), {} as Record<TierKey, number>);
   const draftValid = TIERS.every((t) => draft[t.key].trim() !== "" && Number.isFinite(parsed[t.key]) && parsed[t.key] >= 0);
   const draftDirty = TIERS.some((t) => Math.abs((parsed[t.key] || 0) - (applied[t.key] || 0)) > 0.004);
+  const apply = () => {
+    onApply(parsed);
+    setContribOpen(false);
+  };
 
   const counts = useMemo(() => censusCounts(g), [g]);
   const split = (p: MarketPlan) => costSplit(p, applied, counts);
@@ -115,9 +122,18 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       )
       .slice()
       .sort((a, b) => {
-        const va = sortBy === "er" ? (split(a)?.er ?? Infinity) : (a.monthly ?? Infinity);
-        const vb = sortBy === "er" ? (split(b)?.er ?? Infinity) : (b.monthly ?? Infinity);
-        return (va - vb) * costDir || a.plan.localeCompare(b.plan);
+        const val = (p: MarketPlan): number | string => {
+          if (sortBy === "carrier") return carrierOf(p).toLowerCase();
+          if (sortBy === "plan") return p.plan.toLowerCase();
+          if (sortBy === "ded") return dedOf(p) ?? Infinity;
+          if (sortBy === "oop") return p.oop ?? Infinity;
+          if (sortBy === "er") return split(p)?.er ?? Infinity;
+          return p.monthly ?? Infinity;
+        };
+        const va = val(a);
+        const vb = val(b);
+        if (va === vb) return a.plan.localeCompare(b.plan);
+        return (va > vb ? 1 : -1) * costDir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts]);
@@ -130,6 +146,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setFundings(new Set());
     setCosts(new Set());
     setQuery("");
+  };
+  const sortOn = (k: SortKey) => {
+    if (sortBy === k) setCostDir((d) => (d > 0 ? -1 : 1));
+    else {
+      setSortBy(k);
+      setCostDir(1);
+    }
   };
   const count = (t: Tab) => ({ carrier: carriers.size, ded: deds.size, oop: oops.size, funding: fundings.size, cost: costs.size })[t];
   const inProposal = (name: string) => proposal.includes(name);
@@ -180,63 +203,68 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   return (
     <div>
-      {/* Employer Contribution: four figures, Apply. */}
-      <div id="contribution" className="panel anchor noprint" style={{ ...panel, marginBottom: 12, padding: "12px 16px 14px" }}>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Employer Contribution</h3>
-          <span style={{ fontSize: 12.5, color: C.faint }}>
-            Applied: {TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")} per month
+      {/* Employer Contribution: four figures, Apply; collapses to one line once set. */}
+      <div id="contribution" className="panel anchor noprint" style={{ ...panel, marginBottom: 12, padding: 0 }}>
+        <button
+          onClick={() => setContribOpen((v) => !v)}
+          aria-expanded={contribOpen}
+          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Employer Contribution</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
+            {!contribOpen && <span style={{ ...num }}>{TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}</span>}
+            <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
           </span>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 10, marginTop: 10 }}>
-          {TIERS.map((t) => (
-            <label key={t.key} style={{ display: "block", flex: "1 1 140px", minWidth: 140 }}>
-              <div style={{ fontSize: 12, color: C.muted }}>
-                {TIER_NAMES[t.key]} <span style={{ color: C.faint }}>({counts[t.key] || 0})</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                <span style={{ fontSize: 14, color: C.faint }}>$</span>
-                <input
-                  value={draft[t.key]}
-                  inputMode="decimal"
-                  aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
-                  onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d.]/g, "") }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && draftValid && draftDirty) onApply(parsed);
+        </button>
+        {contribOpen && (
+          <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.hairline}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
+              {TIERS.map((t) => (
+                <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                    {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <span style={{ fontSize: 15, color: C.faint }}>$</span>
+                    <input
+                      value={draft[t.key]}
+                      inputMode="numeric"
+                      aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
+                      onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d]/g, "") }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && draftValid && draftDirty) apply();
+                      }}
+                      style={{ ...textInput, width: "100%", padding: "8px 10px", fontSize: 17, fontWeight: 600, color: C.ink, ...num }}
+                    />
+                  </div>
+                </label>
+              ))}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  onClick={apply}
+                  disabled={!draftValid || !draftDirty}
+                  style={{
+                    padding: "11px 30px",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    borderRadius: 4,
+                    color: "#fff",
+                    background: draftValid && draftDirty ? C.blue : C.ghost,
+                    border: `1px solid ${draftValid && draftDirty ? C.blue : C.ghost}`,
+                    cursor: draftValid && draftDirty ? "pointer" : "default",
                   }}
-                  style={{ ...textInput, width: "100%", padding: "6px 9px", fontSize: 15, fontWeight: 600, color: C.ink, ...num }}
-                />
+                >
+                  Apply
+                </button>
+                {appliedChanged && (
+                  <button onClick={onReset} style={{ ...chip(false), color: C.blue }}>
+                    Reset to today
+                  </button>
+                )}
               </div>
-            </label>
-          ))}
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <button
-              onClick={() => onApply(parsed)}
-              disabled={!draftValid || !draftDirty}
-              style={{
-                padding: "8px 18px",
-                fontSize: 13.5,
-                fontWeight: 600,
-                borderRadius: 4,
-                color: "#fff",
-                background: draftValid && draftDirty ? C.blue : C.ghost,
-                border: `1px solid ${draftValid && draftDirty ? C.blue : C.ghost}`,
-                cursor: draftValid && draftDirty ? "pointer" : "default",
-              }}
-            >
-              Apply
-            </button>
-            {appliedChanged && (
-              <button onClick={onReset} style={{ ...chip(false), color: C.blue }}>
-                Reset to today
-              </button>
-            )}
+            </div>
           </div>
-        </div>
-        <div style={{ fontSize: 12, color: C.faint, marginTop: 8, lineHeight: 1.5 }}>
-          What you put in each month per employee, by tier. Employer Cost on every plan is that figure × enrolled, never more than the plan&rsquo;s premium.
-          {contribution.some((c) => c.er != null) && ` Today: ${contribution.filter((c) => c.er != null).map((c) => `${c.key} ${money0(c.er!)}`).join(" · ")}.`}
-        </div>
+        )}
       </div>
 
       {/* Filter tabs: one open at a time, each with its chips beneath. */}
@@ -286,17 +314,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             {tab === "funding" && chips(fundingList, fundings, setFundings)}
             {tab === "cost" && (
               <>
-                <span style={{ fontSize: 12.5, color: C.muted }}>Sort by</span>
-                <button onClick={() => setSortBy("total")} style={chip(sortBy === "total")}>
-                  Total monthly
-                </button>
-                <button onClick={() => setSortBy("er")} style={chip(sortBy === "er")}>
-                  Employer cost
-                </button>
-                <button onClick={() => setCostDir(1)} style={{ ...chip(costDir > 0), marginLeft: 6 }}>
+                <span style={{ fontSize: 12.5, color: C.muted }}>Sort</span>
+                <button onClick={() => { setSortBy("total"); setCostDir(1); }} style={chip(sortBy === "total" && costDir > 0)}>
                   $ → $$$$
                 </button>
-                <button onClick={() => setCostDir(-1)} style={chip(costDir < 0)}>
+                <button onClick={() => { setSortBy("total"); setCostDir(-1); }} style={chip(sortBy === "total" && costDir < 0)}>
                   $$$$ → $
                 </button>
                 <span style={{ fontSize: 12.5, color: C.muted, marginLeft: 10 }}>Show</span>
@@ -352,21 +374,37 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              {["", "Carrier", "Plan", "Deductible", "OOP Max", "Employer Cost", "Total Monthly", ""].map((h, i) => (
+              {(
+                [
+                  [null, ""],
+                  ["carrier", "Carrier"],
+                  ["plan", "Plan"],
+                  ["ded", "Deductible"],
+                  ["oop", "OOP Max"],
+                  ["er", "Employer Cost"],
+                  ["total", "Total Monthly Cost"],
+                  [null, ""],
+                ] as [SortKey | null, string][]
+              ).map(([k, h], i) => (
                 <th
                   key={i}
+                  onClick={k ? () => sortOn(k) : undefined}
+                  title={k ? "Sort by this column" : undefined}
                   style={{
                     padding: "12px 10px 11px",
-                    fontSize: 12.5,
-                    color: C.muted,
-                    fontWeight: 600,
+                    fontSize: 13,
+                    color: C.onColor,
+                    background: C.headerBg,
+                    fontWeight: 700,
                     whiteSpace: "nowrap",
-                    borderBottom: `1px solid ${C.border}`,
                     textAlign: i >= 3 && i <= 6 ? "right" : "left",
                     width: i === 0 || i === 7 ? 44 : undefined,
+                    cursor: k ? "pointer" : undefined,
+                    userSelect: "none",
                   }}
                 >
                   {h}
+                  {k && sortBy === k ? (costDir > 0 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
             </tr>
@@ -396,11 +434,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   </td>
                   <td style={right}>{fmtDed(p.ded)}</td>
                   <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
-                  <td style={{ ...right, fontWeight: 600, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
+                  <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : p.pending ? "quote requested" : "—"}
                   </td>
-                  <td style={{ ...right, whiteSpace: "nowrap" }}>
-                    <span style={{ fontSize: 11, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
+                  <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: 400, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
                     {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
@@ -421,8 +459,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}, {costDir > 0 ? "lowest" : "highest"} {sortBy === "er" ? "employer cost" : "total monthly"} first.
-          Click a plan for every detail. ♡ shortlists it for Sign Up; + adds it to a proposal you can download.
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ shortlists it for Sign Up; + adds it to a proposal you can download.
         </div>
       </div>
 
