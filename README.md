@@ -222,6 +222,21 @@ want the whole book rather than the block the portal serves.
 
 ## Proposals
 
+### PPO only
+
+A rule, kept in `kennion.settings` under `marketRules` and on by default:
+**a client is never shown an EPO plan.** UnitedHealthcare's menu carries an
+E-coded EPO twin of most P-coded PPO plans, and Gravie prices every design
+twice, EPO and PPO; the EPO sits a few dollars under the PPO and adds a choice
+without adding a decision. So the server keeps EPO plans out of every client
+payload — off the UHC menu, out of each carrier proposal's plan list — and a
+current plan the UHC mapping had pointed at an EPO is mapped to its PPO twin
+(same deductible, out-of-pocket max and coinsurance) so the like-for-like
+comparison still holds. Nothing is deleted: the stored quotes and proposals
+keep every plan, and staff pages still see them. `GET /api/admin/market-rules`
+reads the rule; `POST` with `{"networks":"all"}` turns it off, `"ppo-only"`
+back on.
+
 ### Gravie rate workbooks
 
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
