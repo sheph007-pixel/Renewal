@@ -31,7 +31,9 @@ export interface GridProps {
 }
 
 type Tab = "carrier" | "ded" | "oop" | "funding" | "cost";
-type SortKey = "carrier" | "plan" | "ded" | "oop" | "er" | "total";
+type SortKey = "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
+/** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
+const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 const TABS: [Tab, string][] = [
   ["carrier", "Carrier"],
   ["ded", "Deductible"],
@@ -124,6 +126,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       .sort((a, b) => {
         const val = (p: MarketPlan): number | string => {
           if (sortBy === "carrier") return carrierOf(p).toLowerCase();
+          if (sortBy === "network") return networkOf(p).toLowerCase();
           if (sortBy === "plan") return p.plan.toLowerCase();
           if (sortBy === "ded") return dedOf(p) ?? Infinity;
           if (sortBy === "oop") return p.oop ?? Infinity;
@@ -371,18 +374,19 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
       {/* The grid: a short row per plan; the row opens the card. */}
       <div className="panel" style={{ ...panel, padding: "0 0 10px", overflow: "auto" }}>
-        <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 13 }}>
+        <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
               {(
                 [
-                  [null, ""],
                   ["carrier", "Carrier"],
+                  ["network", "Network"],
                   ["plan", "Plan"],
                   ["ded", "Deductible"],
                   ["oop", "OOP Max"],
                   ["er", "Employer Cost"],
                   ["total", "Total Monthly Cost"],
+                  [null, ""],
                   [null, ""],
                 ] as [SortKey | null, string][]
               ).map(([k, h], i) => (
@@ -398,7 +402,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                     textAlign: i >= 3 && i <= 6 ? "right" : "left",
-                    width: i === 0 || i === 7 ? 44 : undefined,
+                    width: i >= 7 ? 44 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -418,12 +422,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const right = { ...cell, textAlign: "right" as const, ...num };
               return (
                 <tr key={p.plan} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
-                  <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from your shortlist` : `Shortlist ${p.plan}`} title={heart ? "On your shortlist — click to remove" : "Shortlist this plan"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
-                      {heart ? "♥" : "♡"}
-                    </button>
-                  </td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>{carrierOf(p)}</td>
+                  <td style={{ ...cell, color: C.body }}>{networkOf(p) || "—"}</td>
                   <td style={cell}>
                     <div>{p.plan}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
@@ -442,6 +442,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from your shortlist` : `Shortlist ${p.plan}`} title={heart ? "On your shortlist — click to remove" : "Shortlist this plan"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
+                      {heart ? "♥" : "♡"}
+                    </button>
+                  </td>
+                  <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => toggleProposal(p.plan)} aria-label={added ? `Remove ${p.plan} from your proposal` : `Add ${p.plan} to your proposal`} title={added ? "In your proposal — click to remove" : "Add to your proposal"} style={{ ...iconBtn, color: added ? C.green : C.blue, fontWeight: 700 }}>
                       {added ? "✓" : "+"}
                     </button>
@@ -451,7 +456,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             })}
             {!list.length && (
               <tr>
-                <td colSpan={8} style={{ padding: "26px 10px", textAlign: "center", color: C.faint }}>
+                <td colSpan={9} style={{ padding: "26px 10px", textAlign: "center", color: C.faint }}>
                   No plan matches those filters.
                 </td>
               </tr>
