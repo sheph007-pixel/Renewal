@@ -191,6 +191,45 @@ CREATE TABLE IF NOT EXISTS kennion.audits (
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- A carrier's rate quote for one group, read straight off the carrier's own
+-- workbook and kept as rows rather than a blob: one quote per carrier and
+-- group (a newer workbook replaces the older rows), and under it every plan
+-- the carrier priced, with its four tier rates. Gravie's rate workbooks fill
+-- these today; the proposal record keeps the file itself.
+CREATE TABLE IF NOT EXISTS kennion.carrier_quotes (
+  id             bigserial PRIMARY KEY,
+  carrier        text NOT NULL,
+  group_name     text NOT NULL,
+  quote_number   text,
+  effective_date date,
+  generated      date,
+  network        text,
+  tiers          jsonb NOT NULL,
+  plan_count     integer NOT NULL,
+  filename       text,
+  proposal_id    bigint,
+  uploaded_by    text,
+  uploaded_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (carrier, group_name)
+);
+CREATE TABLE IF NOT EXISTS kennion.carrier_quote_plans (
+  quote_id     bigint NOT NULL REFERENCES kennion.carrier_quotes(id) ON DELETE CASCADE,
+  position     integer NOT NULL,
+  plan_name    text NOT NULL,
+  plan_type    text,
+  network      text NOT NULL,
+  deductible   text,
+  oop_max      text,
+  coinsurance  numeric(5,2),
+  rate_ee      numeric(12,2),
+  rate_es      numeric(12,2),
+  rate_ec      numeric(12,2),
+  rate_fam     numeric(12,2),
+  monthly      numeric(12,2),
+  PRIMARY KEY (quote_id, position)
+);
+CREATE INDEX IF NOT EXISTS carrier_quote_plans_network_idx ON kennion.carrier_quote_plans (quote_id, network);
+
 CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   group_name   text NOT NULL,
   plan         text NOT NULL,
@@ -209,6 +248,24 @@ const shapeStats = (r) => ({
   total: r.total,
   uploadedAt: r.uploaded_at,
   uploadedBy: r.uploaded_by,
+});
+
+const num = (v) => (v == null ? null : Number(v));
+const day = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null);
+const shapeQuote = (r) => ({
+  id: r.id,
+  carrier: r.carrier,
+  groupName: r.group_name,
+  quoteNumber: r.quote_number,
+  effectiveDate: day(r.effective_date),
+  generated: day(r.generated),
+  network: r.network,
+  tiers: r.tiers,
+  planCount: r.plan_count,
+  filename: r.filename,
+  proposalId: r.proposal_id,
+  uploadedBy: r.uploaded_by,
+  uploadedAt: r.uploaded_at,
 });
 
 export function createDb(url) {
@@ -612,10 +669,93 @@ export function createDb(url) {
       );
     },
 
+    /**
+     * Store a carrier's quote for a group as rows, replacing any earlier quote
+     * from the same carrier for the same group. `plans` are in workbook order.
+     */
+    async replaceCarrierQuote(q, plans) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("DELETE FROM kennion.carrier_quotes WHERE carrier = $1 AND group_name = $2", [q.carrier, q.groupName]);
+        const { rows } = await client.query(
+          `INSERT INTO kennion.carrier_quotes
+             (carrier, group_name, quote_number, effective_date, generated, network, tiers, plan_count, filename, proposal_id, uploaded_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [q.carrier, q.groupName, q.quoteNumber || null, q.effectiveDate || null, q.generated || null, q.network || null,
+           JSON.stringify(q.tiers || {}), plans.length, q.filename || null, q.proposalId || null, q.uploadedBy || null],
+        );
+        const id = rows[0].id;
+        // One multi-row insert per 50 plans keeps a 134-plan quote to three round trips.
+        for (let i = 0; i < plans.length; i += 50) {
+          const chunk = plans.slice(i, i + 50);
+          const vals = [];
+          const ph = chunk.map((pl, j) => {
+            const k = vals.length;
+            vals.push(id, i + j, pl.name, pl.planType || null, pl.network, pl.deductible || null, pl.oopMax || null,
+              pl.coinsurance ?? null, pl.rates.EE ?? null, pl.rates.ES ?? null, pl.rates.EC ?? null, pl.rates.FAM ?? null, pl.monthly ?? null);
+            return `(${Array.from({ length: 13 }, (_, n) => `$${k + n + 1}`).join(",")})`;
+          });
+          await client.query(
+            `INSERT INTO kennion.carrier_quote_plans
+               (quote_id, position, plan_name, plan_type, network, deductible, oop_max, coinsurance, rate_ee, rate_es, rate_ec, rate_fam, monthly)
+             VALUES ${ph.join(",")}`,
+            vals,
+          );
+        }
+        await client.query("COMMIT");
+        return id;
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+
+    /** Every stored quote, one row per carrier and group, without the plans. */
+    async listCarrierQuotes(carrier) {
+      const { rows } = await pool.query(
+        `SELECT id, carrier, group_name, quote_number, effective_date, generated, network, tiers, plan_count, filename, proposal_id, uploaded_by, uploaded_at
+           FROM kennion.carrier_quotes ${carrier ? "WHERE carrier = $1" : ""} ORDER BY carrier, group_name`,
+        carrier ? [carrier] : [],
+      );
+      return rows.map(shapeQuote);
+    },
+
+    /** One group's quote from a carrier, with its plans in workbook order. */
+    async carrierQuote(carrier, groupName) {
+      const { rows } = await pool.query(
+        `SELECT id, carrier, group_name, quote_number, effective_date, generated, network, tiers, plan_count, filename, proposal_id, uploaded_by, uploaded_at
+           FROM kennion.carrier_quotes WHERE carrier = $1 AND group_name = $2`,
+        [carrier, groupName],
+      );
+      if (!rows[0]) return null;
+      const { rows: plans } = await pool.query(
+        `SELECT position, plan_name, plan_type, network, deductible, oop_max, coinsurance, rate_ee, rate_es, rate_ec, rate_fam, monthly
+           FROM kennion.carrier_quote_plans WHERE quote_id = $1 ORDER BY position`,
+        [rows[0].id],
+      );
+      return {
+        ...shapeQuote(rows[0]),
+        plans: plans.map((pl) => ({
+          name: pl.plan_name,
+          planType: pl.plan_type,
+          network: pl.network,
+          deductible: pl.deductible,
+          oopMax: pl.oop_max,
+          coinsurance: pl.coinsurance == null ? null : Number(pl.coinsurance),
+          rates: { EE: num(pl.rate_ee), ES: num(pl.rate_es), EC: num(pl.rate_ec), FAM: num(pl.rate_fam) },
+          monthly: num(pl.monthly),
+        })),
+      };
+    },
+
     async stats() {
       const g = await pool.query("SELECT count(*)::int n FROM kennion.groups");
       const o = await pool.query("SELECT count(*)::int n FROM kennion.rate_overrides");
-      return { groups: g.rows[0].n, overrides: o.rows[0].n };
+      const q = await pool.query("SELECT count(*)::int n FROM kennion.carrier_quotes");
+      return { groups: g.rows[0].n, overrides: o.rows[0].n, quotes: q.rows[0].n };
     },
 
     async close() {
