@@ -21,7 +21,6 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
-  vsToday: number | null;
   /** Some enrolled tier costs less than the contribution: the employer would pay only the premium there. */
   underBudget: boolean;
 }
@@ -42,7 +41,7 @@ export function fundingOf(p: MarketPlan): string {
 export const basisOf = (p: MarketPlan) =>
   p.quoted ? `Quoted for you · ${fmtDate(p.quoted.date || undefined)}` : p.indicative ? "Illustrative rate" : p.pending ? "Quote requested" : "Carrier menu rate";
 
-export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>, today: number): CardModel {
+export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
   const sp = costSplit(p, contribution, counts);
   const benefits: [string, string | null | undefined][] = [
     ["Deductible", p.ded == null ? null : fmtDed(p.ded)],
@@ -74,7 +73,6 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     ee: sp?.ee ?? null,
     underBudget: !!sp?.underBudget,
     premium: sp?.total ?? p.monthly,
-    vsToday: p.monthly == null || !today ? null : +(p.monthly - today).toFixed(2),
   };
 }
 
@@ -157,15 +155,6 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
               <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>{v == null ? "—" : money(v)}</td>
             </tr>
           ))}
-          {m.vsToday != null && !compact && (
-            <tr>
-              <td style={{ padding: "4px 8px 4px 0", color: C.muted }}>Vs today</td>
-              <td style={{ padding: "4px 0", textAlign: "right", fontWeight: 600, color: m.vsToday >= 0 ? C.red : C.green, ...num }}>
-                {m.vsToday >= 0 ? "+" : "−"}
-                {money0(Math.abs(m.vsToday))} / mo
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
       {m.underBudget && (

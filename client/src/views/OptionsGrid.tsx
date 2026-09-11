@@ -88,7 +88,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   const counts = useMemo(() => censusCounts(g), [g]);
   const split = (p: MarketPlan) => costSplit(p, applied, counts);
-  const card = (p: MarketPlan) => cardModel(p, applied, counts, totals.total);
+  const card = (p: MarketPlan) => cardModel(p, applied, counts);
 
   const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
   const fundingList = useMemo(() => Array.from(new Set(plans.map(fundingOf))), [plans]);
@@ -178,7 +178,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setSaving(true);
     try {
       const { downloadOptions } = await import("@/lib/optionsheet");
-      downloadOptions(g, list, proposed, totals.total, applied, counts, contribution);
+      downloadOptions(g, list, proposed, applied, counts, contribution);
     } finally {
       setSaving(false);
     }
@@ -241,6 +241,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       inputMode="numeric"
                       aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
                       onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d]/g, "") }))}
+                      onBlur={() => {
+                        if (draft[t.key].trim() === "") setDraft((d) => ({ ...d, [t.key]: "0" }));
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && draftValid && draftDirty) apply();
                       }}
@@ -446,7 +449,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
               const right = { ...cell, textAlign: "right" as const, ...num };
               return (
-                <tr key={p.plan} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
+                <tr key={p.plan} className="rowlink" onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>{carrierOf(p)}</td>
                   <td style={{ ...cell, color: C.body }}>{networkOf(p) || "—"}</td>
                   <td style={cell}>
@@ -464,7 +467,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {sp?.underBudget && <div style={{ fontSize: 10.5, fontWeight: 400, color: C.faint }}>under budget</div>}
                   </td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
-                    <span style={{ fontSize: 11, fontWeight: 400, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
                     {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
