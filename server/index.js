@@ -23,6 +23,7 @@ import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted } from "./gravie-parse.js";
+import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -2254,16 +2255,6 @@ function slotFor(carrier, funding, quotesMedical) {
  * summary that calls itself ancillary, or one that names only ancillary
  * products and quoted no plan with a rate.
  */
-function isAncillaryRow(row) {
-  const x = row.extracted || {};
-  if (typeof x.quotes_medical === "boolean") return !x.quotes_medical;
-  if (!row.extracted) return false;
-  const text = `${row.filename || ""} ${row.summary || ""} ${x.proposal_type || ""}`;
-  if (/\bancillar(y|ies)\b/i.test(text)) return true;
-  const rated = (x.plans || []).some((pl) => Object.values(pl.rates || {}).some((v) => v != null));
-  return !rated && /\b(dental|vision|life|ad&d|disability|std|ltd|accident|critical illness|hospital indemnity)\b/i.test(text);
-}
-
 /**
  * After any change: recount proposals per group for the Groups page, and
  * settle supersession — within a group and slot, the newest assigned proposal
@@ -2276,6 +2267,16 @@ async function proposalsChanged() {
     // before the list was cut back — is re-derived from what was read.
     let remapped = false;
     for (const r of rows) {
+      // Read before Claude was asked whether a document quotes medical: the
+      // document itself usually says, so decide once and keep the answer.
+      if (r.extracted && typeof r.extracted.quotes_medical !== "boolean") {
+        const medical = medicalFromDocument(r);
+        if (medical != null) {
+          r.extracted = { ...r.extracted, quotes_medical: medical };
+          await proposalStore.updateProposal(r.id, { extracted: r.extracted });
+          remapped = true;
+        }
+      }
       // An ancillary proposal fills no slot, whichever slot an older reading
       // gave it: the four are group health.
       if (r.slot && isAncillaryRow(r)) {
