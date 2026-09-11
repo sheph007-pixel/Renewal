@@ -6,7 +6,7 @@ import OptionsGrid from "@/views/OptionsGrid";
 
 /** Sections on this page, in order, for the "On this page" links. */
 export const OPTIONS_SECTIONS = [
-  { id: "budget", label: "Your Budget" },
+  { id: "contribution", label: "Employer Contribution" },
   { id: "all-options", label: "All Options" },
 ];
 
@@ -21,7 +21,7 @@ interface Props {
   contribution: TierContribution[];
   contributionValues: Record<TierKey, number>;
   contributionChanged: boolean;
-  onContributionChange: (key: TierKey, value: number) => void;
+  onContributionApply: (values: Record<TierKey, number>) => void;
   onContributionReset: () => void;
   onToggleSelected: (plan: string) => void;
 }
@@ -41,7 +41,7 @@ export default function Options({
   contribution,
   contributionValues,
   contributionChanged,
-  onContributionChange,
+  onContributionApply,
   onContributionReset,
   onToggleSelected,
 }: Props) {
@@ -59,10 +59,10 @@ export default function Options({
         onToggleSelected={onToggleSelected}
         direct={direct}
         contribution={contribution}
-        budget={contributionValues}
-        budgetChanged={contributionChanged}
-        onBudgetChange={onContributionChange}
-        onBudgetReset={onContributionReset}
+        applied={contributionValues}
+        appliedChanged={contributionChanged}
+        onApply={onContributionApply}
+        onReset={onContributionReset}
       />
 
       <div className="panel noprint" style={{ ...panel, marginTop: 24, padding: "18px 20px" }}>
@@ -92,3 +92,4 @@ export default function Options({
     </div>
   );
 }
+

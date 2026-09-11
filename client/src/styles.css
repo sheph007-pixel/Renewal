@@ -57,20 +57,22 @@ textarea {
   .printonly {
     display: block !important;
   }
-  /* "PDF" on the options page: the proposal alone, everything else hidden. */
-  body.print-proposal * {
-    visibility: hidden;
+  /* "PDF" on the options page: the printed proposal alone, one card per plan.
+     Everything that is not the printed proposal, an ancestor of it, or inside
+     it is taken out of the page, so the cards start at the top with no gaps. */
+  body.print-proposal .inner *:not(#print-proposal):not(#print-proposal *):not(:has(#print-proposal)) {
+    display: none !important;
   }
-  body.print-proposal #proposal,
-  body.print-proposal #proposal * {
-    visibility: visible;
+  body.print-proposal #print-proposal {
+    display: block !important;
   }
-  body.print-proposal #proposal {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
+  #print-proposal .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 14px;
+  }
+  #print-proposal .cardgrid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
