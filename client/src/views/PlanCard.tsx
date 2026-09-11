@@ -1,4 +1,4 @@
-import { TIERS, costSplit, fmtDate, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { TIERS, splitCopays, costSplit, fmtDate, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 
 /**
@@ -44,12 +44,11 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
   const benefits: [string, string | null | undefined][] = [
     ["Deductible", p.ded == null ? null : fmtDed(p.ded)],
     ["Out-of-pocket max", p.oop == null ? null : money0(p.oop)],
-    ["Coinsurance", p.coins],
-    ["Primary / specialist visit", p.copays],
+    ["Doctor visit", p.pcp ?? splitCopays(p.copays)[0]],
+    ["Specialist", p.specialist ?? splitCopays(p.copays)[1]],
+    ["Imaging", p.imaging],
     ["Urgent care", p.uc],
-    ["Emergency room", p.er],
-    ["Labs & imaging", p.labs],
-    ["Hospital stay", p.hospital],
+    ["Hospital", p.hospital],
     ["Prescription drugs", p.rx],
     ["Network", p.network],
   ];
@@ -62,7 +61,8 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     basis: basisOf(p),
     quoted: !!p.quoted,
     monthly: p.monthly,
-    benefits: benefits.filter((b): b is [string, string] => !!b[1] && b[1] !== "On the proposal"),
+    // The same eight rows on every plan, so cards read alike; "—" where the carrier's document does not say.
+    benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== "On the proposal" ? v : "—"]),
     tiers: TIERS.map((t) => {
       const s = tierSplit(p, contribution, t.key);
       return { key: t.key, label: TIER_NAMES[t.key], count: counts[t.key] || 0, rate: s?.rate ?? null, er: s?.er ?? null, ee: s?.ee ?? null };

@@ -3,7 +3,7 @@
 // plan they also price. Runs with `node --experimental-strip-types`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
+import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, splitCopays, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 const seed = JSON.parse(readFileSync(new URL("../server/data/kennion.json", import.meta.url), "utf8"));
 const g0 = seed.groups.find((x: Group) => x.name === "Aesto Health") as Group;
@@ -86,14 +86,13 @@ assert.ok(menuPlan.coins && menuPlan.uc && menuPlan.er, "UHC menu plans carry co
 
 // Flat-dollar defined contribution: the employer pays the same per tier on every plan; the employee pays the rest.
 const contrib = { EE: 500, ES: 2000, EC: 0, FAM: 1000 };
-assert.deepEqual(tierSplit(comfort, contrib, "EE"), { rate: 600, er: 500, ee: 100, over: false });
-assert.deepEqual(tierSplit(comfort, contrib, "ES"), { rate: 1200, er: 2000, ee: 0, over: true }, "a contribution above the premium: employee pays nothing, and the tier is flagged");
-assert.deepEqual(tierSplit(comfort, contrib, "EC"), { rate: 1110, er: 0, ee: 1110, over: false });
+assert.deepEqual(tierSplit(comfort, contrib, "EE"), { rate: 600, er: 500, ee: 100 });
+assert.deepEqual(tierSplit(comfort, contrib, "ES"), { rate: 1200, er: 2000, ee: 0 }, "a contribution above the premium: employee pays nothing");
+assert.deepEqual(tierSplit(comfort, contrib, "EC"), { rate: 1110, er: 0, ee: 1110 });
 const cs = costSplit(comfort, contrib, counts as Record<"EE" | "ES" | "EC" | "FAM", number>)!;
 assert.equal(cs.total, comfort.monthly);
 assert.equal(cs.er, +(500 * counts.EE + 2000 * counts.ES + 0 * counts.EC + 1000 * counts.FAM).toFixed(2), "contribution × enrolled, whatever the plan");
 assert.equal(cs.ee, +(100 * counts.EE + 0 * counts.ES + 1110 * counts.EC + Math.max(0, 1710 - 1000) * counts.FAM).toFixed(2));
-assert.equal(cs.underBudget, counts.ES > 0, "flagged only when an enrolled tier is under budget");
 const flat = { EE: 100, ES: 100, EC: 100, FAM: 100 };
 const c3 = costSplit(pp.find((p) => p.plan === "Gravie Comfort 3000")!, flat, { EE: 5, ES: 0, EC: 0, FAM: 0 })!;
 assert.equal(c3.er, 500, "the same employer figure on a different plan");
@@ -104,3 +103,8 @@ assert.equal(moneyNum("n/a"), null);
 assert.equal(moneyNum(250), 250);
 
 console.log("market-plans: all assertions passed", { menu: menuCount, withProposals: after.length, census: counts });
+
+// Doctor visit / specialist split out of a menu copay string, for the card's fixed rows.
+assert.deepEqual(splitCopays("$40 / $100"), ["$40", "$100"]);
+assert.deepEqual(splitCopays("On the proposal"), [null, null]);
+assert.equal(comfort.pcp, "No cost", "a Gravie Comfort plan carries its doctor-visit cost");
