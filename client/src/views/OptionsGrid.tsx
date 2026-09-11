@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { TIERS, censusCounts, costSplit, fmtDed, money0, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { TIERS, censusCounts, costSplit, fmtDed, money0, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 
@@ -21,6 +21,8 @@ export interface GridProps {
   selected: Record<string, boolean>;
   onToggleSelected: (plan: string) => void;
   direct: boolean;
+  /** Shown on the printed proposal's footer. */
+  manager: AccountManager | null;
   /** Today's employer contribution by tier: the starting point, and "Reset to today". */
   contribution: TierContribution[];
   /** The applied contribution per tier — what Employer Cost is computed from. */
@@ -59,7 +61,7 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
-export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
+export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
@@ -556,6 +558,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <div style={{ fontSize: 10.5, color: C.faint, marginTop: 12, lineHeight: 1.5 }}>
             Rates shown are monthly composite rates by tier. Illustrative rates are scaled from comparable quotes and confirm at underwriting. All rates and benefits are for general information and discussion only and are not final until the group is enrolled with the carrier.
           </div>
+          {(manager?.name || manager?.phone || manager?.email) && (
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.hairline}`, textAlign: "center", fontSize: 11, color: C.muted }}>
+              {[manager.name, manager.title, manager.phone, manager.email].filter(Boolean).join(" · ")}
+              {" · "}
+              {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </div>
+          )}
         </div>
       )}
     </div>

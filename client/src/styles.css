@@ -41,8 +41,11 @@ textarea {
 }
 
 @media print {
+  /* The printed proposal is the only thing this app prints, and it reads
+     best wide: four plans side by side on one landscape page. */
   @page {
-    margin: 0.45in;
+    size: landscape;
+    margin: 0.35in;
   }
   body {
     background: #fff;
@@ -75,10 +78,15 @@ textarea {
   #print-proposal .card {
     break-inside: avoid;
     page-break-inside: avoid;
-    margin-bottom: 14px;
+    padding: 10px 12px 8px !important;
+    gap: 6px !important;
+  }
+  #print-proposal .card table {
+    font-size: 10px !important;
   }
   #print-proposal .cardgrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
   }
 }
 
