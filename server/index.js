@@ -2432,6 +2432,7 @@ async function proposalsChanged() {
               planType: pl.plan_type || null,
               deductible: pl.deductible || null,
               oopMax: pl.oop_max || null,
+              benefits: planBenefits(pl.benefits),
               rates: pl.rates || { EE: null, ES: null, EC: null, FAM: null },
               monthlyTotal: pl.monthly_total ?? null,
             }))
@@ -2476,6 +2477,42 @@ function matchByFilename(filename, context) {
  * `file` is { filename, mime, buffer, context? } — context being the email it
  * came out of, if any.
  */
+/** The six benefit rows a plan card shows, as the reader found them; null where the reader predates them. */
+function planBenefits(b) {
+  if (!b || typeof b !== "object") return null;
+  const str = (v) => (v == null || v === "" ? null : String(v).slice(0, 120));
+  return { doctorVisit: str(b.doctor_visit), specialist: str(b.specialist), imaging: str(b.imaging), urgentCare: str(b.urgent_care), hospital: str(b.hospital), rx: str(b.rx) };
+}
+
+/** A proposal read before the reader asked for per-plan benefits: its cards show only deductible and OOP max. */
+function lacksBenefits(r) {
+  const x = r.extracted;
+  if (!x || x.quotes_medical !== true || !Array.isArray(x.plans) || !x.plans.length) return false;
+  return x.plans.some((pl) => pl && typeof pl === "object" && !("benefits" in pl));
+}
+
+/**
+ * Re-read, once, every medical proposal whose extraction predates the
+ * per-plan benefits question, so existing cards fill in without a click.
+ * Gravie workbooks are parsed, not read, and are skipped. Logged, never fatal.
+ */
+async function backfillPlanBenefits() {
+  if (!aiEnabled()) return;
+  const rows = await proposalStore.listProposals();
+  const want = rows.filter((r) => r.status !== "container" && r.slot !== "Gravie" && r.kind !== "invoice" && lacksBenefits(r));
+  if (!want.length) return;
+  console.log(`proposals: re-reading ${want.length} proposal(s) for per-plan benefits`);
+  for (const r of want) {
+    const f = await proposalStore.getProposalFile(r.id).catch(() => null);
+    if (!f) continue;
+    const keep = !!(r.group_name && r.assigned_by && r.assigned_by !== "ai" && r.assigned_by !== "filename");
+    await proposalStore.updateProposal(r.id, { status: "analyzing", error: null });
+    await runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, keep);
+  }
+  await proposalsChanged();
+  console.log(`proposals: benefits re-read done for ${want.length} proposal(s)`);
+}
+
 async function runAnalysis(id, file, keepAssignment) {
   try {
     if (!aiEnabled()) {
@@ -2967,7 +3004,7 @@ app.post("/api/admin/proposals/reanalyze", requireStaff, express.json({ limit: "
   const all = !!(req.body || {}).all;
   const rows = await proposalStore.listProposals();
   const want = rows.filter(
-    (r) => r.status !== "container" && (all || !r.extracted || typeof r.extracted.quotes_medical !== "boolean"),
+    (r) => r.status !== "container" && (all || !r.extracted || typeof r.extracted.quotes_medical !== "boolean" || lacksBenefits(r)),
   );
   for (const r of want) {
     const f = await proposalStore.getProposalFile(r.id).catch(() => null);
@@ -3117,6 +3154,9 @@ async function boot() {
   } catch (e) {
     console.error("gravie:", e.message);
   }
+  // Proposals read before the reader asked for per-plan benefits, re-read in
+  // the background so the plan cards fill in. Never blocks boot.
+  void backfillPlanBenefits().catch((e) => console.error("proposals: benefits re-read:", e.message));
   // The inbox: first the key pair a file can be sealed to (made on the first
   // boot, kept in settings, its public half in every deploy log), then any
   // files placed in the bucket or at a URL, once every group is known to

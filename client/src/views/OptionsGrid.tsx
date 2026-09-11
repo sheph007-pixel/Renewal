@@ -60,6 +60,27 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
+/** CSV of whatever rows are showing (all, or the current filter). */
+function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
+  const head = ["Carrier", "Network", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const cell = (v: unknown) => {
+    const t = v == null ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const rows = list.map((p) => {
+    const s = costSplit(p, applied, counts);
+    return [carrierOf(p), p.network ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+  });
+  const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${g.name.replace(/[^\w]+/g, "-")}-2027-options.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
@@ -72,6 +93,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const [contribOpen, setContribOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [compareOnly, setCompareOnly] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [proposal, setProposal] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -138,6 +161,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           oopOk(p) &&
           (!fundings.size || fundings.has(fundingOf(p))) &&
           (!favoritesOnly || !!selected[p.plan]) &&
+          (!compareOnly || proposal.includes(p.plan)) &&
           (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
           (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network}`.toLowerCase().includes(q)),
       )
@@ -158,10 +182,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         return (va > vb ? 1 : -1) * costDir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected]);
+  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
-  const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q || favoritesOnly;
+  const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
   const clearAll = () => {
     setCarriers(new Set());
     setDeds(new Set());
@@ -170,6 +194,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setCosts(new Set());
     setQuery("");
     setFavoritesOnly(false);
+    setCompareOnly(false);
   };
   const sortOn = (k: SortKey) => {
     if (sortBy === k) setCostDir((d) => (d > 0 ? -1 : 1));
@@ -179,8 +204,23 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     }
   };
   const count = (t: Tab) => ({ carrier: carriers.size, ded: deds.size, oop: oops.size, funding: fundings.size, cost: costs.size })[t];
+  const MAX_FAVORITES = 8;
+  const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
-  const toggleProposal = (name: string) => setProposal((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
+  const compareFull = proposal.length >= MAX_COMPARE;
+  const favoritesFull = favorites >= MAX_FAVORITES;
+  /** Up to four plans side by side; a fifth is refused until one is removed. */
+  const toggleProposal = (name: string) =>
+    setProposal((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : prev.length >= MAX_COMPARE ? prev : [...prev, name]));
+  /** Up to eight favorites; a ninth is refused until one is removed. */
+  const toggleHeart = (name: string) => {
+    if (!selected[name] && favoritesFull) return;
+    onToggleSelected(name);
+  };
+  const viewComparison = () => {
+    setCompareOpen(true);
+    setTimeout(() => document.getElementById("proposal")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  };
   const proposed = proposal.map((n) => plans.find((p) => p.plan === n)).filter((p): p is MarketPlan => !!p);
   const opened = open ? plans.find((p) => p.plan === open) || null : null;
 
@@ -216,11 +256,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     ));
   const actionsFor = (p: MarketPlan) => (
     <>
-      <button onClick={() => onToggleSelected(p.plan)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
+      <button onClick={() => toggleHeart(p.plan)} disabled={!selected[p.plan] && favoritesFull} title={!selected[p.plan] && favoritesFull ? `Up to ${MAX_FAVORITES} favorites` : undefined} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
         {selected[p.plan] ? "♥ On your shortlist" : "♡ Add to shortlist"}
       </button>
       <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(inProposal(p.plan)), padding: "7px 12px", fontSize: 13 }}>
-        {inProposal(p.plan) ? "✓ In your proposal" : "+ Add to proposal"}
+        {inProposal(p.plan) ? "✓ In comparison" : "+ Add to comparison"}
       </button>
     </>
   );
@@ -349,6 +389,28 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           >
             {favoritesOnly || favorites ? "♥" : "♡"} {favorites}
           </button>
+          <button
+            onClick={() => setCompareOnly((v) => !v)}
+            aria-pressed={compareOnly}
+            title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`}
+            style={{
+              padding: "7px 13px",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 4,
+              cursor: "pointer",
+              color: compareOnly ? "#fff" : proposal.length ? C.blue : C.ink,
+              background: compareOnly ? C.blue : proposal.length ? C.blueTint : C.card,
+              border: `1px solid ${compareOnly || proposal.length ? C.blue : C.border}`,
+            }}
+          >
+            + {proposal.length}
+          </button>
+          {proposal.length > 0 && (
+            <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
+              {compareOpen ? "Hide comparison" : "View comparison"}
+            </button>
+          )}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -356,6 +418,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             aria-label="Search 2027 plan options"
             style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 150, marginLeft: "auto" }}
           />
+          <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
+            Export
+          </button>
           {filtering && (
             <button onClick={clearAll} style={{ ...chip(false), color: C.blue }}>
               Clear all
@@ -386,11 +451,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       </div>
 
       {/* The proposal being built: one card per plan. */}
-      {proposed.length > 0 && (
+      {proposed.length > 0 && compareOpen && (
         <div id="proposal" className="panel noprint" style={{ ...panel, marginBottom: 12, padding: "14px 18px 16px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>
-              Your proposal · {proposed.length} plan{proposed.length === 1 ? "" : "s"}
+              Compare · {proposed.length} of {MAX_COMPARE} plans
             </h3>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <button onClick={() => void downloadExcel()} disabled={saving} style={{ ...chip(false), fontWeight: 600 }}>
@@ -412,8 +477,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 compact
                 actions={
                   <>
-                    <button onClick={() => onToggleSelected(p.plan)} style={chip(!!selected[p.plan])}>
-                      {selected[p.plan] ? "♥ Shortlisted" : "♡ Shortlist"}
+                    <button onClick={() => toggleHeart(p.plan)} disabled={!selected[p.plan] && favoritesFull} style={chip(!!selected[p.plan])}>
+                      {selected[p.plan] ? "♥ Favorite" : "♡ Favorite"}
                     </button>
                     <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(false), color: C.blue }}>
                       Remove
@@ -495,12 +560,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => onToggleSelected(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
+                    <button onClick={() => toggleHeart(p.plan)} disabled={!heart && favoritesFull} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : favoritesFull ? C.hairline : C.ghost }}>
                       {heart ? "♥" : "♡"}
                     </button>
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => toggleProposal(p.plan)} aria-label={added ? `Remove ${p.plan} from your proposal` : `Add ${p.plan} to your proposal`} title={added ? "In your proposal — click to remove" : "Add to your proposal"} style={{ ...iconBtn, color: added ? C.green : C.blue, fontWeight: 700 }}>
+                    <button onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side — remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? C.green : compareFull ? C.hairline : C.blue, fontWeight: 700 }}>
                       {added ? "✓" : "+"}
                     </button>
                   </td>
@@ -517,7 +582,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (the list Sign Up sends); + adds it to a proposal you can download.
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends); + picks up to {MAX_COMPARE} to compare side by side and download.
         </div>
       </div>
 

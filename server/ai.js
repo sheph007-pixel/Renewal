@@ -129,7 +129,7 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "rates", "monthly_total"],
+        required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "benefits", "rates", "monthly_total"],
         properties: {
           name: { type: "string" },
           plan_code: {
@@ -145,6 +145,21 @@ const SCHEMA = {
           plan_type: nullable("string"),
           deductible: nullable("string"),
           oop_max: nullable("string"),
+          benefits: {
+            type: "object",
+            additionalProperties: false,
+            required: ["doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"],
+            description:
+              "The in-network member cost for each service as printed on the benefit summary for this plan, short and verbatim (\"$30 copay\", \"20% after deductible\", \"$10 / $40 / $80\"). Null where the document does not say.",
+            properties: {
+              doctor_visit: { ...nullable("string"), description: "Primary care office visit." },
+              specialist: { ...nullable("string"), description: "Specialist office visit." },
+              imaging: { ...nullable("string"), description: "Labs, X-ray and advanced imaging (MRI, CT)." },
+              urgent_care: nullable("string"),
+              hospital: { ...nullable("string"), description: "Inpatient hospital stay." },
+              rx: { ...nullable("string"), description: "Prescription drug copays or coinsurance by tier." },
+            },
+          },
           rates: {
             type: "object",
             additionalProperties: false,

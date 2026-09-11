@@ -188,8 +188,19 @@ export interface ProposalPlan {
   planType: string | null;
   deductible: string | null;
   oopMax: string | null;
+  /** In-network member cost per service, as printed; null until the reader has seen the document. */
+  benefits?: PlanBenefits | null;
   rates: Record<TierKey, number | null>;
   monthlyTotal: number | null;
+}
+
+export interface PlanBenefits {
+  doctorVisit: string | null;
+  specialist: string | null;
+  imaging: string | null;
+  urgentCare: string | null;
+  hospital: string | null;
+  rx: string | null;
 }
 
 /** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
@@ -592,8 +603,12 @@ export interface MarketPlan {
   coins?: string | null;
   uc?: string | null;
   er?: string | null;
-  labs?: string | null;
+  /** Labs, X-ray and advanced imaging. */
+  imaging?: string | null;
   hospital?: string | null;
+  /** Doctor (primary care) and specialist visits, split out of `copays`. */
+  pcp?: string | null;
+  specialist?: string | null;
   rates: Record<TierKey, number | null>;
   monthly: number | null;
   /** Rate scaled from comparable groups rather than quoted for this one. */
@@ -658,6 +673,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       // Gravie's benefits are by plan family and the same for every group.
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
       const gb = fam ? GRAVIE_BENEFITS[fam] : null;
+      const pb = pl.benefits || null;
       out.push({
         carrier: show.carrier,
         label: show.label,
@@ -665,13 +681,15 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         type: pl.planType || show.label,
         ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
         oop: moneyNum(pl.oopMax),
-        copays: gb ? `${gb.pcp} / ${gb.specialist}` : "On the proposal",
-        rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : "On the proposal",
+        copays: gb ? `${gb.pcp} / ${gb.specialist}` : pb?.doctorVisit || pb?.specialist ? `${pb.doctorVisit ?? "—"} / ${pb.specialist ?? "—"}` : "On the proposal",
+        rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : pb?.rx || "On the proposal",
         coins: null,
-        uc: gb ? gb.uc : null,
+        pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
+        specialist: gb ? gb.specialist : pb?.specialist ?? null,
+        uc: gb ? gb.uc : pb?.urgentCare ?? null,
         er: gb ? gb.er : null,
-        labs: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : null,
-        hospital: gb ? gb.hospital : null,
+        imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
+        hospital: gb ? gb.hospital : pb?.hospital ?? null,
         network: pl.network || show.network,
         rates,
         monthly,
@@ -753,6 +771,13 @@ function tierFactors(data: KennionData, g: Group): Record<TierKey, number> {
   return f;
 }
 
+/** "$40 / $100" → doctor visit and specialist copays. */
+export function splitCopays(copays: string | null | undefined): [string | null, string | null] {
+  const parts = (copays || "").split("/").map((x) => x.trim()).filter(Boolean);
+  if (!parts.length || !/\d/.test(parts[0])) return [null, null];
+  return [parts[0], parts[1] ?? null];
+}
+
 /** The full 2027 menu priced at this group's own census. */
 export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
   const u = data.uhc || {};
@@ -789,6 +814,8 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       ded: m.ded,
       oop: m.oop,
       copays: m.copays,
+      pcp: splitCopays(m.copays)[0],
+      specialist: splitCopays(m.copays)[1],
       rx: (m.rx || "").replace(/,.*$/, ""),
       coins: m.coins ?? null,
       uc: m.uc ?? null,
