@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
+  groupSizeLabel,
   ovKey,
   planRows,
   type KennionData,
@@ -53,6 +54,18 @@ const TAB_LABEL: Record<GroupTab, string> = {
   supplemental: "Supplemental Package",
   signup: "Sign Up",
 };
+
+/** Two people, for the Group Size badge. */
+function PeopleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
 
 /** Where the collapsed/expanded rail is remembered. */
 const NAV_KEY = "kennion.nav.collapsed";
@@ -825,29 +838,44 @@ export default function App() {
                     : subline}
                 </div>
               </div>
-              {tab === "current" && (
-                <div className="noprint" style={{ flex: "0 0 auto", textAlign: "center" }}>
-                  <a
-                    href={NAVIGATOR_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-block",
-                      padding: "9px 18px",
-                      fontSize: 13.5,
-                      fontWeight: 500,
-                      color: "#fff",
-                      background: C.blue,
-                      border: `1px solid ${C.blue}`,
-                      borderRadius: 4,
-                      textDecoration: "none",
-                    }}
-                  >
-                    Employee Navigator
-                  </a>
-                  <div style={{ marginTop: 6, fontSize: 11.5, color: C.faint }}>View Group Details</div>
-                </div>
-              )}
+              <div style={{ flex: "0 0 auto", display: "flex", alignItems: "flex-start", gap: 20 }}>
+                {groupSizeLabel(g) && (
+                  <div className="noprint" style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                      Group Size
+                    </div>
+                    <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
+                      <PeopleIcon />
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
+                      {groupSizeLabel(g)}
+                    </div>
+                  </div>
+                )}
+                {tab === "current" && (
+                  <div className="noprint" style={{ textAlign: "center" }}>
+                    <a
+                      href={NAVIGATOR_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        display: "inline-block",
+                        padding: "9px 18px",
+                        fontSize: 13.5,
+                        fontWeight: 500,
+                        color: "#fff",
+                        background: C.blue,
+                        border: `1px solid ${C.blue}`,
+                        borderRadius: 4,
+                        textDecoration: "none",
+                      }}
+                    >
+                      Employee Navigator
+                    </a>
+                    <div style={{ marginTop: 6, fontSize: 11.5, color: C.faint }}>View Group Details</div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {tab === "home" ? (
