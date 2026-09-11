@@ -239,7 +239,13 @@ export interface KennionData {
   /** The signed-in group's billing this month (group sessions only). */
   funding?: GroupFundingSnapshot | null;
   /** The signed-in group's own invoice on file, if any (group sessions only). */
-  invoice?: { month: string | null; filename: string; uploadedAt: string } | null;
+  invoice?: {
+    month: string | null;
+    filename: string;
+    uploadedAt: string;
+    /** The invoice's Charge Summary rows: product, coverage tier and headcount. */
+    products?: { product: string; coverage: string; count: number | null }[];
+  } | null;
   /** Who at Kennion looks after this group (group sessions only). */
   accountManager?: AccountManager | null;
   /** This group's most recent Sign Up submission, if it has ever sent one. */
