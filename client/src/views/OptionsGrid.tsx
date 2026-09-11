@@ -234,8 +234,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                     {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
-                    <span style={{ fontSize: 15, color: C.faint }}>$</span>
+                  <div style={{ position: "relative", marginTop: 4 }}>
+                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: C.faint, pointerEvents: "none" }}>$</span>
                     <input
                       value={draft[t.key]}
                       inputMode="numeric"
@@ -247,7 +247,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && draftValid && draftDirty) apply();
                       }}
-                      style={{ ...textInput, width: "100%", padding: "8px 10px", fontSize: 17, fontWeight: 600, color: C.ink, ...num }}
+                      style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, ...num }}
                     />
                   </div>
                 </label>
