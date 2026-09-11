@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   PROPOSAL_SLOTS,
   fmtDate,
@@ -26,6 +26,18 @@ export const OPTIONS_SECTIONS = [
   { id: "market", label: "Market Summary" },
   { id: "recommends", label: "Kennion Recommends" },
   { id: "all-options", label: "All Options" },
+];
+
+/** How many plans can sit side by side. */
+export const COMPARE_MAX = 4;
+
+/** Deductible ceilings a client can filter to. */
+const DED_STEPS: [string, number][] = [
+  ["Any deductible", Infinity],
+  ["$0 deductible", 0],
+  ["Up to $1,000", 1000],
+  ["Up to $2,500", 2500],
+  ["Up to $5,000", 5000],
 ];
 
 interface Props {
@@ -145,6 +157,27 @@ export default function Options({
   const active = carrierList.filter((c) => carriers[c]);
   const q = gridQuery.trim().toLowerCase();
 
+  // The rest of the filters and the side-by-side pick live on the page: they
+  // are how a client reads the grid, not part of the shortlist they send.
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [dedMax, setDedMax] = useState(Infinity);
+  const [quotedOnly, setQuotedOnly] = useState(false);
+  const [compare, setCompare] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const typeList = useMemo(() => Array.from(new Set(plans.map((p) => p.type).filter(Boolean))).sort(), [plans]);
+  const anyQuoted = plans.some((p) => p.quoted);
+  const toggleCompare = (plan: string) =>
+    setCompare((prev) => (prev.includes(plan) ? prev.filter((x) => x !== plan) : prev.length >= COMPARE_MAX ? prev : [...prev, plan]));
+  const compared = compare.map((name) => plans.find((p) => p.plan === name)).filter((p): p is MarketPlan => !!p);
+  const filtering = active.length > 0 || !!q || typeFilter !== "All" || dedMax !== Infinity || quotedOnly;
+  const clearFilters = () => {
+    active.forEach((c) => onToggleCarrier(c));
+    onGridQuery("");
+    setTypeFilter("All");
+    setDedMax(Infinity);
+    setQuotedOnly(false);
+  };
+
   const list = useMemo(() => {
     const sortVal = (p: MarketPlan): number | string => {
       if (["EE", "ES", "EC", "FAM"].includes(sort)) return p.rates[sort as TierKey] ?? Infinity;
@@ -157,7 +190,10 @@ export default function Options({
       .filter(
         (p) =>
           (!active.length || active.includes(p.carrier)) &&
-          (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays}`.toLowerCase().includes(q)),
+          (typeFilter === "All" || p.type === typeFilter) &&
+          (dedMax === Infinity || (p.ded != null && +p.ded <= dedMax)) &&
+          (!quotedOnly || !!p.quoted) &&
+          (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network}`.toLowerCase().includes(q)),
       )
       .slice()
       .sort((a, b) => {
@@ -166,10 +202,21 @@ export default function Options({
         if (va === vb) return 0;
         return (va > vb ? 1 : -1) * dir;
       });
-  }, [plans, active, q, sort, dir]);
+  }, [plans, active, q, sort, dir, typeFilter, dedMax, quotedOnly]);
+
+  const download = async () => {
+    setSaving(true);
+    try {
+      const { downloadOptions } = await import("@/lib/optionsheet");
+      downloadOptions(g, list, compared, totals.total);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const cols: { key: SortKey | null; label: string; align?: "left" }[] = [
     { key: null, label: "" },
+    { key: null, label: "Compare" },
     { key: "plan", label: "Plan Name", align: "left" },
     { key: "EE", label: "Employee" },
     { key: "ES", label: "EE + Spouse" },
@@ -422,15 +469,142 @@ export default function Options({
               {c.replace(" (UnitedHealthcare)", "")}
             </button>
           ))}
+          <select aria-label="Plan type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={selectStyle}>
+            <option value="All">Any plan type</option>
+            {typeList.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select aria-label="Deductible" value={String(dedMax)} onChange={(e) => setDedMax(Number(e.target.value))} style={selectStyle}>
+            {DED_STEPS.map(([label, v]) => (
+              <option key={label} value={String(v)}>
+                {label}
+              </option>
+            ))}
+          </select>
+          {anyQuoted && (
+            <button onClick={() => setQuotedOnly((v) => !v)} style={chip(quotedOnly)} title="Only the rates a carrier quoted for your group">
+              Quoted for you
+            </button>
+          )}
           <input
             value={gridQuery}
             onChange={(e) => onGridQuery(e.target.value)}
-            placeholder="Search Report"
+            placeholder="Search plans"
             aria-label="Search 2027 plan options"
-            style={{ ...textInput, fontSize: 13, padding: "8px 11px", width: 170 }}
+            style={{ ...textInput, fontSize: 13, padding: "8px 11px", width: 150 }}
           />
+          {filtering && (
+            <button onClick={clearFilters} style={{ ...chip(false), color: C.blue }}>
+              Clear
+            </button>
+          )}
+          <button onClick={() => void download()} disabled={saving} style={{ ...chip(false), fontWeight: 600 }} title="This grid as it is shown, plus the comparison, as an Excel file">
+            {saving ? "Building…" : "⬇ Download"}
+          </button>
         </div>
       </div>
+
+      {compared.length > 0 && (
+        <div id="compare" className="panel anchor" style={{ ...panel, marginBottom: 16, padding: "14px 18px 16px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>
+              Side by side · {compared.length} of {COMPARE_MAX}
+              {compared.length < 2 && <span style={{ fontWeight: 400, color: C.faint }}> — pick another plan below to compare</span>}
+            </h3>
+            <button className="noprint" onClick={() => setCompare([])} style={{ ...chip(false), color: C.blue }}>
+              Clear comparison
+            </button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", fontSize: 13, minWidth: 420, width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...cmpHead, textAlign: "left", width: 150 }} />
+                  {compared.map((p) => (
+                    <th key={p.plan} style={cmpHead}>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: C.faint }}>{p.carrier.replace(" (UnitedHealthcare)", " by UHC")}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.3 }}>{p.plan}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [
+                    ["Funding", (p: MarketPlan) => p.label],
+                    ["Plan type", (p: MarketPlan) => p.type],
+                    ["Network", (p: MarketPlan) => p.network],
+                    ["Deductible", (p: MarketPlan) => fmtDed(p.ded)],
+                    ["OOP max", (p: MarketPlan) => (p.oop == null ? "—" : money0(p.oop))],
+                    ["PCP / SPC", (p: MarketPlan) => p.copays],
+                    ["Rx", (p: MarketPlan) => p.rx],
+                    ["Employee", (p: MarketPlan) => (p.rates.EE == null ? "—" : money(p.rates.EE))],
+                    ["EE + Spouse", (p: MarketPlan) => (p.rates.ES == null ? "—" : money(p.rates.ES))],
+                    ["EE + Child(ren)", (p: MarketPlan) => (p.rates.EC == null ? "—" : money(p.rates.EC))],
+                    ["EE + Family", (p: MarketPlan) => (p.rates.FAM == null ? "—" : money(p.rates.FAM))],
+                    ["Basis", (p: MarketPlan) => (p.quoted ? `Quoted ${fmtDate(p.quoted.date || undefined)}` : p.indicative ? "Indicative †" : p.pending ? "Quote requested" : "Menu rate")],
+                  ] as [string, (p: MarketPlan) => string][]
+                ).map(([label, f]) => (
+                  <tr key={label}>
+                    <td style={cmpLabel}>{label}</td>
+                    {compared.map((p) => (
+                      <td key={p.plan} style={cmpCell}>
+                        {f(p)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {(() => {
+                  const best = Math.min(...compared.map((p) => p.monthly ?? Infinity));
+                  return (
+                    <>
+                      <tr>
+                        <td style={{ ...cmpLabel, fontWeight: 600, color: C.ink }}>Monthly premium</td>
+                        {compared.map((p) => (
+                          <td key={p.plan} style={{ ...cmpCell, fontWeight: 600, color: p.monthly === best ? C.green : C.ink, ...num }}>
+                            {p.monthly == null ? "—" : money0(p.monthly)}
+                            {p.monthly === best && compared.length > 1 ? " ✓" : ""}
+                          </td>
+                        ))}
+                      </tr>
+                      <tr>
+                        <td style={cmpLabel}>Vs today</td>
+                        {compared.map((p) => {
+                          const dv = p.monthly == null ? null : p.monthly - totals.total;
+                          return (
+                            <td key={p.plan} style={{ ...cmpCell, color: dv == null ? C.ghost : dv >= 0 ? C.red : C.green, ...num }}>
+                              {dv == null ? "—" : `${dv >= 0 ? "+" : "−"}${money0(Math.abs(dv))} / mo`}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      <tr className="noprint">
+                        <td style={cmpLabel} />
+                        {compared.map((p) => {
+                          const on = !!selected[p.plan];
+                          return (
+                            <td key={p.plan} style={{ ...cmpCell, paddingTop: 10 }}>
+                              <button onClick={() => onToggleSelected(p.plan)} style={{ ...chip(on), width: "100%" }}>
+                                {on ? "✓ On your shortlist" : "Add to shortlist"}
+                              </button>
+                              <button onClick={() => toggleCompare(p.plan)} style={{ ...linkBtnStyle, marginTop: 6 }}>
+                                Remove
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="panel" style={{ ...panel, padding: "4px 18px 14px", overflow: "auto" }}>
         <table
@@ -489,6 +663,22 @@ export default function Options({
                       aria-label={`Add ${p.plan} to shortlist`}
                       style={{ accentColor: C.blue, width: 15, height: 15 }}
                     />
+                  </td>
+                  <td className="noprint" style={{ padding: "6px 4px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center" }}>
+                    {(() => {
+                      const on = compare.includes(p.plan);
+                      const full = !on && compare.length >= COMPARE_MAX;
+                      return (
+                        <button
+                          onClick={() => toggleCompare(p.plan)}
+                          disabled={full}
+                          title={full ? `Up to ${COMPARE_MAX} plans side by side — remove one first` : on ? "Remove from the comparison" : "Compare side by side"}
+                          style={{ ...chip(on), padding: "3px 9px", fontSize: 12, opacity: full ? 0.45 : 1, cursor: full ? "default" : "pointer" }}
+                        >
+                          {on ? "✓" : "+"}
+                        </button>
+                      );
+                    })()}
                   </td>
                   <td style={{ padding: "9px 8px", borderBottom: `1px solid ${C.hairline}` }}>
                     <div style={{ color: C.ink }}>{p.plan}</div>
@@ -555,7 +745,8 @@ export default function Options({
           </tbody>
         </table>
         <div style={{ padding: "13px 0 0", fontSize: 12.5, color: C.faint }}>
-          Records: {list.length}
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}, lowest monthly premium first unless you sort a column.
+          Tick a plan to shortlist it; press + to compare up to {COMPARE_MAX} side by side.
         </div>
       </div>
 
@@ -603,3 +794,40 @@ export default function Options({
     </div>
   );
 }
+
+const selectStyle = {
+  ...textInput,
+  fontSize: 13,
+  padding: "7px 9px",
+  width: "auto",
+  background: C.card,
+} as const;
+const cmpHead = {
+  padding: "8px 10px",
+  borderBottom: `1px solid ${C.border}`,
+  textAlign: "left" as const,
+  verticalAlign: "bottom" as const,
+  minWidth: 150,
+};
+const cmpLabel = {
+  padding: "7px 10px 7px 0",
+  fontSize: 12.5,
+  color: C.muted,
+  borderBottom: `1px solid ${C.hairline}`,
+  whiteSpace: "nowrap" as const,
+};
+const cmpCell = {
+  padding: "7px 10px",
+  color: C.body,
+  borderBottom: `1px solid ${C.hairline}`,
+  verticalAlign: "top" as const,
+};
+const linkBtnStyle = {
+  background: "none",
+  border: "none",
+  padding: 0,
+  fontSize: 12,
+  color: C.blue,
+  cursor: "pointer",
+  display: "block",
+} as const;
