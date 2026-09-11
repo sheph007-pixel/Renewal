@@ -132,16 +132,25 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
   const fundingList = useMemo(() => Array.from(new Set(plans.map(fundingOf))), [plans]);
-  const costTier = useMemo(() => {
+  // Quartile cutoffs off this group's own priced plans, so "Show" reads as
+  // real dollar ranges for this group rather than a generic $ / $$$$ scale.
+  const costCuts = useMemo(() => {
     const priced = plans.map((p) => p.monthly).filter((m): m is number => m != null).sort((a, b) => a - b);
     const cut = (q: number) => priced[Math.min(priced.length - 1, Math.floor(priced.length * q))] ?? Infinity;
-    const cuts = [cut(0.25), cut(0.5), cut(0.75)];
+    return priced.length ? [cut(0.25), cut(0.5), cut(0.75)] : [];
+  }, [plans]);
+  const costTier = useMemo(() => {
     return (p: MarketPlan) => {
-      if (p.monthly == null) return null;
-      const i = cuts.findIndex((c) => p.monthly! < c);
+      if (p.monthly == null || !costCuts.length) return null;
+      const i = costCuts.findIndex((c) => p.monthly! < c);
       return COST_TIERS[i === -1 ? 3 : i];
     };
-  }, [plans]);
+  }, [costCuts]);
+  const costLabels = useMemo(() => {
+    if (!costCuts.length) return COST_TIERS;
+    const [a, b, c] = costCuts;
+    return [`Under ${money0(a)}`, `${money0(a)} – ${money0(b)}`, `${money0(b)} – ${money0(c)}`, `${money0(c)}+`];
+  }, [costCuts]);
 
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, v: string) => {
     const next = new Set(set);
@@ -443,7 +452,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   $$$$ → $
                 </button>
                 <span style={{ fontSize: 12.5, color: C.muted, marginLeft: 10 }}>Show</span>
-                {chips(COST_TIERS, costs, setCosts)}
+                {COST_TIERS.map((tier, i) => (
+                  <button key={tier} onClick={() => toggle(costs, setCosts, tier)} style={chip(costs.has(tier))}>
+                    {costLabels[i]}
+                  </button>
+                ))}
               </>
             )}
           </div>
