@@ -75,16 +75,24 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
   };
 }
 
-export default function PlanCard({ m, actions }: { m: CardModel; actions?: React.ReactNode }) {
+/**
+ * `compact` is the proposal card: only the tiers with people in them, one
+ * rate each, deductible / OOP / network, and the three totals. The popup and
+ * the printed proposal use the full card, with every benefit and the
+ * employer / employee split per tier.
+ */
+export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
+  const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
+  const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network"].includes(label)) : m.benefits;
   return (
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: C.muted }}>{m.carrier}</span>
           <span style={{ fontSize: 11, fontWeight: 600, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 10, padding: "1px 8px" }}>{m.funding}</span>
-          {m.type && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}
+          {m.type && !compact && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}
         </div>
-        <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4 }}>{m.plan}</div>
+        <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
       </div>
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
         <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.monthly == null ? "—" : money(m.monthly)}</div>
@@ -93,7 +101,7 @@ export default function PlanCard({ m, actions }: { m: CardModel; actions?: React
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
         <tbody>
-          {m.benefits.map(([label, value]) => (
+          {benefits.map(([label, value]) => (
             <tr key={label}>
               <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
               <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>{value}</td>
@@ -104,22 +112,24 @@ export default function PlanCard({ m, actions }: { m: CardModel; actions?: React
       <div>
         <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 4 }}>Monthly Composite Rates</div>
         <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5, marginTop: 2 }}>
-          <thead>
-            <tr>
-              {["", "Rate", "Employer", "Employee"].map((h, i) => (
-                <th key={h || "tier"} style={{ padding: "3px 0", fontSize: 11, fontWeight: 500, color: C.faint, textAlign: i ? "right" : "left" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
+          {!compact && (
+            <thead>
+              <tr>
+                {["", "Rate", "Employer", "Employee"].map((h, i) => (
+                  <th key={h || "tier"} style={{ padding: "3px 0", fontSize: 11, fontWeight: 500, color: C.faint, textAlign: i ? "right" : "left" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
           <tbody>
-            {m.tiers.map((t) => (
+            {tiers.map((t) => (
               <tr key={t.key}>
                 <td style={{ padding: "3px 8px 3px 0", color: C.muted, whiteSpace: "nowrap" }}>
                   {t.label} <span style={{ color: C.faint }}>({t.count})</span>
                 </td>
                 <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(t.rate)}</td>
-                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null ? "—" : money(t.er)}</td>
-                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null ? "—" : money(t.ee)}</td>
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null ? "—" : money(t.er)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null ? "—" : money(t.ee)}</td>}
               </tr>
             ))}
           </tbody>
@@ -128,18 +138,23 @@ export default function PlanCard({ m, actions }: { m: CardModel; actions?: React
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13, borderTop: `1px solid ${C.hairline}`, paddingTop: 4 }}>
         <tbody>
           {(
-            [
-              ["Total Monthly Employer Cost", m.er, true],
-              ["Total Monthly Employee Cost", m.ee, true],
-              ["Monthly Premium", m.premium, false],
-            ] as [string, number | null, boolean][]
+            compact
+              ? ([
+                  ["Employer Cost", m.er, true],
+                  ["Employee Cost", m.ee, true],
+                ] as [string, number | null, boolean][])
+              : ([
+                  ["Total Monthly Employer Cost", m.er, true],
+                  ["Total Monthly Employee Cost", m.ee, true],
+                  ["Monthly Premium", m.premium, false],
+                ] as [string, number | null, boolean][])
           ).map(([label, v, strong]) => (
             <tr key={label}>
               <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
               <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>{v == null ? "—" : money(v)}</td>
             </tr>
           ))}
-          {m.vsToday != null && (
+          {m.vsToday != null && !compact && (
             <tr>
               <td style={{ padding: "4px 8px 4px 0", color: C.muted }}>Vs today</td>
               <td style={{ padding: "4px 0", textAlign: "right", fontWeight: 600, color: m.vsToday >= 0 ? C.red : C.green, ...num }}>
