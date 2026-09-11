@@ -32,7 +32,6 @@ import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
-import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -838,44 +837,19 @@ export default function App() {
                     : subline}
                 </div>
               </div>
-              <div style={{ flex: "0 0 auto", display: "flex", alignItems: "flex-start", gap: 20 }}>
-                {groupSizeLabel(g) && (
-                  <div className="noprint" style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                      Group Size
-                    </div>
-                    <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
-                      <PeopleIcon />
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
-                      {groupSizeLabel(g)}
-                    </div>
+              {(tab === "changes" || tab === "current") && groupSizeLabel(g) && (
+                <div className="noprint" style={{ flex: "0 0 auto", textAlign: "center" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                    Group Size
                   </div>
-                )}
-                {tab === "current" && (
-                  <div className="noprint" style={{ textAlign: "center" }}>
-                    <a
-                      href={NAVIGATOR_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "inline-block",
-                        padding: "9px 18px",
-                        fontSize: 13.5,
-                        fontWeight: 500,
-                        color: "#fff",
-                        background: C.blue,
-                        border: `1px solid ${C.blue}`,
-                        borderRadius: 4,
-                        textDecoration: "none",
-                      }}
-                    >
-                      Employee Navigator
-                    </a>
-                    <div style={{ marginTop: 6, fontSize: 11.5, color: C.faint }}>View Group Details</div>
+                  <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
+                    <PeopleIcon />
                   </div>
-                )}
-              </div>
+                  <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
+                    {groupSizeLabel(g)}
+                  </div>
+                </div>
+              )}
             </div>
 
             {tab === "home" ? (

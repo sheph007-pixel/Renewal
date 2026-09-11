@@ -648,15 +648,23 @@ const planKey = (s: string) => s.toLowerCase().replace(/\b(plan|option|uhc|unite
 
 /** How a proposal slot is shown: the carrier column and the funding label. */
 function slotPresentation(slot: string, carrier: string | null, planType: string | null): { carrier: string; label: string; network: string } {
-  if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "UHC Choice Plus" };
-  if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "UHC Choice Plus" };
-  if (slot === "Surest") return { carrier: "Surest (UnitedHealthcare)", label: "Copay-only", network: "UHC Choice Plus" };
-  if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Gravie / Cigna" };
+  if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "United Choice Plus" };
+  if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
+  if (slot === "Surest") return { carrier: "UnitedHealthcare", label: "Copay-only", network: "United Choice Plus" };
+  if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Cigna OAP" };
   if (slot === "Nationwide") return { carrier: "Nationwide", label: planType || "Level Funded", network: "Nationwide" };
   if (slot === "Angle") return { carrier: "Angle Health", label: planType || "Level Funded", network: "Angle / Cigna PPO" };
   if (slot === "Cobalt") return { carrier: "Cobalt", label: planType || "Self Funded", network: "On the proposal" };
   return { carrier: carrier || "Other", label: planType || "Quoted", network: "On the proposal" };
 }
+
+/**
+ * Every Gravie plan is on the Cigna OAP network and every UnitedHealthcare
+ * plan (Fully Insured, Level Funded, or Surest) is on the United Choice Plus
+ * network — a fixed rule, not something a carrier's own proposal document
+ * gets to override with a differently-worded network name.
+ */
+const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie"]);
 
 /**
  * The plans on a group's proposals, priced at its census. A plan with no rate
@@ -686,10 +694,14 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
       const gb = fam ? GRAVIE_BENEFITS[fam] : null;
       const pb = pl.benefits || null;
+      // Surest is UnitedHealthcare's own copay-only product, not a separate
+      // company — the carrier reads "UnitedHealthcare", so the plan name is
+      // where "Surest" has to show up.
+      const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
       out.push({
         carrier: show.carrier,
         label: show.label,
-        plan: pl.name,
+        plan: planName,
         type: pl.planType || show.label,
         ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
         oop: moneyNum(pl.oopMax),
@@ -702,7 +714,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         er: gb ? gb.er : null,
         imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
         hospital: gb ? gb.hospital : pb?.hospital ?? null,
-        network: pl.network || show.network,
+        network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : pl.network || show.network,
         rates,
         monthly,
         indicative: false,
@@ -832,7 +844,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       coins: m.coins ?? null,
       uc: m.uc ?? null,
       er: m.er ?? null,
-      network: m.type === "EPO" ? "UHC Choice" : "UHC Choice Plus",
+      network: "United Choice Plus",
       rates,
       monthly: baseEE != null ? monthly : null,
       indicative: q.EE == null,
@@ -852,7 +864,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     });
   }
   out.unshift({
-    carrier: "Surest (UnitedHealthcare)",
+    carrier: "UnitedHealthcare",
     label: "Copay-only",
     plan: "Surest Copay Plan",
     type: "Copay",
@@ -860,7 +872,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     oop: 8000,
     copays: "Priced per service",
     rx: "Copay by drug",
-    network: "UHC Choice Plus",
+    network: "United Choice Plus",
     rates: sRates,
     monthly: sMonthly,
     indicative: false,
@@ -875,7 +887,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     oop: null,
     copays: "$0 on most services",
     rx: "Included on preventive+",
-    network: "Gravie / Cigna",
+    network: "Cigna OAP",
     rates: { EE: null, ES: null, EC: null, FAM: null },
     monthly: null,
     indicative: false,

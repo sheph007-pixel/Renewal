@@ -25,13 +25,6 @@ import { NAVIGATOR_URL } from "@/views/NavigatorCard";
  * understate any group with families on the book.
  */
 
-/** "2026-09" as "September 2026"; anything else as given. */
-function monthLabel(month: string): string {
-  const m = month.match(/^(\d{4})-(\d{2})$/);
-  if (!m) return month;
-  return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-
 interface Props {
   data: KennionData;
   overrides: Overrides;
@@ -187,20 +180,24 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
 
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Your 2026 Medical Plans</h2>
-        {data.invoice && (
-          // The group's own invoice, served against the session cookie, so
-          // the link carries nothing secret and opens in its own tab.
-          <a
-            className="noprint"
-            href="/api/group/invoice"
-            target="_blank"
-            rel="noreferrer"
-            title={`${data.invoice.filename} — opens in a new tab`}
-            style={headerBtn}
-          >
-            View Invoice{data.invoice.month ? ` · ${monthLabel(data.invoice.month)}` : ""}
+        <div className="noprint" style={{ display: "flex", gap: 8 }}>
+          {data.invoice && (
+            // The group's own invoice, served against the session cookie, so
+            // the link carries nothing secret and opens in its own tab.
+            <a
+              href="/api/group/invoice"
+              target="_blank"
+              rel="noreferrer"
+              title={`${data.invoice.filename} — opens in a new tab`}
+              style={headerBtn}
+            >
+              View Invoice
+            </a>
+          )}
+          <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
+            Employee Navigator
           </a>
-        )}
+        </div>
       </div>
 
       <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
