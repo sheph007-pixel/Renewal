@@ -774,7 +774,6 @@ export default function Proposals({ token, groups }: Props) {
   const [layout, setLayout] = useState<"grid" | "list" | "groups">("grid");
   const [query, setQuery] = useState("");
   const [manager, setManager] = useState<"All" | "debbie" | "tracy">("All");
-  const [rereading, setRereading] = useState("");
   const [need, setNeed] = useState<"All" | "missing" | "complete" | string>("All");
 
   const q = query.trim().toLowerCase();
@@ -795,7 +794,6 @@ export default function Proposals({ token, groups }: Props) {
     ancillary: proposals.filter(isAncillary).length,
     noSlot: proposals.filter(needsSlot).length,
     // Read before the current questions were asked; a re-read settles them.
-    stale: proposals.filter((p) => !!p.extracted && typeof p.extracted.quotes_medical !== "boolean").length,
     queue: proposals.filter((p) => p.status === "unassigned" || p.status === "suggested").length,
     reading: proposals.filter((p) => p.status === "analyzing").length,
     assigned: proposals.filter((p) => p.status === "assigned").length,
@@ -867,34 +865,6 @@ export default function Proposals({ token, groups }: Props) {
             {counts.reading ? ` · ${counts.reading} being read` : ""}
           </span>
         </div>
-        {counts.stale > 0 && ai !== false && (
-          <div style={{ marginTop: 12, padding: "9px 12px", background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 4, fontSize: 12.5, color: C.ink, lineHeight: 1.55 }}>
-            <strong>{counts.stale} proposal{counts.stale === 1 ? " was" : "s were"} read before the ancillary question was added.</strong>{" "}
-            They are sorted by what the document says for now.{" "}
-            <button
-              onClick={async () => {
-                setRereading("Re-reading…");
-                try {
-                  const r = await fetch("/api/admin/proposals/reanalyze", {
-                    method: "POST",
-                    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                    body: "{}",
-                  });
-                  const j = await r.json().catch(() => ({}));
-                  setRereading(r.ok ? `Re-reading ${j.reading}…` : j.error || "Could not start.");
-                  void load();
-                } catch (e) {
-                  setRereading((e as Error).message);
-                }
-              }}
-              disabled={!!rereading}
-              style={{ ...linkBtn, fontWeight: 600 }}
-            >
-              {rereading || `Re-read all ${counts.stale}`}
-            </button>{" "}
-            to have Claude say which are ancillary.
-          </div>
-        )}
         {ai === false && (
           <div
             style={{
