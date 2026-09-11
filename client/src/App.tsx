@@ -863,6 +863,7 @@ export default function App() {
                 totals={totals}
                 eePct={EE_PCT}
                 depPct={DEP_PCT}
+                supplementalHref={hrefFor("supplemental")}
               />
             ) : tab === "options" ? (
               <Options

@@ -12,6 +12,7 @@ import {
 } from "@/lib/model";
 import { C, h2, num, panel, sectionHead, th } from "@/lib/ui";
 import SpendDashboard from "@/views/SpendDashboard";
+import Link from "@/lib/Link";
 
 /**
  * What a group has today: one row per plan, the four tier rates, and what that
@@ -39,6 +40,43 @@ interface Props {
   totals: { er: number; ee: number; total: number };
   eePct: number;
   depPct: number;
+  /** The Supplemental Package page, for the 2027 rates link under Other Benefits. */
+  supplementalHref: string;
+}
+
+/**
+ * The eight supplemental lines Kennion places, in the order the Supplemental
+ * Package lists them, each with the words that identify it in an Employee
+ * Navigator benefit name or an invoice product line.
+ */
+const OTHER_BENEFITS: [string, RegExp][] = [
+  ["Dental", /dental/i],
+  ["Vision", /vision/i],
+  ["Voluntary Life / AD&D", /\blife\b|ad&d|ad\s*&\s*d/i],
+  ["Accident", /accident/i],
+  ["Critical Illness", /critical/i],
+  ["Cancer", /cancer/i],
+  ["Hospital Indemnity", /hospital/i],
+  ["Vol. Short Term Disability", /short.?term|\bstd\b|disab/i],
+];
+
+/**
+ * Enrolled per supplemental benefit: from the Employee Navigator export's
+ * lines when the group has them, else from the invoice's product rows.
+ */
+function otherBenefits(g: Group, invoice: KennionData["invoice"]): { benefit: string; enrolled: number; source: "en" | "invoice" | null }[] {
+  const lines = g.lines || [];
+  const products = invoice?.products || [];
+  const source: "en" | "invoice" | null = lines.length ? "en" : products.length ? "invoice" : null;
+  return OTHER_BENEFITS.map(([benefit, re]) => {
+    // Long-term disability is not a line Kennion places; keep it out of the
+    // STD row. Medical lines never count toward any of these.
+    const counts = (t: string) => re.test(t) && !/medical|health plan/i.test(t) && !(benefit.includes("Disability") && /long.?term|\bltd\b/i.test(t));
+    let enrolled = 0;
+    if (source === "en") lines.forEach((l) => counts(`${l.benefit} ${l.plan}`) && (enrolled += l.enrolled || 0));
+    else if (source === "invoice") products.forEach((r) => counts(r.product) && (enrolled += r.count || 0));
+    return { benefit, enrolled, source };
+  });
 }
 
 /** What a column sorts on. Tiers sort on their rate. */
@@ -95,7 +133,7 @@ function Head({
   );
 }
 
-export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
+export default function Current({ data, overrides, g, rows, totals, eePct, depPct, supplementalHref }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
   // Biggest premium first, which is the order an employer reads it in.
@@ -233,6 +271,63 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         </table>
         </div>
       </div>
+
+      {(() => {
+        const other = otherBenefits(g, data.invoice);
+        const known = other.some((b) => b.source);
+        const hcell = { ...th, background: C.headerBg, color: "#fff", borderBottom: "none", borderRight: "1px solid rgba(255,255,255,0.12)", padding: "12px 10px" };
+        return (
+          <>
+            <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <h2 style={h2}>Other Benefits</h2>
+              <div className="noprint" style={{ display: "flex", gap: 14, fontSize: 13 }}>
+                {data.invoice && (
+                  <a href="/api/group/invoice" target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
+                    View invoice ↗
+                  </a>
+                )}
+                <Link href={supplementalHref} style={{ color: C.blue, textDecoration: "none" }}>
+                  2027 supplemental rates →
+                </Link>
+              </div>
+            </div>
+            <div style={{ ...panel, padding: 0, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...hcell, textAlign: "left", padding: "11px 10px 11px 14px" }}>Benefit</th>
+                      <th style={{ ...hcell, textAlign: "center", width: 120 }}>Offered</th>
+                      <th style={{ ...hcell, textAlign: "right", width: 160, borderRight: "none", padding: "11px 14px 11px 10px" }}>Enrolled</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {other.map((b) => {
+                      const on = b.enrolled > 0;
+                      return (
+                        <tr key={b.benefit}>
+                          <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: on ? C.ink : C.muted }}>{b.benefit}</td>
+                          <td style={{ ...cell, textAlign: "center", fontSize: 16, color: on ? C.green : C.ghost }} aria-label={on ? "Offered" : "Not offered"}>
+                            {known ? (on ? "✓" : "✕") : "—"}
+                          </td>
+                          <td style={{ ...rateCell, paddingRight: 14, fontWeight: on ? 600 : 400, color: on ? C.ink : C.ghost }}>{known ? (on ? b.enrolled : "—") : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
+              {!known
+                ? "Enrollment in other benefits appears here once this group's Employee Navigator export or invoice has been read."
+                : other[0].source === "en"
+                  ? "Enrolled counts are from Employee Navigator. Dental, life, accident, critical illness, cancer, hospital indemnity and short term disability are with Guardian; vision with VSP."
+                  : "Enrolled counts are from this month's invoice. Dental, life, accident, critical illness, cancer, hospital indemnity and short term disability are with Guardian; vision with VSP."}
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

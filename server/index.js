@@ -978,7 +978,16 @@ app.post("/api/signin", async (req, res) => {
     funding: fundingSnapshot(g.name),
     // This month's invoice, if one is filed: enough to offer the link, not the file.
     invoice: invoice
-      ? { month: (invoice.context && invoice.context.month) || null, filename: invoice.filename, uploadedAt: invoice.uploaded_at }
+      ? {
+          month: (invoice.context && invoice.context.month) || null,
+          filename: invoice.filename,
+          uploadedAt: invoice.uploaded_at,
+          // The Charge Summary's product rows — product, tier and headcount, no
+          // names — so the client's page can say what else is in force.
+          products: Array.isArray(invoice.extracted && invoice.extracted.products)
+            ? invoice.extracted.products.map((r) => ({ product: r.product, coverage: r.coverage, count: r.count ?? null }))
+            : [],
+        }
       : null,
     linkToken: g.linkToken || null,
     slug: g.slug,
