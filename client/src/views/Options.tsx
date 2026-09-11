@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { hasDirectQuote, marketPlans, type Group, type KennionData, type PlanRow, type TierContribution, type TierKey } from "@/lib/model";
+import { hasDirectQuote, marketPlans, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
 import { C, h2, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
@@ -13,7 +13,6 @@ export const OPTIONS_SECTIONS = [
 interface Props {
   data: KennionData;
   g: Group;
-  rows: PlanRow[];
   totals: { total: number; enrolled: number };
   selected: Record<string, boolean>;
   /** Where the shortlist is reviewed and sent — its own page now. */
@@ -36,7 +35,6 @@ interface Props {
 export default function Options({
   data,
   g,
-  rows,
   totals,
   selected,
   signUpHref,

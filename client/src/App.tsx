@@ -875,7 +875,6 @@ export default function App() {
               <Options
                 data={data}
                 g={g}
-                rows={rows}
                 totals={totals}
                 selected={selected}
                 signUpHref={hrefFor("signup")}
