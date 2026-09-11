@@ -222,6 +222,25 @@ want the whole book rather than the block the portal serves.
 
 ## Proposals
 
+### Gravie rate workbooks
+
+Gravie returns its quote as an Excel workbook per group. Its **EPO** and
+**PPO** sheets each price the same 67 plan designs on Cigna Open Access Plus
+(the EPO version has no out-of-network cover, the PPO does), so every group's
+Gravie quote is the same 134 plans at that group's own rates. Some workbooks
+also carry a "Narrow Network" sheet (Cigna LocalPlus, offered in a few areas)
+and a static benefits grid; both are left out. `server/gravie-parse.js` reads
+a workbook, and a zip of them — through the inbox or
+`POST /api/admin/proposals/gravie-batch` — files each one twice over: as the
+group's **Gravie proposal** (the file, assigned, in the Gravie slot, with the
+134 plans in the same shape a Claude-read proposal carries, so the Options
+page prices them at once) and as **rows** in `kennion.carrier_quotes` and
+`kennion.carrier_quote_plans`, one quote per group, one row per plan.
+`GET /api/admin/quotes?carrier=Gravie` lists the quotes and
+`GET /api/admin/quotes/Gravie/<group>` returns one with its plans. At boot
+every workbook already on file is re-read with the current parser, so a
+parser change reaches stored quotes without anyone uploading again.
+
 Carrier proposals — UnitedHealthcare (Surest included), Gravie, Nationwide,
 Angle Health and Cobalt — are uploaded on the **Proposals** tab, a whole batch at once,
 or one at a time from a company's page. The drop zone takes the proposal in
@@ -642,6 +661,8 @@ human enters:
 | `kennion.rate_overrides` | hand-keyed rates by group + plan + tier, with `updated_at` / `updated_by` |
 | `kennion.imports` | one row per upload — filename, when, by whom, companies found and applied |
 | `kennion.proposals` | one row per carrier proposal — the file itself, what Claude read off it, the group it is assigned to and by whom |
+| `kennion.carrier_quotes` | one row per carrier and group: quote number, effective date, subscribers quoted by tier, plan count — replaced when a newer workbook comes in |
+| `kennion.carrier_quote_plans` | every plan on that quote as a row: name, family, EPO or PPO, deductible, out-of-pocket max, coinsurance, the four tier rates and the monthly at the quoted tiers |
 
 Everything lives in a dedicated `kennion` schema. The database may already carry
 tables from a previous application — a `public.groups` from the old platform is

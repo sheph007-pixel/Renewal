@@ -22,7 +22,7 @@ import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from 
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
-import { parseGravieWorkbook, gravieExtracted } from "./gravie-parse.js";
+import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
 import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
@@ -2650,6 +2650,87 @@ async function ingestInvoiceZip(buf, month, by) {
 }
 
 /**
+ * Carrier quotes as rows — kennion.carrier_quotes and carrier_quote_plans —
+ * one quote per carrier and group, every priced plan under it. Without a
+ * database they live in memory for the life of the process.
+ */
+const memQuotes = new Map();
+const quoteStore = db
+  ? db
+  : {
+      async replaceCarrierQuote(q, plans) {
+        const id = memQuotes.size + 1;
+        memQuotes.set(`${q.carrier}||${q.groupName}`, { id, ...q, planCount: plans.length, uploadedAt: new Date().toISOString(), plans });
+        return id;
+      },
+      async listCarrierQuotes(carrier) {
+        return [...memQuotes.values()].filter((q) => !carrier || q.carrier === carrier).map(({ plans, ...q }) => q);
+      },
+      async carrierQuote(carrier, groupName) {
+        return memQuotes.get(`${carrier}||${groupName}`) || null;
+      },
+    };
+
+/** File one parsed Gravie workbook as rows for its group. */
+async function storeGravieQuote(g, parsed, filename, proposalId, by) {
+  return quoteStore.replaceCarrierQuote(
+    {
+      carrier: "Gravie",
+      groupName: g.name,
+      quoteNumber: parsed.quoteNumber || null,
+      effectiveDate: parsed.effectiveDate || null,
+      generated: parsed.generated || null,
+      network: "Cigna Open Access Plus",
+      tiers: parsed.tiers || {},
+      filename,
+      proposalId,
+      uploadedBy: by || null,
+    },
+    gravieQuoteRows(parsed),
+  );
+}
+
+/**
+ * Every Gravie workbook already on file, re-read with the current parser:
+ * the proposal's plan list is brought to the EPO and PPO sheets only, and the
+ * quote is written as rows if it is not there yet or has changed. Runs at
+ * boot, so a parser fix reaches every stored workbook without an upload.
+ */
+async function settleGravieQuotes() {
+  const rows = (await proposalStore.listProposals()).filter(
+    (r) => r.context && r.context.source === "gravie-workbook" && r.group_name && !r.superseded_by,
+  );
+  let reread = 0;
+  let written = 0;
+  const have = new Map((await quoteStore.listCarrierQuotes("Gravie")).map((q) => [q.groupName, q]));
+  for (const r of rows) {
+    try {
+      const plans = (r.extracted && r.extracted.plans) || [];
+      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || !plans.length;
+      const quote = have.get(r.group_name);
+      const wanted = quote && quote.proposalId === r.id && quote.planCount === plans.length && !stale;
+      if (!stale && wanted) continue;
+      const f = await proposalStore.getProposalFile(r.id);
+      if (!f) continue;
+      const parsed = parseGravieWorkbook(f.data);
+      if (stale) {
+        const extracted = { ...gravieExtracted(parsed), matched_group: r.group_name };
+        await proposalStore.updateProposal(r.id, { extracted, summary: extracted.summary });
+        reread++;
+      }
+      await storeGravieQuote({ name: r.group_name }, parsed, r.filename, r.id, r.uploaded_by);
+      written++;
+    } catch (e) {
+      console.error(`gravie: could not settle ${r.filename}:`, e.message);
+    }
+  }
+  const total = (await quoteStore.listCarrierQuotes("Gravie")).length;
+  if (reread || written) console.log(`gravie: re-read ${reread} workbook(s), wrote ${written} quote(s); ${total} Gravie quote(s) stored as rows`);
+  if (reread) await proposalsChanged();
+  return { reread, written, total };
+}
+
+/**
  * A zip of Gravie rate workbooks, one per group: each is parsed, matched to
  * its group by the name in the sheet header, and filed as that group's Gravie
  * proposal — assigned, in the Gravie slot, with every priced plan in the
@@ -2714,6 +2795,7 @@ async function ingestGravieZip(buf, by) {
       confidence: 1,
       slot: "Gravie",
     });
+    await storeGravieQuote(g, parsed, base, row.id, by);
     stored.push({ group: g.name, id: row.id, plans: extracted.plans.length });
   }
   await proposalsChanged();
@@ -2748,6 +2830,27 @@ app.post(
     }
   },
 );
+
+/** Every carrier quote stored as rows, one per carrier and group, without the plans. */
+app.get("/api/admin/quotes", requireStaff, async (req, res) => {
+  try {
+    const carrier = String(req.query.carrier || "").trim() || null;
+    res.json({ quotes: await quoteStore.listCarrierQuotes(carrier), durable: !!db });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** One group's quote from a carrier, every plan with its four tier rates. */
+app.get("/api/admin/quotes/:carrier/:group", requireStaff, async (req, res) => {
+  try {
+    const q = await quoteStore.carrierQuote(String(req.params.carrier), String(req.params.group));
+    if (!q) return res.status(404).json({ error: "No such quote." });
+    res.json(q);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.get("/api/admin/proposals", requireStaff, async (req, res) => {
   try {
@@ -2895,7 +2998,7 @@ async function boot() {
         funding = { id: fr.id, month: fr.month, filename: fr.filename, fileStamp: fr.file_stamp, lines: fr.lines, byInvoice: fr.by_invoice, summary: fr.summary, uploadedBy: fr.uploaded_by, uploadedAt: fr.uploaded_at };
       }
       const st = await db.stats();
-      console.log(`postgres connected — ${st.groups} imported groups, ${st.overrides} rate overrides`);
+      console.log(`postgres connected — ${st.groups} imported groups, ${st.overrides} rate overrides, ${st.quotes} carrier quotes`);
     } catch (e) {
       // A database that is configured but unreachable must not take the site
       // down; fall back to the shipped census and say so loudly.
@@ -2922,6 +3025,13 @@ async function boot() {
   }
   await proposalsChanged();
   await refreshAudit();
+  // Gravie workbooks already on file, re-read with the current parser and
+  // written as rows where they are not yet. Logged, never fatal.
+  try {
+    await settleGravieQuotes();
+  } catch (e) {
+    console.error("gravie:", e.message);
+  }
   // The inbox: first the key pair a file can be sealed to (made on the first
   // boot, kept in settings, its public half in every deploy log), then any
   // files placed in the bucket or at a URL, once every group is known to

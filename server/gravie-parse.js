@@ -1,9 +1,11 @@
 // A Gravie rate workbook: the quote Gravie returns for one group, as an
-// Excel file. Each sheet prices the same menu on one network — "EPO" and
-// "PPO" on Cigna Open Access Plus, and for groups in a LocalPlus area a
-// "Narrow Network" sheet with both EPO and PPO rows — under a header block
-// (group, effective date, quote number, subscribers quoted by tier). The
-// "Benefits Grid (static)" sheet is the same for every group and is skipped.
+// Excel file. The "EPO" and "PPO" sheets each price the same 67 plan designs
+// on Cigna Open Access Plus — the EPO version has no out-of-network cover,
+// the PPO does — under a header block (group, effective date, quote number,
+// subscribers quoted by tier). That is the quote Kennion works from: 134
+// plans for every group. Some workbooks also carry a "Narrow Network" sheet
+// (Cigna LocalPlus, offered only in a few areas) and a "Benefits Grid
+// (static)" sheet that is the same for every group; both are left out.
 import * as XLSX from "xlsx";
 
 const TIER_KEYS = { "EE:": "EE", "ES:": "ES", "EC:": "EC", "F:": "FAM", "Total:": "total" };
@@ -88,7 +90,9 @@ function readPlans(rows, sheetName, network) {
     out.push({
       name,
       sheet: sheetName,
-      network: `${network}${epo ? " (EPO)" : " (PPO)"}`,
+      /** "EPO" or "PPO": the one thing that differs between the two sheets. */
+      variant: epo ? "EPO" : "PPO",
+      network: `${network} (${epo ? "EPO" : "PPO"})`,
       planType: planType(c.type >= 0 ? r[c.type] : null, name),
       deductible: c.ded >= 0 ? String(r[c.ded] ?? "") : "",
       oopMax: c.oop >= 0 ? String(r[c.oop] ?? "") : "",
@@ -99,26 +103,43 @@ function readPlans(rows, sheetName, network) {
   return out;
 }
 
+/** The sheets that make up the quote: Open Access Plus EPO and PPO, nothing else. */
+const RATE_SHEETS = /^(EPO|PPO)$/i;
+
 /**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
- * tier, and every priced plan across the rate sheets — one row per plan per
- * network, since an EPO and a PPO of the same design are two prices.
+ * tier, and every priced plan on the EPO and PPO sheets — one row per plan
+ * per sheet, since an EPO and a PPO of the same design are two prices.
  */
 export function parseGravieWorkbook(buf) {
   const wb = XLSX.read(buf, { type: "buffer" });
   let header = null;
   const plans = [];
   for (const sheetName of wb.SheetNames) {
-    if (/benefits grid/i.test(sheetName)) continue;
+    if (!RATE_SHEETS.test(sheetName.trim())) continue;
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: null });
     const h = readHeader(rows);
     if (!header && h.group) header = h;
-    const network = /narrow/i.test(sheetName) ? "Cigna LocalPlus" : "Cigna Open Access Plus";
-    plans.push(...readPlans(rows, sheetName, network));
+    plans.push(...readPlans(rows, sheetName.trim().toUpperCase(), "Cigna Open Access Plus"));
   }
   if (!header || !header.group) throw new Error("Not a Gravie rate workbook: no group name in a sheet header");
-  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans");
+  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on an EPO or PPO sheet");
   return { ...header, plans };
+}
+
+/** The rows the carrier_quotes tables take: one per plan, monthly at the quoted tiers. */
+export function gravieQuoteRows(p) {
+  const t = p.tiers || {};
+  return p.plans.map((pl) => ({
+    name: pl.name,
+    planType: pl.planType,
+    network: pl.variant,
+    deductible: pl.deductible || null,
+    oopMax: pl.oopMax || null,
+    coinsurance: pl.coinsurance,
+    rates: pl.rates,
+    monthly: +(["EE", "ES", "EC", "FAM"].reduce((n, k) => n + (pl.rates[k] || 0) * (t[k] || 0), 0)).toFixed(2),
+  }));
 }
 
 /**
@@ -160,8 +181,8 @@ export function gravieExtracted(p) {
     plans,
     total_monthly: null,
     summary:
-      `Gravie level-funded rate workbook, quote ${p.quoteNumber || "n/a"}: ${plans.length} plan prices across ` +
-      `${sheets.join(", ")} on ${p.network || "Cigna"}, priced on ${enrolled ?? "?"} subscribers ` +
+      `Gravie level-funded rate workbook, quote ${p.quoteNumber || "n/a"}: ${plans.length} plan prices, ` +
+      `${sheets.join(" and ")} on Cigna Open Access Plus, priced on ${enrolled ?? "?"} subscribers ` +
       `(EE ${t.EE ?? 0}, ES ${t.ES ?? 0}, EC ${t.EC ?? 0}, F ${t.FAM ?? 0}).`,
     audit_flags: [],
   };
