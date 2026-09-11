@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { TIERS, fmtDate, fmtDed, money, money0, type Group, type MarketPlan } from "@/lib/model";
+import { TIERS, censusCounts, fmtDate, fmtDed, money, money0, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 
 /**
@@ -23,6 +23,35 @@ export interface GridProps {
   onToggleSelected: (plan: string) => void;
   /** Whether any UHC rate is a direct quote, for the footnote. */
   direct: boolean;
+  /** Today's employer contribution by tier — the budget's starting point and the "today" it is compared to. */
+  contribution: TierContribution[];
+  /** The employer's monthly budget per tier: what they put in toward any plan. */
+  budget: Record<TierKey, number>;
+  budgetChanged: boolean;
+  onBudgetChange: (key: TierKey, value: number) => void;
+  onBudgetReset: () => void;
+}
+
+const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
+
+/**
+ * What the employer pays for a plan at the budget: each tier's headcount
+ * times the lower of the budget and that tier's rate, so a budget above the
+ * premium never pays more than the premium. Employees cover the rest.
+ */
+export function costSplit(p: MarketPlan, budget: Record<TierKey, number>, counts: Record<TierKey, number>) {
+  let er = 0;
+  let total = 0;
+  let any = false;
+  for (const t of TIERS) {
+    const n = counts[t.key] || 0;
+    const rate = p.rates[t.key];
+    if (!n || rate == null) continue;
+    any = true;
+    er += Math.min(Math.max(budget[t.key] || 0, 0), rate) * n;
+    total += rate * n;
+  }
+  return any ? { er: +er.toFixed(2), ee: +(total - er).toFixed(2), total: +total.toFixed(2) } : null;
 }
 
 type Tab = "carrier" | "ded" | "oop" | "funding" | "cost";
@@ -65,8 +94,14 @@ export function fundingOf(p: MarketPlan): string {
 const basisOf = (p: MarketPlan) =>
   p.quoted ? `Quoted for you ${fmtDate(p.quoted.date || undefined)}` : p.indicative ? "Indicative rate †" : p.pending ? "Quote requested" : "Carrier menu rate";
 
-export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct }: GridProps) {
+export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, contribution, budget, budgetChanged, onBudgetChange, onBudgetReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
+  const [budgetOpen, setBudgetOpen] = useState(true);
+  const [sortBy, setSortBy] = useState<"total" | "er">("total");
+  const counts = useMemo(() => censusCounts(g), [g]);
+  const split = (p: MarketPlan) => costSplit(p, budget, counts);
+  const budgetTotal = TIERS.reduce((n, t) => n + (counts[t.key] || 0) * (budget[t.key] || 0), 0);
+  const todayEr = contribution.reduce((n, t) => n + (t.er ?? 0) * t.count, 0);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
   const [oops, setOops] = useState<Set<string>>(new Set());
@@ -119,8 +154,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network}`.toLowerCase().includes(q)),
       )
       .slice()
-      .sort((a, b) => ((a.monthly ?? Infinity) - (b.monthly ?? Infinity)) * costDir || a.plan.localeCompare(b.plan));
-  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir]);
+      .sort((a, b) => {
+        const va = sortBy === "er" ? (split(a)?.er ?? Infinity) : (a.monthly ?? Infinity);
+        const vb = sortBy === "er" ? (split(b)?.er ?? Infinity) : (b.monthly ?? Infinity);
+        return (va - vb) * costDir || a.plan.localeCompare(b.plan);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plans, carriers, deds, oops, fundings, costs, costTier, q, costDir, sortBy, budget, counts]);
 
   const filtering = carriers.size + deds.size + oops.size + fundings.size + costs.size > 0 || !!q;
   const clearAll = () => {
@@ -150,7 +190,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setSaving(true);
     try {
       const { downloadOptions } = await import("@/lib/optionsheet");
-      downloadOptions(g, list, proposed, totals.total);
+      downloadOptions(g, list, proposed, totals.total, budget, counts);
     } finally {
       setSaving(false);
     }
@@ -173,6 +213,57 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   return (
     <div>
+      {/* The budget bar: what the employer puts in per tier, and what that adds up to. */}
+      <div id="budget" className="panel anchor" style={{ ...panel, marginBottom: 12, padding: budgetOpen ? "12px 16px 14px" : "10px 16px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 10 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Your monthly budget</h3>
+            <span style={{ fontSize: 20, fontWeight: 600, color: C.ink, letterSpacing: "-0.3px", ...num }}>{money0(budgetTotal)}</span>
+            <span style={{ fontSize: 12.5, color: C.faint }}>
+              / mo across {totals.enrolled} enrolled
+              {!budgetOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(budget[t.key] || 0)}`).join(" · ")}`}
+              {todayEr > 0 && ` · today ${money0(todayEr)}`}
+            </span>
+          </div>
+          <div className="noprint" style={{ display: "flex", gap: 6 }}>
+            {budgetChanged && (
+              <button onClick={onBudgetReset} style={{ ...chip(false), color: C.blue }}>
+                Reset to today
+              </button>
+            )}
+            <button onClick={() => setBudgetOpen((v) => !v)} style={chip(false)} aria-expanded={budgetOpen}>
+              {budgetOpen ? "Collapse ▴" : "Edit ▾"}
+            </button>
+          </div>
+        </div>
+        {budgetOpen && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 12 }}>
+            {TIERS.map((t) => {
+              const today = contribution.find((c) => c.key === t.key);
+              return (
+                <label key={t.key} style={{ display: "block", padding: "8px 10px", border: `1px solid ${C.border}`, borderRadius: 4, background: C.zebra }}>
+                  <div style={{ fontSize: 12, color: C.muted }}>{TIER_NAMES[t.key]}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 4 }}>
+                    <span style={{ fontSize: 14, color: C.faint }}>$</span>
+                    <BudgetInput value={budget[t.key] || 0} onChange={(v) => onBudgetChange(t.key, v)} label={`Monthly budget for ${TIER_NAMES[t.key]}`} />
+                    <span style={{ fontSize: 12, color: C.faint }}>/ mo each</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginTop: 3 }}>
+                    {counts[t.key] || 0} enrolled{today && today.er != null ? ` · today ${money0(today.er)}` : ""}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        {budgetOpen && (
+          <div style={{ fontSize: 12, color: C.faint, marginTop: 8, lineHeight: 1.5 }}>
+            Employer Cost on each plan is your budget × enrolled in each tier, never more than that plan&rsquo;s premium; employees pay the difference.
+            Today&rsquo;s figures are what you contribute now, averaged by tier.
+          </div>
+        )}
+      </div>
+
       {/* Filter tabs: one open at a time, each with its chips beneath. */}
       <div className="noprint" style={{ ...panel, padding: "10px 14px 12px", marginBottom: 12 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
@@ -221,8 +312,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             {tab === "funding" && chips(fundingList, fundings, setFundings)}
             {tab === "cost" && (
               <>
-                <span style={{ fontSize: 12.5, color: C.muted }}>Sort</span>
-                <button onClick={() => setCostDir(1)} style={chip(costDir > 0)}>
+                <span style={{ fontSize: 12.5, color: C.muted }}>Sort by</span>
+                <button onClick={() => setSortBy("total")} style={chip(sortBy === "total")}>
+                  Total monthly
+                </button>
+                <button onClick={() => setSortBy("er")} style={chip(sortBy === "er")}>
+                  Employer cost
+                </button>
+                <button onClick={() => setCostDir(1)} style={{ ...chip(costDir > 0), marginLeft: 6 }}>
                   $ → $$$$
                 </button>
                 <button onClick={() => setCostDir(-1)} style={chip(costDir < 0)}>
@@ -275,7 +372,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 </tr>
               </thead>
               <tbody>
-                {detailRows(totals.total).map(([label, f, strong]) => (
+                {detailRows(totals.total, split).map(([label, f, strong]) => (
                   <tr key={label}>
                     <td style={{ ...cmpLabel, ...(strong ? { fontWeight: 600, color: C.ink } : {}) }}>{label}</td>
                     {proposed.map((p) => (
@@ -309,7 +406,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              {["", "Carrier", "Plan", "Deductible", "OOP Max", "Monthly Premium", "Vs Today", ""].map((h, i) => (
+              {["", "Carrier", "Plan", "Deductible", "OOP Max", "Employer Cost", "Total Monthly", ""].map((h, i) => (
                 <th
                   key={i}
                   style={{
@@ -330,7 +427,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </thead>
           <tbody>
             {list.map((p, i) => {
-              const dv = p.monthly == null ? null : p.monthly - totals.total;
+              const sp = split(p);
               const heart = !!selected[p.plan];
               const added = inProposal(p.plan);
               const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
@@ -363,12 +460,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   </td>
                   <td style={right}>{fmtDed(p.ded)}</td>
                   <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
-                  <td style={{ ...right, fontWeight: 600, whiteSpace: "nowrap" }}>
-                    <span style={{ fontSize: 11, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
-                    {p.monthly == null ? (p.pending ? "quote requested" : "—") : money0(p.monthly) + (p.indicative ? " †" : "")}
+                  <td style={{ ...right, fontWeight: 600, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
+                    {sp ? money0(sp.er) : p.pending ? "quote requested" : "—"}
+                    {sp && sp.ee > 0 && <div style={{ fontSize: 11, fontWeight: 400, color: C.faint }}>employees {money0(sp.ee)}</div>}
                   </td>
-                  <td style={{ ...right, color: dv == null ? C.ghost : dv >= 0 ? C.red : C.green }}>
-                    {dv == null ? "" : `${dv >= 0 ? "+" : "−"}${money0(Math.abs(dv))}`}
+                  <td style={{ ...right, whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 11, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
+                    {p.monthly == null ? "—" : money0(p.monthly) + (p.indicative ? " †" : "")}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button
@@ -393,7 +491,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}, {costDir > 0 ? "lowest" : "highest"} monthly premium first.
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}, {costDir > 0 ? "lowest" : "highest"} {sortBy === "er" ? "employer cost" : "total monthly"} first.
           Click a plan for every detail. ♡ shortlists it for Sign Up; + adds it to a proposal you can download.
         </div>
       </div>
@@ -430,16 +528,49 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               </span>
               <span style={{ fontSize: 12.5, color: C.faint }}>/ mo with all {totals.enrolled} enrolled on this plan</span>
             </div>
-            {opened.monthly != null && (
-              <div style={{ fontSize: 13, fontWeight: 600, color: opened.monthly - totals.total >= 0 ? C.red : C.green }}>
-                {opened.monthly - totals.total >= 0 ? "+" : "−"}
-                {money0(Math.abs(opened.monthly - totals.total))} / mo vs today ({Math.round(((opened.monthly - totals.total) / totals.total) * 100)}%)
-              </div>
-            )}
+            {(() => {
+              const sp = split(opened);
+              return sp ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 18, fontSize: 13, marginTop: 4 }}>
+                  <span><strong style={{ color: C.ink }}>{money0(sp.er)}</strong> <span style={{ color: C.muted }}>you pay at your budget</span></span>
+                  <span><strong style={{ color: C.ink }}>{money0(sp.ee)}</strong> <span style={{ color: C.muted }}>employees pay between them</span></span>
+                  {totals.total > 0 && (
+                    <span style={{ fontWeight: 600, color: opened.monthly! - totals.total >= 0 ? C.red : C.green }}>
+                      {opened.monthly! - totals.total >= 0 ? "+" : "−"}
+                      {money0(Math.abs(opened.monthly! - totals.total))} total vs today
+                    </span>
+                  )}
+                </div>
+              ) : null;
+            })()}
+            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13, marginTop: 12 }}>
+              <thead>
+                <tr>
+                  {["Tier", "Enrolled", "Premium", "You pay", "Employee pays"].map((h, i) => (
+                    <th key={h} style={{ ...cmpLabel, textAlign: i ? "right" : "left", fontWeight: 600, color: C.ink }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {TIERS.map((t) => {
+                  const rate = opened.rates[t.key];
+                  const er = rate == null ? null : Math.min(Math.max(budget[t.key] || 0, 0), rate);
+                  return (
+                    <tr key={t.key}>
+                      <td style={cmpLabel}>{TIER_NAMES[t.key]}</td>
+                      <td style={{ ...cmpCell, textAlign: "right", ...num }}>{counts[t.key] || 0}</td>
+                      <td style={{ ...cmpCell, textAlign: "right", ...num }}>{rate == null ? "—" : money(rate)}</td>
+                      <td style={{ ...cmpCell, textAlign: "right", ...num }}>{er == null ? "—" : money(er)}</td>
+                      <td style={{ ...cmpCell, textAlign: "right", ...num, fontWeight: 600, color: C.ink }}>{rate == null || er == null ? "—" : money(rate - er)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13, marginTop: 12 }}>
               <tbody>
-                {detailRows(totals.total)
-                  .filter(([label]) => label !== "Monthly premium" && label !== "Vs today")
+                {detailRows(totals.total, split)
+                  .filter(([label]) => !["Monthly premium", "Vs today", "Employer cost", "Employees pay"].includes(label) && !TIERS.some((t) => t.label === label))
                   .map(([label, f]) => (
                     <tr key={label}>
                       <td style={{ ...cmpLabel, width: 150 }}>{label}</td>
@@ -464,7 +595,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 }
 
 /** Every detail of a plan, as label / value rows, shared by the popup and the proposal. */
-function detailRows(today: number): [string, (p: MarketPlan) => string, boolean?][] {
+function detailRows(
+  today: number,
+  split: (p: MarketPlan) => { er: number; ee: number; total: number } | null,
+): [string, (p: MarketPlan) => string, boolean?][] {
   return [
     ["Funding", fundingOf],
     ["Plan type", (p) => p.type || "—"],
@@ -475,6 +609,8 @@ function detailRows(today: number): [string, (p: MarketPlan) => string, boolean?
     ["Rx", (p) => p.rx],
     ...TIERS.map((t): [string, (p: MarketPlan) => string] => [t.label, (p) => (p.rates[t.key] == null ? "—" : money(p.rates[t.key]))]),
     ["Basis", basisOf],
+    ["Employer cost", (p) => (split(p) ? money0(split(p)!.er) : "—"), true],
+    ["Employees pay", (p) => (split(p) ? money0(split(p)!.ee) : "—")],
     ["Monthly premium", (p) => (p.monthly == null ? "—" : money0(p.monthly)), true],
     ["Vs today", (p) => (p.monthly == null ? "—" : `${p.monthly - today >= 0 ? "+" : "−"}${money0(Math.abs(p.monthly - today))} / mo`)],
   ];
@@ -519,3 +655,28 @@ const linkBtnStyle = {
   cursor: "pointer",
   display: "block",
 } as const;
+
+/** A dollar field that keeps what is typed while focused and commits a number on every valid keystroke. */
+function BudgetInput({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) setText(String(value));
+  }, [value, focused]);
+  return (
+    <input
+      value={text}
+      inputMode="decimal"
+      aria-label={label}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => {
+        const v = e.target.value.replace(/[^\d.]/g, "");
+        setText(v);
+        const n = Number(v);
+        if (v !== "" && !Number.isNaN(n)) onChange(n);
+      }}
+      style={{ ...textInput, width: 90, padding: "5px 8px", fontSize: 15, fontWeight: 600, color: C.ink, ...num }}
+    />
+  );
+}
