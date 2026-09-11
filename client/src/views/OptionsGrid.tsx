@@ -211,7 +211,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   return (
     <div>
       {/* Employer Contribution: four figures, Apply; collapses to one line once set. */}
-      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.page, border: `2px solid ${C.border}`, marginBottom: 12, padding: 0 }}>
+      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.border, border: `2px solid ${C.inputEdge}`, marginBottom: 12, padding: 0 }}>
         <button
           onClick={() => setContribOpen((v) => !v)}
           aria-expanded={contribOpen}
