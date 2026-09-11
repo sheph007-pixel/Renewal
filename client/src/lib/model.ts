@@ -913,29 +913,27 @@ export function tierSplit(
   p: MarketPlan,
   contribution: Record<TierKey, number>,
   t: TierKey,
-): { rate: number; er: number; ee: number; over: boolean } | null {
+): { rate: number; er: number; ee: number } | null {
   const rate = p.rates[t];
   if (rate == null) return null;
   const er = Math.max(contribution[t] || 0, 0);
-  return { rate, er: +er.toFixed(2), ee: +Math.max(0, rate - er).toFixed(2), over: er > rate };
+  return { rate, er: +er.toFixed(2), ee: +Math.max(0, rate - er).toFixed(2) };
 }
 
 /**
  * A plan's monthly split at the employer's contribution: the contribution
  * times headcount in every tier — the same figure on every plan — and what
- * employees pay between them. `underBudget` when some enrolled tier's
- * premium is below the contribution. Null when no enrolled tier has a rate.
+ * employees pay between them. Null when no enrolled tier has a rate.
  */
 export function costSplit(
   p: MarketPlan,
   contribution: Record<TierKey, number>,
   counts: Record<TierKey, number>,
-): { er: number; ee: number; total: number; underBudget: boolean } | null {
+): { er: number; ee: number; total: number } | null {
   let er = 0;
   let ee = 0;
   let total = 0;
   let any = false;
-  let underBudget = false;
   for (const t of TIERS) {
     const n = counts[t.key] || 0;
     const s = tierSplit(p, contribution, t.key);
@@ -944,9 +942,8 @@ export function costSplit(
     er += s.er * n;
     ee += s.ee * n;
     total += s.rate * n;
-    if (s.over) underBudget = true;
   }
-  return any ? { er: +er.toFixed(2), ee: +ee.toFixed(2), total: +total.toFixed(2), underBudget } : null;
+  return any ? { er: +er.toFixed(2), ee: +ee.toFixed(2), total: +total.toFixed(2) } : null;
 }
 
 // ---- Gravie benefits by plan family -------------------------------------

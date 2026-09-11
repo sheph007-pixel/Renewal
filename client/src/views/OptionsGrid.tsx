@@ -464,7 +464,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : p.pending ? "quote requested" : "—"}
-                    {sp?.underBudget && <div style={{ fontSize: 10.5, fontWeight: 400, color: C.faint }}>under budget</div>}
                   </td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "—" : money0(p.monthly)}
