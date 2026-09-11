@@ -25,7 +25,7 @@ import Admin, { type ImportRecord } from "@/views/Admin";
 import type { CarrierStats } from "@/views/Reconciliation";
 import type { FundingInfo } from "@/views/Funding";
 import Current, { CURRENT_SECTIONS } from "@/views/Current";
-import Options, { OPTIONS_SECTIONS, type SortKey } from "@/views/Options";
+import Options, { OPTIONS_SECTIONS } from "@/views/Options";
 import Home from "@/views/Home";
 import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
@@ -130,10 +130,6 @@ export default function App() {
   const [ai, setAi] = useState(false);
   const [durable, setDurable] = useState(false);
 
-  const [sort, setSort] = useState<SortKey>("monthly");
-  const [dir, setDir] = useState(1);
-  const [gridQuery, setGridQuery] = useState("");
-  const [carriers, setCarriers] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
@@ -881,10 +877,6 @@ export default function App() {
                 g={g}
                 rows={rows}
                 totals={totals}
-                sort={sort}
-                dir={dir}
-                gridQuery={gridQuery}
-                carriers={carriers}
                 selected={selected}
                 signUpHref={hrefFor("signup")}
                 contribution={contribution}
@@ -894,12 +886,6 @@ export default function App() {
                   setContributionOverride((prev) => ({ ...(prev || contributionValues), [key]: v }))
                 }
                 onContributionReset={() => setContributionOverride(null)}
-                onSort={(k) => {
-                  setDir((d) => (sort === k ? -d : 1));
-                  setSort(k);
-                }}
-                onGridQuery={setGridQuery}
-                onToggleCarrier={(c) => setCarriers((prev) => ({ ...prev, [c]: !prev[c] }))}
                 onToggleSelected={toggleSelected}
               />
             ) : tab === "supplemental" ? (

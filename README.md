@@ -11,11 +11,12 @@ with its access code and sees two things:
 2. **2027 Medical Plan Options** — the shopped market (UnitedHealthcare Level
    Funded, Gravie, Nationwide, Angle, Cobalt), every plan costed at the group's own census,
    with three Kennion recommendations above one grid of every plan from every
-   carrier, lowest monthly premium first. The grid sorts on any column and
-   filters by carrier, plan type, deductible ceiling, "quoted for you" and a
-   search; up to four plans can be picked to compare side by side, and the
-   grid and comparison download as an Excel file. Groups build a shortlist
-   and send it with a note to their rep.
+   carrier, lowest monthly premium first. Filter tabs along the top — Carrier,
+   Deductible and OOP Max by range, Funding, Total Cost ($ to $$$$, sorted
+   either way) — and a search; each row is carrier, plan, deductible, OOP max
+   and monthly premium, and clicking it opens every detail. A heart shortlists
+   a plan (the shortlist Sign Up sends); + adds it to a proposal shown side by
+   side that downloads as Excel or prints to PDF.
 
 Both sections print to a clean report, and every page carries the carrier
 disclaimer footer — including in print.

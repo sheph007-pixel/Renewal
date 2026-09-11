@@ -57,6 +57,21 @@ textarea {
   .printonly {
     display: block !important;
   }
+  /* "PDF" on the options page: the proposal alone, everything else hidden. */
+  body.print-proposal * {
+    visibility: hidden;
+  }
+  body.print-proposal #proposal,
+  body.print-proposal #proposal * {
+    visibility: visible;
+  }
+  body.print-proposal #proposal {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+  }
 }
 
 /* The client shell: a full-height rail down the left, the page beside it. The
