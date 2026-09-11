@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { hasDirectQuote, marketPlans, type Group, type KennionData, type PlanRow, type TierContribution, type TierKey } from "@/lib/model";
+import { hasDirectQuote, marketPlans, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
 import { C, h2, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
@@ -13,7 +13,6 @@ export const OPTIONS_SECTIONS = [
 interface Props {
   data: KennionData;
   g: Group;
-  rows: PlanRow[];
   totals: { total: number; enrolled: number };
   selected: Record<string, boolean>;
   /** Where the shortlist is reviewed and sent — its own page now. */
@@ -36,7 +35,6 @@ interface Props {
 export default function Options({
   data,
   g,
-  rows,
   totals,
   selected,
   signUpHref,
@@ -49,17 +47,10 @@ export default function Options({
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
   const direct = hasDirectQuote(data, g);
-  const priced = plans.filter((p) => p.monthly != null).length;
   const short = plans.filter((p) => selected[p.plan]);
 
   return (
     <div>
-      <p style={{ margin: "0 0 14px", fontSize: 13.5, lineHeight: 1.6, color: C.body, textWrap: "pretty" }}>
-        Your 2026 program plans end December 31, 2026. We priced {priced} plans from every carrier at your enrollment
-        of {totals.enrolled}. Enter what you&rsquo;ll contribute per tier and Apply; Employer Cost shows what each plan costs you.
-        {rows.length ? ` Today you spend ${money(totals.total)} a month.` : ""}
-      </p>
-
       <OptionsGrid
         g={g}
         plans={plans}
@@ -102,6 +93,3 @@ export default function Options({
   );
 }
 
-function money(n: number): string {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-}
