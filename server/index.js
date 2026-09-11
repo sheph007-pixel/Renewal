@@ -2496,8 +2496,30 @@ function lacksBenefits(r) {
  * per-plan benefits question, so existing cards fill in without a click.
  * Gravie workbooks are parsed, not read, and are skipped. Logged, never fatal.
  */
+/**
+ * A read that was in flight when the server last stopped: nothing survives
+ * a restart, so any row still "analyzing" at boot is orphaned. Pick each
+ * one back up (the file is stored) and, failing that, let staff assign it.
+ */
+async function resumeOrphanedReads() {
+  const rows = await proposalStore.listProposals();
+  const stuck = rows.filter((r) => r.status === "analyzing");
+  if (!stuck.length) return;
+  console.log(`proposals: resuming ${stuck.length} read(s) interrupted by the last restart`);
+  for (const r of stuck) {
+    const f = await proposalStore.getProposalFile(r.id).catch(() => null);
+    if (!f) {
+      await proposalStore.updateProposal(r.id, { status: r.group_name ? "assigned" : "unassigned", error: "The file could not be read back after a restart." });
+      continue;
+    }
+    await runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, !!r.group_name);
+  }
+  await proposalsChanged();
+}
+
 async function backfillPlanBenefits() {
   if (!aiEnabled()) return;
+  await resumeOrphanedReads();
   const rows = await proposalStore.listProposals();
   const want = rows.filter((r) => r.status !== "container" && r.slot !== "Gravie" && r.kind !== "invoice" && lacksBenefits(r));
   if (!want.length) return;
@@ -2556,7 +2578,9 @@ async function runAnalysis(id, file, keepAssignment) {
     };
     // The slot comes from what was read, unless staff already set one.
     if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical);
-    if (keepAssignment) {
+    // Staff may assign a group while the read is still running; that choice stands.
+    const staffAssigned = !!(current && current.group_name && current.assigned_by && current.assigned_by !== "ai" && current.assigned_by !== "filename");
+    if (keepAssignment || staffAssigned) {
       // Uploaded straight onto a company page: the human already chose the
       // group. Note a disagreement rather than overriding them.
       if (matched && current && current.group_name && matched.name !== current.group_name) {
