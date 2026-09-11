@@ -173,6 +173,24 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
   console.log("cookie session: sign-in sets it, it signs in alone, forgeries and absence do not — ok");
 }
 
+// 8c. PPO only: no EPO plan reaches a client, from UnitedHealthcare's menu or
+// a carrier proposal, and a current plan mapped to an EPO points at its PPO twin.
+{
+  const menu = payload.uhc.menu || [];
+  assert.ok(menu.length > 0, "a menu");
+  assert.ok(menu.every((m) => String(m.type).toUpperCase() !== "EPO"), "no EPO on the client's UHC menu");
+  const codes = new Set(menu.map((m) => m.plan));
+  for (const m of payload.uhc.mapping || []) {
+    assert.ok(!/^E/.test(m.uhcPlan) || codes.has(m.uhcPlan), `mapping to ${m.uhcPlan} points at a plan the client can see`);
+  }
+  for (const p of payload.proposals || []) {
+    for (const pl of p.plans || []) {
+      assert.ok(!/\bEPO\b/i.test(`${pl.network || ""} ${pl.planType || ""} ${pl.name || ""}`), `no EPO plan on proposal ${p.id}`);
+    }
+  }
+  console.log("ppo only: no EPO plan in the client payload — ok");
+}
+
 // 9. Every response carries the headers that keep a token out of a referrer.
 const headers = (await fetch(`${base}/healthz`)).headers;
 assert.equal(headers.get("referrer-policy"), "no-referrer", "a group's token never rides a Referer header");

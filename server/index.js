@@ -973,7 +973,7 @@ app.post("/api/signin", async (req, res) => {
     overrides: overridesFor(g.name),
     // The carrier proposals on file for this group — plans and tier rates as
     // read off the documents — and this month's billing, counts and rates only.
-    proposals: currentProposals[g.name] || [],
+    proposals: clientProposals(g.name),
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
     // This month's invoice, if one is filed: enough to offer the link, not the file.
@@ -1171,17 +1171,47 @@ function tierKeyOfCensus(census) {
 function clientUhc(g) {
   const u = data.uhc || {};
   const det = u.detail || {};
-  const mine = det[g.name] || det[g.name.replace(/,? (Inc|LLC)\.?$/i, "")] || null;
+  let mine = det[g.name] || det[g.name.replace(/,? (Inc|LLC)\.?$/i, "")] || null;
   const refName = Object.keys(det)[0];
   const refRows = refName ? (det[refName] || []).filter((r) => r.tier === "EE" && r.currentRate) : [];
   const refEE = refRows.length ? refRows.reduce((a, r) => a + r.currentRate, 0) / refRows.length : null;
+  let menu = u.menu || [];
+  let mapping = u.mapping || [];
+  if (ppoOnly()) {
+    // PPO only: the EPO menu plans go; a current plan mapped to an EPO is
+    // mapped to its PPO twin instead (same deductible, out-of-pocket and
+    // coinsurance — UHC codes them E… and P…), and a group's quoted rate on
+    // an EPO is left out rather than shown under the twin's name.
+    const byPlan = new Map(menu.map((m) => [m.plan, m]));
+    menu = menu.filter((m) => !isEpoMenu(m));
+    const twinOf = (code) => {
+      const e = byPlan.get(code);
+      if (!e || !isEpoMenu(e)) return code;
+      const p = byPlan.get(code.replace(/^E/, "P"));
+      if (p && !isEpoMenu(p)) return p.plan;
+      const alike = menu.find((m) => m.ded === e.ded && m.oop === e.oop && m.coins === e.coins);
+      return alike ? alike.plan : code;
+    };
+    mapping = mapping.map((m) => {
+      const uhcPlan = twinOf(m.uhcPlan);
+      return uhcPlan === m.uhcPlan ? m : { ...m, uhcPlan, type: "PPO" };
+    });
+    if (mine) mine = mine.filter((r) => !r.uhcPlan || !isEpoMenu(byPlan.get(r.uhcPlan) || {}));
+  }
   return {
-    menu: u.menu || [],
-    mapping: u.mapping || [],
+    menu,
+    mapping,
     detail: mine ? { [g.name]: mine } : {},
     summary: {},
     refEE,
   };
+}
+
+/** A group's current proposals as a client sees them: PPO only when the rule says so. */
+function clientProposals(name) {
+  const list = currentProposals[name] || [];
+  if (!ppoOnly()) return list;
+  return list.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
 }
 
 /** The newest client invoice filed under a group, without its bytes; null if none. */
@@ -2008,6 +2038,51 @@ async function loadRatesLock() {
   }
 }
 const ratesLocked = () => !!(ratesLock && ratesLock.locked);
+
+/**
+ * What a client is shown of the market. One rule today: **PPO only** — an
+ * EPO twin of a PPO plan (UnitedHealthcare's E-coded menu plans, Gravie's
+ * "EPO" sheet) is priced a few dollars under it and adds a choice without
+ * adding a decision, so it is kept out of every client page. The rule is a
+ * portal-wide setting, kept in kennion.settings under marketRules, and the
+ * stored quotes keep every plan; this only decides what is served.
+ */
+const DEFAULT_MARKET_RULES = { networks: "ppo-only" };
+let marketRules = { ...DEFAULT_MARKET_RULES };
+async function loadMarketRules() {
+  if (!db) return;
+  try {
+    const stored = await db.getSetting("marketRules");
+    if (stored && typeof stored === "object") marketRules = { ...DEFAULT_MARKET_RULES, ...stored };
+    else await db.setSetting("marketRules", marketRules, "system");
+  } catch (e) {
+    console.error("could not read the market rules:", e.message);
+  }
+}
+const ppoOnly = () => marketRules.networks === "ppo-only";
+/** A proposal plan that is an EPO: says so in its network, its type, or its name. */
+const isEpoPlan = (pl) =>
+  /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
+/** A UnitedHealthcare menu plan that is an EPO. */
+const isEpoMenu = (m) => String(m.type || "").toUpperCase() === "EPO";
+
+app.get("/api/admin/market-rules", requireStaff, (req, res) => {
+  res.json(marketRules);
+});
+
+app.post("/api/admin/market-rules", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const networks = String((req.body || {}).networks || "");
+  if (!["ppo-only", "all"].includes(networks)) return res.status(400).json({ error: "networks must be ppo-only or all" });
+  const next = { ...marketRules, networks, by: req.staffEmail || null, at: new Date().toISOString() };
+  try {
+    if (db) await db.setSetting("marketRules", next, req.staffEmail || null);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  marketRules = next;
+  console.warn(`market rules: networks=${networks} by ${req.staffEmail}`);
+  res.json(next);
+});
 
 app.get("/api/admin/rates-lock", requireStaff, (req, res) => {
   res.json(ratesLock || { locked: false });
@@ -3014,6 +3089,7 @@ async function boot() {
   }
   markAdminCodeReady();
   await loadRatesLock();
+  await loadMarketRules();
   await loadGroupCookieSecret();
   rebuild();
   // An import that covered the roster before this rule existed still says
