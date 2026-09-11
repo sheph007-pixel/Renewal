@@ -131,8 +131,6 @@ export const SUPPLEMENTAL_SECTIONS: SupplementalSection[] = [
 export const SUPPLEMENTAL_FOOTNOTE =
   "Rates shown for: Vol. Life $100K EE / $50K Spouse / $10K Child(ren). Critical Illness $10K EE / $5K Spouse / $2.5K Child(ren). Vol. Disability $500 weekly benefit (Vol. Disability is not available for all groups). Additional rates for age 60+ available in platform.";
 
-export const PROGRAM_URL = "https://www.kennionprogram.com";
-
 export const CARRIERS = [
   {
     name: "Guardian",
@@ -193,8 +191,6 @@ function sheetFor(XLSX: typeof import("xlsx"), f: Frequency) {
     rows.push([SUPPLEMENTAL_FOOTNOTE]);
     rows.push([]);
   }
-  rows.push([`View program details: ${PROGRAM_URL}`]);
-
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet["!cols"] = [{ wch: 34 }, ...SUPPLEMENTAL_TIERS.map(() => ({ wch: 22 }))];
   for (const r of moneyRows) {

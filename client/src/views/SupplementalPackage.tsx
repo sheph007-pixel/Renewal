@@ -3,7 +3,6 @@ import { money } from "@/lib/model";
 import {
   CARRIERS,
   FREQUENCIES,
-  PROGRAM_URL,
   SUPPLEMENTAL_EFFECTIVE,
   SUPPLEMENTAL_FOOTNOTE,
   SUPPLEMENTAL_SECTIONS,
@@ -136,12 +135,6 @@ export default function SupplementalPackage() {
       ))}
 
       <p style={{ margin: "4px 0 0", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{SUPPLEMENTAL_FOOTNOTE}</p>
-      <p style={{ margin: "8px 0 0", fontSize: 13, color: C.body }}>
-        View program details:{" "}
-        <a href={PROGRAM_URL} target="_blank" rel="noreferrer" style={{ color: C.blue }}>
-          www.kennionprogram.com
-        </a>
-      </p>
     </div>
   );
 }
