@@ -650,7 +650,7 @@ const planKey = (s: string) => s.toLowerCase().replace(/\b(plan|option|uhc|unite
 function slotPresentation(slot: string, carrier: string | null, planType: string | null): { carrier: string; label: string; network: string } {
   if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "United Choice Plus" };
   if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
-  if (slot === "Surest") return { carrier: "Surest (UnitedHealthcare)", label: "Copay-only", network: "United Choice Plus" };
+  if (slot === "Surest") return { carrier: "UnitedHealthcare", label: "Copay-only", network: "United Choice Plus" };
   if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Cigna OAP" };
   if (slot === "Nationwide") return { carrier: "Nationwide", label: planType || "Level Funded", network: "Nationwide" };
   if (slot === "Angle") return { carrier: "Angle Health", label: planType || "Level Funded", network: "Angle / Cigna PPO" };
@@ -694,10 +694,14 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
       const gb = fam ? GRAVIE_BENEFITS[fam] : null;
       const pb = pl.benefits || null;
+      // Surest is UnitedHealthcare's own copay-only product, not a separate
+      // company — the carrier reads "UnitedHealthcare", so the plan name is
+      // where "Surest" has to show up.
+      const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
       out.push({
         carrier: show.carrier,
         label: show.label,
-        plan: pl.name,
+        plan: planName,
         type: pl.planType || show.label,
         ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
         oop: moneyNum(pl.oopMax),
@@ -860,7 +864,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     });
   }
   out.unshift({
-    carrier: "Surest (UnitedHealthcare)",
+    carrier: "UnitedHealthcare",
     label: "Copay-only",
     plan: "Surest Copay Plan",
     type: "Copay",

@@ -41,7 +41,7 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
       <div style={card}>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: C.body, textWrap: "pretty" as const }}>
           Your 2026 program ends December 31. For 2027, we took {g.name}&rsquo;s census to
-          UnitedHealthcare, Surest and Gravie and priced every plan on their menus —{" "}
+          UnitedHealthcare and Gravie and priced every plan on their menus —{" "}
           {summary.pricedCount} option{summary.pricedCount === 1 ? "" : "s"} in all, effective January 1, 2027.
           {!direct && " Underwriting for your group is still open, so figures below are indicative until firm rates arrive."}
         </p>
