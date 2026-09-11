@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { hasDirectQuote, marketPlans, type AccountManager, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
+import { marketPlans, type AccountManager, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
 import { C, h2, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
@@ -43,7 +43,6 @@ export default function Options({
   onToggleSelected,
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
-  const direct = hasDirectQuote(data, g);
   const short = plans.filter((p) => selected[p.plan]);
 
   return (
@@ -54,7 +53,6 @@ export default function Options({
         totals={totals}
         selected={selected}
         onToggleSelected={onToggleSelected}
-        direct={direct}
         manager={manager}
         contribution={contribution}
         applied={contributionValues}

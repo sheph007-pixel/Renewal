@@ -20,7 +20,6 @@ export interface GridProps {
   totals: { total: number; enrolled: number };
   selected: Record<string, boolean>;
   onToggleSelected: (plan: string) => void;
-  direct: boolean;
   /** Shown on the printed proposal's footer. */
   manager: AccountManager | null;
   /** Today's employer contribution by tier: the starting point, and "Reset to today". */
@@ -61,7 +60,7 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
-export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
+export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
@@ -520,13 +519,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
           {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (the list Sign Up sends); + adds it to a proposal you can download.
         </div>
-      </div>
-
-      <div style={{ marginTop: 10, fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
-        {direct
-          ? "Illustrative rate — scaled from the plans UnitedHealthcare quoted directly for your group. Un-marked rows are your quoted rates."
-          : "Illustrative rate — your current rate level applied to the UnitedHealthcare menu quoted for comparable Kennion groups; your own underwriting is still open."}{" "}
-        Total Monthly is that plan&rsquo;s rates × your current enrollment by tier. Rows marked quoted are read off the proposal the carrier sent for your group. Final rates confirm at enrollment and underwriting approval.
       </div>
 
       {opened && (
