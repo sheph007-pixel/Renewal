@@ -9,7 +9,7 @@ import { cardModel } from "@/views/PlanCard";
 
 const carrierOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", " by UHC");
 
-function optionRow(p: MarketPlan, today: number, contribution: Record<TierKey, number>, counts: Record<TierKey, number>) {
+function optionRow(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>) {
   const sp = costSplit(p, contribution, counts);
   return {
     Carrier: carrierOf(p),
@@ -31,7 +31,6 @@ function optionRow(p: MarketPlan, today: number, contribution: Record<TierKey, n
     "Employer Cost": sp ? sp.er : "",
     "Employees Pay": sp ? sp.ee : "",
     "Monthly Premium": p.monthly ?? "",
-    "Vs Today": p.monthly == null ? "" : +(p.monthly - today).toFixed(2),
     Basis: p.quoted ? `Quoted ${p.quoted.date || ""}`.trim() : p.indicative ? "Illustrative" : p.pending ? "Quote requested" : "Menu rate",
   };
 }
@@ -40,7 +39,6 @@ export function downloadOptions(
   g: Group,
   list: MarketPlan[],
   proposed: MarketPlan[],
-  today: number,
   contribution: Record<TierKey, number>,
   counts: Record<TierKey, number>,
   todayByTier: TierContribution[],
@@ -55,7 +53,7 @@ export function downloadOptions(
   csheet["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 26 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(book, csheet, "Employer Contribution");
 
-  const sheet = XLSX.utils.json_to_sheet(list.map((p) => optionRow(p, today, contribution, counts)));
+  const sheet = XLSX.utils.json_to_sheet(list.map((p) => optionRow(p, contribution, counts)));
   sheet["!cols"] = [18, 40, 14, 12, 26, 12, 10, 12, 22, 22, 16, 30, 11, 12, 14, 12, 14, 14, 16, 12, 18].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(book, sheet, "2027 Options");
 
@@ -66,7 +64,7 @@ export function downloadOptions(
       [],
     ];
     for (const p of proposed) {
-      const m = cardModel(p, contribution, counts, today);
+      const m = cardModel(p, contribution, counts);
       rows.push([`${m.carrier} · ${m.plan}`, m.funding + (m.type ? ` · ${m.type}` : "")]);
       rows.push(["Total Monthly Cost", m.monthly ?? ""]);
       rows.push(["Basis", m.basis]);
@@ -76,7 +74,6 @@ export function downloadOptions(
       rows.push(["Total Monthly Employer Cost", m.er ?? ""]);
       rows.push(["Total Monthly Employee Cost", m.ee ?? ""]);
       rows.push(["Monthly Premium", m.premium ?? ""]);
-      if (m.vsToday != null) rows.push(["Vs today", m.vsToday]);
       rows.push([]);
     }
     const ps = XLSX.utils.aoa_to_sheet(rows);

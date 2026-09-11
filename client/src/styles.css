@@ -34,6 +34,12 @@ textarea {
   scroll-margin-top: 16px;
 }
 
+/* A table row that opens something on click gets visibly darker on hover,
+   regardless of its own background color (zebra stripe, shortlisted tint). */
+.rowlink:hover {
+  filter: brightness(0.96);
+}
+
 @media print {
   @page {
     margin: 0.45in;
