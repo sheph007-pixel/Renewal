@@ -81,7 +81,23 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const parsed = TIERS.reduce((acc, t) => ({ ...acc, [t.key]: Number(draft[t.key]) }), {} as Record<TierKey, number>);
   const draftValid = TIERS.every((t) => draft[t.key].trim() !== "" && Number.isFinite(parsed[t.key]) && parsed[t.key] >= 0);
   const draftDirty = TIERS.some((t) => Math.abs((parsed[t.key] || 0) - (applied[t.key] || 0)) > 0.004);
+  // The carriers' floor: the employer pays at least half the employee-only
+  // rate of the least expensive plan. Off this group's own quotes, so it is a
+  // different figure for every group; whole dollars, rounded up.
+  const floorEE = useMemo(() => {
+    const rates = plans.map((p) => p.rates.EE).filter((r): r is number => r != null && r > 0);
+    return rates.length ? Math.ceil(Math.min(...rates) * 0.5) : 0;
+  }, [plans]);
+  const belowFloor = floorEE > 0 && parsed.EE < floorEE;
+  // A default under the floor is not a contribution a carrier would accept:
+  // lift it, so the first Employer Cost the page shows is a lawful one.
+  useEffect(() => {
+    if (floorEE > 0 && (applied.EE || 0) < floorEE) onApply({ ...applied, EE: floorEE });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorEE, applied.EE]);
+  const canApply = draftValid && draftDirty && !belowFloor;
   const apply = () => {
+    if (!canApply) return;
     onApply(parsed);
     setContribOpen(false);
   };
@@ -233,6 +249,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                     {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
+                    {t.key === "EE" && floorEE > 0 && (
+                      <span
+                        style={{ fontWeight: 400, color: belowFloor ? C.red : C.faint, marginLeft: 8 }}
+                        title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan"
+                      >
+                        min {money0(floorEE)}
+                      </span>
+                    )}
                   </div>
                   <div style={{ position: "relative", marginTop: 4 }}>
                     <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: C.faint, pointerEvents: "none" }}>$</span>
@@ -245,7 +269,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                         if (draft[t.key].trim() === "") setDraft((d) => ({ ...d, [t.key]: "0" }));
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && draftValid && draftDirty) apply();
+                        if (e.key === "Enter") apply();
                       }}
                       style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, ...num }}
                     />
@@ -255,16 +279,17 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <button
                   onClick={apply}
-                  disabled={!draftValid || !draftDirty}
+                  disabled={!canApply}
+                  title={belowFloor ? `Employee Only must be at least ${money0(floorEE)}: half the employee-only rate of the least expensive plan` : undefined}
                   style={{
                     padding: "11px 30px",
                     fontSize: 15,
                     fontWeight: 700,
                     borderRadius: 4,
                     color: "#fff",
-                    background: draftValid && draftDirty ? C.blue : C.ghost,
-                    border: `1px solid ${draftValid && draftDirty ? C.blue : C.ghost}`,
-                    cursor: draftValid && draftDirty ? "pointer" : "default",
+                    background: canApply ? C.blue : C.ghost,
+                    border: `1px solid ${canApply ? C.blue : C.ghost}`,
+                    cursor: canApply ? "pointer" : "default",
                   }}
                 >
                   Apply
