@@ -21,8 +21,6 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
-  /** Some enrolled tier costs less than the contribution: the employer would pay only the premium there. */
-  underBudget: boolean;
 }
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
@@ -71,7 +69,6 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     }),
     er: sp?.er ?? null,
     ee: sp?.ee ?? null,
-    underBudget: !!sp?.underBudget,
     premium: sp?.total ?? p.monthly,
   };
 }
@@ -158,11 +155,6 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
           })}
         </tbody>
       </table>
-      {m.underBudget && (
-        <div style={{ fontSize: 11.5, color: C.faint, lineHeight: 1.4 }}>
-          Under budget in at least one tier: the employer pays only the premium there, so the actual employer cost on this plan is lower.
-        </div>
-      )}
       {actions && <div className="noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>{actions}</div>}
     </div>
   );
