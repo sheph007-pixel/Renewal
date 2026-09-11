@@ -131,6 +131,18 @@ export interface Group {
   supplementalMonthly?: number;
 }
 
+/**
+ * ACA's small/large group line: 2-50 employees is small, 51+ is large. Off
+ * the group's own headcount (active employees on the census, whether or not
+ * they took medical) rather than just who is medically enrolled. Null when
+ * there is no headcount to go on.
+ */
+export function groupSizeLabel(g: Group): string | null {
+  const n = g.medicalEligible ?? g.enrolled;
+  if (!n || n < 1) return null;
+  return n <= 50 ? "Small Group 2-50" : "Large Group 51+";
+}
+
 /** One supplemental benefit in force: no member detail, group totals only. */
 export interface SupplementalLine {
   benefit: string;
