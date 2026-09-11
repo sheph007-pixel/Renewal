@@ -219,7 +219,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         >
           <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Employer Contribution</span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
-            {!contribOpen && <span style={{ ...num }}>{TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}</span>}
+            <span style={{ ...num }}>
+              <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo across {totals.enrolled} enrolled
+              {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
+            </span>
             <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
           </span>
         </button>
@@ -458,6 +461,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : p.pending ? "quote requested" : "—"}
+                    {sp?.underBudget && <div style={{ fontSize: 10.5, fontWeight: 400, color: C.faint }}>under budget</div>}
                   </td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     <span style={{ fontSize: 11, fontWeight: 400, color: C.faint, marginRight: 8, letterSpacing: 1 }}>{costTier(p) || ""}</span>
