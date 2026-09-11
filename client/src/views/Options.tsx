@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { hasDirectQuote, marketPlans, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
+import { marketPlans, type AccountManager, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
 import { C, h2, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
@@ -11,6 +11,8 @@ interface Props {
   selected: Record<string, boolean>;
   /** Where the shortlist is reviewed and sent — its own page now. */
   signUpHref: string;
+  /** Shown on the printed proposal's footer. */
+  manager: AccountManager | null;
   /** Today's employer contribution by tier, and the employer's own editable 2027 figures. */
   contribution: TierContribution[];
   contributionValues: Record<TierKey, number>;
@@ -32,6 +34,7 @@ export default function Options({
   totals,
   selected,
   signUpHref,
+  manager,
   contribution,
   contributionValues,
   contributionChanged,
@@ -40,7 +43,6 @@ export default function Options({
   onToggleSelected,
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
-  const direct = hasDirectQuote(data, g);
   const short = plans.filter((p) => selected[p.plan]);
 
   return (
@@ -51,7 +53,7 @@ export default function Options({
         totals={totals}
         selected={selected}
         onToggleSelected={onToggleSelected}
-        direct={direct}
+        manager={manager}
         contribution={contribution}
         applied={contributionValues}
         appliedChanged={contributionChanged}

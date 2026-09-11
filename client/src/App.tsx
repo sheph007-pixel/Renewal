@@ -888,6 +888,7 @@ export default function App() {
                 totals={totals}
                 selected={selected}
                 signUpHref={hrefFor("signup")}
+                manager={manager}
                 contribution={contribution}
                 contributionValues={contributionValues}
                 contributionChanged={contributionOverride != null}

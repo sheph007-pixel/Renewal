@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { TIERS, censusCounts, costSplit, fmtDed, money0, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { TIERS, censusCounts, costSplit, fmtDed, money0, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 
@@ -20,7 +20,8 @@ export interface GridProps {
   totals: { total: number; enrolled: number };
   selected: Record<string, boolean>;
   onToggleSelected: (plan: string) => void;
-  direct: boolean;
+  /** Shown on the printed proposal's footer. */
+  manager: AccountManager | null;
   /** Today's employer contribution by tier: the starting point, and "Reset to today". */
   contribution: TierContribution[];
   /** The applied contribution per tier — what Employer Cost is computed from. */
@@ -80,7 +81,7 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, direct, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
+export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
@@ -585,13 +586,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
-        {direct
-          ? "Illustrative rate — scaled from the plans UnitedHealthcare quoted directly for your group. Un-marked rows are your quoted rates."
-          : "Illustrative rate — your current rate level applied to the UnitedHealthcare menu quoted for comparable Kennion groups; your own underwriting is still open."}{" "}
-        Total Monthly is that plan&rsquo;s rates × your current enrollment by tier. Rows marked quoted are read off the proposal the carrier sent for your group. Final rates confirm at enrollment and underwriting approval.
-      </div>
-
       {opened && (
         <div role="dialog" aria-modal="true" aria-label={`${opened.plan} details`} onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,24,28,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", maxHeight: "92vh", overflow: "auto", position: "relative" }}>
@@ -621,6 +615,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <div style={{ fontSize: 10.5, color: C.faint, marginTop: 12, lineHeight: 1.5 }}>
             Rates shown are monthly composite rates by tier. Illustrative rates are scaled from comparable quotes and confirm at underwriting. All rates and benefits are for general information and discussion only and are not final until the group is enrolled with the carrier.
           </div>
+          {(manager?.name || manager?.phone || manager?.email) && (
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.hairline}`, textAlign: "center", fontSize: 11, color: C.muted }}>
+              {[manager.name, manager.title, manager.phone, manager.email].filter(Boolean).join(" · ")}
+              {" · "}
+              {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </div>
+          )}
         </div>
       )}
     </div>
