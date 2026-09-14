@@ -52,7 +52,6 @@ const SITE = "BenSync — 2027 Renewal";
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
   assistant: "AI Assistant",
-  changes: "What's Changing For 2027",
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
   supplemental: "Supplemental Package",
@@ -734,7 +733,7 @@ export default function App() {
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
-    tab === "options" || tab === "signup" || tab === "changes"
+    tab === "options" || tab === "signup"
       ? "Effective January 1, 2027"
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
@@ -743,7 +742,7 @@ export default function App() {
           : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
-    (tab === "options" || tab === "signup" || tab === "changes"
+    (tab === "options" || tab === "signup"
       ? "2027 renewal options, effective January 1, 2027"
       : tab === "supplemental"
         ? "Supplemental benefits on file, besides medical"
@@ -757,16 +756,16 @@ export default function App() {
   // Every page lives under the group's short address.
   const hrefFor = (t: GroupTab) => (g ? groupHome(g, t) : t === "options" ? PATHS.options : PATHS.current);
 
-  // Welcome carries no step — it is where you start, not part of the count —
-  // so the four real pages run 1 through 4, Sign Up included. Medical Plans
-  // is one step: today's plans and the 2027 options are two tabs on it.
+  // Welcome carries no step — it is where you start, not part of the count,
+  // and What's Changing sits on it — so the three real pages run 1 through 3,
+  // Sign Up included. Medical Plans is one step: today's plans and the 2027
+  // options are two tabs on it.
   const TAB_STEP: Partial<Record<GroupTab, number>> = {
-    changes: 1,
-    current: 2,
-    supplemental: 3,
-    signup: 4,
+    current: 1,
+    supplemental: 2,
+    signup: 3,
   };
-  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "supplemental", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "assistant", "current", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
@@ -853,7 +852,7 @@ export default function App() {
                   {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
                 </div>
               </div>
-              {(tab === "changes" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
+              {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 <div
                   style={{
                     ...panel,
@@ -904,25 +903,28 @@ export default function App() {
             {tab === "assistant" ? (
               <Assistant threadId={page.thread} hrefFor={assistantHref} groupName={g.name} />
             ) : tab === "home" ? (
-              <Home
-                g={g}
-                currentHref={hrefFor("current")}
-                optionsHref={hrefFor("options")}
-                supplementalHref={hrefFor("supplemental")}
-                signUpHref={hrefFor("signup")}
-                changesHref={hrefFor("changes")}
-                manager={manager}
-                lastSignup={data.signup || null}
-              />
-            ) : tab === "changes" ? (
-              <WhatsChanging
-                data={data}
-                g={g}
-                rows={rows}
-                totals={totals}
-                optionsHref={hrefFor("options")}
-                signUpHref={hrefFor("signup")}
-              />
+              <>
+                <Home
+                  g={g}
+                  currentHref={hrefFor("current")}
+                  optionsHref={hrefFor("options")}
+                  supplementalHref={hrefFor("supplemental")}
+                  signUpHref={hrefFor("signup")}
+                  manager={manager}
+                  lastSignup={data.signup || null}
+                />
+                {/* The headline — today against 2027 — sits under the letter, one page, less to click through. */}
+                <section id="changes" className="anchor" style={{ marginTop: 26 }}>
+                  <WhatsChanging
+                    data={data}
+                    g={g}
+                    rows={rows}
+                    totals={totals}
+                    optionsHref={hrefFor("options")}
+                    signUpHref={hrefFor("signup")}
+                  />
+                </section>
+              </>
             ) : tab === "current" ? (
               <Current
                 data={data}

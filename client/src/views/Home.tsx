@@ -18,7 +18,6 @@ interface Props {
   optionsHref: string;
   supplementalHref: string;
   signUpHref: string;
-  changesHref: string;
   manager: AccountManager | null | undefined;
   lastSignup: GroupSignup | null;
 }
@@ -29,7 +28,7 @@ interface Props {
  * is laid out, and how to get a call on the calendar — with the two people
  * to reach, the account manager and Hunter himself, beside it.
  */
-export default function Home({ g, currentHref, optionsHref, supplementalHref, signUpHref, changesHref, manager, lastSignup }: Props) {
+export default function Home({ g, currentHref, optionsHref, supplementalHref, signUpHref, manager, lastSignup }: Props) {
   const p = { margin: "0 0 16px", fontSize: 15.5, lineHeight: 1.75, color: C.body } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   const li = { margin: "0 0 8px" } as const;
@@ -45,7 +44,7 @@ export default function Home({ g, currentHref, optionsHref, supplementalHref, si
         <p style={{ ...p, marginBottom: 10 }}>This site organizes everything for your 2027 Employee Benefits Program:</p>
         <ol style={{ margin: "0 0 16px", paddingLeft: 26, fontSize: 15.5, lineHeight: 1.75, color: C.body }}>
           <li style={li}>
-            <Link href={changesHref} style={link}>What&rsquo;s Changing For 2027</Link> &mdash; the headline: today against 2027.
+            <a href="#changes" style={link}>What&rsquo;s Changing For 2027</a> &mdash; the headline: today against 2027, just below.
           </li>
           <li style={li}>
             <Link href={currentHref} style={link}>Your 2026 Medical Plans</Link> &mdash; what your group has in force today.
