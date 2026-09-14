@@ -10,6 +10,7 @@
 // a comparison of options, a memo — which are built here from the figures.
 import Anthropic from "@anthropic-ai/sdk";
 import { comparisonTable, comparisonText, renderComparison, renderDocument } from "./documents.js";
+import { prepareForModel } from "./intake.js";
 
 const apiKey = () =>
   process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
@@ -45,6 +46,8 @@ How to work:
 - You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
 - The portal's pages, which you may point to by name: Welcome; Assistant (this); What's Changing For 2027 (today against 2027, the headline); Your 2026 Medical Plans (what is in force today, with rates and the employer/employee split); New 2027 Medical Options (every quoted plan side by side, with a contribution modeler); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
 - When the client wants to move forward, or the question needs a person — a specific quote, a carrier's answer, a meeting — say the account manager (named below) can do that. Do not paste their phone, email or booking link unless the client asks how to reach them.
+
+Attachments: the client may attach a file to a question — another broker's quote, a carrier's renewal letter, a spreadsheet of their own, a screenshot. Read it and answer about it; where it makes sense, set it beside the figures below (the same tier rates × headcount arithmetic) and say which comes out ahead and by how much. If a file is unreadable or is not what they think it is, say so.
 
 Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
 
@@ -269,6 +272,7 @@ async function fakeReply(question, ctx) {
     const file = await ctx.keep(await renderDocument({ format: /word|docx/i.test(q) ? "docx" : "pdf", title: "Renewal summary", markdown: `# Where ${ctx.data.group.name}'s renewal stands\n\n- ${ctx.data.group.enrolled} enrolled today\n- Canned summary (KENNION_FAKE_AI)`, group: ctx.data.group }));
     pieces.push(`I wrote it up — ${file.filename}. `);
   }
+  if (ctx.attachments && ctx.attachments.length) pieces.push(`I read ${ctx.attachments.map((f) => f.filename).join(", ")}. `);
   pieces.push(`Canned reply (KENNION_FAKE_AI). You asked: "${q}". In a deployment this is answered with the group's own plans, rates and quotes in front of the model.`);
   return pieces.join("");
 }
@@ -281,7 +285,18 @@ async function fakeReply(question, ctx) {
  * piece, `onStatus` a line to show while a document is built, `keep` stores
  * a document and returns its record. Resolves to { text, files }.
  */
-export async function replyTo({ data, history, page, compact = false, playbook, onText, onStatus = () => undefined, keep }) {
+/** Attachments on user turns older than this many attachment-bearing turns are named, not re-read. */
+const ATTACHMENT_TURNS = 3;
+
+/** One attachment as content blocks the model reads: the file itself for a PDF or image, its text otherwise. */
+async function attachmentBlocks(f) {
+  const p = await prepareForModel({ filename: f.filename, mime: f.mime, buffer: f.data });
+  if (p.kind === "pdf") return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: p.buffer.toString("base64") }, title: f.filename }];
+  if (p.kind === "image") return [{ type: "image", source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") } }];
+  return [{ type: "document", source: { type: "text", media_type: "text/plain", data: p.text || "(empty)" }, title: f.filename }];
+}
+
+export async function replyTo({ data, history, page, compact = false, playbook, onText, onStatus = () => undefined, keep, readFile }) {
   const turns = history.slice(-HISTORY_TURNS);
   while (turns.length && turns[0].role !== "user") turns.shift();
   const last = turns[turns.length - 1];
@@ -293,7 +308,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   };
 
   if (fakeAi()) {
-    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile });
+    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile, attachments: last && last.files });
     let full = "";
     for (const word of text.split(" ")) {
       full += word + " ";
@@ -304,17 +319,48 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   if (!assistantEnabled()) throw new Error("The assistant is off: no ANTHROPIC_API_KEY is set.");
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
 
-  const messages = turns.map((m, i) => {
-    if (m.role === "user" && i === turns.length - 1 && page && PAGE_NAMES[page]) {
+  // The client's attachments ride along on the turns that carried them — the
+  // newest few in full, older ones by name, so a long thread stays affordable.
+  const withFiles = turns.map((m, i) => (m.role === "user" && Array.isArray(m.files) && m.files.length ? i : -1)).filter((i) => i >= 0);
+  const readInFull = new Set(withFiles.slice(-ATTACHMENT_TURNS));
+  const messages = [];
+  for (let i = 0; i < turns.length; i++) {
+    const m = turns[i];
+    if (m.role === "assistant") {
+      // Earlier answers that carried documents read back with a note of what was made.
+      const extra = Array.isArray(m.files) && m.files.length ? `\n\n(Documents attached to this answer: ${m.files.map((f) => f.filename).join(", ")})` : "";
+      messages.push({ role: "assistant", content: m.content + extra });
+      continue;
+    }
+    let text = m.content;
+    if (i === turns.length - 1 && page && PAGE_NAMES[page]) {
       const where = compact
         ? `(Asked in the small chat box on ${PAGE_NAMES[page]}: answer in a few sentences, no table, no headings; offer the full comparison on the Assistant page if they want it.)`
         : `(Asked from ${PAGE_NAMES[page]}.)`;
-      return { role: "user", content: `${where}\n\n${m.content}` };
+      text = `${where}\n\n${text}`;
     }
-    // Earlier answers that carried documents read back with a note of what was made.
-    const extra = m.role === "assistant" && Array.isArray(m.files) && m.files.length ? `\n\n(Documents attached to this answer: ${m.files.map((f) => f.filename).join(", ")})` : "";
-    return { role: m.role, content: m.content + extra };
-  });
+    const files = Array.isArray(m.files) ? m.files : [];
+    if (!files.length) {
+      messages.push({ role: "user", content: text });
+      continue;
+    }
+    const blocks = [];
+    if (readInFull.has(i) && readFile) {
+      for (const f of files) {
+        const rec = await readFile(f.id);
+        if (!rec) continue;
+        try {
+          blocks.push(...(await attachmentBlocks(rec)));
+        } catch (e) {
+          blocks.push({ type: "text", text: `(The attachment "${f.filename}" could not be read: ${e.message})` });
+        }
+      }
+      blocks.push({ type: "text", text: `(Attached: ${files.map((f) => f.filename).join(", ")})\n\n${text}` });
+    } else {
+      blocks.push({ type: "text", text: `(Attached earlier in this conversation: ${files.map((f) => f.filename).join(", ")})\n\n${text}` });
+    }
+    messages.push({ role: "user", content: blocks });
+  }
 
   const params = {
     model: MODEL,

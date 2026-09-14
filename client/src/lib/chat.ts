@@ -134,14 +134,30 @@ export async function readEvents(body: ReadableStream<Uint8Array>, on: (event: s
 
 const localId = () => -Math.floor(Math.random() * 1e9) - 1;
 
+/** What a client may attach: the kinds the reader understands. */
+export const ATTACHMENT_ACCEPT = ".pdf,.png,.jpg,.jpeg,.gif,.webp,.xlsx,.xls,.csv,.docx,.txt";
+export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
+
+/** Upload one attachment ahead of the message that will carry it. */
+export async function uploadAttachment(file: File): Promise<ChatFile> {
+  if (file.size > ATTACHMENT_MAX_BYTES) throw new Error(`${file.name} is larger than 15 MB.`);
+  const r = await fetch(`/api/chat/attachments?filename=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  if (!r.ok) throw new Error(await failure(r));
+  return ((await r.json()) as { file: ChatFile }).file;
+}
+
 /**
  * Ask a question. On a new thread (`threadId` null) the server opens one and
  * says so first; `onThread` gets its id, so the caller can show it. Resolves
  * once the answer is complete; the thread list and messages update as the
  * reply streams in.
  */
-export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void, compact = false): Promise<number> {
-  const question: ChatMessage = { id: localId(), role: "user", content, createdAt: new Date().toISOString() };
+export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void, compact = false, attachments: ChatFile[] = []): Promise<number> {
+  const question: ChatMessage = { id: localId(), role: "user", content, files: attachments, createdAt: new Date().toISOString() };
   let id = threadId;
   const fresh = (tid: number | null): Streaming => ({ threadId: tid, text: "", status: "", files: [] });
   if (id != null) {
@@ -153,7 +169,7 @@ export async function sendMessage(threadId: number | null, content: string, page
   const r = await fetch("/api/chat/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ threadId: id, content, page, compact }),
+    body: JSON.stringify({ threadId: id, content, page, compact, attachments: attachments.map((f) => f.id) }),
   });
   if (!r.ok || !r.body) {
     const error = await failure(r);
