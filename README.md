@@ -571,6 +571,13 @@ model writes in Markdown, rendered as a branded PDF or Word file. These are
 tools on the model's turn (`create_comparison`, `create_document`); a turn
 runs at most five tool rounds.
 
+**Research.** The assistant can search the web (Anthropic's server-side
+`web_search` tool, up to five searches a turn) for what the group's figures
+do not cover — an ACA affordability percentage, an IRS limit, a carrier's
+network, a regulation — and says what it found and where in words. It
+never searches for the group's own numbers. `KENNION_WEB_SEARCH=0` turns it
+off.
+
 **The admin's side** (`/admin/assistant`) is where Kennion steers it:
 
 - **Playbook** — three plain-English boxes that go into every answer's

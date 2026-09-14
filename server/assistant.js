@@ -142,9 +142,15 @@ How to work:
 
 Attachments: the client may attach a file to a question — another broker's quote, a carrier's renewal letter, a spreadsheet of their own, a screenshot. Read it and answer about it; where it makes sense, set it beside the figures below (the same tier rates × headcount arithmetic) and say which comes out ahead and by how much. If a file is unreadable or is not what they think it is, say so.
 
+Research: you can search the web with web_search. Use it when the client asks you to research or look something up, or when the answer depends on something outside their figures — an ACA affordability percentage or an IRS limit for a plan year, a carrier's network or product, a regulation, a benchmark, a definition. Prefer authoritative sources (IRS, DOL, CMS, HealthCare.gov, the carrier's own site, SHRM, KFF). Say what you found in a sentence or two and name the source in words ("per the IRS"); do not paste URLs unless asked. Never search for the client's own figures — those are below. Searching is for facts, not for advice: the guidance on legal, tax and actuarial questions above still applies.
+
 Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
 
 Kennion's guidance follows. It is written by the people who run the program and overrides anything above where they differ.`;
+
+/** Anthropic's server-side web search: the model searches, reads, cites; nothing runs here. */
+const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 5 };
+const webSearchOn = () => !/^(0|false|off|no)$/i.test(String(process.env.KENNION_WEB_SEARCH || ""));
 
 const TOOLS = [
   {
@@ -471,7 +477,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
       { type: "text", text: playbookText(playbook), cache_control: { type: "ephemeral" } },
       { type: "text", text: `Here are the client's figures. Use them.\n\n${describeGroup(data)}`, cache_control: { type: "ephemeral" } },
     ],
-    tools: TOOLS,
+    tools: webSearchOn() ? [...TOOLS, WEB_SEARCH] : TOOLS,
     output_config: { effort: "medium" },
   };
 
@@ -487,13 +493,23 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
     full += t;
     onText(t);
   };
+  // A web search happens on Anthropic's side mid-turn; the client sees a line while it runs.
+  const watch = (stream) => {
+    stream.on("text", emit);
+    stream.on("streamEvent", (ev) => {
+      if (ev.type !== "content_block_start") return;
+      const t = ev.content_block && ev.content_block.type;
+      if (t === "server_tool_use") onStatus("Searching the web…");
+      else if (t === "text") onStatus("");
+    });
+  };
   const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
   let useBeta = beta;
   const call = async () => {
     if (useBeta) {
       try {
         const stream = client.beta.messages.stream({ ...params, messages, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
-        stream.on("text", emit);
+        watch(stream);
         return await stream.finalMessage();
       } catch (e) {
         if (!(e instanceof Anthropic.BadRequestError) || full) throw e;
@@ -502,13 +518,18 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
       }
     }
     const stream = client.messages.stream({ ...params, messages });
-    stream.on("text", emit);
+    watch(stream);
     return stream.finalMessage();
   };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const response = await call();
     if (response.stop_reason === "refusal") throw new Error("The assistant declined to answer that one.");
+    // A long web search can pause the turn; sending the content back resumes it.
+    if (response.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: response.content });
+      continue;
+    }
     if (response.stop_reason !== "tool_use") break;
     // Thinking blocks ride along unchanged: the model needs them back to continue.
     messages.push({ role: "assistant", content: response.content });
