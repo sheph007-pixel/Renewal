@@ -99,6 +99,34 @@ for (const field of ["broker", "manager", "renewal", "sic", "sicDesc", "division
   assert.equal(payload.group[field], undefined, `${field} is not a client's business`);
 }
 
+// 6b. The client sees the size category staff keep, never the Employee
+// Navigator roster count: that counts everyone not marked terminated and is
+// a staff figure on the Data Check, not a headcount for a client page or the
+// assistant.
+assert.equal(payload.group.medicalEligible, undefined, "the roster count does not reach a client");
+assert.ok(["2-50", "51+"].includes(payload.group.sizeCategory), "the staff size category does");
+
+// 6c. The data check: every group's figures, and the briefing the assistant
+// answers from — staff only, aggregates only, and the roster count named to
+// staff is never told to the assistant.
+{
+  const auth = { Authorization: `Bearer ${staff.token}` };
+  const r = await fetch(`${base}/api/admin/data-audit`, { headers: auth });
+  assert.equal(r.status, 200);
+  const { audit } = await r.json();
+  assert.ok(audit.counts.checked >= roster.length, "every live group is checked");
+  assert.ok(audit.rows.some((x) => x.name === mine.name));
+  const row = audit.rows.find((x) => x.name === mine.name);
+  assert.ok(row.checks.length > 10, "a full set of checks per group");
+  assert.ok(!JSON.stringify(audit).includes('"first"'), "no member record in the audit");
+  const one = await (await fetch(`${base}/api/admin/data-audit/${encodeURIComponent(mine.name)}`, { headers: auth })).json();
+  assert.equal(one.group.name, mine.name);
+  assert.match(one.briefing, new RegExp(`Enrolled in medical: ${mine.enrolled} employees`));
+  assert.ok(!/Active employees on the census/.test(one.briefing), "no roster headcount in the assistant's briefing");
+  assert.match(one.briefing, /no verified count of the company's total or benefit-eligible employees/);
+  assert.equal((await fetch(`${base}/api/admin/data-audit`, { headers: { Authorization: `Bearer ${mine.code}` } })).status, 401, "staff only");
+}
+
 // 7. Codes are guessable by design, so guessing is throttled.
 const guess = (code, ip) =>
   fetch(`${base}/api/signin`, {

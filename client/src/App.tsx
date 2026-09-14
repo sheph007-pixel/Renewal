@@ -518,7 +518,9 @@ export default function App() {
                 ? "Proposals"
                 : page.tab === "assistant"
                   ? "Assistant"
-                  : "Import"
+                  : page.tab === "data"
+                    ? "Data Check"
+                    : "Import"
       } — Rate Administration`;
     document.title = t;
   }, [page, g]);

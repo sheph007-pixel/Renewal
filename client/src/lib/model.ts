@@ -105,11 +105,10 @@ export interface Group {
   tpa: string;
   enrolled: number;
   /**
-   * Active employees on the census as of the last import, whether or not
-   * they took medical. Absent on a group imported before this field
-   * existed.
+   * The ACA size bucket staff set for the group (or the default from its
+   * enrolled count): the one figure the Group Size badge reads.
    */
-  medicalEligible?: number;
+  sizeCategory?: "2-50" | "51+";
   lives: number;
   tiers?: Record<TierKey, number>;
   monthly?: number;
@@ -132,15 +131,17 @@ export interface Group {
 }
 
 /**
- * ACA's small/large group line: 2-50 employees is small, 51+ is large. Off
- * the group's own headcount (active employees on the census, whether or not
- * they took medical) rather than just who is medically enrolled. Null when
- * there is no headcount to go on.
+ * ACA's small/large group line: 2-50 employees is small, 51+ is large. Reads
+ * the size category staff keep on the company page — the same one Rate
+ * Administration shows — so the client and the admin never disagree. It
+ * used to be derived from the Employee Navigator roster count, which counts
+ * everyone not marked terminated and put small groups over the line. Null
+ * when no category is on file.
  */
 export function groupSizeLabel(g: Group): string | null {
-  const n = g.medicalEligible ?? g.enrolled;
-  if (!n || n < 1) return null;
-  return n <= 50 ? "Small Group 2-50" : "Large Group 51+";
+  if (g.sizeCategory === "51+") return "Large Group 51+";
+  if (g.sizeCategory === "2-50") return "Small Group 2-50";
+  return null;
 }
 
 /** One supplemental benefit in force: no member detail, group totals only. */

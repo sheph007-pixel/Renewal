@@ -47,6 +47,7 @@ as a link, and a reload comes back to the same place.
 | `/admin/rates` | Rate Administration — Plans & Rates |
 | `/admin/import` | Rate Administration — Import |
 | `/admin/assistant` | Rate Administration — Assistant: conversations, playbook, try it as a group |
+| `/admin/data` | Rate Administration — Data Check: every group's figures checked, and what the assistant is told |
 
 Sections within a page are `#hash` anchors — `/options#shortlist`, say — and
 each group page lists its sections under the heading as "On this page" links.
@@ -554,7 +555,20 @@ quote on file for 2027 with its plans and rates, this month's billing, the
 last Sign Up submission, and the account manager to hand off to. It is the
 same allow-listed view the group's pages get — no census, no other company —
 so the assistant cannot say anything the client could not already read on the
-site. The question notes which page it was asked from. Replies stream over
+site. The question notes which page it was asked from.
+
+**Headcount.** The only headcount the assistant is given is who is enrolled.
+The briefing used to carry the Employee Navigator roster count as "active
+employees on the census" — every `<Employee>` in the company's export whose
+status is not Terminated — and the assistant repeated it when a client asked
+how many employees they had. That count is not eligibility: Employee
+Navigator's *Active* status covers part-time and PRN staff, classes that are
+not benefit-eligible and records nobody ever closed, so on some groups it ran
+to many times the enrolled figure (326 against 40 enrolled on one). It is now
+a staff figure on the **Data Check** tab, the briefing says plainly that no
+verified total or eligible headcount is on file and that the account manager
+can confirm one from the census, and the client's **Group Size** badge reads
+the size category staff keep on the company page rather than that count. Replies stream over
 server-sent events (`POST /api/chat/send`); conversations are kept in
 `kennion.chat_threads` / `kennion.chat_messages`, scoped to the group, and in
 memory when there is no database. The box and the tab only show when the
@@ -783,6 +797,43 @@ before ingest. Each ingested file is archived to the bucket under `archive/`,
 and the result of every entry is logged, never thrown, so a bad file cannot
 keep the site from booting. Clear `INBOX_INGEST` once the log shows the file
 landed, or the next boot ingests it again.
+
+## The Data Check tab
+
+The snapshot audit on the Import tab reconciles the three Employee Navigator
+files with each other in aggregate. **Data Check** (`/admin/data`,
+`server/data-audit.js`) is per company: every group on the roster checked
+against itself and against every other file the portal holds about it, so a
+wrong figure is caught here before a client reads it on a page or hears it
+from the assistant. It is computed on request from what is in memory, so it
+is always about the data as it stands. The checks, in the order shown:
+
+| Check | What it looks at |
+| --- | --- |
+| Enrolled count | The group's enrolled figure equals what its plans add to, what its tiers add to, and the census it was built from. |
+| Premium | The monthly medical premium equals the plans' total and the census's, and annual is twelve times it. |
+| Coverage tiers | Every enrolled person is on a coverage level the pages can price. |
+| Billed rates | A billed rate behind every tier somebody is in, and the rates × heads reproducing what each plan bills (else "off schedule"). |
+| Employer/employee split | Whether payroll's split came through, or the pages say Pending. |
+| Headcount | The Employee Navigator roster (status Active) against who is enrolled. Flagged when the roster is more than three times the enrolled count and 20 people over — the sign of a roster full of part-time, ineligible or never-closed records. Never shown to a client or to the assistant. |
+| Size category | The 2-50 / 51+ bucket the client's Group Size badge shows: set by staff, or defaulted from the enrolled count — and flagged when the roster would put it on the other side of the line. |
+| Program carrier | On EBPA, HealthEZ or BCBS of Alabama, with every plan's carrier read rather than assumed. |
+| This month's billing | The funding workbook's participants and premium for the group against the XML's captive plans. |
+| Supplemental lines | Whether dental, vision, life and the rest were captured for the group. |
+| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount. |
+| Account manager | One is assigned, so the assistant names a person rather than the fallback contact. |
+| Client access | The code and a permanent link. |
+| Import | When the group was last imported, and whether the newest export still carried it. |
+| Identity | Duplicate spellings of the same company, and whether contacts came through. |
+
+Groups that need a look come first; "only groups that need a look" is the
+default view, and archived or not-in-program companies can be shown for a
+complete roster. Opening a group lists every check with its verdict, links to
+the company page, and shows **what the assistant is told** — the briefing
+`describeGroup()` builds for that group, word for word, so staff can read
+exactly what the client's assistant knows before the client asks. Aggregates
+only: no member is named anywhere in a result (`scripts/test-data-audit.mjs`
+and `scripts/test-group-payload.mjs` hold that line).
 
 ## Known gaps
 

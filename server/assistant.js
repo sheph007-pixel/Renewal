@@ -214,7 +214,12 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
   const facts = [
     `Administrator (TPA) today: ${g.tpa || "unknown"}`,
     `Enrolled in medical: ${g.enrolled ?? "—"} employees; covered lives: ${g.lives ?? "—"}`,
-    g.medicalEligible != null ? `Active employees on the census: ${g.medicalEligible}` : null,
+    // The only headcount on file is who is enrolled. Employee Navigator's
+    // roster count (everyone not marked terminated) was once passed here as
+    // "active employees"; it counts part-time, ineligible and never-closed
+    // records and ran to many times the enrolled figure, so it is kept for
+    // staff on the Data Check and never told to a client.
+    `Headcount: BenSync holds only who is enrolled. It has no verified count of the company's total or benefit-eligible employees. If asked how many employees the company has, say that figure is not on file here and the account manager can confirm it from the census; never quote or estimate one.`,
     g.tiers ? `Enrollment by tier: ${TIER_KEYS.map((k) => `${k} ${g.tiers[k] ?? 0}`).join(", ")}` : null,
     g.pyStart || g.pyEnd ? `Current plan year: ${g.pyStart || "?"} to ${g.pyEnd || "?"}; the 2027 renewal is effective January 1, 2027` : null,
     g.monthly != null ? `Total medical premium today: ${money(g.monthly)} per month (${money0(g.annual ?? g.monthly * 12)} per year)` : null,

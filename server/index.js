@@ -19,7 +19,8 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
-import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { auditData } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -1654,7 +1655,11 @@ const CLIENT_GROUP_FIELDS = [
   "linkToken",
   "tpa",
   "enrolled",
-  "medicalEligible",
+  // The ALE bucket staff set (or the default from enrolled), for the Group
+  // Size badge. The Employee Navigator roster count that used to travel here
+  // as `medicalEligible` counts everyone not marked terminated — part-time,
+  // ineligible, never closed — and is a staff figure now (see data-audit.js).
+  "sizeCategory",
   "lives",
   "tiers",
   "planTiers",
@@ -1671,23 +1676,6 @@ const CLIENT_GROUP_FIELDS = [
   "lines",
 ];
 
-/**
- * Active (non-terminated) headcount from a group's stored import
- * diagnostics — the same figure `medicalEligible` is meant to be, but read
- * fresh off data already on the group rather than whatever value was
- * computed at import time. That matters because the definition changed
- * after some groups were imported: their stored `medicalEligible` is
- * stale, but the raw counts it should have been built from are already
- * sitting in `diagnostics` from that same import, so there is no need to
- * re-upload anything to correct it.
- */
-function activeEmployeeCount(diagnostics) {
-  const employees = diagnostics && diagnostics.employees;
-  if (!employees || typeof employees.total !== "number") return null;
-  const skipped = Object.values(employees.skipped || {}).reduce((n, x) => n + x, 0);
-  return employees.total - skipped;
-}
-
 function clientGroupView(g) {
   const { members } = g;
   const planTiers = {};
@@ -1703,8 +1691,6 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
-  const active = activeEmployeeCount(g.diagnostics);
-  if (active != null) out.medicalEligible = active;
   // Whether supplemental has ever been read for this group, and what it
   // comes to — the same figures the Groups page shows staff.
   const breakdown = premiumBreakdown(g);
@@ -2005,6 +1991,50 @@ app.get("/api/admin/audit", requireStaff, async (req, res) => {
     await refreshAudit();
   }
   res.json({ audit });
+});
+
+/**
+ * The data check: every group against itself and against every file the
+ * portal holds about it (server/data-audit.js). Computed on request from
+ * what is in memory — it is cheap — so it is always about the data as it
+ * stands, including a rate keyed in a minute ago.
+ */
+function dataAuditBundles() {
+  const byName = new Map(adminGroups.map((a) => [a.name, a]));
+  const latestImportAt = recentImports[0] ? recentImports[0].uploaded_at : null;
+  return groups.map((g) => ({
+    g,
+    admin: byName.get(g.name) || {},
+    split: splitFor(g),
+    proposals: clientProposals(g.name),
+    billing: (funding && funding.summary[g.name]) || null,
+    fundingMonth: funding ? funding.month : null,
+    // The assigned manager by name; none means the assistant gets the fallback contact.
+    manager: g.manager ? managerContact(g.manager).name || null : null,
+    latestImportAt,
+  }));
+}
+
+app.get("/api/admin/data-audit", requireStaff, (_req, res) => {
+  res.json({ audit: auditData(dataAuditBundles()) });
+});
+
+/**
+ * One group in full: its checks, and the briefing the assistant is handed
+ * word for word — the same describeGroup() text every answer is written
+ * from — so staff can read exactly what a client's assistant knows.
+ */
+app.get("/api/admin/data-audit/:name", requireStaff, async (req, res) => {
+  const g = matchExisting(String(req.params.name || ""));
+  if (!g) return res.status(404).json({ error: "No such group." });
+  const bundle = dataAuditBundles().find((b) => b.g.name === g.name);
+  const [row] = auditData([bundle]).rows;
+  try {
+    const briefing = describeGroup(await assistantData(g));
+    res.json({ group: row, briefing });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /**
