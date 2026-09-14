@@ -38,10 +38,10 @@ as a link, and a reload comes back to the same place.
 | `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
 | `/<group-slug>/<tab>` | …its other pages: `assistant`, `current`, `options`, `supplemental`, `signup` (`changes`, an old address, lands on Welcome, where What's Changing is a section now) |
 | `/<group-slug>/assistant/<id>` | One conversation with the assistant |
-| | The rail lists **Medical Plans** once; the page has two tabs, *Current 2026 Medical Plans* (`current`) and *New 2027 Medical Options* (`options`), to switch between. |
+| | The rail lists **Medical Plans** once and opens it on the 2027 options; the page has two tabs, *New 2027 Medical Options* (`options`, leading, marked NEW) and *Current 2026 Medical Plans* (`current`, muted, for reference), to switch between. |
 | `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
-| `/current` | Current Medical Plan(s) — the first tab of **Medical Plans** |
-| `/options` | 2027 Medical Plan Options — the second tab of **Medical Plans** |
+| `/current` | Current Medical Plan(s) — the second tab of **Medical Plans** |
+| `/options` | 2027 Medical Plan Options — the first tab of **Medical Plans**, where the rail lands |
 | `/admin` | Staff sign-in |
 | `/admin/groups` | Rate Administration — Groups |
 | `/admin/groups/<company name>` | One company's page |

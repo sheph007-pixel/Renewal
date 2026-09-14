@@ -761,25 +761,31 @@ export default function App() {
   // Sign Up included. Medical Plans is one step: today's plans and the 2027
   // options are two tabs on it.
   const TAB_STEP: Partial<Record<GroupTab, number>> = {
-    current: 1,
+    options: 1,
     supplemental: 2,
     signup: 3,
   };
-  const navItems: NavItem[] = (["home", "assistant", "current", "supplemental", "signup"] as GroupTab[])
+  // Medical Plans in the rail opens on the 2027 options — the page the
+  // renewal is about — with today's plans a tab away.
+  const navItems: NavItem[] = (["home", "assistant", "options", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
       href: hrefFor(t),
-      label: t === "current" ? "Medical Plans" : TAB_LABEL[t],
+      label: t === "options" ? "Medical Plans" : TAB_LABEL[t],
       step: TAB_STEP[t],
       mark: t === "home" ? "home" : undefined,
       cta: t === "signup",
-      also: t === "current" ? (["options"] as GroupTab[]) : undefined,
+      also: t === "options" ? (["current"] as GroupTab[]) : undefined,
     }));
-  /** Medical Plans is one page in the rail with two tabs on it: today's plans, and the 2027 options. */
-  const medicalTabs: { tab: GroupTab; label: string }[] = [
-    { tab: "current", label: "Current 2026 Medical Plans" },
-    { tab: "options", label: "New 2027 Medical Options" },
+  /**
+   * Medical Plans is one page in the rail with two tabs on it. The 2027
+   * options lead and carry the emphasis — that is what the client is here to
+   * decide — and today's plans sit beside them, muted, for reference.
+   */
+  const medicalTabs: { tab: GroupTab; label: string; lead: boolean }[] = [
+    { tab: "options", label: "New 2027 Medical Options", lead: true },
+    { tab: "current", label: "Current 2026 Medical Plans", lead: false },
   ];
 
   const shut = navCollapsed && !narrow;
@@ -873,7 +879,7 @@ export default function App() {
             </div>
 
             {(tab === "current" || tab === "options") && (
-              <nav aria-label="Medical Plans" className="noprint" style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: `1px solid ${C.border}` }}>
+              <nav aria-label="Medical Plans" className="noprint" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
                 {medicalTabs.map((t) => {
                   const on = t.tab === tab;
                   return (
@@ -882,17 +888,37 @@ export default function App() {
                       href={hrefFor(t.tab)}
                       aria-current={on ? "page" : undefined}
                       style={{
-                        display: "block",
-                        padding: "8px 14px 10px",
-                        marginBottom: -1,
-                        fontSize: 14,
-                        fontWeight: on ? 600 : 500,
-                        color: on ? C.ink : C.body,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 10,
+                        padding: t.lead ? "10px 18px 12px" : "12px 16px 12px",
+                        marginBottom: -2,
+                        fontSize: t.lead ? 19 : 15,
+                        fontWeight: t.lead ? 700 : 500,
+                        letterSpacing: t.lead ? "-0.2px" : undefined,
+                        color: t.lead ? (on ? C.navy : C.ink) : on ? C.body : C.muted,
                         textDecoration: "none",
-                        borderBottom: `3px solid ${on ? C.orange : "transparent"}`,
+                        borderBottom: `4px solid ${on ? (t.lead ? C.orange : C.faint) : "transparent"}`,
                         whiteSpace: "nowrap",
                       }}
                     >
+                      {t.lead && (
+                        <span
+                          aria-hidden
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            letterSpacing: "0.8px",
+                            color: C.onColor,
+                            background: C.orange,
+                            borderRadius: 4,
+                            padding: "3px 7px",
+                            lineHeight: 1,
+                          }}
+                        >
+                          NEW
+                        </span>
+                      )}
                       {t.label}
                     </Link>
                   );
