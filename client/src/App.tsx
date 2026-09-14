@@ -31,6 +31,7 @@ import Home from "@/views/Home";
 import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
+import SyncMark from "@/views/SyncMark";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import Assistant from "@/views/Assistant";
 import ChatWidget from "@/views/ChatWidget";
@@ -50,7 +51,7 @@ const SITE = "BenSync — 2027 Renewal";
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
-  assistant: "Assistant",
+  assistant: "AI Assistant",
   changes: "What's Changing For 2027",
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
@@ -734,7 +735,7 @@ export default function App() {
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
         : tab === "assistant"
-          ? "Your Kennion team, on call: ask about your plans, your options, funding and budget"
+          ? "Ask anything about your plans, your quotes or your bill and get the answer in seconds. It drafts what you need to send and finds what's on file, any hour, without waiting on a callback."
           : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
@@ -835,7 +836,14 @@ export default function App() {
               <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
                 {/* Same wording as the side rail's current entry, so the page
                     a client lands on after clicking a link is never in doubt. */}
-                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px" }}>{TAB_LABEL[tab]}</h1>
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px", display: "flex", alignItems: "center", gap: 10 }}>
+                  {tab === "assistant" && (
+                    <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: C.navy, color: C.teal, flex: "none" }}>
+                      <SyncMark size={18} />
+                    </span>
+                  )}
+                  {tab === "assistant" ? "BenSync AI Assistant" : TAB_LABEL[tab]}
+                </h1>
                 <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
                   {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
                 </div>

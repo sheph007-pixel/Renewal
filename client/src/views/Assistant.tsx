@@ -153,7 +153,7 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
           page="assistant"
           onThread={(id) => navigate(hrefFor(id), { replace: true })}
           autoFocus
-          welcome={`Hi ${groupName} team — I'm the BenSync Assistant, part of your Kennion team. I have your current plans, the carriers' quotes and this month's billing in front of me. What would you like to know?`}
+          welcome={`Hi ${groupName} team — I'm the BenSync AI Assistant, backed by your Kennion team. I have your current plans, the carriers' quotes and this month's billing in front of me. Ask me anything, or tell me what you need drafted.`}
         />
       </div>
     </div>
