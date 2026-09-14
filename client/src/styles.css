@@ -397,6 +397,14 @@ button,
 .card .grid-icon {
   text-transform: none;
 }
+/* Bubbles: the assistant's answer keeps its lists and links inside the grey bubble. */
+.chat-bubble.them .md a {
+  color: #0B84FE;
+}
+.chat-bubble.them .md ul,
+.chat-bubble.them .md ol {
+  padding-left: 18px;
+}
 /* What the assistant writes. */
 .md > :first-child {
   margin-top: 0 !important;

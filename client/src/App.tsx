@@ -735,7 +735,7 @@ export default function App() {
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
         : tab === "assistant"
-          ? "Ask anything about your plans, your quotes or your bill and get the answer in seconds. It drafts what you need to send and finds what's on file, any hour, without waiting on a callback."
+          ? "Ask anything about employee benefits and get the answer in seconds."
           : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
