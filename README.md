@@ -13,7 +13,7 @@ with its access code and sees two things:
    as one grid of every plan from every carrier, lowest cost first. Above it,
    **Employer Contribution**: four monthly figures by tier and Apply, which
    drive an Employer Cost column (contribution × enrolled per tier, never more
-   than the premium). Filter tabs — Carrier, Deductible and OOP Max by range,
+   than the premium). Filter tabs — Carrier, Network Type (PPO, EPO or RBP, read off the proposal), Deductible and OOP Max by range,
    Funding, Total Cost ($ to $$$$, sorted either way) — and a search; each row
    is carrier, plan, deductible, OOP max, employer cost and total monthly, and
    clicking it opens a plan card: total monthly cost, benefits, composite
@@ -256,12 +256,13 @@ back on.
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
 **PPO** sheets each price the same 67 plan designs on Cigna Open Access Plus
 (the EPO version has no out-of-network cover, the PPO does), so every group's
-Gravie quote is the same 134 plans at that group's own rates. Wherever a
-Gravie plan names its network — the Options grid, a plan card, the popup —
-it carries a **Find a doctor** link to Cigna's public Open Access Plus
-directory (`networkDirectory()` in `client/src/lib/model.ts`), and the
-assistant gives the same link when a client asks whether a doctor is in
-network on a Gravie plan. Some workbooks
+Gravie quote is the same 134 plans at that group's own rates. A Gravie
+plan's card (the popup and the printed proposal) carries a **Find a doctor**
+link to Cigna's public Open Access Plus directory (`networkDirectory()` in
+`client/src/lib/model.ts`), the CSV export carries the address in a Provider
+Directory column, and the assistant gives the same link when a client asks
+whether a doctor is in network on a Gravie plan. The grid itself stays to
+the network type and name. Some workbooks
 also carry a "Narrow Network" sheet (Cigna LocalPlus, offered in a few areas)
 and a static benefits grid; both are left out. `server/gravie-parse.js` reads
 a workbook, and a zip of them — through the inbox or

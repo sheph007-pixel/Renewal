@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
@@ -36,9 +36,11 @@ type Tab = "carrier" | "network" | "ded" | "oop" | "cost";
 type SortKey = "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
 /** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
+/** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
+const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
 const TABS: [Tab, string][] = [
   ["carrier", "Carrier"],
-  ["network", "Network"],
+  ["network", "Network Type"],
   ["ded", "Deductible"],
   ["oop", "OOP Max"],
   ["cost", "Total Monthly Cost"],
@@ -63,14 +65,14 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Carrier", "Network", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Carrier", "Network Type", "Network", "Provider Directory", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const rows = list.map((p) => {
     const s = costSplit(p, applied, counts);
-    return [carrierOf(p), p.network ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    return [carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
   });
   const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -238,7 +240,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const card = (p: MarketPlan) => cardModel(p, applied, counts);
 
   const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
-  const networkList = useMemo(() => Array.from(new Set(plans.map(networkOf).filter(Boolean))), [plans]);
+  const networkList = useMemo(() => NETWORK_TYPES.filter((t) => plans.some((p) => networkTypeOf(p) === t)), [plans]);
   // Quartile cutoffs off this group's own priced plans, so "Show" reads as
   // real dollar ranges for this group rather than a generic $ / $$$$ scale.
   const costCuts = useMemo(() => {
@@ -273,19 +275,19 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       .filter(
         (p) =>
           (!carriers.size || carriers.has(carrierOf(p))) &&
-          (!networks.size || networks.has(networkOf(p))) &&
+          (!networks.size || networks.has(netType(p))) &&
           dedOk(p) &&
           oopOk(p) &&
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
           (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
-          (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network}`.toLowerCase().includes(q)),
+          (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${netType(p)}`.toLowerCase().includes(q)),
       )
       .slice()
       .sort((a, b) => {
         const val = (p: MarketPlan): number | string => {
           if (sortBy === "carrier") return carrierOf(p).toLowerCase();
-          if (sortBy === "network") return networkOf(p).toLowerCase();
+          if (sortBy === "network") return `${netType(p)} ${networkOf(p)}`.toLowerCase();
           if (sortBy === "plan") return p.plan.toLowerCase();
           if (sortBy === "ded") return dedOf(p) ?? Infinity;
           if (sortBy === "oop") return p.oop ?? Infinity;
@@ -665,7 +667,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               {(
                 [
                   ["carrier", "Carrier"],
-                  ["network", "Network"],
+                  ["network", "Network Type"],
                   ["plan", "Plan"],
                   ["ded", "Deductible"],
                   ["oop", "OOP Max"],
@@ -711,22 +713,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
                   <td style={{ ...cell, color: C.body, whiteSpace: "nowrap" }}>
-                    {networkOf(p) || "—"}
-                    {networkDirectory(p.network) && (
-                      <>
-                        {" · "}
-                        <a
-                          href={networkDirectory(p.network)!.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={networkDirectory(p.network)!.name}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ color: C.blue, fontSize: 12 }}
-                        >
-                          Find a doctor
-                        </a>
-                      </>
-                    )}
+                    <div style={{ fontWeight: 600, color: networkTypeOf(p) ? C.ink : C.faint }}>{netType(p)}</div>
+                    <div style={{ fontSize: 11.5, color: C.faint }}>{networkOf(p) || ""}</div>
                   </td>
                   <td style={cell}>
                     <div>{p.plan}</div>
