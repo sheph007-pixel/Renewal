@@ -5,6 +5,7 @@ import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 import SupportTicket from "@/views/SupportTicket";
+import SyncMark from "@/views/SyncMark";
 
 
 export interface NavItem {
@@ -49,12 +50,7 @@ function TabIcon({ tab }: { tab: GroupTab }) {
         </svg>
       );
     case "assistant":
-      return (
-        <svg {...s}>
-          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" />
-          <path d="M8.5 8.5h7M8.5 11.5h4.5" />
-        </svg>
-      );
+      return <SyncMark size={15} />;
     case "changes":
       return (
         <svg {...s}>
