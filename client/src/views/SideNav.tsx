@@ -201,7 +201,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
   const avatar = (
     <span
       aria-hidden
-      style={{ display: "grid", placeItems: "center", flex: "none", width: compact ? 30 : 28, height: compact ? 30 : 28, borderRadius: "50%", background: C.railActive, border: `1px solid ${C.railLine}`, color: "#fff", fontSize: 11, fontWeight: 700 }}
+      style={{ display: "grid", placeItems: "center", flex: "none", width: compact ? 30 : 28, height: compact ? 30 : 28, borderRadius: "50%", background: C.blue, color: "#fff", fontSize: 11, fontWeight: 700 }}
     >
       {monogram(manager.name)}
     </span>
@@ -219,10 +219,10 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
           justifyContent: compact ? "center" : "flex-start",
           gap: 10,
           width: "100%",
-          padding: compact ? 0 : "6px 8px",
+          padding: compact ? 0 : "8px 10px",
           borderRadius: 8,
-          background: open ? C.railActive : "none",
-          border: "none",
+          background: open ? C.railActive : compact ? "none" : "rgba(255,255,255,0.05)",
+          border: compact ? "none" : `1px solid ${open ? C.teal : C.railLine}`,
           color: C.railInk,
           cursor: "pointer",
           textAlign: "left",
@@ -231,10 +231,15 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
       >
         {avatar}
         {!compact && (
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
-            <span style={{ display: "block", fontSize: 11, color: C.railMuted }}>Your Account Manager</span>
-          </span>
+          <>
+            <span style={{ minWidth: 0, flex: 1 }}>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
+              <span style={{ display: "block", fontSize: 11, color: C.teal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Account Manager · Contact</span>
+            </span>
+            <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" {...stroke} style={{ flex: "none", color: C.railMuted, transform: open ? "rotate(180deg)" : "none" }}>
+              <path d="M6 15l6-6 6 6" />
+            </svg>
+          </>
         )}
       </button>
       {open && (
