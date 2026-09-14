@@ -706,6 +706,19 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
   return null;
 }
 
+/**
+ * The pharmacy benefit manager behind a carrier's plans, with its public
+ * formulary, so a client can check a drug the way they check a doctor. One
+ * row per carrier as the links come in: Gravie's PBM is Express Scripts.
+ * Null for a carrier with no PBM on file yet — the card still shows the
+ * row, blank, so every card reads the same.
+ */
+export function pbmOf(carrier: string | null | undefined): { name: string; url: string } | null {
+  const c = String(carrier || "");
+  if (/gravie/i.test(c)) return { name: "Express Scripts", url: "https://www.express-scripts.com/frontend/open-enrollment/gravie" };
+  return null;
+}
+
 export function networkDirectory(network: string | null | undefined): { name: string; url: string } | null {
   const s = String(network || "");
   if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {

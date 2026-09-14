@@ -280,13 +280,18 @@ The audit runs once per reading; a re-read runs it again.
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
 **PPO** sheets each price the same 67 plan designs on Cigna Open Access Plus
 (the EPO version has no out-of-network cover, the PPO does), so every group's
-Gravie quote is the same 134 plans at that group's own rates. A Gravie
-plan's card (the popup and the printed proposal) carries a **Find a doctor**
-link to Cigna's public Open Access Plus directory (`networkDirectory()` in
-`client/src/lib/model.ts`), the CSV export carries the address in a Provider
-Directory column, and the assistant gives the same link when a client asks
-whether a doctor is in network on a Gravie plan. The grid itself stays to
-the network type and name. Some workbooks
+Gravie quote is the same 134 plans at that group's own rates. Every plan
+card (the popup, the printed proposal, the Excel) carries the same rows for
+looking things up — **Network** with a *Find a doctor* link to the provider
+directory, and **Pharmacy (PBM)** with a *Formulary* link — filled in where
+Kennion has the link and blank otherwise, so every card reads alike. Gravie
+has both today: Cigna's public Open Access Plus directory
+(`networkDirectory()` in `client/src/lib/model.ts`) and Express Scripts'
+Gravie formulary (`pbmOf()`); other carriers' links are added there as they
+come in. The CSV export carries the addresses in Provider Directory and
+Formulary columns, and the assistant gives the same links when a client asks
+whether a doctor is in network or a drug is covered on a Gravie plan. The
+grid itself stays to the network type and name. Some workbooks
 also carry a "Narrow Network" sheet (Cigna LocalPlus, offered in a few areas)
 and a static benefits grid; both are left out. `server/gravie-parse.js` reads
 a workbook, and a zip of them — through the inbox or
