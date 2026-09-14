@@ -785,6 +785,7 @@ export default function App() {
             })
           }
           homeHref={hrefFor("home")}
+          groupName={g.name}
           manager={manager}
           onExit={signOut}
         />
@@ -805,48 +806,39 @@ export default function App() {
             </div>
 
             <div
-              className="panel"
+              className="noprint"
               style={{
-                ...panel,
-                padding: "20px 22px",
                 display: "flex",
                 flexWrap: "wrap",
-                alignItems: "flex-start",
+                alignItems: "flex-end",
                 justifyContent: "space-between",
-                gap: 20,
+                gap: 16,
+                margin: "0 0 18px",
               }}
             >
               <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: 23,
-                    fontWeight: 600,
-                    color: C.ink,
-                    letterSpacing: "-0.2px",
-                  }}
-                >
-                  {g.name}
-                </h1>
                 {/* Same wording as the side rail's current entry, so the page
                     a client lands on after clicking a link is never in doubt. */}
-                <div style={{ marginTop: 6, fontSize: 15, fontWeight: 600, color: C.ink }}>{TAB_LABEL[tab]}</div>
-                <div style={{ marginTop: 3, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>
-                  {tab === "home"
-                    ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}`
-                    : subline}
+                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px" }}>{TAB_LABEL[tab]}</h1>
+                <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
+                  {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
                 </div>
               </div>
               {(tab === "changes" || tab === "current") && groupSizeLabel(g) && (
-                <div className="noprint" style={{ flex: "0 0 auto", textAlign: "center" }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                    Group Size
-                  </div>
-                  <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
-                    <PeopleIcon />
-                  </div>
-                  <div style={{ marginTop: 4, fontSize: 12.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
-                    {groupSizeLabel(g)}
+                <div
+                  style={{
+                    ...panel,
+                    flex: "0 0 auto",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 14px",
+                  }}
+                >
+                  <PeopleIcon />
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
                   </div>
                 </div>
               )}
