@@ -222,19 +222,20 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 }
 
 /** One turn as it reads in the admin — the client's question, the assistant's answer with its documents. */
-function Transcript({ messages }: { messages: ChatMessage[] }) {
+function Transcript({ messages, token }: { messages: ChatMessage[]; token: string }) {
+  const headers = { Authorization: `Bearer ${token}` };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {messages.map((m) =>
         m.role === "user" ? (
           <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "85%", display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <div style={{ padding: "8px 12px", borderRadius: 12, borderBottomRightRadius: 4, background: C.navy, color: "#fff", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.content}</div>
-            <FileChips files={m.files || []} href={(f) => `/api/admin/chat/files/${f.id}`} align="right" />
+            <FileChips files={m.files || []} href={(f) => `/api/admin/chat/files/${f.id}`} align="right" headers={headers} />
           </div>
         ) : (
           <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, color: C.ink, padding: "2px 0" }}>
             <Markdown text={m.content} />
-            <FileChips files={m.files || []} href={(f) => `/api/admin/chat/files/${f.id}`} />
+            <FileChips files={m.files || []} href={(f) => `/api/admin/chat/files/${f.id}`} headers={headers} />
           </div>
         ),
       )}
@@ -341,12 +342,12 @@ function TryIt({ token, groups, ai, onActivity }: { token: string; groups: strin
       <div ref={scroller} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 16px" }}>
         {!ai && <div style={{ fontSize: 13, color: C.amber }}>No Anthropic key is set, so the assistant cannot answer here or for clients.</div>}
         {ai && !messages.length && !streaming && <div style={{ fontSize: 13, color: C.muted }}>Ask what a client would ask — a comparison, a summary for leadership, what level funded means for them — and see what the assistant says with this playbook.</div>}
-        <Transcript messages={messages} />
+        <Transcript messages={messages} token={token} />
         {streaming && (
           <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.55, color: C.ink }}>
             {streaming.text ? <Markdown text={streaming.text} /> : null}
             {(streaming.status || !streaming.text) && <div style={{ fontSize: 12.5, color: C.muted, marginTop: 6 }}>{streaming.status || "Thinking…"}</div>}
-            <FileChips files={streaming.files} href={(f) => `/api/admin/chat/files/${f.id}`} />
+            <FileChips files={streaming.files} href={(f) => `/api/admin/chat/files/${f.id}`} headers={{ Authorization: `Bearer ${token}` }} />
           </div>
         )}
         {error && <div role="alert" style={{ marginTop: 10, fontSize: 12.5, color: C.red }}>{error}</div>}
@@ -675,7 +676,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
               )}
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 16px" }}>
-              <Transcript messages={open.messages} />
+              <Transcript messages={open.messages} token={token} />
             </div>
           </div>
         )}
