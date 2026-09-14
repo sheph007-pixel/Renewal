@@ -2660,6 +2660,68 @@ const isEpoPlan = (pl) =>
 /** A UnitedHealthcare menu plan that is an EPO. */
 const isEpoMenu = (m) => String(m.type || "").toUpperCase() === "EPO";
 
+/**
+ * Carrier logos. Staff upload each carrier's official file once (PNG, JPEG
+ * or SVG, under 2 MB); the client's pages show it wherever the carrier is
+ * named, and a carrier without one gets a lettered badge instead. The
+ * images are branding, so they are served without a session.
+ */
+const CARRIERS = ["UnitedHealthcare", "Gravie", "Nationwide", "Angle Health", "Cobalt", "HealthEZ", "EBPA", "BCBS of Alabama", "Guardian", "VSP"];
+const carrierSlug = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const carrierFromSlug = (slug) => CARRIERS.find((c) => carrierSlug(c) === slug) || null;
+const memCarrierLogos = new Map();
+const logoStore = {
+  async list() {
+    if (db) return db.listCarrierLogos();
+    return [...memCarrierLogos.values()].map(({ data: _d, ...r }) => r);
+  },
+  async get(carrier) {
+    if (db) return db.getCarrierLogo(carrier);
+    return memCarrierLogos.get(carrier) || null;
+  },
+  async set(carrier, mime, data, by) {
+    if (db) return db.setCarrierLogo(carrier, mime, data, by);
+    memCarrierLogos.set(carrier, { carrier, mime, data, updatedAt: new Date().toISOString() });
+  },
+  async remove(carrier) {
+    if (db) return db.deleteCarrierLogo(carrier);
+    return memCarrierLogos.delete(carrier);
+  },
+};
+const LOGO_MIMES = { "image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg", "image/webp": "webp" };
+
+app.get("/api/carriers/logos", async (_req, res) => {
+  const have = await logoStore.list();
+  res.setHeader("Cache-Control", "no-cache");
+  res.json({ carriers: CARRIERS.map((c) => ({ carrier: c, slug: carrierSlug(c), logo: have.some((h) => h.carrier === c) })) });
+});
+
+app.get("/api/carriers/:slug/logo", async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  const logo = carrier && (await logoStore.get(carrier));
+  if (!logo) return res.status(404).json({ error: "No logo on file." });
+  res.setHeader("Content-Type", logo.mime);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(logo.data);
+});
+
+app.post("/api/admin/carriers/:slug/logo", requireStaff, express.raw({ type: () => true, limit: "2mb" }), async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  if (!carrier) return res.status(404).json({ error: "Not a carrier this portal knows." });
+  const mime = String(req.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (!LOGO_MIMES[mime]) return res.status(400).json({ error: "Upload a PNG, JPEG, SVG or WebP." });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  if (mime === "image/svg+xml" && /<script|on\w+\s*=|javascript:/i.test(req.body.toString("utf8"))) return res.status(400).json({ error: "That SVG carries script, which a logo must not." });
+  await logoStore.set(carrier, mime, req.body, req.staffEmail || null);
+  res.json({ ok: true, carrier, slug: carrierSlug(carrier) });
+});
+
+app.delete("/api/admin/carriers/:slug/logo", requireStaff, async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  if (!carrier || !(await logoStore.remove(carrier))) return res.status(404).json({ error: "No logo on file." });
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });

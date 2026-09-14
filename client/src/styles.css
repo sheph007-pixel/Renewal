@@ -386,6 +386,15 @@ button,
     grid-template-columns: 1fr !important;
   }
 }
+/* Favorite / compare buttons in the options grid. */
+.grid-icon:hover:not(:disabled) {
+  background: rgba(15, 42, 71, 0.07) !important;
+  border-radius: 8px;
+}
+.grid-icon .card,
+.card .grid-icon {
+  text-transform: none;
+}
 /* What the assistant writes. */
 .md > :first-child {
   margin-top: 0 !important;

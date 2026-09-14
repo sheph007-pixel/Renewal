@@ -245,6 +245,16 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_quote_plans (
 );
 CREATE INDEX IF NOT EXISTS carrier_quote_plans_network_idx ON kennion.carrier_quote_plans (quote_id, network);
 
+-- Each carrier's logo, uploaded once by staff and shown wherever the carrier
+-- is named: the options grid, plan cards, documents.
+CREATE TABLE IF NOT EXISTS kennion.carrier_logos (
+  carrier      text PRIMARY KEY,
+  mime         text NOT NULL,
+  data         bytea NOT NULL,
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  updated_by   text
+);
+
 CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   group_name   text NOT NULL,
   plan         text NOT NULL,
@@ -996,6 +1006,27 @@ export function createDb(url) {
       );
       await pool.query("UPDATE kennion.chat_threads SET updated_at = now() WHERE id = $1", [threadId]);
       return shapeMessage(rows[0]);
+    },
+
+    /** Which carriers have a logo on file, with when. */
+    async listCarrierLogos() {
+      const { rows } = await pool.query("SELECT carrier, mime, updated_at FROM kennion.carrier_logos ORDER BY carrier");
+      return rows.map((r) => ({ carrier: r.carrier, mime: r.mime, updatedAt: r.updated_at }));
+    },
+    async getCarrierLogo(carrier) {
+      const { rows } = await pool.query("SELECT carrier, mime, data, updated_at FROM kennion.carrier_logos WHERE carrier = $1", [carrier]);
+      return rows[0] ? { carrier: rows[0].carrier, mime: rows[0].mime, data: rows[0].data, updatedAt: rows[0].updated_at } : null;
+    },
+    async setCarrierLogo(carrier, mime, data, by) {
+      await pool.query(
+        `INSERT INTO kennion.carrier_logos (carrier, mime, data, updated_by) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (carrier) DO UPDATE SET mime = EXCLUDED.mime, data = EXCLUDED.data, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+        [carrier, mime, data, by || null],
+      );
+    },
+    async deleteCarrierLogo(carrier) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.carrier_logos WHERE carrier = $1", [carrier]);
+      return rowCount > 0;
     },
 
     async stats() {

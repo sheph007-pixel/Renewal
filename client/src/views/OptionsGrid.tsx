@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { TIERS, censusCounts, costSplit, fmtDed, money0, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
+import CarrierMark from "@/views/CarrierMark";
 
 /**
  * Every 2027 plan from every carrier, one grid, lowest cost first.
@@ -577,7 +578,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     fontWeight: 700,
                     whiteSpace: "nowrap",
                     textAlign: i >= 3 && i <= 6 ? "right" : "left",
-                    width: i >= 7 ? 44 : undefined,
+                    width: i >= 7 ? 52 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -597,7 +598,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const right = { ...cell, textAlign: "right" as const, ...num };
               return (
                 <tr key={p.plan} className="rowlink" onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
-                  <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>{carrierOf(p)}</td>
+                  <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
+                    <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
+                  </td>
                   <td style={{ ...cell, color: C.body }}>{networkOf(p) || "—"}</td>
                   <td style={cell}>
                     <div>{p.plan}</div>
@@ -616,13 +619,23 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => toggleHeart(p.plan)} disabled={!heart && favoritesFull} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : favoritesFull ? C.hairline : C.ghost }}>
-                      {heart ? "♥" : "♡"}
+                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} disabled={!heart && favoritesFull} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : favoritesFull ? C.hairline : C.ghost }}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+                        <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
+                      </svg>
                     </button>
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side — remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? C.green : compareFull ? C.hairline : C.blue, fontWeight: 700 }}>
-                      {added ? "✓" : "+"}
+                    <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side — remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
+                      {added ? (
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 12.5l4.5 4.5L19 7.5" />
+                        </svg>
+                      ) : (
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      )}
                     </button>
                   </td>
                 </tr>
@@ -688,10 +701,13 @@ const toDraft = (v: Record<TierKey, number>): Record<TierKey, string> =>
   TIERS.reduce((acc, t) => ({ ...acc, [t.key]: fmtDraft(v[t.key] || 0) }), {} as Record<TierKey, string>);
 
 const iconBtn = {
+  display: "inline-grid",
+  placeItems: "center",
+  width: 36,
+  height: 36,
   background: "none",
   border: "none",
-  padding: "2px 6px",
-  fontSize: 17,
+  padding: 0,
   lineHeight: 1,
   cursor: "pointer",
 } as const;

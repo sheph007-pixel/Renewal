@@ -25,6 +25,7 @@ import SignInCode from "@/views/SignInCode";
 import AuditPanel from "@/views/AuditPanel";
 import RatesAudit from "@/views/RatesAudit";
 import AdminAssistant from "@/views/AdminAssistant";
+import CarrierLogos from "@/views/CarrierLogos";
 
 interface Props {
   data: KennionData;
@@ -568,6 +569,7 @@ export default function Admin({
                 No database is connected, so uploads are lost on the next deploy.
               </div>
             )}
+            <CarrierLogos token={token} />
             <AuditPanel token={token} version={auditVersion} ai={ai} />
             <ImportPanel
               token={token}
