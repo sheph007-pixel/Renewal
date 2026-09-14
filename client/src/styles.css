@@ -348,6 +348,11 @@ textarea {
   background: rgba(15, 42, 71, 0.08);
   color: #0F2A47;
 }
+.chat-file:hover {
+  border-color: #1F8A5B !important;
+  text-decoration: none !important;
+  color: #16714A !important;
+}
 /* What the assistant writes. */
 .md > :first-child {
   margin-top: 0 !important;

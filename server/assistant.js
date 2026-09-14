@@ -4,9 +4,12 @@
 // the model — its plans and rates today, the carriers' quotes for 2027, this
 // month's billing — so an answer is about this employer, not employers in
 // general. The same figures the group's pages show, and nothing more: no
-// census, no other company. Replies stream, since a comparison across a
-// dozen plan options runs long.
+// census, no other company. Kennion's own guidance (the playbook staff edit
+// in the admin) sits beside the figures, so what the assistant says is what
+// Kennion would say. Replies stream, and the model can hand back documents —
+// a comparison of options, a memo — which are built here from the figures.
 import Anthropic from "@anthropic-ai/sdk";
+import { comparisonTable, comparisonText, renderComparison, renderDocument } from "./documents.js";
 
 const apiKey = () =>
   process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
@@ -16,8 +19,19 @@ export const assistantEnabled = () => !!(apiKey() || process.env.ANTHROPIC_AUTH_
 const MODEL = "claude-opus-5";
 /** Turns the model sees. Older ones are dropped, not summarised, to keep a long thread affordable. */
 const HISTORY_TURNS = 30;
+/** Tool rounds per turn: a comparison and a memo is two; more than a few is a loop. */
+const MAX_ROUNDS = 5;
 
-const SYSTEM = `You are the BenSync Assistant, part of the Kennion Benefit Advisors team. Kennion is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal: for 2027 the program is moving to a set of major national carriers and partners — UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna OAP network), Nationwide, Angle Health, and for some groups Cobalt (self funded) — which gives each client more renewal options than before. Plans in force today run through the program's administrators, EBPA and HealthEZ.
+/** What staff can change from the admin, with what it starts as. */
+export const DEFAULT_PLAYBOOK = {
+  persona:
+    "You are the BenSync Assistant: a licensed benefits advisor on the Kennion Benefit Advisors team who specializes in level-funded and fully-insured group health for small and mid-sized employers, and who knows Kennion's 2027 program inside out. You speak as one of the team — warm, direct, and practical — and you exist so a client gets an advisor's answer the moment they have the question, without leaving BenSync or waiting on an email.",
+  rules:
+    "- The 2027 program is a move to new carriers, not a renewal of the old plan: compare total cost and plan design side by side, and never describe 2027 as a percentage increase or decrease on 2026 rates.\n- When comparing level funded to fully insured, always mention the potential year-end refund of unused claims funding on a level-funded plan, and the fixed, no-surprises premium on a fully insured one.\n- A quote on file is the carrier's number; anything not quoted is unknown — say so and offer to have the account manager get it.\n- Kennion binds coverage, not the assistant: when the client is ready to move, point them to Sign Up and their account manager.",
+  faq: "",
+};
+
+const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners — UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna OAP network), Nationwide, Angle Health, and for some groups Cobalt (self funded) — which gives each client more renewal options than before. Plans in force today run through the program's administrators, EBPA and HealthEZ.
 
 You are talking with the HR lead or owner of one employer group — an existing Kennion client — who is using BenSync to understand their options, funding, and budget for 2027. Help them make smarter, faster decisions: explain what they have today, compare the quoted options, model what a contribution change means in dollars, draft a note to leadership or employees, and say plainly what you would look at next.
 
@@ -27,8 +41,63 @@ How to work:
 - Be concise and concrete. Lead with the answer, then the reasoning. Use Markdown: short paragraphs, bulleted lists, and a table when comparing plans or tiers. Round dollars sensibly. No preamble, no closing pleasantries.
 - Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
 - You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
-- The portal's pages, which you may point to by name: Welcome; What's Changing For 2027 (today against 2027, the headline); Your 2026 Medical Plans (what is in force today, with rates and the employer/employee split); New 2027 Medical Options (every quoted plan side by side, with a contribution modeler); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
-- When the client wants to move forward, or the question needs a person — a specific quote, a carrier's answer, a meeting — hand them to their account manager by name, with the phone and email given below.`;
+- The portal's pages, which you may point to by name: Welcome; Assistant (this); What's Changing For 2027 (today against 2027, the headline); Your 2026 Medical Plans (what is in force today, with rates and the employer/employee split); New 2027 Medical Options (every quoted plan side by side, with a contribution modeler); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
+- When the client wants to move forward, or the question needs a person — a specific quote, a carrier's answer, a meeting — hand them to their account manager by name, with the phone and email given below.
+
+Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
+
+Kennion's guidance follows. It is written by the people who run the program and overrides anything above where they differ.`;
+
+const TOOLS = [
+  {
+    name: "create_comparison",
+    description:
+      "Build a downloadable side-by-side comparison of 2027 plan options for this group, priced at its own enrollment, with what is in force today above it. The figures are computed from the quotes on file; you choose which plans go in. Returns the table as text so you can talk about it.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["plans", "format"],
+      properties: {
+        plans: {
+          type: "array",
+          maxItems: 12,
+          items: { type: "string" },
+          description: "The quoted 2027 plans to include, by name (or plan code) exactly as they appear in the figures. Empty means every quoted plan.",
+        },
+        include_current: { type: "boolean", description: "Put the plans in force today at the top for reference. Default true." },
+        contribution: {
+          anyOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["EE", "ES", "EC", "FAM"],
+              properties: { EE: { type: "number" }, ES: { type: "number" }, EC: { type: "number" }, FAM: { type: "number" } },
+            },
+            { type: "null" },
+          ],
+          description: "The employer's monthly contribution per tier, to add employer/employee split columns. Null for none.",
+        },
+        format: { type: "string", enum: ["pdf", "xlsx"], description: "PDF to read, Excel to work with." },
+        title: { anyOf: [{ type: "string" }, { type: "null" }], description: "A title for the document, or null for the default." },
+      },
+    },
+  },
+  {
+    name: "create_document",
+    description:
+      "Turn text you have written into a downloadable, branded document: an executive summary, a memo to leadership, a recap of where the renewal stands, talking points, or an announcement to employees. Write the whole body in Markdown (headings, bullets, bold, simple tables).",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "body_markdown", "format"],
+      properties: {
+        title: { type: "string", description: "The document's title, e.g. \"2027 Renewal — Summary for Leadership\"." },
+        body_markdown: { type: "string", description: "The full text of the document in Markdown. Use the group's real figures." },
+        format: { type: "string", enum: ["pdf", "docx"], description: "PDF to send as is, Word to edit." },
+      },
+    },
+  },
+];
 
 const money = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const money0 = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Math.round(Number(n)).toLocaleString("en-US"));
@@ -129,6 +198,15 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
   return out.join("\n");
 }
 
+/** Kennion's guidance as one system block: who the assistant is, the rules, the house answers. */
+function playbookText(playbook) {
+  const p = { ...DEFAULT_PLAYBOOK, ...(playbook || {}) };
+  const parts = [`## Who you are\n${(p.persona || DEFAULT_PLAYBOOK.persona).trim()}`];
+  if ((p.rules || "").trim()) parts.push(`## Rules from Kennion — follow these\n${p.rules.trim()}`);
+  if ((p.faq || "").trim()) parts.push(`## House answers — when a question matches one of these, answer the way it says\n${p.faq.trim()}`);
+  return parts.join("\n\n");
+}
+
 const PAGE_NAMES = {
   home: "Welcome",
   assistant: "Assistant",
@@ -137,6 +215,7 @@ const PAGE_NAMES = {
   options: "New 2027 Medical Options",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
+  admin: "the Kennion admin (a staff member trying the assistant as this group)",
 };
 
 /** A thread's title, from its first question: the gist, not the whole thing. */
@@ -148,78 +227,157 @@ export function titleFor(text) {
   return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)).replace(/[,;:.!?-]+$/, "") + "…";
 }
 
-async function* fakeReply(question) {
-  const text = `Canned reply (KENNION_FAKE_AI). You asked: "${question}". In a deployment this is answered with the group's own plans, rates and quotes in front of the model.`;
-  for (const word of text.split(" ")) {
-    yield word + " ";
+/**
+ * Run one tool call. `data` is what the documents need (the group view and
+ * its proposals); `keep` stores the bytes and returns the file record.
+ * Returns what the model is told.
+ */
+async function runTool(name, input, { data, keep, onStatus }) {
+  const g = data.group;
+  if (name === "create_comparison") {
+    onStatus("Building the comparison…");
+    let plans = Array.isArray(input.plans) ? input.plans : [];
+    if (!plans.length) plans = (data.proposals || []).flatMap((pr) => (pr.plans || []).map((pl) => pl.name)).slice(0, 12);
+    const table = comparisonTable({ group: g, proposals: data.proposals, plans, includeCurrent: input.include_current !== false, contribution: input.contribution || null });
+    const format = input.format === "xlsx" ? "xlsx" : "pdf";
+    const doc = await renderComparison({ format, title: input.title || null, group: g, table });
+    const file = await keep(doc);
+    return `Created ${file.filename} (${format.toUpperCase()}, ${table.rows.length} rows). The client can download it from this message. Its contents:\n${comparisonText(table)}`;
   }
+  if (name === "create_document") {
+    onStatus("Writing the document…");
+    const format = input.format === "docx" ? "docx" : "pdf";
+    const doc = await renderDocument({ format, title: String(input.title || "Summary").slice(0, 120), markdown: String(input.body_markdown || ""), group: g });
+    const file = await keep(doc);
+    return `Created ${file.filename} (${format.toUpperCase()}). The client can download it from this message.`;
+  }
+  return `Unknown tool ${name}.`;
+}
+
+/** The local stand-in: no key, no network; a document when the question sounds like it wants one. */
+async function fakeReply(question, ctx) {
+  const q = String(question || "");
+  const pieces = [];
+  if (/compar|side.by.side|spreadsheet/i.test(q)) {
+    const table = comparisonTable({ group: ctx.data.group, proposals: ctx.data.proposals, plans: [], includeCurrent: true });
+    const file = await ctx.keep(await renderComparison({ format: /excel|xlsx|spreadsheet/i.test(q) ? "xlsx" : "pdf", group: ctx.data.group, table }));
+    pieces.push(`Here is a comparison of what is on file — ${file.filename}. `);
+  }
+  if (/summar|memo|announce|document|recap|talking points/i.test(q)) {
+    const file = await ctx.keep(await renderDocument({ format: /word|docx/i.test(q) ? "docx" : "pdf", title: "Renewal summary", markdown: `# Where ${ctx.data.group.name}'s renewal stands\n\n- ${ctx.data.group.enrolled} enrolled today\n- Canned summary (KENNION_FAKE_AI)`, group: ctx.data.group }));
+    pieces.push(`I wrote it up — ${file.filename}. `);
+  }
+  pieces.push(`Canned reply (KENNION_FAKE_AI). You asked: "${q}". In a deployment this is answered with the group's own plans, rates and quotes in front of the model.`);
+  return pieces.join("");
 }
 
 /**
- * Answer the newest turn. `context` is the group description; `history` is
- * every stored turn in order, the last being the user's new question; `page`
- * is where in the portal they asked from. `onText` gets each streamed piece.
- * Resolves to the full reply.
+ * Answer the newest turn. `data` holds the group's view (`group`, `proposals`
+ * and the rest describeGroup takes); `history` is every stored turn in order,
+ * the last being the user's new question; `page` is where in the portal they
+ * asked from; `playbook` is Kennion's guidance. `onText` gets each streamed
+ * piece, `onStatus` a line to show while a document is built, `keep` stores
+ * a document and returns its record. Resolves to { text, files }.
  */
-export async function replyTo({ context, history, page, onText }) {
+export async function replyTo({ data, history, page, playbook, onText, onStatus = () => undefined, keep }) {
   const turns = history.slice(-HISTORY_TURNS);
-  if (turns.length && turns[0].role !== "user") turns.shift();
+  while (turns.length && turns[0].role !== "user") turns.shift();
   const last = turns[turns.length - 1];
+  const files = [];
+  const keepFile = async (doc) => {
+    const rec = await keep(doc);
+    files.push(rec);
+    return rec;
+  };
+
   if (fakeAi()) {
+    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile });
     let full = "";
-    for await (const piece of fakeReply(last ? last.content : "")) {
-      full += piece;
-      onText(piece);
+    for (const word of text.split(" ")) {
+      full += word + " ";
+      onText(word + " ");
     }
-    return full.trim();
+    return { text: full.trim(), files };
   }
   if (!assistantEnabled()) throw new Error("The assistant is off: no ANTHROPIC_API_KEY is set.");
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
 
   const messages = turns.map((m, i) => {
     if (m.role === "user" && i === turns.length - 1 && page && PAGE_NAMES[page]) {
-      return { role: "user", content: `(Asked from the "${PAGE_NAMES[page]}" page.)\n\n${m.content}` };
+      return { role: "user", content: `(Asked from ${PAGE_NAMES[page]}.)\n\n${m.content}` };
     }
-    return { role: m.role, content: m.content };
+    // Earlier answers that carried documents read back with a note of what was made.
+    const extra = m.role === "assistant" && Array.isArray(m.files) && m.files.length ? `\n\n(Documents attached to this answer: ${m.files.map((f) => f.filename).join(", ")})` : "";
+    return { role: m.role, content: m.content + extra };
   });
 
   const params = {
     model: MODEL,
-    max_tokens: 4000,
-    // The instructions never change and the group's figures change rarely,
-    // so both sit in front of the cache mark; only the turns vary.
+    max_tokens: 8000,
+    // The instructions never change, Kennion's guidance changes rarely and
+    // the group's figures change rarely, so all three sit in front of cache
+    // marks; only the turns vary.
     system: [
       { type: "text", text: SYSTEM },
-      { type: "text", text: `Here are the client's figures. Use them.\n\n${context}`, cache_control: { type: "ephemeral" } },
+      { type: "text", text: playbookText(playbook), cache_control: { type: "ephemeral" } },
+      { type: "text", text: `Here are the client's figures. Use them.\n\n${describeGroup(data)}`, cache_control: { type: "ephemeral" } },
     ],
+    tools: TOOLS,
     output_config: { effort: "medium" },
-    messages,
   };
 
   let full = "";
+  // What the model says after a tool call starts on its own paragraph.
+  let breakBefore = false;
   const emit = (t) => {
+    if (breakBefore && full && !full.endsWith("\n\n")) {
+      full += "\n\n";
+      onText("\n\n");
+    }
+    breakBefore = false;
     full += t;
     onText(t);
   };
-  const run = async (stream) => {
+  const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
+  let useBeta = beta;
+  const call = async () => {
+    if (useBeta) {
+      try {
+        const stream = client.beta.messages.stream({ ...params, messages, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
+        stream.on("text", emit);
+        return await stream.finalMessage();
+      } catch (e) {
+        if (!(e instanceof Anthropic.BadRequestError) || full) throw e;
+        console.warn("beta fallback request rejected, retrying without it:", e.message);
+        useBeta = false;
+      }
+    }
+    const stream = client.messages.stream({ ...params, messages });
     stream.on("text", emit);
     return stream.finalMessage();
   };
 
-  let response;
-  const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
-  if (beta) {
-    try {
-      response = await run(client.beta.messages.stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }));
-    } catch (e) {
-      if (!(e instanceof Anthropic.BadRequestError) || full) throw e;
-      console.warn("beta fallback request rejected, retrying without it:", e.message);
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const response = await call();
+    if (response.stop_reason === "refusal") throw new Error("The assistant declined to answer that one.");
+    if (response.stop_reason !== "tool_use") break;
+    // Thinking blocks ride along unchanged: the model needs them back to continue.
+    messages.push({ role: "assistant", content: response.content });
+    const results = [];
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+      let text;
+      try {
+        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus });
+      } catch (e) {
+        console.error(`assistant tool ${block.name}:`, e.message);
+        text = `The document could not be made: ${e.message}. Tell the client, briefly, and offer to try again.`;
+      }
+      results.push({ type: "tool_result", tool_use_id: block.id, content: text });
     }
+    messages.push({ role: "user", content: results });
+    breakBefore = true;
+    onStatus("");
   }
-  if (!response) response = await run(client.messages.stream(params));
-
-  if (response.stop_reason === "refusal") {
-    throw new Error("The assistant declined to answer that one.");
-  }
-  return full.trim();
+  return { text: full.trim(), files };
 }

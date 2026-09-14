@@ -1,7 +1,34 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { C } from "@/lib/ui";
-import { loadThread, sendMessage, useChat, type ChatMessage } from "@/lib/chat";
+import { loadThread, sendMessage, useChat, type ChatFile, type ChatMessage } from "@/lib/chat";
 import Markdown from "@/views/Markdown";
+
+const KIND: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+};
+const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
+
+/** A document the assistant made, as a download. */
+export function FileChips({ files, href }: { files: ChatFile[]; href: (f: ChatFile) => string }) {
+  if (!files.length) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+      {files.map((f) => (
+        <a key={f.id} className="chat-file" href={href(f)} download={f.filename} style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "7px 12px 7px 9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, color: C.ink, textDecoration: "none", maxWidth: "100%" }}>
+          <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", width: 28, height: 28, borderRadius: 6, background: C.blueTint, color: C.blueInk, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.3px" }}>
+            {KIND[f.mime] || "FILE"}
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 280 }}>{f.filename}</span>
+            <span style={{ display: "block", fontSize: 11, color: C.muted }}>{sizeOf(f.size)} · Download</span>
+          </span>
+        </a>
+      ))}
+    </div>
+  );
+}
 
 interface Props {
   /** The conversation shown; null is a fresh one, opened on the first question. */
@@ -129,6 +156,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
               <Mark size={compact ? 22 : 26} />
               <div className="chat-answer" style={{ minWidth: 0, flex: 1, fontSize: fs, lineHeight: 1.55, color: C.ink }}>
                 <Markdown text={m.content} />
+                <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} />
               </div>
             </div>
           ),
@@ -137,7 +165,14 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
             <Mark size={compact ? 22 : 26} />
             <div className="chat-answer" style={{ minWidth: 0, flex: 1, fontSize: fs, lineHeight: 1.55, color: C.ink }}>
-              {streaming.text ? <Markdown text={streaming.text} /> : <Typing />}
+              {streaming.text ? <Markdown text={streaming.text} /> : !streaming.status ? <Typing /> : null}
+              {streaming.status && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: streaming.text ? 8 : 0, fontSize: 12.5, color: C.muted }}>
+                  <Typing />
+                  {streaming.status}
+                </div>
+              )}
+              <FileChips files={streaming.files} href={(f) => `/api/chat/files/${f.id}`} />
             </div>
           </div>
         )}

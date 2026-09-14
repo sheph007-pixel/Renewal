@@ -46,6 +46,7 @@ as a link, and a reload comes back to the same place.
 | `/admin/groups/<company name>` | One company's page |
 | `/admin/rates` | Rate Administration — Plans & Rates |
 | `/admin/import` | Rate Administration — Import |
+| `/admin/assistant` | Rate Administration — Assistant: conversations, playbook, try it as a group |
 
 Sections within a page are `#hash` anchors — `/options#shortlist`, say — and
 each group page lists its sections under the heading as "On this page" links.
@@ -559,6 +560,35 @@ server-sent events (`POST /api/chat/send`); conversations are kept in
 memory when there is no database. The box and the tab only show when the
 server has an Anthropic key (the sign-in payload says so).
 
+**Documents.** The assistant can hand back files (`server/documents.js`),
+attached to its answer as downloads (`kennion.chat_files`, served at
+`/api/chat/files/:id` by the group's cookie alone): a side-by-side
+**comparison** of chosen 2027 options at the group's own enrollment, with
+today's plans above and optional employer/employee split columns, as PDF or
+Excel — the numbers are computed on the server from the quotes on file, the
+model only picks the plans — and a **memo, summary or announcement** the
+model writes in Markdown, rendered as a branded PDF or Word file. These are
+tools on the model's turn (`create_comparison`, `create_document`); a turn
+runs at most five tool rounds.
+
+**The admin's side** (`/admin/assistant`) is where Kennion steers it:
+
+- **Playbook** — three plain-English boxes that go into every answer's
+  system prompt, so a change takes effect on the next question with no
+  deploy: *who it is* (the persona — a licensed advisor on the Kennion team
+  who specializes in level-funded and fully-insured group health), *rules*
+  ("never describe 2027 as a rate increase", "always mention the
+  level-funded refund"), and *house answers* (questions with the answer you
+  want given verbatim). Kept in `settings` under `assistant.playbook` with
+  the last twenty versions; the defaults live in `server/assistant.js`.
+- **Try it as a group** — ask as any client and see what the assistant says
+  with the playbook as saved. Those conversations are kept (`staff = true`)
+  but never shown to the client.
+- **Conversations** — every thread across every group: first question,
+  turns, last active; filter by group, search inside questions and answers,
+  open the transcript with its documents, **flag for follow-up** with a
+  note for the account manager, delete.
+
 ## Privacy
 
 The census carries names, ages, genders, ZIPs and premiums for over 1,300
@@ -785,8 +815,9 @@ node --experimental-strip-types scripts/test-market-plans.mts
 
 `KENNION_FAKE_AI=1` makes the server treat a text upload whose body is a JSON
 extraction as Claude's reading of it, and answers the assistant with a canned
-reply, so the whole proposal path and the chat can be walked locally without a
-key. It is for local runs only; never set it in a deployment.
+reply (with a real comparison or memo file when the question asks for one),
+so the whole proposal path and the chat can be walked locally without a key.
+It is for local runs only; never set it in a deployment.
 
 ## Deploy
 

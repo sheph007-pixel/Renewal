@@ -13,11 +13,28 @@ export interface ChatThread {
   updatedAt: string;
 }
 
+/** A document the assistant made for a turn: a comparison, a memo. */
+export interface ChatFile {
+  id: number;
+  filename: string;
+  mime: string;
+  size: number;
+}
+
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  files?: ChatFile[];
   createdAt: string;
+}
+
+/** The reply being streamed: text so far, what is being built, documents made so far. */
+export interface Streaming {
+  threadId: number | null;
+  text: string;
+  status: string;
+  files: ChatFile[];
 }
 
 export interface ChatState {
@@ -25,8 +42,7 @@ export interface ChatState {
   /** True once the list has been fetched, so an empty list means "none" rather than "not yet". */
   loaded: boolean;
   messages: Record<number, ChatMessage[]>;
-  /** The reply being streamed, by thread; text so far. */
-  streaming: { threadId: number | null; text: string } | null;
+  streaming: Streaming | null;
   error: string | null;
 }
 
@@ -93,7 +109,7 @@ export async function deleteThread(id: number) {
 }
 
 /** Read `event:`/`data:` frames off the stream, one callback per frame. */
-async function readEvents(body: ReadableStream<Uint8Array>, on: (event: string, data: string) => void) {
+export async function readEvents(body: ReadableStream<Uint8Array>, on: (event: string, data: string) => void) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
@@ -127,10 +143,11 @@ const localId = () => -Math.floor(Math.random() * 1e9) - 1;
 export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void): Promise<number> {
   const question: ChatMessage = { id: localId(), role: "user", content, createdAt: new Date().toISOString() };
   let id = threadId;
+  const fresh = (tid: number | null): Streaming => ({ threadId: tid, text: "", status: "", files: [] });
   if (id != null) {
-    set({ messages: { ...state.messages, [id]: [...(state.messages[id] || []), question] }, streaming: { threadId: id, text: "" }, error: null });
+    set({ messages: { ...state.messages, [id]: [...(state.messages[id] || []), question] }, streaming: fresh(id), error: null });
   } else {
-    set({ streaming: { threadId: null, text: "" }, error: null });
+    set({ streaming: fresh(null), error: null });
   }
 
   const r = await fetch("/api/chat/send", {
@@ -146,7 +163,10 @@ export async function sendMessage(threadId: number | null, content: string, page
   }
 
   let text = "";
+  let status = "";
+  const files: ChatFile[] = [];
   let error: string | null = null;
+  const progress = () => set({ streaming: { threadId: id, text, status, files: [...files] } });
   await readEvents(r.body, (event, raw) => {
     const data = JSON.parse(raw) as Record<string, unknown>;
     if (event === "thread") {
@@ -158,13 +178,20 @@ export async function sendMessage(threadId: number | null, content: string, page
         set({
           threads: [thread, ...state.threads.filter((x) => x.id !== t.id)],
           messages: { ...state.messages, [t.id]: [question] },
-          streaming: { threadId: t.id, text: "" },
+          streaming: fresh(t.id),
         });
         onThread?.(t.id);
       }
     } else if (event === "text") {
       text += (data as { text: string }).text;
-      set({ streaming: { threadId: id, text } });
+      progress();
+    } else if (event === "status") {
+      status = (data as { text: string }).text;
+      progress();
+    } else if (event === "file") {
+      files.push((data as { file: ChatFile }).file);
+      status = "";
+      progress();
     } else if (event === "done") {
       const m = (data as { message: ChatMessage }).message;
       const tid = id!;
@@ -183,8 +210,8 @@ export async function sendMessage(threadId: number | null, content: string, page
   if (error) {
     // Whatever streamed before the failure is kept on screen as a partial answer.
     const tid = id;
-    if (tid != null && text) {
-      const partial: ChatMessage = { id: localId(), role: "assistant", content: text, createdAt: new Date().toISOString() };
+    if (tid != null && (text || files.length)) {
+      const partial: ChatMessage = { id: localId(), role: "assistant", content: text, files, createdAt: new Date().toISOString() };
       set({ messages: { ...state.messages, [tid]: [...(state.messages[tid] || []), partial] } });
     }
     set({ streaming: null, error });

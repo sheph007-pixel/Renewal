@@ -24,6 +24,7 @@ import TwoFactor from "@/views/TwoFactor";
 import SignInCode from "@/views/SignInCode";
 import AuditPanel from "@/views/AuditPanel";
 import RatesAudit from "@/views/RatesAudit";
+import AdminAssistant from "@/views/AdminAssistant";
 
 interface Props {
   data: KennionData;
@@ -69,13 +70,14 @@ const cellBase = {
   ...num,
 };
 
-export type AdminTab = "groups" | "rates" | "proposals" | "import";
+export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant";
 
 const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "groups", label: "Groups", href: PATHS.groups },
   { key: "rates", label: "Existing Plans & Rates", href: PATHS.rates },
   { key: "proposals", label: "Proposals", href: PATHS.proposals },
   { key: "import", label: "Import", href: PATHS.import },
+  { key: "assistant", label: "Assistant", href: PATHS.assistantAdmin },
 ];
 
 export interface ImportRecord {
@@ -541,6 +543,14 @@ export default function Admin({
               onChanged={(gs) => onImported(gs as unknown[])}
             />
           ))}
+
+        {tab === "assistant" && (
+          <AdminAssistant
+            token={token}
+            ai={ai}
+            groups={(data.groups as unknown as AdminGroup[]).filter((g) => !g.archived && g.eligible !== false).map((g) => g.name)}
+          />
+        )}
 
         {tab === "proposals" && (
           <Proposals

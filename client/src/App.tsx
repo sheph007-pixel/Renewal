@@ -515,7 +515,9 @@ export default function App() {
               ? "Existing Plans & Rates"
               : page.tab === "proposals"
                 ? "Proposals"
-                : "Import"
+                : page.tab === "assistant"
+                  ? "Assistant"
+                  : "Import"
       } — Rate Administration`;
     document.title = t;
   }, [page, g]);
