@@ -1,5 +1,4 @@
-import { BRAND_TAGLINE, BenSync, C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
-import Footer from "@/views/Footer";
+import { BenSync, C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
 
 interface Props {
   mode: "group" | "staff";
@@ -86,7 +85,7 @@ export default function Login({
             <>
               <div style={{ textAlign: "center", marginBottom: 18 }}>
                 <img src={BenSync} alt="BenSync" style={{ height: 40, display: "inline-block" }} />
-                <div style={{ marginTop: 8, fontSize: 13.5, color: C.muted, textWrap: "balance" }}>{BRAND_TAGLINE}</div>
+                <div style={{ marginTop: 8, fontSize: 13.5, color: C.muted, textWrap: "balance" }}>Powered By Kennion Benefit Advisors</div>
               </div>
               <div style={{ ...panel, padding: "28px 30px 30px" }}>
                 <h1
@@ -100,7 +99,7 @@ export default function Login({
                     textWrap: "balance",
                   }}
                 >
-                  2027 Employee Benefits Program
+                  Employee Benefits Program
                 </h1>
                 <div
                   style={{
@@ -115,7 +114,7 @@ export default function Login({
                 </div>
 
                 <label htmlFor="access-code" style={labelStyle}>
-                  Group access code
+                  Group Access Code
                 </label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
@@ -292,7 +291,6 @@ export default function Login({
         </div>
       </div>
 
-      <Footer />
     </div>
   );
 }
