@@ -3522,6 +3522,16 @@ async function runProposalAudit(id) {
   }
 }
 
+/** Audit a batch a few at a time: both APIs take parallel calls, and one at a time made 70 proposals an afternoon's work. */
+const AUDIT_PARALLEL = Number(process.env.KENNION_AUDIT_PARALLEL || 4);
+async function auditInParallel(ids) {
+  const queue = [...ids];
+  const workers = Array.from({ length: Math.max(1, Math.min(AUDIT_PARALLEL, queue.length)) }, async () => {
+    while (queue.length) await runProposalAudit(queue.shift());
+  });
+  await Promise.all(workers);
+}
+
 async function runAnalysis(id, file, keepAssignment) {
   try {
     if (!aiEnabled()) {
@@ -4015,7 +4025,7 @@ app.post("/api/admin/proposals/audit", requireStaff, async (req, res) => {
   const rows = (await proposalStore.listProposals()).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
   const todo = rows.filter((r) => all || !r.audit);
   (async () => {
-    for (const r of todo) await runProposalAudit(r.id);
+    await auditInParallel(todo.map((r) => r.id));
   })();
   res.json({ queued: todo.length });
 });
@@ -4183,7 +4193,7 @@ async function boot() {
     (async () => {
       const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
       if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
-      for (const r of rows) await runProposalAudit(r.id);
+      await auditInParallel(rows.map((r) => r.id));
     })().catch((e) => console.error("proposal audit sweep:", e.message));
   }
   rebuild();
