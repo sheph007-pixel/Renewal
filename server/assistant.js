@@ -11,6 +11,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { comparisonTable, comparisonText, renderComparison, renderDocument } from "./documents.js";
 import { prepareForModel } from "./intake.js";
+import { compare as compareBenchmarks, compareText as benchmarkText } from "./benchmarks.js";
 
 const apiKey = () =>
   process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
@@ -150,6 +151,8 @@ How to work:
 
 Attachments: the client may attach a file to a question — another broker's quote, a carrier's renewal letter, a spreadsheet of their own, a screenshot. Read it and answer about it; where it makes sense, set it beside the figures below (the same tier rates × headcount arithmetic) and say which comes out ahead and by how much. If a file is unreadable or is not what they think it is, say so.
 
+Benchmarks: lookup_benchmarks compares this group with published survey figures (KFF, Mercer, SHRM, BLS) that Kennion has approved, for employers of its size. Use it when the client asks how they compare, whether they pay too much, what is typical, what other employers contribute, or when a recommendation would be stronger with the market context. Quote the source and year in words. If it says none are on file, say so and answer from the group's figures alone.
+
 Research: you can search the web with web_search. Use it when the client asks you to research or look something up, or when the answer depends on something outside their figures — an ACA affordability percentage or an IRS limit for a plan year, a carrier's network or product, a regulation, a benchmark, a definition. Prefer authoritative sources (IRS, DOL, CMS, HealthCare.gov, the carrier's own site, SHRM, KFF). Say what you found in a sentence or two and name the source in words ("per the IRS"); do not paste URLs unless asked. Never search for the client's own figures — those are below. Searching is for facts, not for advice: the guidance on legal, tax and actuarial questions above still applies.
 
 Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
@@ -161,6 +164,11 @@ const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 
 const webSearchOn = () => !/^(0|false|off|no)$/i.test(String(process.env.KENNION_WEB_SEARCH || ""));
 
 const TOOLS = [
+  {
+    name: "lookup_benchmarks",
+    description: "This group against Kennion's approved benchmarks from published surveys (KFF, Mercer, SHRM, BLS) for employers of its size and region: premiums, employer share, worker contribution, deductibles, typical increases. Returns each figure with its source and year.",
+    input_schema: { type: "object", additionalProperties: false, properties: {} },
+  },
   {
     name: "update_client_memory",
     description:
@@ -365,6 +373,10 @@ export function titleFor(text) {
  */
 async function runTool(name, input, { data, keep, onStatus, saveMemory }) {
   const g = data.group;
+  if (name === "lookup_benchmarks") {
+    onStatus("Checking benchmarks…");
+    return benchmarkText(compareBenchmarks(data, data.benchmarks || []));
+  }
   if (name === "update_client_memory") {
     const add = (Array.isArray(input.add) ? input.add : []).map((t) => String(t).replace(/\s+/g, " ").trim().slice(0, 300)).filter(Boolean);
     const removeIds = (Array.isArray(input.remove_ids) ? input.remove_ids : []).map(Number).filter(Number.isInteger);
