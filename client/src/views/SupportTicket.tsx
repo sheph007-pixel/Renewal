@@ -19,7 +19,7 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
   const [fileError, setFileError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState<{ id: number; emailed: boolean } | null>(null);
+  const [done, setDone] = useState<{ ref: string } | null>(null);
   const first = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error || "Could not send that. Try again.");
-      setDone({ id: body.id, emailed: body.emailed !== false });
+      setDone({ ref: body.ref || `BS-${1000 + Number(body.id || 0)}` });
     } catch (e) {
       setError((e as Error).message || "Could not send that. Try again.");
     } finally {
@@ -76,11 +76,9 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
         {done ? (
           <div style={{ textAlign: "center", padding: "18px 6px 8px" }}>
             <div style={{ fontSize: 34, color: C.blue }}>✓</div>
-            <h2 style={{ margin: "6px 0 6px", fontSize: 19 }}>Ticket #{done.id} Sent</h2>
+            <h2 style={{ margin: "6px 0 6px", fontSize: 19 }}>Ticket Sent</h2>
             <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
-              {done.emailed
-                ? `Kennion has it and will reply to ${requester.trim()}.`
-                : `Kennion has it. Email delivery is delayed, so a reply may take a little longer.`}
+              Reference <b>{done.ref}</b>. We will reply to {requester.trim()}.
             </p>
             <button onClick={onClose} style={{ ...primaryBtn, marginTop: 18 }}>
               Done
