@@ -265,6 +265,11 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   // That is where the TPA comes from; the enrollment rows themselves do not
   // name a carrier.
   const planCarrier = new Map();
+  // The plan's name exactly as Employee Navigator spells it, year and all,
+  // keyed by the cleaned name the portal files it under. The cleaned name is
+  // the key everywhere (rates, overrides, billing); the full one is what a
+  // client sees on their plan grid.
+  const planFullName = new Map();
   // Every other benefit's carrier, keyed by benefit + plan so a dental and a
   // vision plan that happen to share a name cannot borrow each other's carrier.
   const lineCarrier = new Map();
@@ -272,11 +277,14 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   if (catalog) {
     for (const pl of blocks(catalog, "Plan")) {
       const benefit = text(pl, "Benefit");
-      const pn = cleanPlan(text(pl, "PlanName"));
+      const raw = text(pl, "PlanName");
+      const pn = cleanPlan(raw);
       const carrier = text(pl, "Carrier");
       if (!pn || !carrier) continue;
-      if (benefit === "Medical") planCarrier.set(pn, carrier);
-      else lineCarrier.set(`${benefit}||${pn}`, carrier);
+      if (benefit === "Medical") {
+        planCarrier.set(pn, carrier);
+        if (!planFullName.has(pn)) planFullName.set(pn, raw.trim());
+      } else lineCarrier.set(`${benefit}||${pn}`, carrier);
     }
   }
 
@@ -446,6 +454,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       if (ends && (!pyEnd || ends > pyEnd)) pyEnd = ends;
 
       const plan = cleanPlan(text(en, "Plan"));
+      // A plan the catalog did not name keeps the spelling on the enrollment row.
+      if (!planFullName.has(plan)) planFullName.set(plan, (text(en, "Plan") || plan).trim());
       if (!carriers.has(plan)) {
         const carrier = carrierFor(planCarrier, plan);
         if (carrier) carriers.set(plan, carrier);
@@ -532,6 +542,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   const plans = [...planAgg.entries()]
     .map(([plan, a]) => ({
       plan,
+      /** The plan's full name as Employee Navigator spells it ("EBPA Choice Gold 2026"). */
+      enName: planFullName.get(plan) || plan,
       tpa: carriers.get(plan) || "",
       enrolled: a.enrolled,
       monthly: round2(a.monthly),

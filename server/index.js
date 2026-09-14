@@ -18,7 +18,7 @@ import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck } from "./ai.js";
+import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
@@ -2075,10 +2075,11 @@ const xmlVerifyView = () => {
  * uploads, the stored-export check and the findings), kept in the audits
  * table under its own fingerprint so nobody presses anything twice.
  */
-let dataRead = null;
-const dataCheckFingerprint = (audit) =>
+/** One read per reader — Claude, and ChatGPT as the second opinion — each kept under its own fingerprint. */
+const dataReads = { claude: null, chatgpt: null };
+const dataCheckFingerprint = (audit, who = "claude") =>
   [
-    "datacheck-v1",
+    who === "chatgpt" ? "datacheck-gpt-v1" : "datacheck-v1",
     recentImports[0] ? recentImports[0].uploaded_at : "-",
     carrierStats ? carrierStats.uploadedAt : "-",
     funding ? funding.uploadedAt : "-",
@@ -2088,15 +2089,16 @@ const dataCheckFingerprint = (audit) =>
     audit.counts.fail,
     audit.rows.filter((r) => r.status !== "ok" && r.status !== "skip").map((r) => `${r.name}:${r.checks.filter((c) => c.level === "warn" || c.level === "fail").map((c) => c.key).join(",")}`).join(";"),
   ].join("|");
-async function dataReadFor(audit) {
-  const fingerprint = dataCheckFingerprint(audit);
-  if (dataRead && dataRead.fingerprint === fingerprint) return dataRead;
+async function dataReadFor(audit, who = "claude") {
+  const fingerprint = dataCheckFingerprint(audit, who);
+  const have = dataReads[who];
+  if (have && have.fingerprint === fingerprint) return have;
   if (db) {
     try {
       const saved = await db.getAudit(fingerprint);
       if (saved && saved.read) {
-        dataRead = { fingerprint, text: saved.read, at: saved.createdAt };
-        return dataRead;
+        dataReads[who] = { fingerprint, text: saved.read, at: saved.createdAt };
+        return dataReads[who];
       }
     } catch (e) {
       console.error("could not load the data check read:", e.message);
@@ -2131,8 +2133,9 @@ async function keepDataCheck() {
 
 app.get("/api/admin/data-audit", requireStaff, async (_req, res) => {
   const audit = (await keepDataCheck()) || auditData(dataAuditBundles());
-  const read = await dataReadFor(audit);
-  res.json({ audit, xml: xmlVerifyView(), read: dataReadView(read), snapshot: audit && audit.counts ? (auditSnapshotView()) : null });
+  const read = await dataReadFor(audit, "claude");
+  const second = await dataReadFor(audit, "chatgpt");
+  res.json({ audit, xml: xmlVerifyView(), read: dataReadView(read), secondRead: dataReadView(second), chatgpt: chatgptEnabled(), snapshot: auditSnapshotView() });
 });
 
 /** The cross-file verdict the Import tab shows, for the same page. */
@@ -2153,12 +2156,15 @@ app.post("/api/admin/data-audit/verify-xml", requireStaff, async (req, res) => {
   }
 });
 
-app.post("/api/admin/data-audit/read", requireStaff, async (_req, res) => {
-  if (!aiEnabled()) return res.status(400).json({ error: "AI is off on this server (no API key)." });
+/** `?by=chatgpt` asks the second reader; anything else asks Claude. Each read is kept for this state of the data. */
+app.post("/api/admin/data-audit/read", requireStaff, async (req, res) => {
+  const who = String(req.query.by || "") === "chatgpt" ? "chatgpt" : "claude";
+  if (who === "claude" && !aiEnabled()) return res.status(400).json({ error: "AI is off on this server (no API key)." });
+  if (who === "chatgpt" && !chatgptEnabled()) return res.status(400).json({ error: "ChatGPT is off on this server: no ChatGPT (or OPENAI_API_KEY) variable is set." });
   const audit = auditData(dataAuditBundles());
-  const cached = await dataReadFor(audit);
+  const cached = await dataReadFor(audit, who);
   if (cached) return res.json({ read: dataReadView(cached) });
-  const fingerprint = dataCheckFingerprint(audit);
+  const fingerprint = dataCheckFingerprint(audit, who);
   const payload = {
     headline: audit.headline,
     counts: audit.counts,
@@ -2170,10 +2176,10 @@ app.post("/api/admin/data-audit/read", requireStaff, async (_req, res) => {
     threeFiles: auditSnapshotView(),
   };
   try {
-    const text = await explainDataCheck(payload);
-    dataRead = { fingerprint, text, at: new Date().toISOString() };
-    if (db) await db.saveAudit(fingerprint, { kind: "datacheck", counts: audit.counts, headline: audit.headline }, text).catch((e) => console.error("could not keep the data check read:", e.message));
-    res.json({ read: dataReadView(dataRead) });
+    const text = who === "chatgpt" ? await secondReadDataCheck(payload) : await explainDataCheck(payload);
+    dataReads[who] = { fingerprint, text, at: new Date().toISOString() };
+    if (db) await db.saveAudit(fingerprint, { kind: who === "chatgpt" ? "datacheck-second" : "datacheck", counts: audit.counts, headline: audit.headline }, text).catch((e) => console.error("could not keep the data check read:", e.message));
+    res.json({ read: dataReadView(dataReads[who]) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

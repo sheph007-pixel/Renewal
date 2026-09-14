@@ -99,6 +99,13 @@ for (const field of ["broker", "manager", "renewal", "sic", "sicDesc", "division
   assert.equal(payload.group[field], undefined, `${field} is not a client's business`);
 }
 
+// 6a. Each plan carries its carrier for the Carrier column; the full Employee
+// Navigator name rides along once the group has been imported from an export.
+for (const p of payload.group.plans) {
+  assert.ok(typeof p.tpa === "string", `plan ${p.plan} names its carrier`);
+  if (p.enName != null) assert.ok(p.enName.startsWith(p.plan), "the full name is the filed name plus the year");
+}
+
 // 6b. The client sees the size category staff keep, never the Employee
 // Navigator roster count: that counts everyone not marked terminated and is
 // a staff figure on the Data Check, not a headcount for a client page or the
@@ -134,6 +141,13 @@ assert.ok(["2-50", "51+"].includes(payload.group.sizeCategory), "the staff size 
   assert.match(rd.read.text, /Canned data check read/);
   const again = await (await fetch(`${base}/api/admin/data-audit`, { headers: auth })).json();
   assert.equal(again.read.text, rd.read.text, "the read is kept for this state of the data");
+  // The second reader is independent: its own read, kept under its own key.
+  assert.equal(again.chatgpt, true, "canned under KENNION_FAKE_AI");
+  const second = await (await fetch(`${base}/api/admin/data-audit/read?by=chatgpt`, { method: "POST", headers: auth })).json();
+  assert.match(second.read.text, /Canned second read/);
+  const both = await (await fetch(`${base}/api/admin/data-audit`, { headers: auth })).json();
+  assert.equal(both.secondRead.text, second.read.text);
+  assert.equal(both.read.text, rd.read.text, "Claude's read is untouched by the second");
 }
 
 // 7. Codes are guessable by design, so guessing is throttled.

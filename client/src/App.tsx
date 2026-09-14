@@ -18,7 +18,6 @@ import {
   useRoute,
   type GroupTab,
 } from "@/lib/router";
-import Link from "@/lib/Link";
 import { clearSession, loadSession, saveSession } from "@/lib/session";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
@@ -775,11 +774,6 @@ export default function App() {
       cta: t === "signup",
     }));
 
-  // Back / next walk the reading order; the Assistant sits beside it, not in it.
-  const walk = navItems.filter((it) => it.tab !== "assistant");
-  const here = walk.findIndex((it) => it.tab === tab);
-  const prev = here > 0 ? walk[here - 1] : null;
-  const next = here >= 0 && here < walk.length - 1 ? walk[here + 1] : null;
   const shut = navCollapsed && !narrow;
   const assistantHref = (thread?: number | null) => groupHome(g, "assistant", thread);
 
@@ -940,33 +934,6 @@ export default function App() {
                 onSubmit={() => void submitSignup()}
               />
             )}
-
-            <nav
-              aria-label="Nearby pages"
-              className="noprint"
-              style={{
-                marginTop: 26,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 16,
-              }}
-            >
-              <span>
-                {prev && (
-                  <Link href={prev.href} style={{ fontSize: 13.5 }}>
-                    &larr; Back: {prev.label}
-                  </Link>
-                )}
-              </span>
-              <span>
-                {next && (
-                  <Link href={next.href} style={{ fontSize: 13.5 }}>
-                    Next: {next.label} &rarr;
-                  </Link>
-                )}
-              </span>
-            </nav>
 
             <Footer />
           </div>

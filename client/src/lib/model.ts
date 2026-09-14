@@ -86,7 +86,11 @@ export interface Member {
 }
 
 export interface GroupPlan {
+  /** The plan as the portal files it: Employee Navigator's name with the trailing year dropped. */
   plan: string;
+  /** The full name as Employee Navigator spells it, year and all. Absent on the shipped census. */
+  enName?: string;
+  /** The carrier or administrator, as Employee Navigator's plan catalog names it. */
   tpa: string;
   enrolled: number;
   monthly: number;

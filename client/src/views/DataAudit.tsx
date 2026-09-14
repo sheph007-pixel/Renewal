@@ -272,7 +272,9 @@ export default function DataAudit({ token, ai }: Props) {
   const [audit, setAudit] = useState<DataAuditResult | null>(null);
   const [xml, setXml] = useState<XmlVerify | null>(null);
   const [read, setRead] = useState<{ text: string; at: string } | null>(null);
-  const [reading, setReading] = useState(false);
+  const [secondRead, setSecondRead] = useState<{ text: string; at: string } | null>(null);
+  const [chatgpt, setChatgpt] = useState(false);
+  const [reading, setReading] = useState<"" | "claude" | "chatgpt">("");
   const [readError, setReadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -293,6 +295,8 @@ export default function DataAudit({ token, ai }: Props) {
       setAudit(j.audit);
       setXml(j.xml || null);
       setRead(j.read || null);
+      setSecondRead(j.secondRead || null);
+      setChatgpt(!!j.chatgpt);
       setVersion((v) => v + 1);
     } catch (e) {
       setError((e as Error).message);
@@ -301,18 +305,19 @@ export default function DataAudit({ token, ai }: Props) {
     }
   };
 
-  const askClaude = async () => {
-    setReading(true);
+  const ask = async (who: "claude" | "chatgpt") => {
+    setReading(who);
     setReadError(null);
     try {
-      const r = await fetch("/api/admin/data-audit/read", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const r = await fetch(`/api/admin/data-audit/read${who === "chatgpt" ? "?by=chatgpt" : ""}`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
-      setRead(j.read);
+      if (who === "chatgpt") setSecondRead(j.read);
+      else setRead(j.read);
     } catch (e) {
       setReadError((e as Error).message);
     } finally {
-      setReading(false);
+      setReading("");
     }
   };
   useEffect(() => {
@@ -405,11 +410,11 @@ export default function DataAudit({ token, ai }: Props) {
                 <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Claude&rsquo;s Read</span>
                 {ai ? (
                   <button
-                    onClick={() => void askClaude()}
-                    disabled={reading}
+                    onClick={() => void ask("claude")}
+                    disabled={!!reading}
                     style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: C.blue, cursor: reading ? "default" : "pointer" }}
                   >
-                    {reading ? "Reading the findings…" : read ? "Read again" : "Ask Claude what to look at first"}
+                    {reading === "claude" ? "Reading the findings…" : read ? "Read again" : "Ask Claude what to look at first"}
                   </button>
                 ) : (
                   <span style={{ fontSize: 12.5, color: C.faint }}>AI is off on this server (no API key); the checks above stand on their own.</span>
@@ -422,6 +427,28 @@ export default function DataAudit({ token, ai }: Props) {
                 <div style={{ marginTop: 6, fontSize: 12.5, color: C.muted, maxWidth: 900 }}>
                   The numbers above are arithmetic done on the server against the three Employee Navigator files. Claude reads
                   the findings and says which groups to look at first and why; it does not decide a figure.
+                </div>
+              )}
+              <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Second Read (ChatGPT)</span>
+                {chatgpt ? (
+                  <button
+                    onClick={() => void ask("chatgpt")}
+                    disabled={!!reading}
+                    style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: C.blue, cursor: reading ? "default" : "pointer" }}
+                  >
+                    {reading === "chatgpt" ? "Reading the findings…" : secondRead ? "Read again" : "Ask ChatGPT for a second, independent read"}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 12.5, color: C.faint }}>No ChatGPT key on this server.</span>
+                )}
+                {secondRead && <span style={{ fontSize: 12, color: C.faint }}>read {when(secondRead.at)} · kept in the database for this state of the data</span>}
+              </div>
+              {secondRead && <div style={{ marginTop: 8, fontSize: 13, color: C.body, lineHeight: 1.65, whiteSpace: "pre-wrap", maxWidth: 900 }}>{secondRead.text}</div>}
+              {!secondRead && chatgpt && (
+                <div style={{ marginTop: 6, fontSize: 12.5, color: C.muted, maxWidth: 900 }}>
+                  The same findings, read by ChatGPT without seeing Claude&rsquo;s answer. Two readers that agree on what to look at
+                  first are worth more than one; where they differ, the checks above are the record.
                 </div>
               )}
             </div>

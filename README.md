@@ -865,8 +865,19 @@ each other and against what clients are served:
   decides a figure. A read is kept in `kennion.audits` under the same
   fingerprint, so the same state of the data is never read twice.
 
-There is one AI in the portal, Claude (the Anthropic SDK in `server/ai.js` and
-`server/assistant.js`); nothing else reads or writes the data.
+- **A second read (ChatGPT)**, on request (`POST
+  /api/admin/data-audit/read?by=chatgpt`): the same findings read by ChatGPT
+  without seeing Claude's answer, so two readers that agree on what to look at
+  first are worth more than one. The key is the `ChatGPT` variable on Railway
+  (`CHATGPT_API_KEY` or `OPENAI_API_KEY` also work); the model defaults to
+  `gpt-5` and can be pinned with `CHATGPT_MODEL`. Kept in `kennion.audits`
+  under its own fingerprint. Without the variable the button says so.
+
+Two models read the findings; neither decides a figure. Every number on the
+tab is arithmetic done on the server against the three Employee Navigator
+files, and the checks are the record where the two reads differ. Claude is
+also the assistant's model (`server/assistant.js`); ChatGPT is used for this
+second read only.
 
 ## Known gaps
 
