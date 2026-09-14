@@ -37,8 +37,18 @@ export interface Streaming {
   files: ChatFile[];
 }
 
+/** One thing the assistant remembers about the group between conversations. */
+export interface MemoryLine {
+  id: number;
+  text: string;
+  source: "client" | "staff";
+  createdAt: string;
+}
+
 export interface ChatState {
   threads: ChatThread[];
+  /** The group's standing preferences, as the assistant has them. */
+  memory: MemoryLine[];
   /** True once the list has been fetched, so an empty list means "none" rather than "not yet". */
   loaded: boolean;
   messages: Record<number, ChatMessage[]>;
@@ -46,7 +56,7 @@ export interface ChatState {
   error: string | null;
 }
 
-let state: ChatState = { threads: [], loaded: false, messages: {}, streaming: null, error: null };
+let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<ChatState>) {
@@ -66,7 +76,18 @@ export function useChat(): ChatState {
 
 /** Sign-out: forget everything, so the next group in this tab starts clean. */
 export function resetChat() {
-  set({ threads: [], loaded: false, messages: {}, streaming: null, error: null });
+  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null });
+}
+
+export async function loadMemory() {
+  const r = await fetch("/api/chat/memory");
+  if (r.ok) set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
+}
+
+/** Drop one remembered line; the assistant no longer sees it. */
+export async function forgetMemory(id: number) {
+  const r = await fetch(`/api/chat/memory/${id}`, { method: "DELETE" });
+  if (r.ok) set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
 }
 
 async function failure(r: Response): Promise<string> {
@@ -208,6 +229,8 @@ export async function sendMessage(threadId: number | null, content: string, page
       files.push((data as { file: ChatFile }).file);
       status = "";
       progress();
+    } else if (event === "memory") {
+      set({ memory: (data as { memory: MemoryLine[] }).memory });
     } else if (event === "done") {
       const m = (data as { message: ChatMessage }).message;
       const tid = id!;

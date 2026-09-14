@@ -310,6 +310,17 @@ CREATE TABLE IF NOT EXISTS kennion.chat_files (
 ALTER TABLE kennion.chat_files ALTER COLUMN thread_id DROP NOT NULL;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS group_name text;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'assistant';
+-- What the assistant remembers about a group between conversations: the
+-- preferences the client stated (budget, priorities, must-haves, what they
+-- ruled out). One line each; the client and staff can remove any of them.
+CREATE TABLE IF NOT EXISTS kennion.client_memory (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  text          text NOT NULL,
+  source        text NOT NULL DEFAULT 'client',
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS client_memory_group ON kennion.client_memory (group_name, created_at);
 `;
 
 const shapeThread = (r) => ({
@@ -963,6 +974,23 @@ export function createDb(url) {
     async sweepPendingFiles() {
       const { rowCount } = await pool.query("DELETE FROM kennion.chat_files WHERE thread_id IS NULL AND created_at < now() - interval '1 day'");
       return rowCount;
+    },
+
+    async listMemory(groupName) {
+      const { rows } = await pool.query("SELECT id, text, source, created_at FROM kennion.client_memory WHERE group_name = $1 ORDER BY created_at, id", [groupName]);
+      return rows.map((r) => ({ id: Number(r.id), text: r.text, source: r.source, createdAt: r.created_at }));
+    },
+    /** Add lines and drop the ids named; a line already there is not added twice. At most 40 kept. */
+    async updateMemory(groupName, { add = [], removeIds = [], source = "client" } = {}) {
+      if (removeIds.length) await pool.query("DELETE FROM kennion.client_memory WHERE group_name = $1 AND id = ANY($2::bigint[])", [groupName, removeIds]);
+      for (const text of add) {
+        await pool.query(
+          "INSERT INTO kennion.client_memory (group_name, text, source) SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM kennion.client_memory WHERE group_name = $1 AND lower(text) = lower($2))",
+          [groupName, text, source],
+        );
+      }
+      await pool.query("DELETE FROM kennion.client_memory WHERE group_name = $1 AND id NOT IN (SELECT id FROM kennion.client_memory WHERE group_name = $1 ORDER BY created_at DESC, id DESC LIMIT 40)", [groupName]);
+      return this.listMemory(groupName);
     },
 
     async getFile(id) {

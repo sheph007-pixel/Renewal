@@ -571,6 +571,19 @@ model writes in Markdown, rendered as a branded PDF or Word file. These are
 tools on the model's turn (`create_comparison`, `create_document`); a turn
 runs at most five tool rounds.
 
+**Advice and memory.** Asked what to do, the assistant recommends — named
+plans, the why in the group's own figures, what would change its mind — and
+asks two or three qualifying questions first when it does not know what the
+client cares about. What the client tells it (a budget, a contribution
+philosophy, a network must-have, a plan they ruled out) it records with the
+`update_client_memory` tool, one plain sentence per line in
+`kennion.client_memory`; every later conversation for that group starts from
+those lines. The client sees them on the Assistant page ("What it remembers
+about you") and can remove any; staff see and edit them in the conversation
+drawer on `/admin/assistant` (`/api/chat/memory`, `/api/admin/chat/memory`).
+The model is Claude Fable 5.1 (`KENNION_MODEL` overrides), falling back to
+Claude Opus 5 for the life of the process if the account cannot use it.
+
 **Research.** The assistant can search the web (Anthropic's server-side
 `web_search` tool, up to five searches a turn) for what the group's figures
 do not cover — an ACA affordability percentage, an IRS limit, a carrier's

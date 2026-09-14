@@ -205,6 +205,79 @@ function Stat({ label, value }: { label: string; value: number | string }) {
 }
 
 /** One turn as it reads in the admin — the client's question, the assistant's answer with its documents. */
+interface MemoryLine {
+  id: number;
+  text: string;
+  source: "client" | "staff";
+}
+
+/** What the assistant remembers about one group: the client's stated preferences. Staff can add a line or drop one. */
+function GroupMemory({ group, token }: { group: string; token: string }) {
+  const [lines, setLines] = useState<MemoryLine[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const auth = { Authorization: `Bearer ${token}` };
+  useEffect(() => {
+    let live = true;
+    void fetch(`/api/admin/chat/memory?group=${encodeURIComponent(group)}`, { headers: auth })
+      .then((r) => (r.ok ? r.json() : { memory: [] }))
+      .then((p) => live && setLines((p as { memory: MemoryLine[] }).memory));
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group]);
+  const change = async (body: { add?: string[]; removeIds?: number[] }) => {
+    const r = await fetch("/api/admin/chat/memory", { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ group, ...body }) });
+    if (r.ok) setLines(((await r.json()) as { memory: MemoryLine[] }).memory);
+  };
+  if (!lines) return null;
+  return (
+    <details open={lines.length > 0} style={{ borderBottom: `1px solid ${C.hairline}`, background: C.card }}>
+      <summary style={{ padding: "8px 16px", fontSize: 11, fontWeight: 600, letterSpacing: "0.4px", textTransform: "uppercase", color: C.faint, cursor: "pointer" }}>
+        What it remembers about this group{lines.length ? ` · ${lines.length}` : ""}
+      </summary>
+      <div style={{ padding: "0 12px 10px" }}>
+        {lines.map((m) => (
+          <div key={m.id} className="pb-row" style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "4px 4px 4px 8px", borderRadius: 6, fontSize: 12.5, lineHeight: 1.45, color: C.body }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              {m.text}
+              {m.source === "staff" && <span style={{ marginLeft: 6, fontSize: 10.5, color: C.faint }}>staff</span>}
+            </span>
+            <button className="chat-tool pb-tools" onClick={() => void change({ removeIds: [m.id] })} title="Forget this" aria-label="Forget this" style={{ flex: "none" }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && draft.trim()) {
+                void change({ add: [draft.trim()] });
+                setDraft("");
+              }
+            }}
+            placeholder="Add something the assistant should know about this group"
+            style={{ ...textInput, flex: 1, fontSize: 12.5, padding: "6px 9px" }}
+          />
+          <button
+            onClick={() => {
+              if (!draft.trim()) return;
+              void change({ add: [draft.trim()] });
+              setDraft("");
+            }}
+            disabled={!draft.trim()}
+            style={chip(false)}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function Transcript({ messages, token, onAdopt }: { messages: ChatMessage[]; token: string; onAdopt?: (q: string, a: string) => void }) {
   const headers = { Authorization: `Bearer ${token}` };
   return (
@@ -717,6 +790,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
                 </button>
               )}
             </div>
+            <GroupMemory key={open.thread.groupName} group={open.thread.groupName} token={token} />
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 16px" }}>
               <Transcript messages={open.messages} token={token} onAdopt={adopt} />
             </div>

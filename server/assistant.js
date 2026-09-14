@@ -17,7 +17,12 @@ const apiKey = () =>
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
 export const assistantEnabled = () => !!(apiKey() || process.env.ANTHROPIC_AUTH_TOKEN || fakeAi());
 
-const MODEL = "claude-opus-5";
+// The most capable model available, with the one below it as the stand-in if
+// the account cannot use it (Fable needs standard data retention) — decided
+// once per process, on the first rejected request.
+const MODEL = process.env.KENNION_MODEL || "claude-fable-5-1";
+const STANDBY_MODEL = "claude-opus-5";
+let activeModel = MODEL;
 /** Turns the model sees. Older ones are dropped, not summarised, to keep a long thread affordable. */
 const HISTORY_TURNS = 30;
 /** Tool rounds per turn: a comparison and a memo is two; more than a few is a loop. */
@@ -132,10 +137,13 @@ You are talking with the HR lead or owner of one employer group — an existing 
 How to work:
 - Answer from the group's figures below. Every rate is a monthly composite per tier (EE = employee only, ES = employee + spouse, EC = employee + child(ren), FAM = family). A plan's monthly cost at the group's census is the tier rate times the headcount in that tier, summed; annual is monthly times 12. Show the arithmetic briefly when you compute a figure.
 - Never invent a number. If the figures do not cover a question — a plan's benefits, a carrier that has not quoted, a rate that is missing — say what is missing and that the account manager can get it, rather than estimating.
-- Be brief. Answer the question that was asked and stop: usually two to five sentences, or a short list — under 120 words unless the client asked for a comparison, a walkthrough, or a document. Lead with the answer; give the reasoning in one line; offer the next level of detail ("want the tier-by-tier?") instead of including it. Round to whole dollars unless cents matter.
+- Be brief. Answer the question that was asked and stop: usually two to five sentences, or a short list — under 120 words unless the client asked for a comparison, a walkthrough, or a document. Lead with the answer; give the reasoning in one line. Round to whole dollars unless cents matter.
+- Do not end answers with an offer or a question ("Want me to…?", "Want the full side-by-side on the Assistant page?"). Answer, then stop. Mention the Assistant page at most once in a conversation, and only when the client asks for something the small box cannot show (a full table, a long walkthrough). When the client says yes, go ahead, or asks for more, deliver the thing itself — the numbers, the comparison, the document — rather than offering it again.
 - Formatting: plain sentences first. Use a bulleted list for three or more parallel items. Use a Markdown table only when comparing three or more options on the Assistant page, and keep it to at most four columns — in the chat box, never a table; write the two or three numbers in a sentence instead. No headings in short answers. No preamble ("Great question"), no closing pleasantries, no sign-off.
 - Do not end answers with the account manager's contact details, a "ready to move?" line, or an offer to book a call. The contact card is on every page. Name the account manager only when the client asks for a person, asks for something only Kennion can do (a new quote, a carrier's answer, binding coverage), or says they are ready to proceed — and then once, by name.
 - Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
+- Advise like a benefits advisor, not a catalogue. When the client asks what they should do, what you recommend, or which option is best, give a recommendation: name the plan or plans, say why in terms of their figures (cost at their census, what changes for employees, funding tradeoffs, network), and say what would change your mind. Frame it as "here is what we would recommend" — Kennion's recommendation, with the account manager confirming before anything binds. If you do not yet know what matters to them, ask two or three short questions first (budget or a cost ceiling; whether they would rather keep employee cost flat or hold the employer's spend; network or carrier must-haves; appetite for a level-funded refund versus a fixed premium; anything the team has complained about), then recommend. Never tell them they must pick a carrier before you can advise — comparing across carriers is the advice. When they push back or say what they prefer, revise the recommendation and say what changed.
+- Remember what the client tells you. When they state a preference, a constraint, or a decision — a budget, a contribution philosophy, a carrier or network they need, a plan they liked or ruled out, who decides — record it with update_client_memory in one plain sentence so the next conversation starts from it. Do not record figures that are already in their data, guesses, or anything they did not say. When they change their mind, remove the old line and add the new one. What you have on file for this client is listed below; treat it as their standing preferences and say when a recommendation follows from it.
 - You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
 - The portal's pages, which you may point to by name: Welcome; Assistant (this); What's Changing For 2027 (today against 2027, the headline); Your 2026 Medical Plans (what is in force today, with rates and the employer/employee split); New 2027 Medical Options (every quoted plan side by side, with a contribution modeler); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
 - When the client wants to move forward, or the question needs a person — a specific quote, a carrier's answer, a meeting — say the account manager (named below) can do that. Do not paste their phone, email or booking link unless the client asks how to reach them.
@@ -153,6 +161,20 @@ const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 
 const webSearchOn = () => !/^(0|false|off|no)$/i.test(String(process.env.KENNION_WEB_SEARCH || ""));
 
 const TOOLS = [
+  {
+    name: "update_client_memory",
+    description:
+      "Record what this client has told you about their preferences and constraints so later conversations start from it, or remove lines that are no longer true. One plain sentence per line, in their terms (e.g. \"Wants to hold the employer's monthly spend at about $18,000.\", \"Needs the Cigna network for a physician group in Huntsville.\", \"Ruled out HDHPs after employee pushback in 2025.\"). Only what they actually said.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["add", "remove_ids"],
+      properties: {
+        add: { type: "array", maxItems: 6, items: { type: "string" }, description: "Lines to remember. Empty for none." },
+        remove_ids: { type: "array", maxItems: 20, items: { type: "integer" }, description: "Ids of lines below that are no longer true. Empty for none." },
+      },
+    },
+  },
   {
     name: "create_comparison",
     description:
@@ -341,8 +363,16 @@ export function titleFor(text) {
  * its proposals); `keep` stores the bytes and returns the file record.
  * Returns what the model is told.
  */
-async function runTool(name, input, { data, keep, onStatus }) {
+async function runTool(name, input, { data, keep, onStatus, saveMemory }) {
   const g = data.group;
+  if (name === "update_client_memory") {
+    const add = (Array.isArray(input.add) ? input.add : []).map((t) => String(t).replace(/\s+/g, " ").trim().slice(0, 300)).filter(Boolean);
+    const removeIds = (Array.isArray(input.remove_ids) ? input.remove_ids : []).map(Number).filter(Number.isInteger);
+    if (!saveMemory || (!add.length && !removeIds.length)) return "Nothing changed.";
+    onStatus("Noting that…");
+    const list = await saveMemory({ add, removeIds });
+    return `Noted. What is on file for this client now:\n${memoryText(list) || "(nothing)"}`;
+  }
   if (name === "create_comparison") {
     onStatus("Building the comparison…");
     let plans = Array.isArray(input.plans) ? input.plans : [];
@@ -363,10 +393,17 @@ async function runTool(name, input, { data, keep, onStatus }) {
   return `Unknown tool ${name}.`;
 }
 
+/** The client's standing preferences as the model reads them, one numbered line each. */
+const memoryText = (list) => (list || []).map((m) => `${m.id}. ${m.text}`).join("\n");
+
 /** The local stand-in: no key, no network; a document when the question sounds like it wants one. */
 async function fakeReply(question, ctx) {
   const q = String(question || "");
   const pieces = [];
+  if (/\b(remember|prefer|we want|our budget)\b/i.test(q) && ctx.saveMemory) {
+    await ctx.saveMemory({ add: [q.replace(/^please\s+remember\s+(that\s+)?/i, "").trim().slice(0, 300)], removeIds: [] });
+    pieces.push("Noted, I'll keep that in mind. ");
+  }
   if (/compar|side.by.side|spreadsheet/i.test(q)) {
     const table = comparisonTable({ group: ctx.data.group, proposals: ctx.data.proposals, plans: [], includeCurrent: true });
     const file = await ctx.keep(await renderComparison({ format: /excel|xlsx|spreadsheet/i.test(q) ? "xlsx" : "pdf", group: ctx.data.group, table }));
@@ -400,7 +437,7 @@ async function attachmentBlocks(f) {
   return [{ type: "document", source: { type: "text", media_type: "text/plain", data: p.text || "(empty)" }, title: f.filename }];
 }
 
-export async function replyTo({ data, history, page, compact = false, playbook, onText, onStatus = () => undefined, keep, readFile }) {
+export async function replyTo({ data, history, page, compact = false, playbook, memory = [], saveMemory, onText, onStatus = () => undefined, keep, readFile }) {
   const turns = history.slice(-HISTORY_TURNS);
   while (turns.length && turns[0].role !== "user") turns.shift();
   const last = turns[turns.length - 1];
@@ -412,7 +449,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   };
 
   if (fakeAi()) {
-    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile, attachments: last && last.files });
+    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile, attachments: last && last.files, saveMemory });
     let full = "";
     for (const word of text.split(" ")) {
       full += word + " ";
@@ -439,7 +476,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
     let text = m.content;
     if (i === turns.length - 1 && page && PAGE_NAMES[page]) {
       const where = compact
-        ? `(Asked in the small chat box on ${PAGE_NAMES[page]}: answer in a few sentences, no table, no headings; offer the full comparison on the Assistant page if they want it.)`
+        ? `(Asked in the small chat box on ${PAGE_NAMES[page]}: answer in a few sentences, no table, no headings.)`
         : `(Asked from ${PAGE_NAMES[page]}.)`;
       text = `${where}\n\n${text}`;
     }
@@ -467,7 +504,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   }
 
   const params = {
-    model: MODEL,
+    model: activeModel,
     max_tokens: 8000,
     // The instructions never change, Kennion's guidance changes rarely and
     // the group's figures change rarely, so all three sit in front of cache
@@ -476,6 +513,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
       { type: "text", text: SYSTEM },
       { type: "text", text: playbookText(playbook), cache_control: { type: "ephemeral" } },
       { type: "text", text: `Here are the client's figures. Use them.\n\n${describeGroup(data)}`, cache_control: { type: "ephemeral" } },
+      { type: "text", text: `What this client has told you before (their standing preferences; ids for update_client_memory):\n${memoryText(memory) || "(nothing yet)"}` },
     ],
     tools: webSearchOn() ? [...TOOLS, WEB_SEARCH] : TOOLS,
     output_config: { effort: "medium" },
@@ -506,20 +544,32 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
   let useBeta = beta;
   const call = async () => {
-    if (useBeta) {
+    for (;;) {
       try {
-        const stream = client.beta.messages.stream({ ...params, messages, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
+        if (useBeta) {
+          const stream = client.beta.messages.stream({ ...params, model: activeModel, messages, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
+          watch(stream);
+          return await stream.finalMessage();
+        }
+        const stream = client.messages.stream({ ...params, model: activeModel, messages });
         watch(stream);
         return await stream.finalMessage();
       } catch (e) {
-        if (!(e instanceof Anthropic.BadRequestError) || full) throw e;
-        console.warn("beta fallback request rejected, retrying without it:", e.message);
-        useBeta = false;
+        if (!(e instanceof Anthropic.BadRequestError || e instanceof Anthropic.NotFoundError) || full) throw e;
+        // The account cannot use the first-choice model: fall back for good.
+        if (activeModel !== STANDBY_MODEL && /model|retention/i.test(e.message)) {
+          console.warn(`assistant: ${activeModel} rejected (${e.message}); using ${STANDBY_MODEL} from now on`);
+          activeModel = STANDBY_MODEL;
+          continue;
+        }
+        if (useBeta) {
+          console.warn("beta fallback request rejected, retrying without it:", e.message);
+          useBeta = false;
+          continue;
+        }
+        throw e;
       }
     }
-    const stream = client.messages.stream({ ...params, messages });
-    watch(stream);
-    return stream.finalMessage();
   };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -538,7 +588,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
       if (block.type !== "tool_use") continue;
       let text;
       try {
-        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus });
+        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus, saveMemory });
       } catch (e) {
         console.error(`assistant tool ${block.name}:`, e.message);
         text = `The document could not be made: ${e.message}. Tell the client, briefly, and offer to try again.`;
