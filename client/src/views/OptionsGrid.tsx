@@ -120,6 +120,48 @@ function InfoTip({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/**
+ * A percentage box that can be typed into. It keeps what is typed until the
+ * field is left or Enter is pressed, then clamps to the floor and 100; clamping
+ * on every keystroke would turn "9" into the floor before the "5" arrives.
+ */
+function PctInput({ label, value, min, onCommit }: { label: string; value: number; min: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+  const commit = () => {
+    setEditing(false);
+    const n = Number(text.replace(/[^\d]/g, ""));
+    const v = Math.max(min, Math.min(100, Number.isFinite(n) && text.trim() !== "" ? n : value));
+    setText(String(v));
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <input
+      value={text}
+      inputMode="numeric"
+      aria-label={`${label} percentage`}
+      onFocus={(e) => {
+        setEditing(true);
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[^\d]/g, "").slice(0, 3);
+        setText(t);
+        const n = Number(t);
+        if (t !== "" && n >= min && n <= 100) onCommit(n);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      style={{ ...textInput, width: 62, padding: "5px 8px", fontSize: 14, fontWeight: 600, textAlign: "right", ...num }}
+    />
+  );
+}
+
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
@@ -356,7 +398,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
-              <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo across {totals.enrolled} enrolled
+              Employer cost <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
               {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
             </span>
             <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
@@ -392,13 +434,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <label key={label} style={{ display: "block", width: 260 }} title={`${label}: ${hint}`}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                         {label}
-                        <input
-                          value={value}
-                          inputMode="numeric"
-                          aria-label={`${label} percentage`}
-                          onChange={(e) => set(Math.max(min, Math.min(100, Number(e.target.value.replace(/[^\d]/g, "")) || 0)))}
-                          style={{ ...textInput, width: 62, padding: "5px 8px", fontSize: 14, fontWeight: 600, textAlign: "right", ...num }}
-                        />
+                        <PctInput label={label} value={value} min={min} onCommit={set} />
                         <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
                       </div>
                       <input type="range" min={min} max={100} step={1} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
