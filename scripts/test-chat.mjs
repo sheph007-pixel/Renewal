@@ -235,6 +235,30 @@ assert.equal((await fetch(`${base}/api/admin/chat/send`, { method: "POST", heade
 assert.equal((await fetch(`${base}/api/admin/chat/threads/${trialId}`, { method: "DELETE", headers: staffAuth })).status, 200);
 console.log("assistant admin: log, transcript, flag, search, playbook and staff trials — ok");
 
+// Memory: a stated preference is kept for the group, shown to the client,
+// visible and editable by staff, and gone when either side removes it.
+assert.equal((await fetch(`${base}/api/chat/memory`)).status, 401);
+assert.deepEqual((await (await fetch(`${base}/api/chat/memory`, { headers: { cookie } })).json()).memory, []);
+const memTurn = await send({ threadId: tid, content: "Please remember that we want to keep the employer's monthly spend under $20,000.", page: "assistant" });
+const memEvent = memTurn.events.find((e) => e.event === "memory");
+assert.ok(memEvent, "the turn announces the remembered line");
+assert.equal(memEvent.data.memory.length, 1);
+assert.match(memEvent.data.memory[0].text, /under \$20,000/);
+let mem = (await (await fetch(`${base}/api/chat/memory`, { headers: { cookie } })).json()).memory;
+assert.equal(mem.length, 1);
+assert.equal(mem[0].source, "client");
+assert.deepEqual((await (await fetch(`${base}/api/chat/memory`, { headers: { cookie: otherCookie } })).json()).memory, [], "memory is per group");
+mem = (await (await fetch(`${base}/api/admin/chat/memory?group=${encodeURIComponent(mine.name)}`, { headers: staffAuth })).json()).memory;
+assert.equal(mem.length, 1);
+mem = (await (await fetch(`${base}/api/admin/chat/memory`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ group: mine.name, add: ["Prefers the Cigna network."] }) })).json()).memory;
+assert.equal(mem.length, 2);
+assert.equal(mem[1].source, "staff");
+mem = (await (await fetch(`${base}/api/chat/memory/${mem[0].id}`, { method: "DELETE", headers: { cookie } })).json()).memory;
+assert.equal(mem.length, 1, "the client can forget a line");
+mem = (await (await fetch(`${base}/api/admin/chat/memory`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ group: mine.name, removeIds: [mem[0].id] }) })).json()).memory;
+assert.equal(mem.length, 0, "and so can staff");
+console.log("assistant memory: preferences are kept per group, shown, and removable by client or staff — ok");
+
 // Rename, then delete.
 const renamed = await (await fetch(`${base}/api/chat/threads/${tid}`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ title: "Medical spend" }) })).json();
 assert.equal(renamed.thread.title, "Medical spend");

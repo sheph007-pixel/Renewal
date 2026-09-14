@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { C, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { navigate } from "@/lib/router";
-import { deleteThread, loadThreads, renameThread, useChat, type ChatThread } from "@/lib/chat";
+import { deleteThread, forgetMemory, loadMemory, loadThreads, renameThread, useChat, type ChatThread, type MemoryLine } from "@/lib/chat";
 import ChatPanel from "@/views/ChatPanel";
 
 interface Props {
@@ -83,12 +83,44 @@ function ThreadRow({ t, on, href, onRename, onDelete }: { t: ChatThread; on: boo
  * the one open on the right, with room to read a comparison table. The
  * corner box on the other pages is the same conversations, smaller.
  */
+/**
+ * What the assistant remembers about the group — the preferences the client
+ * has stated — with a way to drop any line. It shows only once there is
+ * something to show.
+ */
+function MemoryPanel({ lines }: { lines: MemoryLine[] }) {
+  const [openPanel, setOpenPanel] = useState(true);
+  if (!lines.length) return null;
+  return (
+    <div style={{ flex: "none", borderTop: `1px solid ${C.hairline}`, background: C.card, maxHeight: "40%", display: "flex", flexDirection: "column" }}>
+      <button onClick={() => setOpenPanel((v) => !v)} aria-expanded={openPanel} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "9px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", textTransform: "none" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.4px", textTransform: "uppercase", color: C.faint }}>What it remembers about you</span>
+        <span style={{ fontSize: 11, color: C.faint }}>{openPanel ? "Hide" : `${lines.length}`}</span>
+      </button>
+      {openPanel && (
+        <div style={{ overflowY: "auto", padding: "0 8px 10px" }}>
+          {lines.map((m) => (
+            <div key={m.id} className="chat-thread" style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "5px 6px 5px 10px", borderRadius: 6, fontSize: 12.5, lineHeight: 1.45, color: C.body }}>
+              <span style={{ flex: 1, minWidth: 0 }}>{m.text}</span>
+              <button className="chat-tool chat-thread-tools" onClick={() => void forgetMemory(m.id)} title="Forget this" aria-label="Forget this" style={{ flex: "none" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </div>
+          ))}
+          <div style={{ padding: "6px 10px 0", fontSize: 11, color: C.faint, lineHeight: 1.45 }}>Its recommendations follow these. Tell it when something changes, or remove a line.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Assistant({ threadId, hrefFor, groupName }: Props) {
   const chat = useChat();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     loadThreads().catch(() => undefined);
+    loadMemory().catch(() => undefined);
   }, []);
 
   // A thread that is gone (deleted here, or a stale link) falls back to a fresh one.
@@ -145,6 +177,7 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
             </div>
           ))}
         </div>
+        <MemoryPanel lines={chat.memory} />
       </aside>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <ChatPanel

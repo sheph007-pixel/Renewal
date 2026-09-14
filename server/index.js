@@ -1233,9 +1233,11 @@ function memoryChatStore() {
   const threads = new Map();
   const messages = new Map();
   const files = new Map();
+  const memory = new Map();
   let nextThread = 1;
   let nextMessage = 1;
   let nextFile = 1;
+  let nextMemory = 1;
   const own = (groupName, id, staff) => {
     const t = threads.get(Number(id));
     return t && t.groupName === groupName && t.staff === !!staff ? t : null;
@@ -1307,6 +1309,16 @@ function memoryChatStore() {
       let n = 0;
       for (const [id, f] of files) if (f.threadId == null && Date.now() - f.createdAt > 86_400_000) files.delete(id) && n++;
       return n;
+    },
+    async listMemory(groupName) {
+      return (memory.get(groupName) || []).map((m) => ({ ...m }));
+    },
+    async updateMemory(groupName, { add = [], removeIds = [], source = "client" } = {}) {
+      let list = (memory.get(groupName) || []).filter((m) => !removeIds.includes(m.id));
+      for (const text of add) if (!list.some((m) => m.text.toLowerCase() === text.toLowerCase())) list.push({ id: nextMemory++, text, source, createdAt: new Date().toISOString() });
+      list = list.slice(-40);
+      memory.set(groupName, list);
+      return list.map((m) => ({ ...m }));
     },
     async getFile(id) {
       const f = files.get(Number(id));
@@ -1426,12 +1438,19 @@ async function streamTurn({ g, thread, content, page, compact = false, attachmen
     if (attached.length) send("question", { message: question });
     const history = await chatStore.listMessages(thread.id);
     const data = await assistantData(g);
+    const memory = await chatStore.listMemory(g.name);
     const { text, files } = await replyTo({
       data,
       history,
       page,
       compact,
       playbook,
+      memory,
+      saveMemory: async (change) => {
+        const list = await chatStore.updateMemory(g.name, { ...change, source: thread.staff ? "staff" : "client" });
+        send("memory", { memory: list });
+        return list;
+      },
       readFile: async (id) => {
         const f = await chatStore.getFile(id);
         return f && f.threadId === thread.id ? f : null;
@@ -1467,6 +1486,33 @@ app.get("/api/chat/threads", async (req, res) => {
   const g = groupFromCookie(req);
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ threads: await chatStore.listThreads(g.name) });
+});
+
+/** What the assistant remembers about the group; the client can drop any line. */
+app.get("/api/chat/memory", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  res.json({ memory: await chatStore.listMemory(g.name) });
+});
+app.delete("/api/chat/memory/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(404).json({ error: "No such note." });
+  res.json({ memory: await chatStore.updateMemory(g.name, { removeIds: [id] }) });
+});
+app.get("/api/admin/chat/memory", requireStaff, async (req, res) => {
+  const group = String(req.query.group || "");
+  if (!group) return res.status(400).json({ error: "group is required" });
+  res.json({ memory: await chatStore.listMemory(group) });
+});
+app.post("/api/admin/chat/memory", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
+  const body = req.body || {};
+  const group = String(body.group || "");
+  if (!group) return res.status(400).json({ error: "group is required" });
+  const add = Array.isArray(body.add) ? body.add.map((t) => String(t).replace(/\s+/g, " ").trim().slice(0, 300)).filter(Boolean) : [];
+  const removeIds = Array.isArray(body.removeIds) ? body.removeIds.map(Number).filter(Number.isInteger) : [];
+  res.json({ memory: await chatStore.updateMemory(group, { add, removeIds, source: "staff" }) });
 });
 
 app.get("/api/chat/threads/:id", async (req, res) => {
