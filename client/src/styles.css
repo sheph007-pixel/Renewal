@@ -370,6 +370,22 @@ button,
 .chat-box .md li {
   overflow-wrap: anywhere;
 }
+/* The playbook editor's list rows: tools appear on hover. */
+.pb-row .pb-tools {
+  opacity: 0;
+}
+.pb-row:hover .pb-tools,
+.pb-row:focus-within .pb-tools {
+  opacity: 1;
+}
+.pb-row:hover {
+  background: #fafbfc;
+}
+@media (max-width: 900px) {
+  .pb-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
 /* What the assistant writes. */
 .md > :first-child {
   margin-top: 0 !important;

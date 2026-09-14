@@ -198,11 +198,21 @@ assert.equal(log.threads.length, 0);
 
 const pb = await (await fetch(`${base}/api/admin/assistant/playbook`, { headers: staffAuth })).json();
 assert.ok(pb.persona.length > 50 && pb.defaults.persona === pb.persona, "the playbook starts at the defaults");
+assert.ok(Array.isArray(pb.rules) && pb.rules.length >= 3 && pb.rules.every((r) => r.id && r.text && r.on === true), "rules are a list of switchable lines");
+assert.ok(Array.isArray(pb.suggestions) && pb.suggestions.length > 3, "common rules are offered");
 assert.equal(pb.updatedAt, null);
-const saved = await (await fetch(`${base}/api/admin/assistant/playbook`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ persona: pb.persona, rules: "- Never call it a rate increase.", faq: "Q: Who is the TPA?\nA: HealthEZ." }) })).json();
-assert.equal(saved.rules, "- Never call it a rate increase.");
+// The old free-text shape still saves, and comes back as lists.
+let saved = await (await fetch(`${base}/api/admin/assistant/playbook`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ persona: pb.persona, rules: "- Never call it a rate increase.\n- Always mention the refund.", faq: "Q: Who is the TPA?\nA: HealthEZ." }) })).json();
+assert.deepEqual(saved.rules.map((r) => r.text), ["Never call it a rate increase.", "Always mention the refund."]);
+assert.deepEqual(saved.faq.map((f) => [f.q, f.a]), [["Who is the TPA?", "HealthEZ."]]);
 assert.ok(saved.updatedAt && saved.updatedBy === "hunter@kennion.com");
 assert.equal(saved.history.length, 1, "the previous version is kept");
+// The structured shape: an item switched off stays but is not used; empty and junk items are dropped.
+saved = await (await fetch(`${base}/api/admin/assistant/playbook`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ persona: pb.persona, rules: [{ id: "r1", text: "Keep it short.", on: true }, { id: "r2", text: "Off for now.", on: false }, { text: "   " }], facts: [{ text: "Open enrollment runs November 1-15." }], faq: [{ q: "Who is the TPA?", a: "HealthEZ." }, { q: "no answer" }] }) })).json();
+assert.deepEqual(saved.rules.map((r) => [r.text, r.on]), [["Keep it short.", true], ["Off for now.", false]]);
+assert.equal(saved.facts.length, 1);
+assert.equal(saved.faq.length, 1, "a question without an answer is dropped");
+assert.equal(saved.history.length, 2);
 assert.equal((await fetch(`${base}/api/admin/assistant/playbook`, { method: "POST", headers: { ...json, cookie }, body: "{}" })).status, 401, "a group cannot edit the playbook");
 
 // A staff trial as the group: kept, marked staff, invisible to the client.
