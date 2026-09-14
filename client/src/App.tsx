@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
   groupSizeLabel,
+  marketPlans,
   ovKey,
   planRows,
   type KennionData,
@@ -558,7 +559,15 @@ export default function App() {
    * Sign Up worth its own page rather than a promise at the bottom of one.
    */
   const submitSignup = async () => {
-    const plans = Object.keys(selected).filter((p) => selected[p]);
+    // Each plan goes over with its option ID in front (UH3 · P4000i8021B),
+    // the handle Kennion and the client both use for it.
+    const known = data && g ? marketPlans(data, g) : [];
+    const plans = Object.keys(selected)
+      .filter((p) => selected[p])
+      .map((name) => {
+        const id = known.find((mp) => mp.plan === name)?.optionId;
+        return id ? `${id} · ${name}` : name;
+      });
     if (!plans.length || signupBusy) return;
     setSignupBusy(true);
     setSignupError("");

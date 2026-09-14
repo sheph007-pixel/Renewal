@@ -255,6 +255,24 @@ Cobalt is not offered as a 2027 option: its slot is not shown on any group,
 its proposals are not served to clients, and the assistant does not name it.
 Anything already uploaded stays stored.
 
+### Option IDs
+
+Every quoted 2027 plan carries a short, stable handle — **UH3**, **GR1** —
+so a client, Kennion and the assistant can point at one plan among dozens
+without the carrier's full name. The prefix is the carrier (UH
+UnitedHealthcare, with fully insured and level funded numbered together; GR
+Gravie; NW Nationwide; AN Angle); the number runs per group in the order the
+carrier lists its plans. `assignOptionIds` in `server/index.js`, run from
+`proposalsChanged`, writes `option_id` into each stored plan; a number is
+never reused. A re-read of a proposal, or a newer proposal in the same
+slot, hands each surviving plan its old number (matched by plan code, then
+by exact name) and gives new plans the next free ones; an EPO twin is
+numbered but never shown. The ID is the first column of the grid (sortable,
+searchable, first column of the CSV), a badge on the plan card and the
+printed proposal, part of the Sign Up shortlist ("UH3 · P4000i8021B"), the
+first thing the assistant says about a plan, and what `create_comparison`
+accepts. Test: `node scripts/test-option-ids.mjs`.
+
 ### Proposal audit
 
 Every proposal's stored reading is checked against the document itself by
@@ -970,6 +988,7 @@ node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scr
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
 node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
 node scripts/test-proposal-audit.mjs  # boots the server on 5086: read, two-model audit, client view, document
+node scripts/test-option-ids.mjs      # boots the server on 5089: UH1/GR1 numbering, re-reads, newer quotes, sign-up
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```

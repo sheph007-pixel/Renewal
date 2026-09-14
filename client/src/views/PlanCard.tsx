@@ -10,6 +10,8 @@ import CarrierMark from "@/views/CarrierMark";
  * popup, the proposal on screen, the printed proposal and the Excel block.
  */
 export interface CardModel {
+  /** UH3, GR1 — the handle the client, Kennion and the assistant all use for this plan. */
+  optionId: string | null;
   carrier: string;
   links: { directory: { name: string; url: string } | null; formulary: { name: string; url: string } | null };
   plan: string;
@@ -60,6 +62,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
   ];
   const type = p.type && p.type !== p.label && p.type !== fundingOf(p) ? p.type : null;
   return {
+    optionId: p.optionId ?? null,
     carrier: carrierOf(p),
     /** Where to look things up on this plan: the provider directory and the PBM's formulary, where Kennion has the link. */
     links: { directory: networkDirectory(p.network), formulary: pbmOf(p.carrier) },
@@ -115,6 +118,7 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {m.optionId && <span style={{ fontSize: 12, fontWeight: 700, color: C.onColor, background: C.navy, borderRadius: 6, padding: "2px 8px", letterSpacing: "0.3px", fontVariantNumeric: "tabular-nums" }}>{m.optionId}</span>}
           <CarrierMark name={m.carrier} size={20} fontSize={12.5} color={C.muted} />
           <span style={{ fontSize: 11, fontWeight: 600, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 10, padding: "1px 8px" }}>{m.funding}</span>
           {m.type && !compact && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}

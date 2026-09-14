@@ -106,7 +106,7 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
   const used = new Set();
   for (const w of wanted) {
     const nw = norm(w);
-    let hit = all.find((x) => norm(x.pl.name) === nw && !used.has(x)) || all.find((x) => (norm(x.pl.name).includes(nw) || nw.includes(norm(x.pl.name))) && !used.has(x)) || all.find((x) => x.pl.planCode && norm(x.pl.planCode) === nw && !used.has(x));
+    let hit = all.find((x) => x.pl.optionId && norm(x.pl.optionId) === nw && !used.has(x)) || all.find((x) => norm(x.pl.name) === nw && !used.has(x)) || all.find((x) => (norm(x.pl.name).includes(nw) || nw.includes(norm(x.pl.name))) && !used.has(x)) || all.find((x) => x.pl.planCode && norm(x.pl.planCode) === nw && !used.has(x));
     if (!hit) {
       notes.push(`"${w}" did not match a quoted plan on file, so it is not in the table.`);
       continue;
@@ -130,7 +130,7 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
     const { er, ee } = splitFor(rates);
     rows.push({
       section: "2027 options",
-      name: pl.name,
+      name: pl.optionId ? `${pl.optionId} · ${pl.name}` : pl.name,
       carrier: slotCarrier(pr.slot, pr.carrier),
       funding: slotFunding(pr.slot, pr.funding),
       network: pl.network || "—",
