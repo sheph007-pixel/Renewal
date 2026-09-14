@@ -25,7 +25,6 @@ import SignInCode from "@/views/SignInCode";
 import AuditPanel from "@/views/AuditPanel";
 import RatesAudit from "@/views/RatesAudit";
 import AdminAssistant from "@/views/AdminAssistant";
-import AdminBenchmarks from "@/views/AdminBenchmarks";
 
 interface Props {
   data: KennionData;
@@ -71,7 +70,7 @@ const cellBase = {
   ...num,
 };
 
-export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant" | "benchmarks";
+export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant";
 
 const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "groups", label: "Groups", href: PATHS.groups },
@@ -79,7 +78,6 @@ const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "proposals", label: "Proposals", href: PATHS.proposals },
   { key: "import", label: "Import", href: PATHS.import },
   { key: "assistant", label: "Assistant", href: PATHS.assistantAdmin },
-  { key: "benchmarks", label: "Benchmarks", href: PATHS.benchmarksAdmin },
 ];
 
 export interface ImportRecord {
@@ -553,8 +551,6 @@ export default function Admin({
             groups={(data.groups as unknown as AdminGroup[]).filter((g) => !g.archived && g.eligible !== false).map((g) => g.name)}
           />
         )}
-
-        {tab === "benchmarks" && <AdminBenchmarks token={token} ai={ai} groups={(data.groups as unknown as AdminGroup[]).filter((g) => !g.archived && g.eligible !== false).map((g) => g.name)} />}
 
         {tab === "proposals" && (
           <Proposals

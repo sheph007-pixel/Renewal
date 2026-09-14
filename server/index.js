@@ -20,7 +20,6 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { METRICS, METRIC_KEYS, REGIONS, SIZE_BANDS, compare as compareBenchmarks, normalizeRow as normalizeBenchmark, proposeBenchmarks } from "./benchmarks.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -1425,7 +1424,6 @@ async function assistantData(g) {
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
     renewal: g.renewal,
-    benchmarks: await benchmarkStore.inUse(),
   };
 }
 
@@ -2755,130 +2753,6 @@ const logoStore = {
 };
 const LOGO_MIMES = { "image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg", "image/webp": "webp" };
 
-/**
- * Benchmarks (server/benchmarks.js): published survey figures with their
- * source and year, compared with each group's own numbers. The assistant
- * can propose a set from the web; staff approve before anyone sees them.
- */
-const memBenchmarks = new Map();
-let nextBenchmark = 1;
-const benchmarkStore = {
-  async list() {
-    if (db) return db.listBenchmarks();
-    return [...memBenchmarks.values()].map((r) => ({ ...r }));
-  },
-  async inUse() {
-    return this.list();
-  },
-  async add(rows, status, by) {
-    if (db) return db.addBenchmarks(rows, status, by);
-    const now = new Date().toISOString();
-    return rows.map((r) => {
-      const rec = { id: nextBenchmark++, ...r, status, createdBy: by || null, createdAt: now, updatedAt: now };
-      memBenchmarks.set(rec.id, rec);
-      return { ...rec };
-    });
-  },
-  async update(id, patch) {
-    if (db) return db.updateBenchmark(id, patch);
-    const r = memBenchmarks.get(id);
-    if (!r) return null;
-    for (const k of ["value", "year", "source", "sourceUrl", "note", "status", "sizeBand", "region"]) if (patch[k] != null) r[k] = patch[k];
-    r.updatedAt = new Date().toISOString();
-    return { ...r };
-  },
-  async remove(id) {
-    if (db) return db.deleteBenchmark(id);
-    return memBenchmarks.delete(id);
-  },
-  async clearAssistant() {
-    if (db) return db.clearAssistantBenchmarks();
-    let n = 0;
-    for (const [id, r] of memBenchmarks) if (r.createdBy === "assistant") memBenchmarks.delete(id) && n++;
-    return n;
-  },
-};
-let benchmarkRefreshBusy = false;
-
-/** The client's page: their group against the benchmarks for its size and place. */
-app.get("/api/benchmarks", async (req, res) => {
-  const g = groupForPage(req);
-  if (!g) return res.status(401).json({ error: "no session" });
-  const data = await assistantData(g);
-  res.json({ comparison: compareBenchmarks(data, await benchmarkStore.inUse()), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })) });
-});
-
-app.get("/api/admin/benchmarks", requireStaff, async (_req, res) => {
-  res.json({ rows: await benchmarkStore.list(), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })), sizeBands: SIZE_BANDS, regions: REGIONS });
-});
-
-/** Every group against the benchmarks, one row each, for the admin's table. */
-app.get("/api/admin/benchmarks/overview", requireStaff, async (_req, res) => {
-  const rows = await benchmarkStore.inUse();
-  const out = [];
-  for (const g of groups.filter((x) => !x.archived && x.eligible !== false)) {
-    const c = compareBenchmarks(await assistantData(g), rows);
-    out.push({ group: g.name, employees: c.employees, sizeBand: c.sizeBand, lines: c.lines.map(({ metric, groupText, benchmarkText, diffPct, read }) => ({ metric, groupText, benchmarkText, diffPct, read })) });
-  }
-  out.sort((a, b) => a.group.localeCompare(b.group));
-  res.json({ groups: out });
-});
-
-/** A group as the client sees it. */
-app.get("/api/admin/benchmarks/preview", requireStaff, async (req, res) => {
-  const g = groups.find((x) => x.name === String(req.query.group || ""));
-  if (!g) return res.status(404).json({ error: "No such group." });
-  res.json({ comparison: compareBenchmarks(await assistantData(g), await benchmarkStore.inUse()) });
-});
-
-app.post("/api/admin/benchmarks", requireStaff, express.json({ limit: "64kb" }), async (req, res) => {
-  const rows = (Array.isArray(req.body) ? req.body : [req.body]).map(normalizeBenchmark).filter(Boolean);
-  if (!rows.length) return res.status(400).json({ error: `A row needs a metric (${METRIC_KEYS.join(", ")}), a value and a source.` });
-  res.json({ rows: await benchmarkStore.add(rows, "approved", req.staffEmail || "staff") });
-});
-
-app.patch("/api/admin/benchmarks/:id", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
-  const id = Number(req.params.id);
-  const b = req.body || {};
-  const patch = {
-    value: Number.isFinite(Number(b.value)) && b.value !== "" && b.value != null ? Number(b.value) : null,
-    year: Number.isInteger(Number(b.year)) && b.year != null && b.year !== "" ? Number(b.year) : null,
-    source: b.source != null ? String(b.source).trim().slice(0, 200) : null,
-    sourceUrl: b.sourceUrl != null ? String(b.sourceUrl).trim().slice(0, 500) : null,
-    note: b.note != null ? String(b.note).trim().slice(0, 500) : null,
-    status: null,
-    sizeBand: SIZE_BANDS.includes(b.sizeBand) || b.sizeBand === "all" ? b.sizeBand : null,
-    region: REGIONS.includes(b.region) ? b.region : null,
-  };
-  const row = Number.isInteger(id) && (await benchmarkStore.update(id, patch));
-  if (!row) return res.status(404).json({ error: "No such benchmark." });
-  res.json({ row });
-});
-
-app.delete("/api/admin/benchmarks/:id", requireStaff, async (req, res) => {
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || !(await benchmarkStore.remove(id))) return res.status(404).json({ error: "No such benchmark." });
-  res.json({ ok: true });
-});
-
-/** The assistant searches the surveys and loads a fresh set, replacing what it loaded before; rows added by hand stay. */
-app.post("/api/admin/benchmarks/refresh", requireStaff, async (req, res) => {
-  if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is off: no Anthropic key is set." });
-  if (benchmarkRefreshBusy) return res.status(409).json({ error: "A refresh is already running." });
-  benchmarkRefreshBusy = true;
-  try {
-    const rows = await proposeBenchmarks({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "", fake: process.env.KENNION_FAKE_AI === "1" });
-    if (!rows.length) return res.status(502).json({ error: "The search came back with nothing usable. Try again in a minute." });
-    await benchmarkStore.clearAssistant();
-    const added = await benchmarkStore.add(rows, "approved", "assistant");
-    res.json({ rows: added });
-  } catch (e) {
-    console.error("benchmarks refresh:", e.message);
-    res.status(502).json({ error: e.message || "The refresh failed." });
-  } finally {
-    benchmarkRefreshBusy = false;
-  }
-});
 
 app.get("/api/carriers/logos", async (_req, res) => {
   const have = await logoStore.list();
