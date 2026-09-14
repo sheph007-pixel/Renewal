@@ -22,6 +22,8 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
+  /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
+  source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string; models: string[] } | null } | null;
 }
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
@@ -71,7 +73,43 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     er: sp?.er ?? null,
     ee: sp?.ee ?? null,
     premium: sp?.total ?? p.monthly,
+    source: p.quoted ? { proposalId: p.quoted.proposalId, audit: p.quoted.audit || null } : null,
   };
+}
+
+/**
+ * The card's footer: whether the figures above were checked against the
+ * carrier's document by two models, when, and the document itself. A plan
+ * whose audit found something reads as under review; one not yet audited
+ * says so; an illustrative plan has no footer.
+ */
+function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
+  const a = source.audit;
+  const when = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const href = `/api/group/proposals/${source.proposalId}/file`;
+  const link = (
+    <a href={href} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
+      View carrier proposal
+    </a>
+  );
+  if (a && a.status === "pass") {
+    return (
+      <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+        <span style={{ color: C.green, fontWeight: 600 }}>✓ Proposal Audit Completed</span>
+        <span>
+          {when(a.completedAt)}
+          {a.models.length ? ` · ${a.models.join(" + ")}` : ""}
+        </span>
+        <span>· {link}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+      <span style={{ color: C.amber, fontWeight: 600 }}>{a ? "Proposal audit: under review by Kennion" : "Proposal audit pending"}</span>
+      <span>· {link}</span>
+    </div>
+  );
 }
 
 /**
@@ -169,6 +207,7 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
           })}
         </tbody>
       </table>
+      {m.source && <AuditFoot source={m.source} />}
       {actions && <div className="noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>{actions}</div>}
     </div>
   );

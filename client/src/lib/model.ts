@@ -234,6 +234,15 @@ export interface GroupProposal {
   summary: string | null;
   filename: string;
   uploadedAt: string;
+  /** The two-model check of the stored reading against the document, or null before it has run. */
+  audit?: ProposalAudit | null;
+}
+
+/** Whether the figures read off a proposal were checked against the document, when, and by which models. */
+export interface ProposalAudit {
+  status: "pass" | "issues" | "unreadable";
+  completedAt: string;
+  models: string[];
 }
 
 /** What Employee Navigator billed the group for the month — counts and rates only. */
@@ -633,7 +642,7 @@ export interface MarketPlan {
   /** Carrier has not returned rates at all. */
   pending?: boolean;
   /** Read off a proposal the carrier sent for this group. */
-  quoted?: { slot: string; date: string | null; proposalId: number };
+  quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
 }
 
 /** The four proposal slots a group's 2027 options are built from, in the order they are shown. */
@@ -762,7 +771,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         rates,
         monthly,
         indicative: false,
-        quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id },
+        quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id, audit: pr.audit || null },
       });
     }
   }

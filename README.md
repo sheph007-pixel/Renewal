@@ -255,6 +255,26 @@ Cobalt is not offered as a 2027 option: its slot is not shown on any group,
 its proposals are not served to clients, and the assistant does not name it.
 Anything already uploaded stays stored.
 
+### Proposal audit
+
+Every proposal's stored reading is checked against the document itself by
+two models before a client is shown it (`server/proposal-audit.js`). After
+the read, Claude and ChatGPT each get the carrier's document and the stored
+plans — name, code, network, deductible, out-of-pocket max, the four tier
+rates, the benefit figures — and report every value the document
+contradicts, structured. Both must find nothing for the audit to **pass**;
+any mismatch is **issues**; a model that is off or fails is recorded, never
+counted as a pass. The result is kept on the row (`kennion.proposals.audit`)
+and shows on the Proposals page as a pill (Audit passed · date, or how many
+things to check, with the mismatch table under Details) and an **Audit**
+button to run it again; `POST /api/admin/proposals/audit` runs it for every
+current proposal not yet audited (`?all=1` for all). On the client's side a
+quoted plan's card ends with **✓ Proposal Audit Completed**, the date, the
+models, and **View carrier proposal**, which opens the document from
+`/api/group/proposals/:id/file` — for the group it was quoted for only. A
+plan whose audit found something reads "under review by Kennion" instead.
+The audit runs once per reading; a re-read runs it again.
+
 ### Gravie rate workbooks
 
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
@@ -943,6 +963,7 @@ node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
 node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
+node scripts/test-proposal-audit.mjs  # boots the server on 5086: read, two-model audit, client view, document
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
