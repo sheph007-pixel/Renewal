@@ -10,7 +10,24 @@ export default function Markdown({ text }: { text: string }) {
   return <div className="md">{blocks(text)}</div>;
 }
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|(?<![\w*])\*[^*\s][^*]*\*(?![\w*]))/g;
+// A bare address is a link too, so nothing the assistant names has to be copied out by hand.
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>"')\]]+|(?<![\w*])\*[^*\s][^*]*\*(?![\w*]))/g;
+
+/** A bare URL as a link, with trailing punctuation left outside it. */
+function bareLink(tok: string, key: number): ReactNode[] {
+  const m = tok.match(/^(.*?)([.,;:!?]+)?$/);
+  const url = m ? m[1] : tok;
+  const tail = m && m[2] ? m[2] : "";
+  let label = url.replace(/^https?:\/\//, "");
+  if (label.length > 60) label = `${label.slice(0, 57)}…`;
+  const out: ReactNode[] = [
+    <a key={key} href={url} target="_blank" rel="noreferrer">
+      {label}
+    </a>,
+  ];
+  if (tail) out.push(tail);
+  return out;
+}
 
 function inline(s: string): ReactNode[] {
   const out: ReactNode[] = [];
@@ -22,6 +39,7 @@ function inline(s: string): ReactNode[] {
     const tok = m[0];
     if (tok.startsWith("**")) out.push(<strong key={k++}>{inline(tok.slice(2, -2))}</strong>);
     else if (tok.startsWith("`")) out.push(<code key={k++}>{tok.slice(1, -1)}</code>);
+    else if (/^https?:\/\//.test(tok)) out.push(...bareLink(tok, k++));
     else if (tok.startsWith("[")) {
       const i = tok.indexOf("](");
       out.push(

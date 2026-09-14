@@ -1101,8 +1101,8 @@ export function createDb(url) {
       const { rowCount } = await pool.query("DELETE FROM kennion.benchmarks WHERE id = $1", [id]);
       return rowCount > 0;
     },
-    async clearProposedBenchmarks() {
-      const { rowCount } = await pool.query("DELETE FROM kennion.benchmarks WHERE status = 'proposed'");
+    async clearAssistantBenchmarks() {
+      const { rowCount } = await pool.query("DELETE FROM kennion.benchmarks WHERE created_by = 'assistant'");
       return rowCount;
     },
 

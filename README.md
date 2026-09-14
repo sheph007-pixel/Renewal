@@ -594,17 +594,22 @@ group's own credential (`X-Kennion-Group-Token`, the permanent-link token,
 or `X-Kennion-Group-Code`), and the server answers for that group
 (`groupForPage`). A header naming no real group is refused, never ignored.
 
-**Benchmarks.** `server/benchmarks.js` keeps published survey figures (KFF
-Employer Health Benefits Survey, Mercer, SHRM, BLS) in `kennion.benchmarks`,
-one figure per row with its source, year, firm-size band (3-49, 50-199,
-200-999, 1000+, all) and region (all, south). Rows come from staff typing
-one in on `/admin/benchmarks`, or from **Find the latest figures**, which has
-the model search the surveys and propose a set; a proposed row is not used
-until approved. The client's **Benchmarking** page compares the group
-(enrollment-weighted single and family premium × 12, the employer's share
-from the Employee Navigator split) with the approved rows that fit its size
-and region; the assistant's `lookup_benchmarks` tool reads the same
-comparison so recommendations carry the market context with its source.
+**Benchmarks.** `server/benchmarks.js` keeps six figures employers ask
+about — employee-only premium, the employer's share of it, deductible,
+out-of-pocket maximum, participation (enrolled over eligible) and plans
+offered — from published surveys (KFF Employer Health Benefits Survey,
+Mercer, SHRM, BLS, MEPS-IC) in `kennion.benchmarks`, one figure per row with
+its source, year, firm-size band on the ACA line (2-50, 51+, all) and place
+(Alabama, the South, national). **Update from the surveys** on
+`/admin/benchmarks` has the model search and load a fresh set, replacing
+what it loaded before; rows staff add by hand stay. The admin page shows
+every group against the benchmarks in one table. The client's
+**Benchmarking** page compares the group (enrollment-weighted employee-only
+rate × 12, the employer's share from the Employee Navigator split,
+deductible and out-of-pocket max from the plan designs on file) with the
+rows that fit its size and place, closest cut first; the assistant's
+`lookup_benchmarks` tool reads the same comparison so recommendations carry
+the market context with its source.
 
 **Research.** The assistant can search the web (Anthropic's server-side
 `web_search` tool, up to five searches a turn) for what the group's figures
@@ -851,7 +856,7 @@ node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
 node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
-node scripts/test-benchmarks.mjs      # boots the server on 5083: propose, approve, compare per group
+node scripts/test-benchmarks.mjs      # boots the server on 5083: load, hand rows, compare per group
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
