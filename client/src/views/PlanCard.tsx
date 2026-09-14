@@ -1,5 +1,6 @@
 import { TIERS, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
+import CarrierMark from "@/views/CarrierMark";
 
 /**
  * One plan, the way a broker's comparison card reads: the carrier and plan,
@@ -85,7 +86,7 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: C.muted }}>{m.carrier}</span>
+          <CarrierMark name={m.carrier} size={20} fontSize={12.5} color={C.muted} />
           <span style={{ fontSize: 11, fontWeight: 600, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 10, padding: "1px 8px" }}>{m.funding}</span>
           {m.type && !compact && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}
         </div>
