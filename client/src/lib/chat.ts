@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { groupHeaders } from "@/lib/session";
 
 /**
  * The assistant's conversations, held once for the whole app so the chat box
@@ -80,13 +81,13 @@ export function resetChat() {
 }
 
 export async function loadMemory() {
-  const r = await fetch("/api/chat/memory");
+  const r = await fetch("/api/chat/memory", { headers: groupHeaders() });
   if (r.ok) set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
 }
 
 /** Drop one remembered line; the assistant no longer sees it. */
 export async function forgetMemory(id: number) {
-  const r = await fetch(`/api/chat/memory/${id}`, { method: "DELETE" });
+  const r = await fetch(`/api/chat/memory/${id}`, { method: "DELETE", headers: groupHeaders() });
   if (r.ok) set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
 }
 
@@ -96,7 +97,7 @@ async function failure(r: Response): Promise<string> {
 }
 
 export async function loadThreads() {
-  const r = await fetch("/api/chat/threads");
+  const r = await fetch("/api/chat/threads", { headers: groupHeaders() });
   if (!r.ok) throw new Error(await failure(r));
   const p = (await r.json()) as { threads: ChatThread[] };
   set({ threads: p.threads, loaded: true });
@@ -104,7 +105,7 @@ export async function loadThreads() {
 
 export async function loadThread(id: number) {
   if (state.messages[id]) return;
-  const r = await fetch(`/api/chat/threads/${id}`);
+  const r = await fetch(`/api/chat/threads/${id}`, { headers: groupHeaders() });
   if (!r.ok) throw new Error(await failure(r));
   const p = (await r.json()) as { thread: ChatThread; messages: ChatMessage[] };
   set({ messages: { ...state.messages, [id]: p.messages } });
@@ -113,7 +114,7 @@ export async function loadThread(id: number) {
 export async function renameThread(id: number, title: string) {
   const r = await fetch(`/api/chat/threads/${id}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...groupHeaders() },
     body: JSON.stringify({ title }),
   });
   if (!r.ok) throw new Error(await failure(r));
@@ -122,7 +123,7 @@ export async function renameThread(id: number, title: string) {
 }
 
 export async function deleteThread(id: number) {
-  const r = await fetch(`/api/chat/threads/${id}`, { method: "DELETE" });
+  const r = await fetch(`/api/chat/threads/${id}`, { method: "DELETE", headers: groupHeaders() });
   if (!r.ok) throw new Error(await failure(r));
   const messages = { ...state.messages };
   delete messages[id];
@@ -164,7 +165,7 @@ export async function uploadAttachment(file: File): Promise<ChatFile> {
   if (file.size > ATTACHMENT_MAX_BYTES) throw new Error(`${file.name} is larger than 15 MB.`);
   const r = await fetch(`/api/chat/attachments?filename=${encodeURIComponent(file.name)}`, {
     method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": file.type || "application/octet-stream", ...groupHeaders() },
     body: file,
   });
   if (!r.ok) throw new Error(await failure(r));
@@ -189,7 +190,7 @@ export async function sendMessage(threadId: number | null, content: string, page
 
   const r = await fetch("/api/chat/send", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...groupHeaders() },
     body: JSON.stringify({ threadId: id, content, page, compact, attachments: attachments.map((f) => f.id) }),
   });
   if (!r.ok || !r.body) {

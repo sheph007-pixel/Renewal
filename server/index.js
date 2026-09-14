@@ -20,6 +20,7 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { METRICS, METRIC_KEYS, REGIONS, SIZE_BANDS, compare as compareBenchmarks, normalizeRow as normalizeBenchmark, proposeBenchmarks } from "./benchmarks.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -881,7 +882,24 @@ function groupFromRequest(req) {
   const code = String(body.code || "").trim().toUpperCase();
   if (token) return { g: byToken.get(token) || null, guessed: true };
   if (code) return { g: byCode.get(code) || null, guessed: true };
-  return { g: groupFromCookie(req), guessed: false };
+  return { g: groupForPage(req), guessed: false };
+}
+
+/**
+ * The group a page is showing, for every request that page makes. The page
+ * names its own group in a header with that group's own credential (its
+ * permanent-link token or its access code), and that wins over the cookie:
+ * the cookie is one per browser, so a staff member with two groups open in
+ * two tabs would otherwise have the second tab's sign-in answer the first
+ * tab's questions with the wrong group's figures. A header that names no
+ * real group is refused outright rather than falling back to the cookie.
+ */
+function groupForPage(req) {
+  const token = String(req.get("x-kennion-group-token") || "").trim();
+  const code = String(req.get("x-kennion-group-code") || "").trim().toUpperCase();
+  if (token) return byToken.get(token) || null;
+  if (code) return byCode.get(code) || null;
+  return groupFromCookie(req);
 }
 
 const SIGNIN_WINDOW_MS = 10 * 60 * 1000;
@@ -1407,6 +1425,7 @@ async function assistantData(g) {
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
     renewal: g.renewal,
+    benchmarks: await benchmarkStore.approved(),
   };
 }
 
@@ -1483,19 +1502,19 @@ function sendChatFile(res, f) {
 }
 
 app.get("/api/chat/threads", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ threads: await chatStore.listThreads(g.name) });
 });
 
 /** What the assistant remembers about the group; the client can drop any line. */
 app.get("/api/chat/memory", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ memory: await chatStore.listMemory(g.name) });
 });
 app.delete("/api/chat/memory/:id", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(404).json({ error: "No such note." });
@@ -1516,7 +1535,7 @@ app.post("/api/admin/chat/memory", requireStaff, express.json({ limit: "16kb" })
 });
 
 app.get("/api/chat/threads/:id", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const id = threadId(req.params.id);
   const thread = id && (await chatStore.getThread(g.name, id));
@@ -1525,7 +1544,7 @@ app.get("/api/chat/threads/:id", async (req, res) => {
 });
 
 app.post("/api/chat/threads/:id", express.json({ limit: "4kb" }), async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const id = threadId(req.params.id);
   const title = String((req.body || {}).title || "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -1536,7 +1555,7 @@ app.post("/api/chat/threads/:id", express.json({ limit: "4kb" }), async (req, re
 });
 
 app.delete("/api/chat/threads/:id", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const id = threadId(req.params.id);
   if (!id || !(await chatStore.deleteThread(g.name, id))) return res.status(404).json({ error: "No such conversation." });
@@ -1545,7 +1564,7 @@ app.delete("/api/chat/threads/:id", async (req, res) => {
 
 /** A document the assistant made for this group, by the session cookie alone. */
 app.get("/api/chat/files/:id", async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const f = threadId(req.params.id) && (await chatStore.getFile(Number(req.params.id)));
   if (!f || f.groupName !== g.name || f.staff) return res.status(404).json({ error: "No such file." });
@@ -1560,7 +1579,7 @@ app.get("/api/chat/files/:id", async (req, res) => {
  */
 const CHAT_ATTACHMENT_MAX = 15 * 1024 * 1024;
 app.post("/api/chat/attachments", express.raw({ type: () => true, limit: CHAT_ATTACHMENT_MAX }), async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const filename = String(req.query.filename || "").replace(/[\\/]/g, "_").trim().slice(0, 200) || "attachment";
   if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
@@ -1573,7 +1592,7 @@ app.post("/api/chat/attachments", express.raw({ type: () => true, limit: CHAT_AT
 });
 
 app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => {
-  const g = groupFromCookie(req);
+  const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is not available right now." });
   const body = req.body || {};
@@ -2735,6 +2754,119 @@ const logoStore = {
   },
 };
 const LOGO_MIMES = { "image/png": "png", "image/jpeg": "jpg", "image/svg+xml": "svg", "image/webp": "webp" };
+
+/**
+ * Benchmarks (server/benchmarks.js): published survey figures with their
+ * source and year, compared with each group's own numbers. The assistant
+ * can propose a set from the web; staff approve before anyone sees them.
+ */
+const memBenchmarks = new Map();
+let nextBenchmark = 1;
+const benchmarkStore = {
+  async list() {
+    if (db) return db.listBenchmarks();
+    return [...memBenchmarks.values()].map((r) => ({ ...r }));
+  },
+  async approved() {
+    return (await this.list()).filter((r) => r.status === "approved");
+  },
+  async add(rows, status, by) {
+    if (db) return db.addBenchmarks(rows, status, by);
+    const now = new Date().toISOString();
+    return rows.map((r) => {
+      const rec = { id: nextBenchmark++, ...r, status, createdBy: by || null, createdAt: now, updatedAt: now };
+      memBenchmarks.set(rec.id, rec);
+      return { ...rec };
+    });
+  },
+  async update(id, patch) {
+    if (db) return db.updateBenchmark(id, patch);
+    const r = memBenchmarks.get(id);
+    if (!r) return null;
+    for (const k of ["value", "year", "source", "sourceUrl", "note", "status", "sizeBand", "region"]) if (patch[k] != null) r[k] = patch[k];
+    r.updatedAt = new Date().toISOString();
+    return { ...r };
+  },
+  async remove(id) {
+    if (db) return db.deleteBenchmark(id);
+    return memBenchmarks.delete(id);
+  },
+  async clearProposed() {
+    if (db) return db.clearProposedBenchmarks();
+    let n = 0;
+    for (const [id, r] of memBenchmarks) if (r.status === "proposed") memBenchmarks.delete(id) && n++;
+    return n;
+  },
+};
+let benchmarkRefreshBusy = false;
+
+/** The client's page: their group against the approved benchmarks for its size. */
+app.get("/api/benchmarks", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const data = await assistantData(g);
+  res.json({ comparison: compareBenchmarks(data, await benchmarkStore.approved()), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })) });
+});
+
+app.get("/api/admin/benchmarks", requireStaff, async (_req, res) => {
+  res.json({ rows: await benchmarkStore.list(), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })), sizeBands: SIZE_BANDS, regions: REGIONS });
+});
+
+/** A group as the client would see it, for staff to check before approving. */
+app.get("/api/admin/benchmarks/preview", requireStaff, async (req, res) => {
+  const g = groups.find((x) => x.name === String(req.query.group || ""));
+  if (!g) return res.status(404).json({ error: "No such group." });
+  res.json({ comparison: compareBenchmarks(await assistantData(g), await benchmarkStore.approved()) });
+});
+
+app.post("/api/admin/benchmarks", requireStaff, express.json({ limit: "64kb" }), async (req, res) => {
+  const rows = (Array.isArray(req.body) ? req.body : [req.body]).map(normalizeBenchmark).filter(Boolean);
+  if (!rows.length) return res.status(400).json({ error: `A row needs a metric (${METRIC_KEYS.join(", ")}), a value and a source.` });
+  res.json({ rows: await benchmarkStore.add(rows, "approved", req.staffEmail) });
+});
+
+app.patch("/api/admin/benchmarks/:id", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
+  const id = Number(req.params.id);
+  const b = req.body || {};
+  const patch = {
+    value: Number.isFinite(Number(b.value)) && b.value !== "" && b.value != null ? Number(b.value) : null,
+    year: Number.isInteger(Number(b.year)) && b.year != null && b.year !== "" ? Number(b.year) : null,
+    source: b.source != null ? String(b.source).trim().slice(0, 200) : null,
+    sourceUrl: b.sourceUrl != null ? String(b.sourceUrl).trim().slice(0, 500) : null,
+    note: b.note != null ? String(b.note).trim().slice(0, 500) : null,
+    status: ["approved", "proposed"].includes(b.status) ? b.status : null,
+    sizeBand: SIZE_BANDS.includes(b.sizeBand) || b.sizeBand === "all" ? b.sizeBand : null,
+    region: REGIONS.includes(b.region) ? b.region : null,
+  };
+  const row = Number.isInteger(id) && (await benchmarkStore.update(id, patch));
+  if (!row) return res.status(404).json({ error: "No such benchmark." });
+  res.json({ row });
+});
+
+app.delete("/api/admin/benchmarks/:id", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !(await benchmarkStore.remove(id))) return res.status(404).json({ error: "No such benchmark." });
+  res.json({ ok: true });
+});
+
+/** The assistant searches the surveys and proposes a fresh set; the old proposals are replaced. */
+app.post("/api/admin/benchmarks/refresh", requireStaff, async (req, res) => {
+  if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is off: no Anthropic key is set." });
+  if (benchmarkRefreshBusy) return res.status(409).json({ error: "A refresh is already running." });
+  benchmarkRefreshBusy = true;
+  try {
+    const rows = await proposeBenchmarks({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "", fake: process.env.KENNION_FAKE_AI === "1" });
+    if (!rows.length) return res.status(502).json({ error: "The search came back with nothing usable. Try again in a minute." });
+    await benchmarkStore.clearProposed();
+    const added = await benchmarkStore.add(rows, "proposed", req.staffEmail);
+    res.json({ rows: added });
+  } catch (e) {
+    console.error("benchmarks refresh:", e.message);
+    res.status(502).json({ error: e.message || "The refresh failed." });
+  } finally {
+    benchmarkRefreshBusy = false;
+  }
+});
 
 app.get("/api/carriers/logos", async (_req, res) => {
   const have = await logoStore.list();

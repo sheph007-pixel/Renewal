@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { C } from "@/lib/ui";
 import { ATTACHMENT_ACCEPT, loadThread, sendMessage, uploadAttachment, useChat, type ChatFile, type ChatMessage } from "@/lib/chat";
 import Markdown from "@/views/Markdown";
+import { groupHeaders } from "@/lib/session";
 
 const KIND: Record<string, string> = {
   "application/pdf": "PDF",
@@ -209,14 +210,14 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
               <div className="chat-bubble me" style={{ maxWidth: "80%", padding: compact ? "8px 13px" : "9px 15px", borderRadius: 18, borderBottomRightRadius: 5, background: "#0B84FE", color: "#fff", fontSize: fs, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {m.content}
               </div>
-              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} align="right" />
+              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} align="right" headers={groupHeaders()} />
             </div>
           ) : (
             <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", margin: "6px 0" }}>
               <div className="chat-answer chat-bubble them" style={{ maxWidth: "85%", minWidth: 0, padding: compact ? "8px 13px" : "9px 15px", borderRadius: 18, borderBottomLeftRadius: 5, background: "#E9E9EB", fontSize: fs, lineHeight: 1.45, color: "#1c1c1e", wordBreak: "break-word" }}>
                 <Markdown text={m.content} />
               </div>
-              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} />
+              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} headers={groupHeaders()} />
             </div>
           ),
         )}
@@ -231,7 +232,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
                 </div>
               )}
             </div>
-            <FileChips files={streaming.files} href={(f) => `/api/chat/files/${f.id}`} />
+            <FileChips files={streaming.files} href={(f) => `/api/chat/files/${f.id}`} headers={groupHeaders()} />
           </div>
         )}
         {chat.error && !streaming && (

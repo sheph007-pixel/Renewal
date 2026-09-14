@@ -48,8 +48,8 @@ let list = await (await fetch(`${base}/api/chat/threads`, { headers: { cookie } 
 assert.deepEqual(list.threads, []);
 
 // A first question opens a thread, announces it, streams text, and finishes.
-async function send(body, c = cookie) {
-  const r = await fetch(`${base}/api/chat/send`, { method: "POST", headers: { ...json, cookie: c }, body: JSON.stringify(body) });
+async function send(body, c = cookie, extra = {}) {
+  const r = await fetch(`${base}/api/chat/send`, { method: "POST", headers: { ...json, cookie: c, ...extra }, body: JSON.stringify(body) });
   if (!r.ok) return { status: r.status, body: await r.json() };
   assert.match(r.headers.get("content-type") || "", /text\/event-stream/);
   const events = [];
@@ -258,6 +258,19 @@ assert.equal(mem.length, 1, "the client can forget a line");
 mem = (await (await fetch(`${base}/api/admin/chat/memory`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ group: mine.name, removeIds: [mem[0].id] }) })).json()).memory;
 assert.equal(mem.length, 0, "and so can staff");
 console.log("assistant memory: preferences are kept per group, shown, and removable by client or staff — ok");
+
+// Two groups open in one browser: the cookie is the other group's (it signed
+// in last), but the page names its own group in a header, and that wins.
+// A header naming no real group is refused rather than falling back.
+const tokenHeader = mine.linkToken ? { "X-Kennion-Group-Token": mine.linkToken } : { "X-Kennion-Group-Code": mine.code };
+let cross = await (await fetch(`${base}/api/chat/threads`, { headers: { cookie: otherCookie, ...tokenHeader } })).json();
+assert.ok(cross.threads.some((t) => t.id === tid), "the header's group's threads come back, not the cookie's");
+const crossTurn = await send({ threadId: tid, content: "Which company am I?", page: "home" }, otherCookie, tokenHeader);
+assert.equal(crossTurn.status, 200);
+assert.equal(crossTurn.events[0].data.id, tid, "the turn lands on the header's group's thread");
+assert.equal((await fetch(`${base}/api/chat/threads`, { headers: { cookie: otherCookie, "X-Kennion-Group-Code": "KEN-NOPE-0000" } })).status, 401, "a bad header is refused, not ignored");
+assert.equal((await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie: otherCookie } })).status, 404, "the cookie alone still cannot reach another group's thread");
+console.log("assistant isolation: a page's own group header beats a cookie left by another group's sign-in — ok");
 
 // Rename, then delete.
 const renamed = await (await fetch(`${base}/api/chat/threads/${tid}`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ title: "Medical spend" }) })).json();

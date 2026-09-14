@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { groupHeaders } from "@/lib/session";
 import { C, panel, primaryBtn, textInput } from "@/lib/ui";
 
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
@@ -51,7 +52,7 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
     try {
       const r = await fetch("/api/group/support", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...groupHeaders() },
         body: JSON.stringify({ priority, requester: requester.trim(), subject: subject.trim(), description: description.trim(), file: file ? { name: file.name, base64: file.base64 } : null }),
       });
       const body = await r.json().catch(() => ({}));
