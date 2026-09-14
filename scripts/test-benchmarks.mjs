@@ -31,62 +31,58 @@ const mine = staff.groups.filter((g) => !g.archived && g.eligible !== false)[0];
 const r0 = await fetch(`${base}/api/signin`, { method: "POST", headers: json, body: JSON.stringify({ code: mine.code }) });
 const cookie = (r0.headers.get("set-cookie") || "").split(";")[0];
 
-// No session, nothing. With one, nothing yet approved.
+// No session, nothing. With one, nothing yet on file.
 assert.equal((await fetch(`${base}/api/benchmarks`)).status, 401);
 assert.equal((await fetch(`${base}/api/admin/benchmarks`)).status, 401);
 let page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
 assert.deepEqual(page.comparison.lines, []);
-assert.ok(page.metrics.length >= 8);
+assert.equal(page.metrics.length, 6, "six figures employers ask about");
 
-// The assistant proposes; nothing is in use until approved.
+// The assistant loads a set straight in, each row citing its source; the client sees what fits its size and place.
 let admin = await (await fetch(`${base}/api/admin/benchmarks/refresh`, { method: "POST", headers: staffAuth })).json();
 assert.equal(admin.rows.length, 3);
-assert.ok(admin.rows.every((r) => r.status === "proposed"));
+assert.ok(admin.rows.every((r) => r.createdBy === "assistant" && r.source));
 page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
-assert.deepEqual(page.comparison.lines, [], "proposed rows do not reach the client");
+const band = page.comparison.sizeBand;
+assert.ok(["2-50", "51+"].includes(band), "the ACA line");
+assert.equal(page.comparison.region, "AL");
+const want = band === "2-50" ? 3 : 2; // the 2-50 cost-sharing row applies only to a small group
+assert.equal(page.comparison.lines.length, want, "rows for other sizes do not apply");
+const single = page.comparison.lines.find((l) => l.metric === "premium_single_annual");
+assert.equal(single.benchmark, 9000);
+assert.match(single.source, /Canned/);
+assert.ok(single.group == null || single.group > 0, "the group's figure is its EE rate × 12 when rates are on file");
+const ded = page.comparison.lines.find((l) => l.metric === "deductible_single");
+assert.equal(ded.region, "south", "a South row beats none for an Alabama group");
 
-// Approve one: the client sees it, with the group's own figure beside it.
-const single = admin.rows.find((r) => r.metric === "premium_single_annual");
-const ok = await (await fetch(`${base}/api/admin/benchmarks/${single.id}`, { method: "PATCH", headers: { ...json, ...staffAuth }, body: JSON.stringify({ status: "approved" }) })).json();
-assert.equal(ok.row.status, "approved");
-page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
-assert.equal(page.comparison.lines.length, 1);
-const line = page.comparison.lines[0];
-assert.equal(line.metric, "premium_single_annual");
-assert.equal(line.benchmark, 9000);
-assert.match(line.source, /Canned/);
-assert.ok(line.group == null || line.group > 0, "the group's figure is its EE rate × 12 when rates are on file");
-
-// A row for another firm size does not apply to this group.
-const family = admin.rows.find((r) => r.metric === "premium_family_annual");
-await fetch(`${base}/api/admin/benchmarks/${family.id}`, { method: "PATCH", headers: { ...json, ...staffAuth }, body: JSON.stringify({ status: "approved" }) });
-page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
-assert.equal(page.comparison.lines.length, page.comparison.sizeBand === "3-49" ? 2 : 1, "a 3-49 row applies only to a 3-49 group");
-await fetch(`${base}/api/admin/benchmarks/${family.id}`, { method: "PATCH", headers: { ...json, ...staffAuth }, body: JSON.stringify({ status: "proposed" }) });
-
-// A refresh replaces the old proposals but leaves approved rows alone.
+// A second load replaces the assistant's rows but leaves a row added by hand alone.
+const added = await (await fetch(`${base}/api/admin/benchmarks`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ metric: "participation_pct", sizeBand: "all", region: "AL", value: 77, year: 2024, source: "MEPS-IC" }) })).json();
+assert.equal(added.rows[0].createdBy, "hunter@kennion.com");
+assert.equal((await fetch(`${base}/api/admin/benchmarks`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ metric: "nope", value: 1, source: "x" }) })).status, 400);
 admin = await (await fetch(`${base}/api/admin/benchmarks/refresh`, { method: "POST", headers: staffAuth })).json();
 let all = (await (await fetch(`${base}/api/admin/benchmarks`, { headers: staffAuth })).json()).rows;
-assert.equal(all.filter((r) => r.status === "approved").length, 1);
-assert.equal(all.filter((r) => r.status === "proposed").length, 3);
-assert.ok(!all.some((r) => r.id === family.id), "the unapproved family row was replaced by the refresh");
+assert.equal(all.length, 4);
+assert.ok(all.some((r) => r.id === added.rows[0].id), "the hand-added row survives a refresh");
 
-// Staff add a row by hand, fix a value, and remove one.
-const added = await (await fetch(`${base}/api/admin/benchmarks`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ metric: "deductible_single", sizeBand: "all", region: "south", value: 2500, year: 2025, source: "KFF EHBS" }) })).json();
-assert.equal(added.rows[0].status, "approved");
-assert.equal((await fetch(`${base}/api/admin/benchmarks`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ metric: "nope", value: 1, source: "x" }) })).status, 400);
-const fixed = await (await fetch(`${base}/api/admin/benchmarks/${added.rows[0].id}`, { method: "PATCH", headers: { ...json, ...staffAuth }, body: JSON.stringify({ value: 2600 }) })).json();
-assert.equal(fixed.row.value, 2600);
+// Fix a value, see it on the client's page, remove it.
+const fixed = await (await fetch(`${base}/api/admin/benchmarks/${added.rows[0].id}`, { method: "PATCH", headers: { ...json, ...staffAuth }, body: JSON.stringify({ value: 80 }) })).json();
+assert.equal(fixed.row.value, 80);
 page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
-assert.equal(page.comparison.lines.length, 2);
+const part = page.comparison.lines.find((l) => l.metric === "participation_pct");
+assert.equal(part.benchmark, 80);
+assert.ok(part.group == null || (part.group > 0 && part.group <= 100), "participation is enrolled over eligible");
 assert.equal((await fetch(`${base}/api/admin/benchmarks/${added.rows[0].id}`, { method: "DELETE", headers: staffAuth })).status, 200);
 page = await (await fetch(`${base}/api/benchmarks`, { headers: { cookie } })).json();
-assert.equal(page.comparison.lines.length, 1);
+assert.ok(!page.comparison.lines.some((l) => l.metric === "participation_pct"));
 
-// The preview shows staff a group's page as the client sees it.
+// The admin's table: every group, and one group's page as the client sees it.
+const overview = await (await fetch(`${base}/api/admin/benchmarks/overview`, { headers: staffAuth })).json();
+assert.ok(overview.groups.length > 1);
+const row = overview.groups.find((g) => g.group === mine.name);
+assert.ok(row && row.lines.length === want);
 const preview = await (await fetch(`${base}/api/admin/benchmarks/preview?group=${encodeURIComponent(mine.name)}`, { headers: staffAuth })).json();
-assert.equal(preview.comparison.lines.length, 1);
+assert.equal(preview.comparison.lines.length, want);
 assert.equal((await fetch(`${base}/api/admin/benchmarks/preview?group=No%20Such`, { headers: staffAuth })).status, 404);
 
-console.log("benchmarks: propose, approve, add, fix, remove, compare per group — ok", { group: mine.name, band: page.comparison.sizeBand });
+console.log("benchmarks: load from surveys, hand rows, fix, remove, every group compared — ok", { group: mine.name, band });
 stop();

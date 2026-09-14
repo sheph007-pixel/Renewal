@@ -6,7 +6,7 @@ export interface BenchmarkLine {
   metric: string;
   label: string;
   short: string;
-  unit: "usd" | "pct";
+  unit: "usd" | "pct" | "count";
   group: number | null;
   groupText: string;
   benchmark: number;
@@ -29,7 +29,8 @@ export interface Comparison {
   lines: BenchmarkLine[];
 }
 
-const bandLabel = (b: string | null) => (b && b !== "all" ? `${b} employees` : "all employers");
+export const bandLabel = (b: string | null) => (b && b !== "all" ? `${b} employees` : "all sizes");
+export const regionLabel = (r: string | null) => (r === "AL" ? "Alabama" : r === "south" ? "the South" : "national");
 
 /**
  * One metric: the group's figure beside the benchmark, with a bar for each so
@@ -43,7 +44,7 @@ export function BenchmarkCard({ l }: { l: BenchmarkLine }) {
       {v != null && <div style={{ width: `${Math.max(2, (v / max) * 100)}%`, height: "100%", background: color, borderRadius: 4 }} />}
     </div>
   );
-  const tone = l.diffPct == null || Math.abs(l.diffPct) < 3 ? C.muted : l.read && /Costs more/.test(l.read) ? C.orangeInk : l.read && /Costs less/.test(l.read) ? C.green : C.body;
+  const tone = !l.read || /In line/.test(l.read) ? C.muted : /Costs more|Lower than/.test(l.read) ? C.orangeInk : /Costs less|Better than/.test(l.read) ? C.green : C.body;
   return (
     <div style={{ ...panel, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: C.ink }}>{l.label}</div>
@@ -64,8 +65,7 @@ export function BenchmarkCard({ l }: { l: BenchmarkLine }) {
         ) : (
           l.source
         )}
-        {l.year ? `, ${l.year}` : ""} · {bandLabel(l.sizeBand)}
-        {l.region !== "all" ? ", the South" : ", national"}
+        {l.year ? `, ${l.year}` : ""} · {bandLabel(l.sizeBand)}, {regionLabel(l.region)}
         {l.note ? ` · ${l.note}` : ""}
       </div>
     </div>
@@ -104,8 +104,7 @@ export default function Benchmarking() {
     <div>
       <div style={{ ...panel, padding: "14px 18px", marginBottom: 14, display: "flex", flexWrap: "wrap", gap: "6px 22px", alignItems: "baseline", fontSize: 13, color: C.body }}>
         <span>
-          Compared with employers of <strong style={{ color: C.ink }}>{bandLabel(c.sizeBand)}</strong>
-          {c.region !== "all" ? " in the South" : ""}
+          Compared with employers of <strong style={{ color: C.ink }}>{bandLabel(c.sizeBand)}</strong> in {regionLabel(c.region)}
         </span>
         <span>
           Your group: <strong style={{ ...num, color: C.ink }}>{c.employees ?? "—"}</strong> employees, <strong style={{ ...num, color: C.ink }}>{c.enrolled ?? "—"}</strong> enrolled in medical

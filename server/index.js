@@ -1425,7 +1425,7 @@ async function assistantData(g) {
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
     renewal: g.renewal,
-    benchmarks: await benchmarkStore.approved(),
+    benchmarks: await benchmarkStore.inUse(),
   };
 }
 
@@ -2767,8 +2767,8 @@ const benchmarkStore = {
     if (db) return db.listBenchmarks();
     return [...memBenchmarks.values()].map((r) => ({ ...r }));
   },
-  async approved() {
-    return (await this.list()).filter((r) => r.status === "approved");
+  async inUse() {
+    return this.list();
   },
   async add(rows, status, by) {
     if (db) return db.addBenchmarks(rows, status, by);
@@ -2791,38 +2791,50 @@ const benchmarkStore = {
     if (db) return db.deleteBenchmark(id);
     return memBenchmarks.delete(id);
   },
-  async clearProposed() {
-    if (db) return db.clearProposedBenchmarks();
+  async clearAssistant() {
+    if (db) return db.clearAssistantBenchmarks();
     let n = 0;
-    for (const [id, r] of memBenchmarks) if (r.status === "proposed") memBenchmarks.delete(id) && n++;
+    for (const [id, r] of memBenchmarks) if (r.createdBy === "assistant") memBenchmarks.delete(id) && n++;
     return n;
   },
 };
 let benchmarkRefreshBusy = false;
 
-/** The client's page: their group against the approved benchmarks for its size. */
+/** The client's page: their group against the benchmarks for its size and place. */
 app.get("/api/benchmarks", async (req, res) => {
   const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   const data = await assistantData(g);
-  res.json({ comparison: compareBenchmarks(data, await benchmarkStore.approved()), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })) });
+  res.json({ comparison: compareBenchmarks(data, await benchmarkStore.inUse()), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })) });
 });
 
 app.get("/api/admin/benchmarks", requireStaff, async (_req, res) => {
   res.json({ rows: await benchmarkStore.list(), metrics: METRICS.map(({ key, label, short, unit }) => ({ key, label, short, unit })), sizeBands: SIZE_BANDS, regions: REGIONS });
 });
 
-/** A group as the client would see it, for staff to check before approving. */
+/** Every group against the benchmarks, one row each, for the admin's table. */
+app.get("/api/admin/benchmarks/overview", requireStaff, async (_req, res) => {
+  const rows = await benchmarkStore.inUse();
+  const out = [];
+  for (const g of groups.filter((x) => !x.archived && x.eligible !== false)) {
+    const c = compareBenchmarks(await assistantData(g), rows);
+    out.push({ group: g.name, employees: c.employees, sizeBand: c.sizeBand, lines: c.lines.map(({ metric, groupText, benchmarkText, diffPct, read }) => ({ metric, groupText, benchmarkText, diffPct, read })) });
+  }
+  out.sort((a, b) => a.group.localeCompare(b.group));
+  res.json({ groups: out });
+});
+
+/** A group as the client sees it. */
 app.get("/api/admin/benchmarks/preview", requireStaff, async (req, res) => {
   const g = groups.find((x) => x.name === String(req.query.group || ""));
   if (!g) return res.status(404).json({ error: "No such group." });
-  res.json({ comparison: compareBenchmarks(await assistantData(g), await benchmarkStore.approved()) });
+  res.json({ comparison: compareBenchmarks(await assistantData(g), await benchmarkStore.inUse()) });
 });
 
 app.post("/api/admin/benchmarks", requireStaff, express.json({ limit: "64kb" }), async (req, res) => {
   const rows = (Array.isArray(req.body) ? req.body : [req.body]).map(normalizeBenchmark).filter(Boolean);
   if (!rows.length) return res.status(400).json({ error: `A row needs a metric (${METRIC_KEYS.join(", ")}), a value and a source.` });
-  res.json({ rows: await benchmarkStore.add(rows, "approved", req.staffEmail) });
+  res.json({ rows: await benchmarkStore.add(rows, "approved", req.staffEmail || "staff") });
 });
 
 app.patch("/api/admin/benchmarks/:id", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
@@ -2834,7 +2846,7 @@ app.patch("/api/admin/benchmarks/:id", requireStaff, express.json({ limit: "16kb
     source: b.source != null ? String(b.source).trim().slice(0, 200) : null,
     sourceUrl: b.sourceUrl != null ? String(b.sourceUrl).trim().slice(0, 500) : null,
     note: b.note != null ? String(b.note).trim().slice(0, 500) : null,
-    status: ["approved", "proposed"].includes(b.status) ? b.status : null,
+    status: null,
     sizeBand: SIZE_BANDS.includes(b.sizeBand) || b.sizeBand === "all" ? b.sizeBand : null,
     region: REGIONS.includes(b.region) ? b.region : null,
   };
@@ -2849,7 +2861,7 @@ app.delete("/api/admin/benchmarks/:id", requireStaff, async (req, res) => {
   res.json({ ok: true });
 });
 
-/** The assistant searches the surveys and proposes a fresh set; the old proposals are replaced. */
+/** The assistant searches the surveys and loads a fresh set, replacing what it loaded before; rows added by hand stay. */
 app.post("/api/admin/benchmarks/refresh", requireStaff, async (req, res) => {
   if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is off: no Anthropic key is set." });
   if (benchmarkRefreshBusy) return res.status(409).json({ error: "A refresh is already running." });
@@ -2857,8 +2869,8 @@ app.post("/api/admin/benchmarks/refresh", requireStaff, async (req, res) => {
   try {
     const rows = await proposeBenchmarks({ apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "", fake: process.env.KENNION_FAKE_AI === "1" });
     if (!rows.length) return res.status(502).json({ error: "The search came back with nothing usable. Try again in a minute." });
-    await benchmarkStore.clearProposed();
-    const added = await benchmarkStore.add(rows, "proposed", req.staffEmail);
+    await benchmarkStore.clearAssistant();
+    const added = await benchmarkStore.add(rows, "approved", "assistant");
     res.json({ rows: added });
   } catch (e) {
     console.error("benchmarks refresh:", e.message);
