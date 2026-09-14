@@ -859,7 +859,7 @@ export default function App() {
                   {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
                 </div>
               </div>
-              {(tab === "changes" || tab === "current") && groupSizeLabel(g) && (
+              {(tab === "changes" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 <div
                   style={{
                     ...panel,
