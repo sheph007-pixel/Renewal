@@ -23,14 +23,107 @@ const HISTORY_TURNS = 30;
 /** Tool rounds per turn: a comparison and a memo is two; more than a few is a loop. */
 const MAX_ROUNDS = 5;
 
-/** What staff can change from the admin, with what it starts as. */
+/**
+ * What staff can change from the admin, with what it starts as. Each list
+ * item can be switched off without being deleted, so a rule can be tried
+ * both ways; order is the order the model reads them.
+ */
+const item = (text) => ({ id: Math.random().toString(36).slice(2, 10), text, on: true });
 export const DEFAULT_PLAYBOOK = {
   persona:
-    "You are the BenSync Assistant: a licensed benefits advisor on the Kennion Benefit Advisors team who specializes in level-funded and fully-insured group health for small and mid-sized employers, and who knows Kennion's 2027 program inside out. You speak as one of the team — warm, direct, and practical — and you exist so a client gets an advisor's answer the moment they have the question, without leaving BenSync or waiting on an email.",
-  rules:
-    "- The 2027 program is a move to new carriers, not a renewal of the old plan: compare total cost and plan design side by side, and never describe 2027 as a percentage increase or decrease on 2026 rates.\n- When comparing level funded to fully insured, always mention the potential year-end refund of unused claims funding on a level-funded plan, and the fixed, no-surprises premium on a fully insured one.\n- A quote on file is the carrier's number; anything not quoted is unknown — say so plainly.\n- Kennion binds coverage, not the assistant. Only when the client says they are ready to move, point them to Sign Up.",
-  faq: "",
+    "You are the BenSync Assistant: a licensed benefits advisor on the Kennion Benefit Advisors team who specializes in level-funded and fully-insured group health for small and mid-sized employers, and who knows Kennion's program inside out. You speak as one of the team — warm, direct, and practical — and you exist so a client gets an advisor's answer the moment they have the question, without leaving BenSync or waiting on an email.",
+  rules: [
+    item("The new program is a move to new carriers, not a renewal of the old plan: compare total cost and plan design side by side, and never describe it as a percentage increase or decrease on the current rates."),
+    item("When comparing level funded to fully insured, always mention the potential year-end refund of unused claims funding on a level-funded plan, and the fixed, no-surprises premium on a fully insured one."),
+    item("A quote on file is the carrier's number; anything not quoted is unknown — say so plainly."),
+    item("Kennion binds coverage, not the assistant. Only when the client says they are ready to move, point them to Sign Up."),
+  ],
+  facts: [],
+  faq: [],
 };
+
+/** Common rules staff can add with a click. */
+export const RULE_SUGGESTIONS = [
+  "Keep every answer in the chat box to three sentences or fewer.",
+  "Never quote a rate, deductible or out-of-pocket figure that is not in the figures on file.",
+  "Always give annual cost alongside monthly cost.",
+  "Do not recommend one carrier over another; lay out the tradeoffs and let the client decide.",
+  "When asked about dental, vision, life or disability, point to the Supplemental Package page and keep to what is on file.",
+  "Never discuss another client, another employer's rates, or Kennion's commissions.",
+  "If the client seems frustrated or the question is sensitive (a termination, a claim, a denial), keep it brief and offer the account manager.",
+  "Write at an eighth-grade reading level; explain any insurance term the first time it appears.",
+];
+
+const lineItems = (text) =>
+  String(text || "")
+    .split("\n")
+    .map((l) => l.replace(/^\s*[-*•]\s*/, "").trim())
+    .filter(Boolean)
+    .map(item);
+
+/** Q:/A: blocks in a free-text FAQ, for a playbook saved before it was structured. */
+function faqItems(text) {
+  const out = [];
+  let q = null;
+  let a = [];
+  const flush = () => {
+    if (q) out.push({ ...item(""), q, a: a.join("\n").trim() });
+    q = null;
+    a = [];
+  };
+  for (const raw of String(text || "").split("\n")) {
+    const l = raw.trim();
+    const mq = l.match(/^Q:\s*(.*)$/i);
+    if (mq) {
+      flush();
+      q = mq[1].trim();
+      continue;
+    }
+    const ma = l.match(/^A:\s*(.*)$/i);
+    if (ma && q) {
+      a.push(ma[1]);
+      continue;
+    }
+    if (q && l) a.push(l);
+  }
+  flush();
+  return out.map(({ text: _t, ...rest }) => rest);
+}
+
+const cleanList = (list, max, shape) =>
+  (Array.isArray(list) ? list : [])
+    .map(shape)
+    .filter(Boolean)
+    .slice(0, max);
+
+/**
+ * A playbook as stored, whatever shape it was saved in: the three free-text
+ * boxes it started as, or the lists. Strings are cut to size; ids kept or made.
+ */
+export function normalizePlaybook(raw) {
+  const p = raw && typeof raw === "object" ? raw : {};
+  const persona = String(p.persona || "").replace(/\r/g, "").trim().slice(0, 4000) || DEFAULT_PLAYBOOK.persona;
+  const rules = typeof p.rules === "string"
+    ? lineItems(p.rules)
+    : cleanList(p.rules, 60, (r) => {
+        const text = String((r && r.text) || "").replace(/\s+/g, " ").trim().slice(0, 600);
+        return text ? { id: String((r && r.id) || item("").id).slice(0, 20), text, on: r.on !== false } : null;
+      });
+  const facts = typeof p.facts === "string"
+    ? lineItems(p.facts)
+    : cleanList(p.facts, 100, (r) => {
+        const text = String((r && r.text) || "").replace(/\s+/g, " ").trim().slice(0, 600);
+        return text ? { id: String((r && r.id) || item("").id).slice(0, 20), text, on: r.on !== false } : null;
+      });
+  const faq = typeof p.faq === "string"
+    ? faqItems(p.faq)
+    : cleanList(p.faq, 100, (r) => {
+        const q = String((r && r.q) || "").replace(/\s+/g, " ").trim().slice(0, 300);
+        const a = String((r && r.a) || "").replace(/\r/g, "").trim().slice(0, 3000);
+        return q && a ? { id: String((r && r.id) || item("").id).slice(0, 20), q, a, on: r.on !== false } : null;
+      });
+  return { persona, rules, facts, faq };
+}
 
 const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners — UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna OAP network), Nationwide, Angle Health, and for some groups Cobalt (self funded) — which gives each client more renewal options than before. Plans in force today run through the program's administrators, EBPA and HealthEZ.
 
@@ -203,12 +296,17 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
   return out.join("\n");
 }
 
-/** Kennion's guidance as one system block: who the assistant is, the rules, the house answers. */
+/** Kennion's guidance as one system block: who the assistant is, the rules, the facts, the house answers. */
 function playbookText(playbook) {
-  const p = { ...DEFAULT_PLAYBOOK, ...(playbook || {}) };
-  const parts = [`## Who you are\n${(p.persona || DEFAULT_PLAYBOOK.persona).trim()}`];
-  if ((p.rules || "").trim()) parts.push(`## Rules from Kennion — follow these\n${p.rules.trim()}`);
-  if ((p.faq || "").trim()) parts.push(`## House answers — when a question matches one of these, answer the way it says\n${p.faq.trim()}`);
+  const p = normalizePlaybook(playbook);
+  const on = (list) => list.filter((x) => x.on !== false);
+  const parts = [`## Who you are\n${p.persona}`];
+  const rules = on(p.rules);
+  if (rules.length) parts.push(`## Rules from Kennion — follow these, in order of importance\n${rules.map((r) => `- ${r.text}`).join("\n")}`);
+  const facts = on(p.facts);
+  if (facts.length) parts.push(`## Facts about the program — true unless the client's figures say otherwise\n${facts.map((r) => `- ${r.text}`).join("\n")}`);
+  const faq = on(p.faq);
+  if (faq.length) parts.push(`## House answers — when a question matches one of these, answer the way it says, in these words\n${faq.map((r) => `Q: ${r.q}\nA: ${r.a}`).join("\n\n")}`);
   return parts.join("\n\n");
 }
 

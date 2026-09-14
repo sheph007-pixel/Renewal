@@ -33,14 +33,181 @@ interface Stats {
   flagged: number;
 }
 
-interface Playbook {
+interface Line {
+  id: string;
+  text: string;
+  on: boolean;
+}
+interface Answer {
+  id: string;
+  q: string;
+  a: string;
+  on: boolean;
+}
+interface PlaybookBody {
   persona: string;
-  rules: string;
-  faq: string;
-  defaults: { persona: string; rules: string; faq: string };
+  rules: Line[];
+  facts: Line[];
+  faq: Answer[];
+}
+interface Playbook extends PlaybookBody {
+  defaults: PlaybookBody;
+  suggestions: string[];
   updatedAt: string | null;
   updatedBy: string | null;
-  history: { updatedAt: string | null; updatedBy: string | null; persona: string; rules: string; faq: string }[];
+  history: (PlaybookBody & { updatedAt: string | null; updatedBy: string | null })[];
+}
+
+const newId = () => Math.random().toString(36).slice(2, 10);
+const same = (a: PlaybookBody, b: PlaybookBody) => JSON.stringify([a.persona, a.rules, a.facts, a.faq]) === JSON.stringify([b.persona, b.rules, b.facts, b.faq]);
+
+const rowBtn = { display: "grid", placeItems: "center", width: 24, height: 24, border: "none", borderRadius: 5, background: "transparent", color: C.faint, cursor: "pointer", flex: "none" } as const;
+
+/** One editable line in a list: on/off, the text, move, remove. */
+function LineRow({ line, first, last, onChange, onMove, onRemove }: { line: Line; first: boolean; last: boolean; onChange: (l: Line) => void; onMove: (d: -1 | 1) => void; onRemove: () => void }) {
+  return (
+    <div className="pb-row" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 6px 6px 8px", borderRadius: 7, background: line.on ? "transparent" : C.zebra }}>
+      <input type="checkbox" checked={line.on} onChange={(e) => onChange({ ...line, on: e.target.checked })} title={line.on ? "On — the assistant follows this" : "Off — kept but not used"} style={{ marginTop: 5, accentColor: C.blue, cursor: "pointer" }} />
+      <textarea
+        value={line.text}
+        onChange={(e) => onChange({ ...line, text: e.target.value.replace(/\n/g, " ") })}
+        rows={1}
+        ref={(el) => {
+          if (el) {
+            el.style.height = "auto";
+            el.style.height = `${el.scrollHeight}px`;
+          }
+        }}
+        style={{ flex: 1, minWidth: 0, resize: "none", border: "1px solid transparent", borderRadius: 5, padding: "3px 6px", fontSize: 13, lineHeight: 1.5, color: line.on ? C.ink : C.muted, background: "transparent", outline: "none", fontFamily: "inherit", textDecoration: line.on ? "none" : "line-through" }}
+        onFocus={(e) => (e.currentTarget.style.borderColor = C.inputEdge)}
+        onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+      />
+      <span className="pb-tools" style={{ display: "flex", gap: 2, marginTop: 2 }}>
+        <button onClick={() => onMove(-1)} disabled={first} title="Move up" aria-label="Move up" style={{ ...rowBtn, opacity: first ? 0.3 : 1 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 14l6-6 6 6" /></svg>
+        </button>
+        <button onClick={() => onMove(1)} disabled={last} title="Move down" aria-label="Move down" style={{ ...rowBtn, opacity: last ? 0.3 : 1 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 10l6 6 6-6" /></svg>
+        </button>
+        <button onClick={onRemove} title="Remove" aria-label="Remove" style={rowBtn}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** A list of lines with a box to add one, and optionally a menu of common ones. */
+function LineList({ title, hint, lines, onChange, placeholder, suggestions }: { title: string; hint: string; lines: Line[]; onChange: (l: Line[]) => void; placeholder: string; suggestions?: string[] }) {
+  const [draft, setDraft] = useState("");
+  const [showSuggest, setShowSuggest] = useState(false);
+  const add = (text: string) => {
+    const t = text.replace(/\s+/g, " ").trim();
+    if (!t) return;
+    onChange([...lines, { id: newId(), text: t, on: true }]);
+    setDraft("");
+  };
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= lines.length) return;
+    const next = [...lines];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  const unused = (suggestions || []).filter((s) => !lines.some((l) => l.text === s));
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{title}</div>
+        <div style={{ fontSize: 11.5, color: C.faint }}>{lines.filter((l) => l.on).length} on{lines.some((l) => !l.on) ? `, ${lines.filter((l) => !l.on).length} off` : ""}</div>
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>{hint}</div>
+      <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: C.card }}>
+        {!lines.length && <div style={{ padding: "10px 12px", fontSize: 12.5, color: C.faint }}>None yet.</div>}
+        {lines.map((l, i) => (
+          <LineRow key={l.id} line={l} first={i === 0} last={i === lines.length - 1} onChange={(nl) => onChange(lines.map((x) => (x.id === l.id ? nl : x)))} onMove={(d) => move(i, d)} onRemove={() => onChange(lines.filter((x) => x.id !== l.id))} />
+        ))}
+        <div style={{ display: "flex", gap: 6, padding: 6, borderTop: lines.length ? `1px solid ${C.hairline}` : "none" }}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add(draft);
+              }
+            }}
+            placeholder={placeholder}
+            style={{ ...textInput, flex: 1, fontSize: 13, padding: "7px 9px" }}
+          />
+          <button onClick={() => add(draft)} disabled={!draft.trim()} style={{ ...chip(false), opacity: draft.trim() ? 1 : 0.5 }}>
+            Add
+          </button>
+        </div>
+      </div>
+      {unused.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          <button onClick={() => setShowSuggest((v) => !v)} style={{ background: "none", border: "none", padding: 0, fontSize: 12, color: C.blue, cursor: "pointer" }}>
+            {showSuggest ? "Hide" : "Add a common one"} ({unused.length})
+          </button>
+          {showSuggest && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+              {unused.map((sug) => (
+                <button key={sug} onClick={() => add(sug)} title="Add this rule" style={{ fontSize: 12, padding: "5px 10px", borderRadius: 999, border: `1px solid ${C.blueEdge}`, background: C.blueTint, color: C.blueInk, cursor: "pointer", textAlign: "left", textTransform: "none" }}>
+                  + {sug}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Question-and-answer pairs the assistant gives verbatim. */
+function AnswerList({ items, onChange }: { items: Answer[]; onChange: (a: Answer[]) => void }) {
+  const [q, setQ] = useState("");
+  const [a, setA] = useState("");
+  const add = () => {
+    if (!q.trim() || !a.trim()) return;
+    onChange([...items, { id: newId(), q: q.trim(), a: a.trim(), on: true }]);
+    setQ("");
+    setA("");
+  };
+  const field = { ...textInput, width: "100%", fontSize: 13, padding: "6px 8px", fontFamily: "inherit" } as const;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>House answers</div>
+        <div style={{ fontSize: 11.5, color: C.faint }}>{items.filter((x) => x.on).length} on</div>
+      </div>
+      <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>When a client asks something like the question, the assistant answers in these words. They also show it the tone you want.</div>
+      <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))" }}>
+        {items.map((it) => (
+          <div key={it.id} className="pb-row" style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", background: it.on ? C.card : C.zebra, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="checkbox" checked={it.on} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, on: e.target.checked } : x)))} title={it.on ? "On" : "Off — kept but not used"} style={{ accentColor: C.blue, cursor: "pointer" }} />
+              <input value={it.q} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, q: e.target.value } : x)))} placeholder="Question" style={{ ...field, fontWeight: 600 }} />
+              <button onClick={() => onChange(items.filter((x) => x.id !== it.id))} title="Remove" aria-label="Remove" style={rowBtn}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </div>
+            <textarea value={it.a} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, a: e.target.value } : x)))} placeholder="Answer" rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.5 }} />
+          </div>
+        ))}
+        <div style={{ border: `1px dashed ${C.inputEdge}`, borderRadius: 8, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="A question clients ask — e.g. Who is our stop-loss carrier?" style={{ ...field, fontWeight: 600 }} />
+          <textarea value={a} onChange={(e) => setA(e.target.value)} placeholder="The answer, in your words" rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.5 }} />
+          <div>
+            <button onClick={add} disabled={!q.trim() || !a.trim()} style={{ ...chip(false), opacity: q.trim() && a.trim() ? 1 : 0.5 }}>
+              Add answer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
@@ -204,38 +371,33 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
 
   // ---- playbook
   const [pb, setPb] = useState<Playbook | null>(null);
-  const [persona, setPersona] = useState("");
-  const [rules, setRules] = useState("");
-  const [faq, setFaq] = useState("");
+  const [draft, setDraft] = useState<PlaybookBody>({ persona: "", rules: [], facts: [], faq: [] });
   const [pbState, setPbState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [pbError, setPbError] = useState("");
   const [showHistory, setShowHistory] = useState(false);
+  const body = (p: PlaybookBody): PlaybookBody => ({ persona: p.persona, rules: p.rules, facts: p.facts, faq: p.faq });
 
   useEffect(() => {
     void fetch("/api/admin/assistant/playbook", { headers: auth })
       .then((r) => r.json())
       .then((p: Playbook) => {
         setPb(p);
-        setPersona(p.persona);
-        setRules(p.rules);
-        setFaq(p.faq);
+        setDraft(body(p));
       })
       .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  const dirty = !!pb && (persona !== pb.persona || rules !== pb.rules || faq !== pb.faq);
+  const dirty = !!pb && !same(draft, pb);
   const savePlaybook = async () => {
     setPbState("saving");
     setPbError("");
     try {
-      const r = await fetch("/api/admin/assistant/playbook", { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ persona, rules, faq }) });
+      const r = await fetch("/api/admin/assistant/playbook", { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify(draft) });
       if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "Could not save");
       const p = (await r.json()) as Playbook;
       setPb(p);
-      setPersona(p.persona);
-      setRules(p.rules);
-      setFaq(p.faq);
+      setDraft(body(p));
       setPbState("saved");
     } catch (e) {
       setPbState("error");
@@ -303,7 +465,6 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
   };
 
   const shown = threads.filter((t) => showStaff || !t.staff);
-  const ta = { ...textInput, width: "100%", fontSize: 13, lineHeight: 1.5, resize: "vertical" as const, fontFamily: "inherit" };
 
   return (
     <>
@@ -327,44 +488,61 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
           <div style={{ flex: "1 1 420px" }}>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>Playbook</h2>
             <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 760 }}>
-              How the assistant is told to behave, in plain English. It reads this on every question, so a change takes effect the next time anyone asks — no deploy. Write rules the way you would brief a new advisor: what to say, what not to say, how to position the program.
+              How the assistant is told to behave. It reads all of this on every question, so a change takes effect the next time anyone asks — no deploy. Untick an item to try the assistant without it; the order of rules is the order of importance.
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
-            <span style={{ fontSize: 12.5, color: pbState === "error" ? C.red : pbState === "saved" && !dirty ? C.green : C.faint }}>
-              {pbState === "saving" ? "Saving…" : pbState === "error" ? pbError || "Not saved" : pbState === "saved" && !dirty ? "Saved" : pb?.updatedAt ? `Last saved ${when(pb.updatedAt)}${pb.updatedBy ? ` by ${pb.updatedBy}` : ""}` : "Defaults — never edited"}
+            <span style={{ fontSize: 12.5, color: pbState === "error" ? C.red : pbState === "saved" && !dirty ? C.green : dirty ? C.amber : C.faint }}>
+              {pbState === "saving" ? "Saving…" : pbState === "error" ? pbError || "Not saved" : dirty ? "Unsaved changes" : pbState === "saved" ? "Saved" : pb?.updatedAt ? `Last saved ${when(pb.updatedAt)}${pb.updatedBy ? ` by ${pb.updatedBy}` : ""}` : "Defaults — never edited"}
             </span>
+            {dirty && pb && (
+              <button onClick={() => setDraft(body(pb))} style={chip(false)}>
+                Discard
+              </button>
+            )}
             <button onClick={() => void savePlaybook()} disabled={!pb || !dirty || pbState === "saving"} style={{ ...primaryBtn, opacity: !pb || !dirty || pbState === "saving" ? 0.5 : 1 }}>
               Save playbook
             </button>
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: 16, marginTop: 16, gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
-          <label style={{ display: "block" }}>
+        <div style={{ display: "grid", gap: 20, marginTop: 18, gridTemplateColumns: "minmax(280px, 1fr) minmax(320px, 1.4fr)" }} className="pb-grid">
+          <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Who it is</div>
-            <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>The persona: role, expertise, tone.</div>
-            <textarea value={persona} onChange={(e) => setPersona(e.target.value)} rows={7} style={ta} />
-            {pb && persona !== pb.defaults.persona && (
-              <button onClick={() => setPersona(pb.defaults.persona)} style={{ marginTop: 6, background: "none", border: "none", padding: 0, fontSize: 12, color: C.blue, cursor: "pointer" }}>
+            <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>Role, expertise, tone — one short paragraph, as if briefing a new hire.</div>
+            <textarea value={draft.persona} onChange={(e) => setDraft({ ...draft, persona: e.target.value })} rows={8} style={{ ...textInput, width: "100%", fontSize: 13, lineHeight: 1.5, resize: "vertical", fontFamily: "inherit" }} />
+            {pb && draft.persona !== pb.defaults.persona && (
+              <button onClick={() => setDraft({ ...draft, persona: pb.defaults.persona })} style={{ marginTop: 6, background: "none", border: "none", padding: 0, fontSize: 12, color: C.blue, cursor: "pointer" }}>
                 Reset to the default
               </button>
             )}
-          </label>
-          <label style={{ display: "block" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Rules</div>
-            <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>One per line. &ldquo;Never describe 2027 as a rate increase.&rdquo; &ldquo;Always mention the level-funded refund.&rdquo;</div>
-            <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={7} style={ta} placeholder="- Never …&#10;- Always …&#10;- When a client asks about …, say …" />
-          </label>
-          <label style={{ display: "block" }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>House answers</div>
-            <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>Questions with the answer you want given, in your words. Put the question on one line and the answer under it.</div>
-            <textarea value={faq} onChange={(e) => setFaq(e.target.value)} rows={7} style={ta} placeholder="Q: Who is our stop-loss carrier?&#10;A: …&#10;&#10;Q: When does open enrollment run?&#10;A: …" />
-          </label>
+            <div style={{ marginTop: 18 }}>
+              <LineList
+                title="Facts about the program"
+                hint="Things the assistant should know that are not in a group's figures: who the stop-loss carrier is, when open enrollment runs, how billing works. One fact per line."
+                lines={draft.facts}
+                onChange={(facts) => setDraft({ ...draft, facts })}
+                placeholder="e.g. Open enrollment runs November 1–15; changes take effect January 1."
+              />
+            </div>
+          </div>
+          <div>
+            <LineList
+              title="Rules"
+              hint="What to always do, never do, or say a certain way. One rule per line; the first ones carry the most weight."
+              lines={draft.rules}
+              onChange={(rules) => setDraft({ ...draft, rules })}
+              placeholder="e.g. Never describe the move as a rate increase."
+              suggestions={pb?.suggestions || []}
+            />
+            <div style={{ marginTop: 18 }}>
+              <AnswerList items={draft.faq} onChange={(faq) => setDraft({ ...draft, faq })} />
+            </div>
+          </div>
         </div>
 
         {pb && pb.history.length > 0 && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 14 }}>
             <button onClick={() => setShowHistory((v) => !v)} style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}>
               {showHistory ? "Hide" : "Show"} earlier versions ({pb.history.length})
             </button>
@@ -373,14 +551,10 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
                 {pb.history.map((h, i) => (
                   <div key={i} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, fontSize: 12.5, color: C.body, padding: "6px 10px", borderRadius: 6, background: C.zebra }}>
                     <span>{h.updatedAt ? `${when(h.updatedAt)}${h.updatedBy ? ` by ${h.updatedBy}` : ""}` : "The defaults"}</span>
-                    <button
-                      onClick={() => {
-                        setPersona(h.persona);
-                        setRules(h.rules);
-                        setFaq(h.faq);
-                      }}
-                      style={{ marginLeft: "auto", background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}
-                    >
+                    <span style={{ color: C.faint }}>
+                      {h.rules.length} rule{h.rules.length === 1 ? "" : "s"}, {h.facts.length} fact{h.facts.length === 1 ? "" : "s"}, {h.faq.length} answer{h.faq.length === 1 ? "" : "s"}
+                    </span>
+                    <button onClick={() => setDraft(body(h))} style={{ marginLeft: "auto", background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}>
                       Load into the editor
                     </button>
                   </div>

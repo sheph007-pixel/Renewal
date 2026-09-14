@@ -19,7 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
-import { DEFAULT_PLAYBOOK, assistantEnabled, replyTo, titleFor } from "./assistant.js";
+import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -1355,12 +1355,13 @@ const chatBusy = new Set();
  * versions, so a change can be seen and undone.
  */
 const PLAYBOOK_KEY = "assistant.playbook";
-let playbook = { ...DEFAULT_PLAYBOOK, updatedAt: null, updatedBy: null, history: [] };
+let playbook = { ...normalizePlaybook(DEFAULT_PLAYBOOK), updatedAt: null, updatedBy: null, history: [] };
 async function loadPlaybook() {
   if (!db) return;
   try {
     const saved = await db.getSetting(PLAYBOOK_KEY);
-    if (saved && typeof saved === "object") playbook = { ...DEFAULT_PLAYBOOK, history: [], ...saved };
+    // A playbook saved as three text boxes reads in as lists.
+    if (saved && typeof saved === "object") playbook = { ...normalizePlaybook(saved), updatedAt: saved.updatedAt || null, updatedBy: saved.updatedBy || null, history: (saved.history || []).map((h) => ({ ...normalizePlaybook(h), updatedAt: h.updatedAt || null, updatedBy: h.updatedBy || null })) };
   } catch (e) {
     console.error("could not load the assistant playbook:", e.message);
   }
@@ -1368,11 +1369,13 @@ async function loadPlaybook() {
 const playbookView = () => ({
   persona: playbook.persona,
   rules: playbook.rules,
+  facts: playbook.facts,
   faq: playbook.faq,
-  defaults: DEFAULT_PLAYBOOK,
+  defaults: normalizePlaybook(DEFAULT_PLAYBOOK),
+  suggestions: RULE_SUGGESTIONS,
   updatedAt: playbook.updatedAt,
   updatedBy: playbook.updatedBy,
-  history: (playbook.history || []).map((h) => ({ updatedAt: h.updatedAt, updatedBy: h.updatedBy, persona: h.persona, rules: h.rules, faq: h.faq })),
+  history: (playbook.history || []).map((h) => ({ updatedAt: h.updatedAt, updatedBy: h.updatedBy, persona: h.persona, rules: h.rules, facts: h.facts, faq: h.faq })),
 });
 
 const CHAT_MESSAGE_MAX = 4000;
@@ -1615,16 +1618,12 @@ app.post("/api/admin/chat/send", requireStaff, express.json({ limit: "32kb" }), 
 app.get("/api/admin/assistant/playbook", requireStaff, (_req, res) => res.json(playbookView()));
 
 app.post("/api/admin/assistant/playbook", requireStaff, express.json({ limit: "256kb" }), async (req, res) => {
-  const body = req.body || {};
-  const clean = (v, max) => String(v == null ? "" : v).replace(/\r/g, "").slice(0, max);
   const next = {
-    persona: clean(body.persona, 4000).trim() || DEFAULT_PLAYBOOK.persona,
-    rules: clean(body.rules, 20000).trim(),
-    faq: clean(body.faq, 40000).trim(),
+    ...normalizePlaybook(req.body || {}),
     updatedAt: new Date().toISOString(),
     updatedBy: req.staffEmail || null,
     history: [
-      { persona: playbook.persona, rules: playbook.rules, faq: playbook.faq, updatedAt: playbook.updatedAt, updatedBy: playbook.updatedBy },
+      { persona: playbook.persona, rules: playbook.rules, facts: playbook.facts, faq: playbook.faq, updatedAt: playbook.updatedAt, updatedBy: playbook.updatedBy },
       ...(playbook.history || []),
     ].slice(0, 20),
   };
