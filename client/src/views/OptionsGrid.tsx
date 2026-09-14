@@ -721,7 +721,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <div style={{ fontSize: 11.5, color: C.faint }}>
                       {fundingOf(p)}
                       {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
-                      {p.quoted && <span style={{ color: C.green, fontWeight: 600 }}> · quoted</span>}
+
                     </div>
                   </td>
                   <td style={right}>{fmtDed(p.ded)}</td>

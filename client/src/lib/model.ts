@@ -727,19 +727,6 @@ export function networkDirectory(network: string | null | undefined): { name: st
 }
 
 /**
- * The reader labels where a plan sat on the quote — "(headline option 2)",
- * "(PPO alternate 32)" — which says nothing about the plan. A label that
- * does, like an Essential PDL drug list, stays as a plain suffix.
- */
-export function tidyQuotedName(name: string): string {
-  return name
-    .replace(/\s*\((?:headline\s+)?(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, "")
-    .replace(/\s*\((?:PPO|EPO)\s+(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, "")
-    .replace(/\s*\(([^()]*?)\s+(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, " · $1")
-    .trim();
-}
-
-/**
  * The plans on a group's proposals, priced at its census. A plan with no rate
  * on any tier is left out; one missing a tier that has people in it has no
  * monthly figure.
@@ -776,11 +763,12 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       // Surest is UnitedHealthcare's own copay-only product, not a separate
       // company — the carrier reads "UnitedHealthcare", so the plan name is
       // where "Surest" has to show up.
-      const planName = tidyQuotedName(pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name);
-      // UHC prints the same plan in its headline grid and again among the
-      // alternates: one plan, one row. A variant with different rates (an
-      // Essential PDL drug list, say) is a different row.
-      const dupKey = `${pr.slot}|${(pl.planCode || planName).toLowerCase()}|${TIERS.map((t) => rates[t.key] ?? "").join(",")}`;
+      // The name is the carrier's, exactly as printed on the quote: it is what
+      // the client will ask about by name, and what the audit checks.
+      const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
+      // A quote that lists the same plan twice at the same rates (headline
+      // grid and again among the alternates) is one plan, one row.
+      const dupKey = `${pr.slot}|${planName.toLowerCase()}|${TIERS.map((t) => rates[t.key] ?? "").join(",")}`;
       if (seen.has(dupKey)) continue;
       seen.add(dupKey);
       out.push({

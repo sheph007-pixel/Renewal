@@ -40,6 +40,8 @@ const RESULT_SCHEMA = {
 
 const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself. The stored plans are given as JSON: for each, the name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family) and the benefit figures the portal shows to the employer.
 
+Names: the stored name should be the plan's name exactly as printed. A stored name that is the printed name with a placement label appended by the portal — "(headline option 2)", "(PPO alternate 32)", "(Essential PDL alternate 30)" — is not a mismatch; mention it in the notes as "name carries a placement label" so staff can re-read the proposal for the exact name. Any other difference in the name is a mismatch.
+
 Check every stored plan against the document, value by value. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value that the document contradicts, and for a stored plan you cannot find on the document at all (field missing_plan). Do not report a plan the document has that the portal does not store unless the portal claims to have every option (field extra_plan, at most three examples). Ignore values the portal stores as null or empty. Never guess: if a page is unreadable say so in the notes and use verdict unreadable only when nothing can be checked.`;
 
 const storedFor = (extracted) => {
