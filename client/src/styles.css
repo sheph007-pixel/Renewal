@@ -129,6 +129,10 @@ button,
   margin: 0 auto;
   padding: 22px 26px 60px;
 }
+.shell > .sidebar .rail-manager > button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: #7fd6a8 !important;
+}
 .shell > .sidebar .rail-item:hover,
 .shell > .sidebar .rail-row:hover {
   background: rgba(255, 255, 255, 0.07);
