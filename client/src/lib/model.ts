@@ -672,6 +672,20 @@ function slotPresentation(slot: string, carrier: string | null, planType: string
 const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie"]);
 
 /**
+ * Where a client looks up a doctor on a plan's network. Gravie's plans run on
+ * Cigna's Open Access Plus (OAP) network, and Cigna's public directory answers
+ * "is my doctor in it?" — so every place a Gravie plan names its network links
+ * there. Null for a network with no public directory on file.
+ */
+export function networkDirectory(network: string | null | undefined): { name: string; url: string } | null {
+  const s = String(network || "");
+  if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {
+    return { name: "Cigna Open Access Plus directory", url: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001" };
+  }
+  return null;
+}
+
+/**
  * The plans on a group's proposals, priced at its census. A plan with no rate
  * on any tier is left out; one missing a tier that has people in it has no
  * monthly figure.

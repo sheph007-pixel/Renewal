@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { TIERS, censusCounts, costSplit, fmtDed, money0, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
@@ -708,7 +708,24 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
-                  <td style={{ ...cell, color: C.body }}>{networkOf(p) || "—"}</td>
+                  <td style={{ ...cell, color: C.body, whiteSpace: "nowrap" }}>
+                    {networkOf(p) || "—"}
+                    {networkDirectory(p.network) && (
+                      <>
+                        {" · "}
+                        <a
+                          href={networkDirectory(p.network)!.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={networkDirectory(p.network)!.name}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ color: C.blue, fontSize: 12 }}
+                        >
+                          Find a doctor
+                        </a>
+                      </>
+                    )}
+                  </td>
                   <td style={cell}>
                     <div>{p.plan}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
