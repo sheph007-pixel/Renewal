@@ -33,6 +33,8 @@ interface Props {
   totals: { er: number; ee: number; total: number };
   eePct: number;
   depPct: number;
+  /** The group's own invoice, addressed to this group so no other cookie can answer. */
+  invoiceHref: string;
 }
 
 /**
@@ -124,7 +126,7 @@ function Head({
   );
 }
 
-export default function Current({ data, overrides, g, rows, totals, eePct, depPct }: Props) {
+export default function Current({ data, overrides, g, rows, totals, eePct, depPct, invoiceHref }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
   // Biggest premium first, which is the order an employer reads it in.
@@ -182,10 +184,8 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
         <h2 style={h2}>Your 2026 Medical Plans</h2>
         <div className="noprint" style={{ display: "flex", gap: 8 }}>
           {data.invoice && (
-            // The group's own invoice, served against the session cookie, so
-            // the link carries nothing secret and opens in its own tab.
             <a
-              href="/api/group/invoice"
+              href={invoiceHref}
               target="_blank"
               rel="noreferrer"
               title={`${data.invoice.filename} — opens in a new tab`}
@@ -281,7 +281,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
               <h2 style={h2}>Your 2026 Supplemental Package</h2>
               <div className="noprint" style={{ display: "flex", gap: 8 }}>
                 {data.invoice && (
-                  <a href="/api/group/invoice" target="_blank" rel="noreferrer" title={`${data.invoice.filename} — opens in a new tab`} style={headerBtn}>
+                  <a href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} — opens in a new tab`} style={headerBtn}>
                     View Invoice
                   </a>
                 )}

@@ -1005,10 +1005,38 @@ app.post("/api/signin", async (req, res) => {
  * Medical Plans. The session cookie is the only credential accepted, so the
  * address carries nothing secret and can be a plain link.
  */
+/**
+ * The group's own invoice. The link names the group (its access code, the
+ * same credential that signed it in) rather than trusting the cookie alone:
+ * a staff member with several groups open, or a cookie left from an earlier
+ * sign-in, must never be handed another group's invoice. Before serving, the
+ * file's own name is matched back to the roster: if it names a different
+ * company than the row it is filed under, it is refused and logged.
+ */
 app.get("/api/group/invoice", async (req, res) => {
-  const g = groupFromCookie(req);
+  const code = String(req.query.code || "").trim().toUpperCase();
+  let g = null;
+  if (code) {
+    const caller = signinKey(req);
+    if (throttled(caller)) return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+    g = byCode.get(code) || null;
+    if (!g) {
+      noteFail(caller);
+      return res.status(404).json({ error: "no such group" });
+    }
+    clearFails(caller);
+  } else {
+    g = groupFromCookie(req);
+  }
   if (!g) return res.status(401).json({ error: "no session" });
   const inv = await latestInvoiceFor(g.name).catch(() => null);
+  if (inv) {
+    const named = invoiceGroupFromFilename(inv.filename);
+    if (named && named !== g.name) {
+      console.error(`invoice #${inv.id} is filed under ${g.name} but its file names ${named}; refused`);
+      return res.status(409).json({ error: "This invoice is filed under the wrong group. Kennion has been notified." });
+    }
+  }
   const f = inv ? await proposalStore.getProposalFile(inv.id).catch(() => null) : null;
   if (!f) return res.status(404).json({ error: "No invoice on file." });
   res.setHeader("Content-Type", f.mime || "application/pdf");
@@ -1315,6 +1343,37 @@ function clientProposals(name) {
 }
 
 /** The newest client invoice filed under a group, without its bytes; null if none. */
+/** The roster group an invoice file's own name points to, or null when it names none. */
+function invoiceGroupFromFilename(filename) {
+  const short = groupFromInvoiceFilename(String(filename || ""));
+  if (!short) return null;
+  return matchInvoiceName(short, groups.map((x) => x.name), normalizeName);
+}
+
+/**
+ * Every invoice on file, checked: the company named on the file must be the
+ * group the row is filed under. Mismatches are logged at boot and the row is
+ * marked, so the Groups page and the client route both know. Never fatal.
+ */
+async function auditInvoices() {
+  const rows = await proposalStore.listProposals();
+  let bad = 0;
+  for (const r of rows) {
+    if (r.kind !== "invoice" || !r.group_name) continue;
+    const named = invoiceGroupFromFilename(r.filename);
+    const mismatch = !!(named && named !== r.group_name);
+    const flagged = !!(r.context && r.context.mismatch);
+    if (mismatch) {
+      bad++;
+      console.error(`invoice audit: #${r.id} "${r.filename}" is filed under ${r.group_name} but names ${named}`);
+    }
+    if (mismatch !== flagged) {
+      await proposalStore.updateProposal(r.id, { context: { ...(r.context || {}), mismatch: mismatch ? named : undefined } }).catch(() => {});
+    }
+  }
+  console.log(`invoice audit: ${rows.filter((r) => r.kind === "invoice").length} invoice(s) checked, ${bad} filed under the wrong group`);
+}
+
 async function latestInvoiceFor(name) {
   const rows = await proposalStore.listProposals();
   return rows.find((r) => r.kind === "invoice" && r.group_name === name) || null;
@@ -2482,7 +2541,7 @@ async function proposalsChanged() {
             filename: r.filename,
             uploadedAt: r.uploaded_at,
             reconciles: typeof x.reconciles === "boolean" ? x.reconciles : null,
-            error: r.error || null,
+            error: r.context && r.context.mismatch ? `Filed under the wrong group: the file names ${r.context.mismatch}.` : r.error || null,
           };
         }
         return;
@@ -3272,6 +3331,11 @@ async function boot() {
     await settleGravieQuotes();
   } catch (e) {
     console.error("gravie:", e.message);
+  }
+  try {
+    await auditInvoices();
+  } catch (e) {
+    console.error("invoice audit:", e.message);
   }
   // Proposals read before the reader asked for per-plan benefits, re-read in
   // the background so the plan cards fill in. Never blocks boot.
