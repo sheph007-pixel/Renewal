@@ -229,6 +229,182 @@ button,
   }
 }
 
+/* The assistant: the box in the corner of every page, and the full page. */
+.chat-fab {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.chat-fab:hover {
+  transform: translateY(-1px) scale(1.04);
+}
+.chat-box {
+  position: fixed;
+  right: 22px;
+  bottom: 88px;
+  z-index: 59;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  height: min(640px, calc(100vh - 112px));
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  animation: chat-rise 0.16s ease-out;
+}
+@keyframes chat-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.chat-hbtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  text-decoration: none;
+}
+.chat-hbtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  text-decoration: none;
+}
+.chat-suggest:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+.chat-input::placeholder {
+  color: #a0a7ab;
+}
+.chat-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 6px 0;
+}
+.chat-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b9296;
+  animation: chat-dot 1.1s infinite ease-in-out;
+}
+.chat-typing i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.chat-typing i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes chat-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.chat-thread-tools {
+  opacity: 0;
+}
+.chat-thread:hover .chat-thread-tools,
+.chat-thread.on .chat-thread-tools,
+.chat-thread:focus-within .chat-thread-tools {
+  opacity: 1;
+}
+.chat-thread:hover {
+  background: #eef1f2;
+}
+.chat-thread.on:hover {
+  background: #E8F3ED;
+}
+.chat-tool {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8b9296;
+  cursor: pointer;
+}
+.chat-tool:hover {
+  background: rgba(15, 42, 71, 0.08);
+  color: #0F2A47;
+}
+.chat-file:hover {
+  border-color: #1F8A5B !important;
+  text-decoration: none !important;
+  color: #16714A !important;
+}
+/* What the assistant writes. */
+.md > :first-child {
+  margin-top: 0 !important;
+}
+.md > :last-child {
+  margin-bottom: 0 !important;
+}
+.md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: #eef1f2;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+@media (max-width: 860px) {
+  .chat-box {
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    border-radius: 0;
+  }
+  .chat-fab {
+    right: 16px;
+    bottom: 16px;
+  }
+  /* The open box fills the screen and has its own close button. */
+  .chat-box + .chat-fab {
+    display: none;
+  }
+  .chat-page {
+    flex-direction: column;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .chat-page > .chat-list {
+    width: auto !important;
+    max-height: 200px;
+    border-right: 0 !important;
+    border-bottom: 1px solid #eef1f2;
+  }
+  .chat-page > div:last-child {
+    height: 70vh;
+  }
+}
+
 /* Two-up cards (Employee Navigator, account manager) that stack when narrow. */
 .cardgrid {
   display: grid;

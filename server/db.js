@@ -254,7 +254,59 @@ CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   updated_by   text,
   PRIMARY KEY (group_name, plan, census_tier)
 );
+
+-- A client's conversations with the assistant, one thread per conversation
+-- and its turns beneath it. Scoped to the group, so an employer only ever
+-- sees its own; the assistant's answers are kept so a thread reads back the
+-- same way it was written.
+CREATE TABLE IF NOT EXISTS kennion.chat_threads (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  title         text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_threads_group_idx ON kennion.chat_threads (group_name, updated_at DESC);
+CREATE TABLE IF NOT EXISTS kennion.chat_messages (
+  id            bigserial PRIMARY KEY,
+  thread_id     bigint NOT NULL REFERENCES kennion.chat_threads(id) ON DELETE CASCADE,
+  role          text NOT NULL CHECK (role IN ('user','assistant')),
+  content       text NOT NULL,
+  page          text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON kennion.chat_messages (thread_id, id);
+-- Staff can try the assistant as any group from the admin; those threads are
+-- kept for the record but never shown to the client. A thread can be flagged
+-- for follow-up by the account manager, with a note.
+ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS staff boolean NOT NULL DEFAULT false;
+ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS flagged_at timestamptz;
+ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS flag_note text;
+-- Documents the assistant produced for a turn — a comparison, a memo — as
+-- [{id, filename, mime, size}], the bytes in chat_files.
+ALTER TABLE kennion.chat_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb;
+CREATE TABLE IF NOT EXISTS kennion.chat_files (
+  id            bigserial PRIMARY KEY,
+  thread_id     bigint NOT NULL REFERENCES kennion.chat_threads(id) ON DELETE CASCADE,
+  filename      text NOT NULL,
+  mime          text NOT NULL,
+  size          integer NOT NULL,
+  data          bytea NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
 `;
+
+const shapeThread = (r) => ({
+  id: Number(r.id),
+  title: r.title,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+  ...(r.group_name !== undefined ? { groupName: r.group_name } : {}),
+  ...(r.staff !== undefined ? { staff: !!r.staff } : {}),
+  ...(r.flagged_at !== undefined ? { flaggedAt: r.flagged_at, flagNote: r.flag_note || null } : {}),
+  ...(r.n !== undefined ? { messages: Number(r.n), preview: r.preview || null } : {}),
+});
+const shapeMessage = (r) => ({ id: Number(r.id), role: r.role, content: r.content, page: r.page, files: r.files || [], createdAt: r.created_at });
 
 const shapeStats = (r) => ({
   filename: r.filename,
@@ -780,6 +832,138 @@ export function createDb(url) {
           monthly: num(pl.monthly),
         })),
       };
+    },
+
+    /** A group's own conversations, most recently active first. Staff trials are not among them. */
+    async listThreads(groupName) {
+      const { rows } = await pool.query(
+        `SELECT id, title, created_at, updated_at FROM kennion.chat_threads
+          WHERE group_name = $1 AND NOT staff ORDER BY updated_at DESC, id DESC LIMIT 200`,
+        [groupName],
+      );
+      return rows.map(shapeThread);
+    },
+
+    async createThread(groupName, title, staff = false) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_threads (group_name, title, staff) VALUES ($1, $2, $3)
+         RETURNING id, title, created_at, updated_at, staff`,
+        [groupName, title || null, !!staff],
+      );
+      return shapeThread(rows[0]);
+    },
+
+    /** One thread, only if it belongs to the group asking; a staff trial only when asked for. */
+    async getThread(groupName, id, staff = false) {
+      const { rows } = await pool.query(
+        "SELECT id, title, created_at, updated_at, staff FROM kennion.chat_threads WHERE id = $1 AND group_name = $2 AND staff = $3",
+        [id, groupName, !!staff],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    /**
+     * Every conversation across every group, for the admin: who asked, how
+     * much, when, and the first question as a preview. Newest activity first.
+     */
+    async adminListThreads({ group, q, flagged, limit = 500 } = {}) {
+      const where = ["true"];
+      const vals = [];
+      if (group) {
+        vals.push(group);
+        where.push(`t.group_name = $${vals.length}`);
+      }
+      if (q) {
+        vals.push(`%${q}%`);
+        where.push(`(t.title ILIKE $${vals.length} OR t.group_name ILIKE $${vals.length} OR EXISTS (SELECT 1 FROM kennion.chat_messages m WHERE m.thread_id = t.id AND m.content ILIKE $${vals.length}))`);
+      }
+      if (flagged) where.push("t.flagged_at IS NOT NULL");
+      vals.push(limit);
+      const { rows } = await pool.query(
+        `SELECT t.id, t.group_name, t.title, t.staff, t.flagged_at, t.flag_note, t.created_at, t.updated_at,
+                (SELECT count(*) FROM kennion.chat_messages m WHERE m.thread_id = t.id) AS n,
+                (SELECT content FROM kennion.chat_messages m WHERE m.thread_id = t.id AND m.role = 'user' ORDER BY m.id LIMIT 1) AS preview
+           FROM kennion.chat_threads t WHERE ${where.join(" AND ")}
+          ORDER BY t.updated_at DESC, t.id DESC LIMIT $${vals.length}`,
+        vals,
+      );
+      return rows.map(shapeThread);
+    },
+
+    /** One thread, any group, for the admin. */
+    async adminThread(id) {
+      const { rows } = await pool.query(
+        "SELECT id, group_name, title, staff, flagged_at, flag_note, created_at, updated_at FROM kennion.chat_threads WHERE id = $1",
+        [id],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    async flagThread(id, flagged, note) {
+      const { rows } = await pool.query(
+        `UPDATE kennion.chat_threads SET flagged_at = $2, flag_note = $3 WHERE id = $1
+         RETURNING id, group_name, title, staff, flagged_at, flag_note, created_at, updated_at`,
+        [id, flagged ? new Date() : null, flagged ? note || null : null],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    async adminDeleteThread(id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.chat_threads WHERE id = $1", [id]);
+      return rowCount > 0;
+    },
+
+    /** Keep a document the assistant made for a thread. Returns its record without the bytes. */
+    async addFile(threadId, filename, mime, data) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_files (thread_id, filename, mime, size, data) VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, filename, mime, size`,
+        [threadId, filename, mime, data.length, data],
+      );
+      return { id: Number(rows[0].id), filename: rows[0].filename, mime: rows[0].mime, size: rows[0].size };
+    },
+
+    async getFile(id) {
+      const { rows } = await pool.query(
+        `SELECT f.id, f.thread_id, f.filename, f.mime, f.size, f.data, t.group_name, t.staff
+           FROM kennion.chat_files f JOIN kennion.chat_threads t ON t.id = f.thread_id WHERE f.id = $1`,
+        [id],
+      );
+      const r = rows[0];
+      return r ? { id: Number(r.id), threadId: Number(r.thread_id), filename: r.filename, mime: r.mime, size: r.size, data: r.data, groupName: r.group_name, staff: !!r.staff } : null;
+    },
+
+    async renameThread(groupName, id, title) {
+      const { rows } = await pool.query(
+        `UPDATE kennion.chat_threads SET title = $3 WHERE id = $1 AND group_name = $2
+         RETURNING id, title, created_at, updated_at`,
+        [id, groupName, title],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    async deleteThread(groupName, id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.chat_threads WHERE id = $1 AND group_name = $2", [id, groupName]);
+      return rowCount > 0;
+    },
+
+    async listMessages(threadId) {
+      const { rows } = await pool.query(
+        "SELECT id, role, content, page, files, created_at FROM kennion.chat_messages WHERE thread_id = $1 ORDER BY id",
+        [threadId],
+      );
+      return rows.map(shapeMessage);
+    },
+
+    /** Append one turn and bump the thread so it sorts to the top. */
+    async addMessage(threadId, role, content, page, files) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_messages (thread_id, role, content, page, files) VALUES ($1, $2, $3, $4, $5::jsonb)
+         RETURNING id, role, content, page, files, created_at`,
+        [threadId, role, content, page || null, JSON.stringify(files || [])],
+      );
+      await pool.query("UPDATE kennion.chat_threads SET updated_at = now() WHERE id = $1", [threadId]);
+      return shapeMessage(rows[0]);
     },
 
     async stats() {

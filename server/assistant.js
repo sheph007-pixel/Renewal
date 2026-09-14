@@ -1,0 +1,383 @@
+// The BenSync assistant: a client's own benefits advisor in a chat box.
+//
+// Every turn is answered with the signed-in group's real figures in front of
+// the model — its plans and rates today, the carriers' quotes for 2027, this
+// month's billing — so an answer is about this employer, not employers in
+// general. The same figures the group's pages show, and nothing more: no
+// census, no other company. Kennion's own guidance (the playbook staff edit
+// in the admin) sits beside the figures, so what the assistant says is what
+// Kennion would say. Replies stream, and the model can hand back documents —
+// a comparison of options, a memo — which are built here from the figures.
+import Anthropic from "@anthropic-ai/sdk";
+import { comparisonTable, comparisonText, renderComparison, renderDocument } from "./documents.js";
+
+const apiKey = () =>
+  process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
+const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
+export const assistantEnabled = () => !!(apiKey() || process.env.ANTHROPIC_AUTH_TOKEN || fakeAi());
+
+const MODEL = "claude-opus-5";
+/** Turns the model sees. Older ones are dropped, not summarised, to keep a long thread affordable. */
+const HISTORY_TURNS = 30;
+/** Tool rounds per turn: a comparison and a memo is two; more than a few is a loop. */
+const MAX_ROUNDS = 5;
+
+/** What staff can change from the admin, with what it starts as. */
+export const DEFAULT_PLAYBOOK = {
+  persona:
+    "You are the BenSync Assistant: a licensed benefits advisor on the Kennion Benefit Advisors team who specializes in level-funded and fully-insured group health for small and mid-sized employers, and who knows Kennion's 2027 program inside out. You speak as one of the team — warm, direct, and practical — and you exist so a client gets an advisor's answer the moment they have the question, without leaving BenSync or waiting on an email.",
+  rules:
+    "- The 2027 program is a move to new carriers, not a renewal of the old plan: compare total cost and plan design side by side, and never describe 2027 as a percentage increase or decrease on 2026 rates.\n- When comparing level funded to fully insured, always mention the potential year-end refund of unused claims funding on a level-funded plan, and the fixed, no-surprises premium on a fully insured one.\n- A quote on file is the carrier's number; anything not quoted is unknown — say so and offer to have the account manager get it.\n- Kennion binds coverage, not the assistant: when the client is ready to move, point them to Sign Up and their account manager.",
+  faq: "",
+};
+
+const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners — UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna OAP network), Nationwide, Angle Health, and for some groups Cobalt (self funded) — which gives each client more renewal options than before. Plans in force today run through the program's administrators, EBPA and HealthEZ.
+
+You are talking with the HR lead or owner of one employer group — an existing Kennion client — who is using BenSync to understand their options, funding, and budget for 2027. Help them make smarter, faster decisions: explain what they have today, compare the quoted options, model what a contribution change means in dollars, draft a note to leadership or employees, and say plainly what you would look at next.
+
+How to work:
+- Answer from the group's figures below. Every rate is a monthly composite per tier (EE = employee only, ES = employee + spouse, EC = employee + child(ren), FAM = family). A plan's monthly cost at the group's census is the tier rate times the headcount in that tier, summed; annual is monthly times 12. Show the arithmetic briefly when you compute a figure.
+- Never invent a number. If the figures do not cover a question — a plan's benefits, a carrier that has not quoted, a rate that is missing — say what is missing and that the account manager can get it, rather than estimating.
+- Be concise and concrete. Lead with the answer, then the reasoning. Use Markdown: short paragraphs, bulleted lists, and a table when comparing plans or tiers. Round dollars sensibly. No preamble, no closing pleasantries.
+- Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
+- You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
+- The portal's pages, which you may point to by name: Welcome; Assistant (this); What's Changing For 2027 (today against 2027, the headline); Your 2026 Medical Plans (what is in force today, with rates and the employer/employee split); New 2027 Medical Options (every quoted plan side by side, with a contribution modeler); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
+- When the client wants to move forward, or the question needs a person — a specific quote, a carrier's answer, a meeting — hand them to their account manager by name, with the phone and email given below.
+
+Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
+
+Kennion's guidance follows. It is written by the people who run the program and overrides anything above where they differ.`;
+
+const TOOLS = [
+  {
+    name: "create_comparison",
+    description:
+      "Build a downloadable side-by-side comparison of 2027 plan options for this group, priced at its own enrollment, with what is in force today above it. The figures are computed from the quotes on file; you choose which plans go in. Returns the table as text so you can talk about it.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["plans", "format"],
+      properties: {
+        plans: {
+          type: "array",
+          maxItems: 12,
+          items: { type: "string" },
+          description: "The quoted 2027 plans to include, by name (or plan code) exactly as they appear in the figures. Empty means every quoted plan.",
+        },
+        include_current: { type: "boolean", description: "Put the plans in force today at the top for reference. Default true." },
+        contribution: {
+          anyOf: [
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["EE", "ES", "EC", "FAM"],
+              properties: { EE: { type: "number" }, ES: { type: "number" }, EC: { type: "number" }, FAM: { type: "number" } },
+            },
+            { type: "null" },
+          ],
+          description: "The employer's monthly contribution per tier, to add employer/employee split columns. Null for none.",
+        },
+        format: { type: "string", enum: ["pdf", "xlsx"], description: "PDF to read, Excel to work with." },
+        title: { anyOf: [{ type: "string" }, { type: "null" }], description: "A title for the document, or null for the default." },
+      },
+    },
+  },
+  {
+    name: "create_document",
+    description:
+      "Turn text you have written into a downloadable, branded document: an executive summary, a memo to leadership, a recap of where the renewal stands, talking points, or an announcement to employees. Write the whole body in Markdown (headings, bullets, bold, simple tables).",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["title", "body_markdown", "format"],
+      properties: {
+        title: { type: "string", description: "The document's title, e.g. \"2027 Renewal — Summary for Leadership\"." },
+        body_markdown: { type: "string", description: "The full text of the document in Markdown. Use the group's real figures." },
+        format: { type: "string", enum: ["pdf", "docx"], description: "PDF to send as is, Word to edit." },
+      },
+    },
+  },
+];
+
+const money = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const money0 = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Math.round(Number(n)).toLocaleString("en-US"));
+const TIER_KEYS = ["EE", "ES", "EC", "FAM"];
+const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
+
+/**
+ * The group's figures as text the model can read — the same allow-listed
+ * view its own pages get (see clientGroupView), so what the assistant knows
+ * is exactly what the client can already see.
+ */
+export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal }) {
+  const g = group;
+  const out = [];
+  out.push(`# ${g.name}`);
+  const facts = [
+    `Administrator (TPA) today: ${g.tpa || "unknown"}`,
+    `Enrolled in medical: ${g.enrolled ?? "—"} employees; covered lives: ${g.lives ?? "—"}`,
+    g.medicalEligible != null ? `Active employees on the census: ${g.medicalEligible}` : null,
+    g.tiers ? `Enrollment by tier: ${TIER_KEYS.map((k) => `${k} ${g.tiers[k] ?? 0}`).join(", ")}` : null,
+    g.pyStart || g.pyEnd ? `Current plan year: ${g.pyStart || "?"} to ${g.pyEnd || "?"}; the 2027 renewal is effective January 1, 2027` : null,
+    g.monthly != null ? `Total medical premium today: ${money(g.monthly)} per month (${money0(g.annual ?? g.monthly * 12)} per year)` : null,
+    g.supplementalMonthly ? `Supplemental (non-medical) premium today: ${money(g.supplementalMonthly)} per month` : null,
+    renewal ? `Renewal status with Kennion: ${renewal}` : null,
+  ].filter(Boolean);
+  out.push(facts.map((f) => `- ${f}`).join("\n"));
+
+  const plans = g.plans || [];
+  if (plans.length) {
+    out.push(`\n## Medical plans in force today (2026)`);
+    for (const p of plans) {
+      const rates = (g.rates || {})[p.plan] || {};
+      const counts = (g.planTiers || {})[p.plan] || {};
+      const tierLine = TIER_KEYS.map((k) => {
+        const r = rates[TIER_CENSUS[k]];
+        return `${k}: ${r != null ? money(r) : "not billed"} × ${counts[k] ?? 0}`;
+      }).join("; ");
+      out.push(`- ${p.plan} (${p.tpa || g.tpa || "TPA ?"}): ${p.enrolled} enrolled, ${money(p.monthly)}/month. Tier rates × enrolled — ${tierLine}`);
+      const sp = splits && splits[g.name] && splits[g.name].plans && splits[g.name].plans[p.plan];
+      if (sp) {
+        const parts = TIER_KEYS.map((k) => {
+          const s = sp[TIER_CENSUS[k]];
+          if (!s || !s.total) return null;
+          return `${k} employer ${money(s.er)} / employee ${money(s.ee)}`;
+        }).filter(Boolean);
+        if (parts.length) out.push(`  Employer/employee split today (from Employee Navigator): ${parts.join("; ")}`);
+      }
+    }
+  }
+  if (Array.isArray(g.lines) && g.lines.length) {
+    out.push(`\n## Supplemental benefits in force`);
+    for (const l of g.lines) out.push(`- ${l.benefit}: ${l.carrier} ${l.plan} — ${l.enrolled} enrolled, ${money(l.monthly)}/month`);
+  }
+
+  if (funding) {
+    out.push(`\n## This month's billing (${funding.month || "latest"})`);
+    out.push(`- Medical: ${funding.participants} participants, ${money(funding.monthly)} monthly premium, ${money(funding.billed)} billed${funding.adjustments ? ` (adjustments ${money(funding.adjustments)})` : ""}${funding.otherMonthly ? `; other products ${money(funding.otherMonthly)}` : ""}`);
+  }
+
+  const props = proposals || [];
+  out.push(`\n## Carrier quotes on file for 2027`);
+  if (!props.length) {
+    out.push(`None yet. Quotes from the 2027 carriers are still coming in; the account manager can say when to expect them.`);
+  }
+  for (const pr of props) {
+    const head = [pr.carrier || pr.slot, pr.funding ? `${pr.funding}` : null, pr.effectiveDate ? `effective ${pr.effectiveDate}` : null, pr.enrolledOnDocument != null ? `priced on ${pr.enrolledOnDocument} enrolled` : null].filter(Boolean).join(", ");
+    out.push(`\n### ${pr.slot} — ${head}`);
+    if (pr.summary) out.push(pr.summary);
+    const list = pr.plans || [];
+    const shown = list.slice(0, 40);
+    for (const pl of shown) {
+      const rates = TIER_KEYS.map((k) => `${k} ${pl.rates && pl.rates[k] != null ? money(pl.rates[k]) : "—"}`).join(", ");
+      const b = pl.benefits || {};
+      const bens = [
+        b.doctorVisit ? `PCP ${b.doctorVisit}` : null,
+        b.specialist ? `specialist ${b.specialist}` : null,
+        b.urgentCare ? `urgent care ${b.urgentCare}` : null,
+        b.imaging ? `imaging ${b.imaging}` : null,
+        b.hospital ? `hospital ${b.hospital}` : null,
+        b.rx ? `Rx ${b.rx}` : null,
+      ].filter(Boolean).join("; ");
+      out.push(
+        `- ${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "—"}, out-of-pocket max ${pl.oopMax || "—"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits — ${bens}` : ""}`,
+      );
+    }
+    if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);
+  }
+
+  if (signup) {
+    out.push(`\n## Sign Up`);
+    out.push(`The client shortlisted ${signup.plans.length} plan(s) on ${String(signup.submittedAt).slice(0, 10)}: ${signup.plans.join("; ")}${signup.note ? `. Note: "${signup.note}"` : ""}`);
+  }
+
+  if (manager && manager.name) {
+    out.push(`\n## Account manager at Kennion`);
+    out.push(`${manager.name}${manager.title ? `, ${manager.title}` : ""}${manager.phone ? ` — ${manager.phone}` : ""}${manager.email ? ` — ${manager.email}` : ""}${manager.calendly ? ` — book a call: ${manager.calendly}` : ""}`);
+  }
+  return out.join("\n");
+}
+
+/** Kennion's guidance as one system block: who the assistant is, the rules, the house answers. */
+function playbookText(playbook) {
+  const p = { ...DEFAULT_PLAYBOOK, ...(playbook || {}) };
+  const parts = [`## Who you are\n${(p.persona || DEFAULT_PLAYBOOK.persona).trim()}`];
+  if ((p.rules || "").trim()) parts.push(`## Rules from Kennion — follow these\n${p.rules.trim()}`);
+  if ((p.faq || "").trim()) parts.push(`## House answers — when a question matches one of these, answer the way it says\n${p.faq.trim()}`);
+  return parts.join("\n\n");
+}
+
+const PAGE_NAMES = {
+  home: "Welcome",
+  assistant: "Assistant",
+  changes: "What's Changing For 2027",
+  current: "Your 2026 Medical Plans",
+  options: "New 2027 Medical Options",
+  supplemental: "Supplemental Package",
+  signup: "Sign Up",
+  admin: "the Kennion admin (a staff member trying the assistant as this group)",
+};
+
+/** A thread's title, from its first question: the gist, not the whole thing. */
+export function titleFor(text) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return "New conversation";
+  if (t.length <= 60) return t;
+  const cut = t.slice(0, 60);
+  return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)).replace(/[,;:.!?-]+$/, "") + "…";
+}
+
+/**
+ * Run one tool call. `data` is what the documents need (the group view and
+ * its proposals); `keep` stores the bytes and returns the file record.
+ * Returns what the model is told.
+ */
+async function runTool(name, input, { data, keep, onStatus }) {
+  const g = data.group;
+  if (name === "create_comparison") {
+    onStatus("Building the comparison…");
+    let plans = Array.isArray(input.plans) ? input.plans : [];
+    if (!plans.length) plans = (data.proposals || []).flatMap((pr) => (pr.plans || []).map((pl) => pl.name)).slice(0, 12);
+    const table = comparisonTable({ group: g, proposals: data.proposals, plans, includeCurrent: input.include_current !== false, contribution: input.contribution || null });
+    const format = input.format === "xlsx" ? "xlsx" : "pdf";
+    const doc = await renderComparison({ format, title: input.title || null, group: g, table });
+    const file = await keep(doc);
+    return `Created ${file.filename} (${format.toUpperCase()}, ${table.rows.length} rows). The client can download it from this message. Its contents:\n${comparisonText(table)}`;
+  }
+  if (name === "create_document") {
+    onStatus("Writing the document…");
+    const format = input.format === "docx" ? "docx" : "pdf";
+    const doc = await renderDocument({ format, title: String(input.title || "Summary").slice(0, 120), markdown: String(input.body_markdown || ""), group: g });
+    const file = await keep(doc);
+    return `Created ${file.filename} (${format.toUpperCase()}). The client can download it from this message.`;
+  }
+  return `Unknown tool ${name}.`;
+}
+
+/** The local stand-in: no key, no network; a document when the question sounds like it wants one. */
+async function fakeReply(question, ctx) {
+  const q = String(question || "");
+  const pieces = [];
+  if (/compar|side.by.side|spreadsheet/i.test(q)) {
+    const table = comparisonTable({ group: ctx.data.group, proposals: ctx.data.proposals, plans: [], includeCurrent: true });
+    const file = await ctx.keep(await renderComparison({ format: /excel|xlsx|spreadsheet/i.test(q) ? "xlsx" : "pdf", group: ctx.data.group, table }));
+    pieces.push(`Here is a comparison of what is on file — ${file.filename}. `);
+  }
+  if (/summar|memo|announce|document|recap|talking points/i.test(q)) {
+    const file = await ctx.keep(await renderDocument({ format: /word|docx/i.test(q) ? "docx" : "pdf", title: "Renewal summary", markdown: `# Where ${ctx.data.group.name}'s renewal stands\n\n- ${ctx.data.group.enrolled} enrolled today\n- Canned summary (KENNION_FAKE_AI)`, group: ctx.data.group }));
+    pieces.push(`I wrote it up — ${file.filename}. `);
+  }
+  pieces.push(`Canned reply (KENNION_FAKE_AI). You asked: "${q}". In a deployment this is answered with the group's own plans, rates and quotes in front of the model.`);
+  return pieces.join("");
+}
+
+/**
+ * Answer the newest turn. `data` holds the group's view (`group`, `proposals`
+ * and the rest describeGroup takes); `history` is every stored turn in order,
+ * the last being the user's new question; `page` is where in the portal they
+ * asked from; `playbook` is Kennion's guidance. `onText` gets each streamed
+ * piece, `onStatus` a line to show while a document is built, `keep` stores
+ * a document and returns its record. Resolves to { text, files }.
+ */
+export async function replyTo({ data, history, page, playbook, onText, onStatus = () => undefined, keep }) {
+  const turns = history.slice(-HISTORY_TURNS);
+  while (turns.length && turns[0].role !== "user") turns.shift();
+  const last = turns[turns.length - 1];
+  const files = [];
+  const keepFile = async (doc) => {
+    const rec = await keep(doc);
+    files.push(rec);
+    return rec;
+  };
+
+  if (fakeAi()) {
+    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile });
+    let full = "";
+    for (const word of text.split(" ")) {
+      full += word + " ";
+      onText(word + " ");
+    }
+    return { text: full.trim(), files };
+  }
+  if (!assistantEnabled()) throw new Error("The assistant is off: no ANTHROPIC_API_KEY is set.");
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+
+  const messages = turns.map((m, i) => {
+    if (m.role === "user" && i === turns.length - 1 && page && PAGE_NAMES[page]) {
+      return { role: "user", content: `(Asked from ${PAGE_NAMES[page]}.)\n\n${m.content}` };
+    }
+    // Earlier answers that carried documents read back with a note of what was made.
+    const extra = m.role === "assistant" && Array.isArray(m.files) && m.files.length ? `\n\n(Documents attached to this answer: ${m.files.map((f) => f.filename).join(", ")})` : "";
+    return { role: m.role, content: m.content + extra };
+  });
+
+  const params = {
+    model: MODEL,
+    max_tokens: 8000,
+    // The instructions never change, Kennion's guidance changes rarely and
+    // the group's figures change rarely, so all three sit in front of cache
+    // marks; only the turns vary.
+    system: [
+      { type: "text", text: SYSTEM },
+      { type: "text", text: playbookText(playbook), cache_control: { type: "ephemeral" } },
+      { type: "text", text: `Here are the client's figures. Use them.\n\n${describeGroup(data)}`, cache_control: { type: "ephemeral" } },
+    ],
+    tools: TOOLS,
+    output_config: { effort: "medium" },
+  };
+
+  let full = "";
+  // What the model says after a tool call starts on its own paragraph.
+  let breakBefore = false;
+  const emit = (t) => {
+    if (breakBefore && full && !full.endsWith("\n\n")) {
+      full += "\n\n";
+      onText("\n\n");
+    }
+    breakBefore = false;
+    full += t;
+    onText(t);
+  };
+  const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
+  let useBeta = beta;
+  const call = async () => {
+    if (useBeta) {
+      try {
+        const stream = client.beta.messages.stream({ ...params, messages, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" });
+        stream.on("text", emit);
+        return await stream.finalMessage();
+      } catch (e) {
+        if (!(e instanceof Anthropic.BadRequestError) || full) throw e;
+        console.warn("beta fallback request rejected, retrying without it:", e.message);
+        useBeta = false;
+      }
+    }
+    const stream = client.messages.stream({ ...params, messages });
+    stream.on("text", emit);
+    return stream.finalMessage();
+  };
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const response = await call();
+    if (response.stop_reason === "refusal") throw new Error("The assistant declined to answer that one.");
+    if (response.stop_reason !== "tool_use") break;
+    // Thinking blocks ride along unchanged: the model needs them back to continue.
+    messages.push({ role: "assistant", content: response.content });
+    const results = [];
+    for (const block of response.content) {
+      if (block.type !== "tool_use") continue;
+      let text;
+      try {
+        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus });
+      } catch (e) {
+        console.error(`assistant tool ${block.name}:`, e.message);
+        text = `The document could not be made: ${e.message}. Tell the client, briefly, and offer to try again.`;
+      }
+      results.push({ type: "tool_result", tool_use_id: block.id, content: text });
+    }
+    messages.push({ role: "user", content: results });
+    breakBefore = true;
+    onStatus("");
+  }
+  return { text: full.trim(), files };
+}

@@ -19,6 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
+import { DEFAULT_PLAYBOOK, assistantEnabled, replyTo, titleFor } from "./assistant.js";
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -991,6 +992,8 @@ app.post("/api/signin", async (req, res) => {
       : null,
     linkToken: g.linkToken || null,
     slug: g.slug,
+    // Whether the assistant can answer: the chat box only shows when it can.
+    assistant: assistantEnabled(),
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
     // contact details travel to the client.
     accountManager: managerContact(g.manager),
@@ -1215,6 +1218,375 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
 
   console.log(`sign-up received: ${g.name} — ${plans.length} plan(s)`);
   res.json({ ok: true, submittedAt: record.submitted_at });
+});
+
+/**
+ * The assistant. A group's conversations are its own: every client route
+ * reads the session cookie and scopes to that group, the way the invoice
+ * link does. Staff see every conversation from the admin, can try the
+ * assistant as any group (those threads are kept apart from the client's),
+ * and edit the playbook the assistant answers by. Without a database it all
+ * lives in memory until the next deploy, which is enough to try it;
+ * Postgres keeps it.
+ */
+function memoryChatStore() {
+  const threads = new Map();
+  const messages = new Map();
+  const files = new Map();
+  let nextThread = 1;
+  let nextMessage = 1;
+  let nextFile = 1;
+  const own = (groupName, id, staff) => {
+    const t = threads.get(Number(id));
+    return t && t.groupName === groupName && t.staff === !!staff ? t : null;
+  };
+  const list = (t) => ({ ...t, messages: (messages.get(t.id) || []).length, preview: ((messages.get(t.id) || []).find((m) => m.role === "user") || {}).content || null });
+  const byActivity = (a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : b.id - a.id);
+  return {
+    async listThreads(groupName) {
+      return [...threads.values()]
+        .filter((t) => t.groupName === groupName && !t.staff)
+        .sort(byActivity)
+        .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }));
+    },
+    async createThread(groupName, title, staff = false) {
+      const now = new Date().toISOString();
+      const t = { id: nextThread++, groupName, title: title || null, staff: !!staff, flaggedAt: null, flagNote: null, createdAt: now, updatedAt: now };
+      threads.set(t.id, t);
+      messages.set(t.id, []);
+      return { id: t.id, title: t.title, staff: t.staff, createdAt: now, updatedAt: now };
+    },
+    async getThread(groupName, id, staff = false) {
+      const t = own(groupName, id, staff);
+      return t ? { id: t.id, title: t.title, staff: t.staff, createdAt: t.createdAt, updatedAt: t.updatedAt } : null;
+    },
+    async renameThread(groupName, id, title) {
+      const t = own(groupName, id, false);
+      if (!t) return null;
+      t.title = title;
+      return { id: t.id, title: t.title, createdAt: t.createdAt, updatedAt: t.updatedAt };
+    },
+    async deleteThread(groupName, id) {
+      const t = own(groupName, id, false);
+      if (!t) return false;
+      threads.delete(t.id);
+      messages.delete(t.id);
+      for (const [fid, f] of files) if (f.threadId === t.id) files.delete(fid);
+      return true;
+    },
+    async listMessages(threadId) {
+      return [...(messages.get(Number(threadId)) || [])];
+    },
+    async addMessage(threadId, role, content, page, fs) {
+      const m = { id: nextMessage++, role, content, page: page || null, files: fs || [], createdAt: new Date().toISOString() };
+      messages.get(Number(threadId)).push(m);
+      threads.get(Number(threadId)).updatedAt = m.createdAt;
+      return m;
+    },
+    async addFile(threadId, filename, mime, data) {
+      const f = { id: nextFile++, threadId: Number(threadId), filename, mime, size: data.length, data };
+      files.set(f.id, f);
+      return { id: f.id, filename, mime, size: f.size };
+    },
+    async getFile(id) {
+      const f = files.get(Number(id));
+      if (!f) return null;
+      const t = threads.get(f.threadId);
+      return { ...f, groupName: t ? t.groupName : null, staff: t ? t.staff : false };
+    },
+    async adminListThreads({ group, q, flagged, limit = 500 } = {}) {
+      const needle = (q || "").toLowerCase();
+      return [...threads.values()]
+        .filter((t) => !group || t.groupName === group)
+        .filter((t) => !flagged || t.flaggedAt)
+        .filter((t) => !needle || `${t.title || ""} ${t.groupName}`.toLowerCase().includes(needle) || (messages.get(t.id) || []).some((m) => m.content.toLowerCase().includes(needle)))
+        .sort(byActivity)
+        .slice(0, limit)
+        .map(list);
+    },
+    async adminThread(id) {
+      const t = threads.get(Number(id));
+      return t ? { ...t } : null;
+    },
+    async flagThread(id, flagged, note) {
+      const t = threads.get(Number(id));
+      if (!t) return null;
+      t.flaggedAt = flagged ? new Date().toISOString() : null;
+      t.flagNote = flagged ? note || null : null;
+      return { ...t };
+    },
+    async adminDeleteThread(id) {
+      const t = threads.get(Number(id));
+      if (!t) return false;
+      threads.delete(t.id);
+      messages.delete(t.id);
+      for (const [fid, f] of files) if (f.threadId === t.id) files.delete(fid);
+      return true;
+    },
+  };
+}
+const chatStore = db || memoryChatStore();
+/** Threads with a reply in flight, so two sends on one thread do not interleave. */
+const chatBusy = new Set();
+
+/**
+ * Kennion's guidance to the assistant — who it is, the rules, the house
+ * answers — edited from the admin. Kept in settings with the last twenty
+ * versions, so a change can be seen and undone.
+ */
+const PLAYBOOK_KEY = "assistant.playbook";
+let playbook = { ...DEFAULT_PLAYBOOK, updatedAt: null, updatedBy: null, history: [] };
+async function loadPlaybook() {
+  if (!db) return;
+  try {
+    const saved = await db.getSetting(PLAYBOOK_KEY);
+    if (saved && typeof saved === "object") playbook = { ...DEFAULT_PLAYBOOK, history: [], ...saved };
+  } catch (e) {
+    console.error("could not load the assistant playbook:", e.message);
+  }
+}
+const playbookView = () => ({
+  persona: playbook.persona,
+  rules: playbook.rules,
+  faq: playbook.faq,
+  defaults: DEFAULT_PLAYBOOK,
+  updatedAt: playbook.updatedAt,
+  updatedBy: playbook.updatedBy,
+  history: (playbook.history || []).map((h) => ({ updatedAt: h.updatedAt, updatedBy: h.updatedBy, persona: h.persona, rules: h.rules, faq: h.faq })),
+});
+
+const CHAT_MESSAGE_MAX = 4000;
+const threadId = (raw) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+/** Everything the assistant is told about a group — the same view its pages get. */
+async function assistantData(g) {
+  const signup = await latestSignup(g.name);
+  return {
+    group: clientGroupView(g),
+    proposals: clientProposals(g.name),
+    funding: fundingSnapshot(g.name),
+    manager: managerContact(g.manager),
+    splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
+    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+    renewal: g.renewal,
+  };
+}
+
+/**
+ * One turn, streamed as server-sent events: `thread` {id, title} first, then
+ * `text` {text} as the answer arrives, `status` {text} while a document is
+ * built, `file` {file} for each document made, `done` {message} with the
+ * stored answer, or `error` {error}. The question is stored before the
+ * model is asked; the answer once it is complete.
+ */
+async function streamTurn({ g, thread, content, page, res }) {
+  if (chatBusy.has(thread.id)) return res.status(409).json({ error: "Wait for the current answer to finish." });
+  chatBusy.add(thread.id);
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  // no-transform keeps the compression middleware from buffering the stream.
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  const send = (event, payload) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+    if (typeof res.flush === "function") res.flush();
+  };
+  try {
+    send("thread", { id: thread.id, title: thread.title });
+    await chatStore.addMessage(thread.id, "user", content, page);
+    const history = await chatStore.listMessages(thread.id);
+    const data = await assistantData(g);
+    const { text, files } = await replyTo({
+      data,
+      history,
+      page,
+      playbook,
+      onText: (t) => send("text", { text: t }),
+      onStatus: (t) => send("status", { text: t }),
+      keep: async (doc) => {
+        const file = await chatStore.addFile(thread.id, doc.filename, doc.mime, doc.data);
+        send("file", { file });
+        return file;
+      },
+    });
+    const message = await chatStore.addMessage(thread.id, "assistant", text, page, files);
+    send("done", { message });
+  } catch (e) {
+    console.error(`assistant: ${g.name}:`, e.message);
+    send("error", { error: e.message || "The assistant could not answer that. Try again." });
+  } finally {
+    chatBusy.delete(thread.id);
+    res.end();
+  }
+}
+
+/** Serve a document the assistant made, with the same headers whoever asks. */
+function sendChatFile(res, f) {
+  res.setHeader("Content-Type", f.mime);
+  res.setHeader("Content-Length", String(f.size));
+  res.setHeader("Content-Disposition", `attachment; filename="${f.filename.replace(/["\\]/g, "")}"; filename*=UTF-8''${encodeURIComponent(f.filename)}`);
+  res.send(f.data);
+}
+
+app.get("/api/chat/threads", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  res.json({ threads: await chatStore.listThreads(g.name) });
+});
+
+app.get("/api/chat/threads/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  const thread = id && (await chatStore.getThread(g.name, id));
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread, messages: await chatStore.listMessages(id) });
+});
+
+app.post("/api/chat/threads/:id", express.json({ limit: "4kb" }), async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  const title = String((req.body || {}).title || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!id || !title) return res.status(400).json({ error: "A title is needed." });
+  const thread = await chatStore.renameThread(g.name, id, title);
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread });
+});
+
+app.delete("/api/chat/threads/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  if (!id || !(await chatStore.deleteThread(g.name, id))) return res.status(404).json({ error: "No such conversation." });
+  res.json({ ok: true });
+});
+
+/** A document the assistant made for this group, by the session cookie alone. */
+app.get("/api/chat/files/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const f = threadId(req.params.id) && (await chatStore.getFile(Number(req.params.id)));
+  if (!f || f.groupName !== g.name || f.staff) return res.status(404).json({ error: "No such file." });
+  sendChatFile(res, f);
+});
+
+app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is not available right now." });
+  const body = req.body || {};
+  const content = String(body.content || "").trim();
+  if (!content) return res.status(400).json({ error: "Type a question first." });
+  if (content.length > CHAT_MESSAGE_MAX) return res.status(400).json({ error: `Keep a message under ${CHAT_MESSAGE_MAX} characters.` });
+  const page = /^[a-z]{1,20}$/.test(String(body.page || "")) ? body.page : null;
+
+  let thread;
+  if (body.threadId != null && body.threadId !== "") {
+    const id = threadId(body.threadId);
+    thread = id && (await chatStore.getThread(g.name, id));
+    if (!thread) return res.status(404).json({ error: "No such conversation." });
+  } else {
+    thread = await chatStore.createThread(g.name, titleFor(content));
+  }
+  await streamTurn({ g, thread, content, page, res });
+});
+
+// ---- The admin's side of the assistant ---------------------------------
+
+app.get("/api/admin/chat/threads", requireStaff, async (req, res) => {
+  const group = String(req.query.group || "").trim() || null;
+  const q = String(req.query.q || "").trim().slice(0, 200) || null;
+  const flagged = req.query.flagged === "1";
+  const threads = await chatStore.adminListThreads({ group, q, flagged });
+  const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+  res.json({
+    threads,
+    stats: {
+      threads: threads.length,
+      messages: threads.reduce((n, t) => n + (t.messages || 0), 0),
+      groups: new Set(threads.filter((t) => !t.staff).map((t) => t.groupName)).size,
+      thisWeek: threads.filter((t) => new Date(t.updatedAt).getTime() > weekAgo).length,
+      flagged: threads.filter((t) => t.flaggedAt).length,
+    },
+  });
+});
+
+app.get("/api/admin/chat/threads/:id", requireStaff, async (req, res) => {
+  const id = threadId(req.params.id);
+  const thread = id && (await chatStore.adminThread(id));
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread, messages: await chatStore.listMessages(id) });
+});
+
+app.post("/api/admin/chat/threads/:id/flag", requireStaff, express.json({ limit: "8kb" }), async (req, res) => {
+  const id = threadId(req.params.id);
+  const body = req.body || {};
+  const thread = id && (await chatStore.flagThread(id, !!body.flagged, String(body.note || "").trim().slice(0, 2000)));
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread });
+});
+
+app.delete("/api/admin/chat/threads/:id", requireStaff, async (req, res) => {
+  const id = threadId(req.params.id);
+  if (!id || !(await chatStore.adminDeleteThread(id))) return res.status(404).json({ error: "No such conversation." });
+  res.json({ ok: true });
+});
+
+app.get("/api/admin/chat/files/:id", requireStaff, async (req, res) => {
+  const f = threadId(req.params.id) && (await chatStore.getFile(Number(req.params.id)));
+  if (!f) return res.status(404).json({ error: "No such file." });
+  sendChatFile(res, f);
+});
+
+/** Try the assistant as a group. The thread is kept, marked staff, and never shown to the client. */
+app.post("/api/admin/chat/send", requireStaff, express.json({ limit: "32kb" }), async (req, res) => {
+  if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is not available: no ANTHROPIC_API_KEY is set." });
+  const body = req.body || {};
+  const g = groups.find((x) => x.name === String(body.group || ""));
+  if (!g) return res.status(404).json({ error: "No such group." });
+  const content = String(body.content || "").trim();
+  if (!content) return res.status(400).json({ error: "Type a question first." });
+  if (content.length > CHAT_MESSAGE_MAX) return res.status(400).json({ error: `Keep a message under ${CHAT_MESSAGE_MAX} characters.` });
+  let thread;
+  if (body.threadId != null && body.threadId !== "") {
+    const id = threadId(body.threadId);
+    thread = id && (await chatStore.getThread(g.name, id, true));
+    if (!thread) return res.status(404).json({ error: "No such conversation." });
+  } else {
+    thread = await chatStore.createThread(g.name, `${titleFor(content)}`, true);
+  }
+  await streamTurn({ g, thread, content, page: "admin", res });
+});
+
+app.get("/api/admin/assistant/playbook", requireStaff, (_req, res) => res.json(playbookView()));
+
+app.post("/api/admin/assistant/playbook", requireStaff, express.json({ limit: "256kb" }), async (req, res) => {
+  const body = req.body || {};
+  const clean = (v, max) => String(v == null ? "" : v).replace(/\r/g, "").slice(0, max);
+  const next = {
+    persona: clean(body.persona, 4000).trim() || DEFAULT_PLAYBOOK.persona,
+    rules: clean(body.rules, 20000).trim(),
+    faq: clean(body.faq, 40000).trim(),
+    updatedAt: new Date().toISOString(),
+    updatedBy: req.staffEmail || null,
+    history: [
+      { persona: playbook.persona, rules: playbook.rules, faq: playbook.faq, updatedAt: playbook.updatedAt, updatedBy: playbook.updatedBy },
+      ...(playbook.history || []),
+    ].slice(0, 20),
+  };
+  try {
+    if (db) await db.setSetting(PLAYBOOK_KEY, next, req.staffEmail || null);
+    playbook = next;
+    res.json(playbookView());
+  } catch (e) {
+    res.status(500).json({ error: "Could not save: " + e.message });
+  }
 });
 
 /**
@@ -3331,6 +3703,7 @@ async function boot() {
   await loadRatesLock();
   await loadMarketRules();
   await loadGroupCookieSecret();
+  await loadPlaybook();
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.

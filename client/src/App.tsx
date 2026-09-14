@@ -32,6 +32,9 @@ import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import SignUp from "@/views/SignUp";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
+import Assistant from "@/views/Assistant";
+import ChatWidget from "@/views/ChatWidget";
+import { resetChat } from "@/lib/chat";
 import type { AccountManager } from "@/lib/model";
 
 /**
@@ -47,6 +50,7 @@ const SITE = "BenSync — 2027 Renewal";
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
+  assistant: "Assistant",
   changes: "What's Changing For 2027",
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
@@ -109,6 +113,8 @@ export default function App() {
   const linkCode = useMemo(linkCodeAtLoad, []);
   /** Who at Kennion holds this group, for the contact card and the rail. */
   const [manager, setManager] = useState<AccountManager | null>(null);
+  /** Whether the server can answer the assistant: the chat box only shows when it can. */
+  const [assistantOn, setAssistantOn] = useState(false);
   /** The rail, collapsed or not. Remembered per browser, so it stays that way. */
   const narrow = useNarrow();
   const [navCollapsed, setNavCollapsed] = useState(() => {
@@ -192,6 +198,7 @@ export default function App() {
     } as KennionData);
     setCode(group.code);
     setManager((p.accountManager as AccountManager) || null);
+    setAssistantOn(!!p.assistant);
     saveSession({ kind: "group", code: group.code });
   }, []);
 
@@ -476,7 +483,7 @@ export default function App() {
   useEffect(() => {
     if (restoring || session !== "group" || !g) return;
     if (page.kind !== "group") return;
-    const want = groupHome(g, page.tab);
+    const want = groupHome(g, page.tab, page.thread);
     if (route.path !== want) navigate(want + (route.hash ? `#${route.hash}` : ""), { replace: true });
   }, [restoring, session, g, page, route.path, route.hash]);
 
@@ -508,7 +515,9 @@ export default function App() {
               ? "Existing Plans & Rates"
               : page.tab === "proposals"
                 ? "Proposals"
-                : "Import"
+                : page.tab === "assistant"
+                  ? "Assistant"
+                  : "Import"
       } — Rate Administration`;
     document.title = t;
   }, [page, g]);
@@ -520,6 +529,8 @@ export default function App() {
     clearSession();
     // The group session cookie is the server's to clear.
     void fetch("/api/signout", { method: "POST" }).catch(() => undefined);
+    resetChat();
+    setAssistantOn(false);
     setData(null);
     setEmail("");
     setStaffCode("");
@@ -722,7 +733,9 @@ export default function App() {
       ? "Effective January 1, 2027"
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
-        : `Calendar Year (January 1 – December 31, ${planYear})`;
+        : tab === "assistant"
+          ? "Your Kennion team, on call: ask about your plans, the 2027 options, funding and budget"
+          : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup" || tab === "changes"
@@ -748,21 +761,24 @@ export default function App() {
     supplemental: 4,
     signup: 5,
   };
-  const navItems: NavItem[] = (["home", "changes", "current", "options", "supplemental", "signup"] as GroupTab[]).map(
-    (t) => ({
+  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "options", "supplemental", "signup"] as GroupTab[])
+    .filter((t) => t !== "assistant" || assistantOn)
+    .map((t) => ({
       tab: t,
       href: hrefFor(t),
       label: TAB_LABEL[t],
       step: TAB_STEP[t],
       mark: t === "home" ? "home" : undefined,
       cta: t === "signup",
-    }),
-  );
+    }));
 
-  const here = navItems.findIndex((it) => it.tab === tab);
-  const prev = here > 0 ? navItems[here - 1] : null;
-  const next = here >= 0 && here < navItems.length - 1 ? navItems[here + 1] : null;
+  // Back / next walk the reading order; the Assistant sits beside it, not in it.
+  const walk = navItems.filter((it) => it.tab !== "assistant");
+  const here = walk.findIndex((it) => it.tab === tab);
+  const prev = here > 0 ? walk[here - 1] : null;
+  const next = here >= 0 && here < walk.length - 1 ? walk[here + 1] : null;
   const shut = navCollapsed && !narrow;
+  const assistantHref = (thread?: number | null) => groupHome(g, "assistant", thread);
 
   return (
     <div>
@@ -844,7 +860,9 @@ export default function App() {
               )}
             </div>
 
-            {tab === "home" ? (
+            {tab === "assistant" ? (
+              <Assistant threadId={page.thread} hrefFor={assistantHref} groupName={g.name} />
+            ) : tab === "home" ? (
               <Home
                 g={g}
                 currentHref={hrefFor("current")}
@@ -943,6 +961,7 @@ export default function App() {
             <Footer />
           </div>
         </div>
+        {assistantOn && tab !== "assistant" && <ChatWidget page={tab} assistantHref={assistantHref} />}
       </div>
     </div>
   );
