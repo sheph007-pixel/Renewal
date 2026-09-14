@@ -208,11 +208,6 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             </svg>
           </button>
         </div>
-        {!compact && (
-          <div style={{ marginTop: 6, fontSize: 11, color: C.faint }}>
-            Answers come from your group&rsquo;s own figures on this site. For a decision, loop in your account manager.
-          </div>
-        )}
       </div>
     </div>
   );
