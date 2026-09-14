@@ -12,10 +12,14 @@ export const C = {
   muted: "#6b7276",
   faint: "#8b9296",
   ghost: "#a0a7ab",
-  blue: "#2166cd",
-  blueInk: "#17479a",
-  blueTint: "#eaf1fc",
-  blueEdge: "#cadcf6",
+  /** BenSync green: the primary action colour. The names stay "blue" so every
+      call site keeps working; the values are the brand's. */
+  blue: "#1F8A5B",
+  blueInk: "#16714A",
+  blueTint: "#E8F3ED",
+  blueEdge: "#bfe0cd",
+  /** BenSync navy: headings and the wordmark's "Ben". */
+  navy: "#0F2A47",
   orange: "#e8781a",
   orangeInk: "#c2631a",
   green: "#1e7e34",
@@ -33,15 +37,15 @@ export const C = {
   headerBg: "#202429",
   onColor: "#fff",
   /** The client's dark rail and what sits on it. */
-  rail: "#171c22",
+  rail: "#0B2138",
   railInk: "rgba(255,255,255,0.74)",
   railMuted: "rgba(255,255,255,0.46)",
   railLine: "rgba(255,255,255,0.10)",
   railActive: "rgba(255,255,255,0.10)",
   /** The one accent beside blue: the call to action and small highlights. */
-  teal: "#1fb6a6",
-  tealInk: "#5ad3c6",
-  tealTint: "#e6f7f5",
+  teal: "#7FD6A8",
+  tealInk: "#7FD6A8",
+  tealTint: "#E8F3ED",
 } as const;
 
 export const panel: CSSProperties = {
@@ -136,3 +140,7 @@ export const pill = (fg: string, bg: string, bd: string): CSSProperties => ({
 });
 
 export const Logo = "/assets/kennion-logo.png";
+/** BenSync wordmark: colour on light, reversed (white + mint) on dark. */
+export const BenSync = "/assets/bensync/wordmark-color.png";
+export const BenSyncDark = "/assets/bensync/wordmark-reversed.png";
+export const BRAND_TAGLINE = "The AI-native benefits platform, backed by Kennion Benefit Advisors.";

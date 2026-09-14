@@ -1,4 +1,4 @@
-import { C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
+import { BRAND_TAGLINE, BenSync, C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
 import Footer from "@/views/Footer";
 
 interface Props {
@@ -72,18 +72,22 @@ export default function Login({
 
   return (
     <div style={{ minHeight: "100vh", background: C.page, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
-        <div
-          style={{ maxWidth: 1400, margin: "0 auto", height: 56, display: "flex", alignItems: "center" }}
-        >
-          <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 30, display: "block" }} />
+      {mode === "staff" && (
+        <div style={{ background: C.card, borderBottom: `1px solid ${C.border}`, padding: "0 22px" }}>
+          <div style={{ maxWidth: 1400, margin: "0 auto", height: 56, display: "flex", alignItems: "center" }}>
+            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 30, display: "block" }} />
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ flex: 1, display: "grid", placeItems: "center", padding: "46px 20px" }}>
         <div style={{ width: "100%", maxWidth: 520 }}>
           {mode === "group" ? (
             <>
+              <div style={{ textAlign: "center", marginBottom: 18 }}>
+                <img src={BenSync} alt="BenSync" style={{ height: 40, display: "inline-block" }} />
+                <div style={{ marginTop: 8, fontSize: 13.5, color: C.muted, textWrap: "balance" }}>{BRAND_TAGLINE}</div>
+              </div>
               <div style={{ ...panel, padding: "28px 30px 30px" }}>
                 <h1
                   style={{

@@ -8,7 +8,7 @@ import {
   type Overrides,
   type TierKey,
 } from "@/lib/model";
-import { C, Logo, panel } from "@/lib/ui";
+import { BenSync, C, panel } from "@/lib/ui";
 import {
   PATHS,
   currentPage,
@@ -42,7 +42,7 @@ import type { AccountManager } from "@/lib/model";
 const EE_PCT = 80;
 const DEP_PCT = 32;
 
-const SITE = "Kennion 2027 Renewal";
+const SITE = "BenSync — 2027 Renewal";
 
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
@@ -600,7 +600,7 @@ export default function App() {
           <div
             style={{ maxWidth: 1400, margin: "0 auto", height: 56, display: "flex", alignItems: "center" }}
           >
-            <img src={Logo} alt="Kennion Benefit Advisors" style={{ height: 30, display: "block" }} />
+            <img src={BenSync} alt="BenSync" style={{ height: 26, display: "block" }} />
           </div>
         </div>
         <div
