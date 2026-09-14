@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 /** Employee Navigator chrome — the palette the design settled on. */
 export const C = {
-  page: "#eef1f2",
+  page: "#f5f7f9",
   card: "#fff",
   border: "#dfe3e6",
   hairline: "#eef1f2",
@@ -32,12 +32,23 @@ export const C = {
   /** A dark stripe — a grid's header row, a small round badge. */
   headerBg: "#202429",
   onColor: "#fff",
+  /** The client's dark rail and what sits on it. */
+  rail: "#171c22",
+  railInk: "rgba(255,255,255,0.74)",
+  railMuted: "rgba(255,255,255,0.46)",
+  railLine: "rgba(255,255,255,0.10)",
+  railActive: "rgba(255,255,255,0.10)",
+  /** The one accent beside blue: the call to action and small highlights. */
+  teal: "#1fb6a6",
+  tealInk: "#5ad3c6",
+  tealTint: "#e6f7f5",
 } as const;
 
 export const panel: CSSProperties = {
   background: C.card,
-  border: `1px solid ${C.border}`,
-  borderRadius: 4,
+  border: "1px solid #e5e9ee",
+  borderRadius: 10,
+  boxShadow: "0 1px 2px rgba(16,24,40,0.04)",
 };
 
 export const primaryBtn: CSSProperties = {

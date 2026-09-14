@@ -4,7 +4,7 @@ body {
   padding: 0;
 }
 body {
-  background: #eef1f2;
+  background: #f5f7f9;
   color: #333333;
   font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -98,6 +98,8 @@ textarea {
   min-height: 100vh;
 }
 .shell > .sidebar {
+  background: #171c22;
+  color: rgba(255, 255, 255, 0.74);
   position: fixed;
   top: 0;
   left: 0;
@@ -115,7 +117,16 @@ textarea {
 .shell > .main > .inner {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 22px 60px;
+  padding: 22px 26px 60px;
+}
+.shell > .sidebar .rail-item:hover,
+.shell > .sidebar .rail-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  text-decoration: none;
+}
+.shell > .sidebar a:hover {
+  text-decoration: none;
 }
 
 /* Below 860px there is no room for a column: the rail sits above the page as a
@@ -138,11 +149,19 @@ textarea {
   .shell > .sidebar > .rail-nav {
     display: flex;
     flex: 1 1 100%;
+    flex-direction: row !important;
     flex-wrap: wrap;
     gap: 4px;
+    padding: 4px 0 !important;
   }
   .shell > .sidebar > .rail-nav > a {
-    flex: 1 1 220px;
+    flex: 1 1 200px;
+  }
+  .shell > .sidebar > .brand {
+    border-bottom: 0 !important;
+  }
+  .shell > .sidebar .rail-brand {
+    display: none;
   }
   .shell > .sidebar .collapse-btn {
     display: none !important;
@@ -185,7 +204,6 @@ textarea {
   }
   .shell > .sidebar .rail-manager > div:first-child {
     flex: 1 1 100%;
-    display: none;
   }
   .shell > .main {
     margin-left: 0;
