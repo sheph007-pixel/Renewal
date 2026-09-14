@@ -13,14 +13,6 @@ interface Props {
   groupName: string;
 }
 
-const SUGGEST = [
-  "Summarize what's changing for us in 2027",
-  "Compare the quoted options to our current plans",
-  "What would a 5% increase in our contribution cost per month?",
-  "Explain level funded vs fully insured for a group our size",
-  "Draft a note to leadership on where the renewal stands",
-];
-
 /** "Today", "Yesterday", "This week", "Earlier" — how the list is grouped. */
 function bucket(iso: string): string {
   const d = new Date(iso);
@@ -160,9 +152,8 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
           threadId={threadId ?? null}
           page="assistant"
           onThread={(id) => navigate(hrefFor(id), { replace: true })}
-          suggestions={SUGGEST}
           autoFocus
-          welcome={`Hi ${groupName} team — I'm the BenSync Assistant, part of your Kennion team. I have your current plans, the carriers' 2027 quotes and this month's billing in front of me. What would you like to know?`}
+          welcome={`Hi ${groupName} team — I'm the BenSync Assistant, part of your Kennion team. I have your current plans, the carriers' quotes and this month's billing in front of me. What would you like to know?`}
         />
       </div>
     </div>

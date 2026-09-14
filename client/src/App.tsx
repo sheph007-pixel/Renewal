@@ -734,7 +734,7 @@ export default function App() {
       : tab === "supplemental"
         ? "What Employee Navigator has on file besides medical"
         : tab === "assistant"
-          ? "Your Kennion team, on call: ask about your plans, the 2027 options, funding and budget"
+          ? "Your Kennion team, on call: ask about your plans, your options, funding and budget"
           : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
