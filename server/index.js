@@ -1068,7 +1068,8 @@ app.post("/api/signout", (req, res) => {
  * recorded on the row and logged; the client still sees the ticket accepted.
  */
 const SUPPORT_TO = (process.env.SUPPORT_TO || "hunter@kennion.com,support@kennion.com").split(",").map((x) => x.trim()).filter(Boolean);
-const SUPPORT_FROM = process.env.SUPPORT_FROM || "BenSync Support <support@kennion.com>";
+// site.kennion.com is the domain verified in Resend; kennion.com itself is not.
+const SUPPORT_FROM = process.env.SUPPORT_FROM || "BenSync Support <support@site.kennion.com>";
 const RESEND_KEY = process.env.RESEND_API_KEY || process.env.Resend || process.env.RESEND || "";
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
 const escapeHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
