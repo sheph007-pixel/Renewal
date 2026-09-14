@@ -728,6 +728,19 @@ export function networkDirectory(network: string | null | undefined): { name: st
 }
 
 /**
+ * The reader labels where a plan sat on the quote — "(headline option 2)",
+ * "(PPO alternate 32)" — which says nothing about the plan. A label that
+ * does, like an Essential PDL drug list, stays as a plain suffix.
+ */
+export function tidyQuotedName(name: string): string {
+  return name
+    .replace(/\s*\((?:headline\s+)?(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, "")
+    .replace(/\s*\((?:PPO|EPO)\s+(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, "")
+    .replace(/\s*\(([^()]*?)\s+(?:option|alternate|alt\.?)\s*#?\d+\)\s*$/i, " · $1")
+    .trim();
+}
+
+/**
  * The plans on a group's proposals, priced at its census. A plan with no rate
  * on any tier is left out; one missing a tier that has people in it has no
  * monthly figure.
@@ -735,6 +748,7 @@ export function networkDirectory(network: string | null | undefined): { name: st
 export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
   const counts = censusCounts(g);
   const out: MarketPlan[] = [];
+  const seen = new Set<string>();
   for (const pr of data.proposals || []) {
     // Cobalt is not offered for 2027, and Kennion offers PPO plans only: the
     // server already keeps both out of the payload; this holds the line if
@@ -763,7 +777,13 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       // Surest is UnitedHealthcare's own copay-only product, not a separate
       // company — the carrier reads "UnitedHealthcare", so the plan name is
       // where "Surest" has to show up.
-      const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
+      const planName = tidyQuotedName(pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name);
+      // UHC prints the same plan in its headline grid and again among the
+      // alternates: one plan, one row. A variant with different rates (an
+      // Essential PDL drug list, say) is a different row.
+      const dupKey = `${pr.slot}|${(pl.planCode || planName).toLowerCase()}|${TIERS.map((t) => rates[t.key] ?? "").join(",")}`;
+      if (seen.has(dupKey)) continue;
+      seen.add(dupKey);
       out.push({
         carrier: show.carrier,
         label: show.label,
@@ -967,7 +987,9 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
   if (fromProposals.length) {
     const quotedCarriers = new Set(fromProposals.map((p) => p.carrier));
     const quotedPlans = new Set(fromProposals.map((p) => planKey(p.plan)));
-    const rest = out.filter((p) => !(p.pending && quotedCarriers.has(p.carrier)) && !quotedPlans.has(planKey(p.plan)));
+    // Once a carrier has quoted the group, its menu estimates are beside the
+    // point: the client sees what the carrier priced, nothing scaled.
+    const rest = out.filter((p) => !(p.pending && quotedCarriers.has(p.carrier)) && !quotedPlans.has(planKey(p.plan)) && !(p.indicative && quotedCarriers.has(p.carrier)));
     return [...fromProposals, ...rest];
   }
   return out;
