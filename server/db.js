@@ -96,6 +96,21 @@ CREATE TABLE IF NOT EXISTS kennion.group_signups (
 );
 CREATE INDEX IF NOT EXISTS group_signups_group_idx ON kennion.group_signups (group_name);
 
+-- A support ticket a client sends from the portal; emailed to Kennion and
+-- kept here so nothing is lost if the email does not go out.
+CREATE TABLE IF NOT EXISTS kennion.support_tickets (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  priority      text NOT NULL DEFAULT 'Low',
+  requester     text NOT NULL,
+  subject       text NOT NULL,
+  description   text NOT NULL,
+  attachment    text,
+  emailed_at    timestamptz,
+  email_error   text,
+  submitted_at  timestamptz NOT NULL DEFAULT now()
+);
+
 -- One row per upload, so the admin screen can say when data last came in and
 -- from which file.
 CREATE TABLE IF NOT EXISTS kennion.imports (
@@ -381,6 +396,22 @@ export function createDb(url) {
         [groupName, JSON.stringify(plans || []), note || null],
       );
       return rows[0];
+    },
+
+    async addSupportTicket(t) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.support_tickets (group_name, priority, requester, subject, description, attachment)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, group_name, priority, requester, subject, submitted_at`,
+        [t.groupName, t.priority, t.requester, t.subject, t.description, t.attachment || null],
+      );
+      return rows[0];
+    },
+    async markSupportTicketEmailed(id, error) {
+      await pool.query(
+        `UPDATE kennion.support_tickets SET emailed_at = CASE WHEN $2::text IS NULL THEN now() ELSE emailed_at END, email_error = $2 WHERE id = $1`,
+        [id, error || null],
+      );
     },
 
     /** Every submission a group has made, newest first. */
