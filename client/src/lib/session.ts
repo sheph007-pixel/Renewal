@@ -38,3 +38,22 @@ export function clearSession() {
     // nothing to clear
   }
 }
+
+/**
+ * The group this tab's page is showing, named on every request the page
+ * makes so the server answers for it and not for whichever group signed in
+ * last in another tab (the session cookie is one per browser). Set when a
+ * group's payload is applied; cleared on sign-out.
+ */
+let pageGroup: { token: string | null; code: string | null } = { token: null, code: null };
+
+export function setPageGroup(g: { token?: string | null; code?: string | null } | null) {
+  pageGroup = g ? { token: g.token || null, code: g.code || null } : { token: null, code: null };
+}
+
+/** Headers naming the page's group; empty when no group is signed in. */
+export function groupHeaders(): Record<string, string> {
+  if (pageGroup.token) return { "X-Kennion-Group-Token": pageGroup.token };
+  if (pageGroup.code) return { "X-Kennion-Group-Code": pageGroup.code };
+  return {};
+}

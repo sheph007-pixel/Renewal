@@ -310,7 +310,53 @@ CREATE TABLE IF NOT EXISTS kennion.chat_files (
 ALTER TABLE kennion.chat_files ALTER COLUMN thread_id DROP NOT NULL;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS group_name text;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'assistant';
+-- What the assistant remembers about a group between conversations: the
+-- preferences the client stated (budget, priorities, must-haves, what they
+-- ruled out). One line each; the client and staff can remove any of them.
+CREATE TABLE IF NOT EXISTS kennion.client_memory (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  text          text NOT NULL,
+  source        text NOT NULL DEFAULT 'client',
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS client_memory_group ON kennion.client_memory (group_name, created_at);
+-- Benchmarks from published surveys, one figure per row with its source and
+-- year; proposed by the assistant or typed in by staff, used only once
+-- approved. size_band is 3-49, 50-199, 200-999, 1000+ or all; region is
+-- all or south.
+CREATE TABLE IF NOT EXISTS kennion.benchmarks (
+  id            bigserial PRIMARY KEY,
+  metric        text NOT NULL,
+  size_band     text NOT NULL DEFAULT 'all',
+  region        text NOT NULL DEFAULT 'all',
+  value         numeric NOT NULL,
+  year          integer,
+  source        text NOT NULL,
+  source_url    text,
+  note          text,
+  status        text NOT NULL DEFAULT 'proposed',
+  created_by    text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
 `;
+
+const shapeBenchmark = (r) => ({
+  id: Number(r.id),
+  metric: r.metric,
+  sizeBand: r.size_band,
+  region: r.region,
+  value: Number(r.value),
+  year: r.year == null ? null : Number(r.year),
+  source: r.source,
+  sourceUrl: r.source_url,
+  note: r.note,
+  status: r.status,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+});
 
 const shapeThread = (r) => ({
   id: Number(r.id),
@@ -965,6 +1011,23 @@ export function createDb(url) {
       return rowCount;
     },
 
+    async listMemory(groupName) {
+      const { rows } = await pool.query("SELECT id, text, source, created_at FROM kennion.client_memory WHERE group_name = $1 ORDER BY created_at, id", [groupName]);
+      return rows.map((r) => ({ id: Number(r.id), text: r.text, source: r.source, createdAt: r.created_at }));
+    },
+    /** Add lines and drop the ids named; a line already there is not added twice. At most 40 kept. */
+    async updateMemory(groupName, { add = [], removeIds = [], source = "client" } = {}) {
+      if (removeIds.length) await pool.query("DELETE FROM kennion.client_memory WHERE group_name = $1 AND id = ANY($2::bigint[])", [groupName, removeIds]);
+      for (const text of add) {
+        await pool.query(
+          "INSERT INTO kennion.client_memory (group_name, text, source) SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM kennion.client_memory WHERE group_name = $1 AND lower(text) = lower($2))",
+          [groupName, text, source],
+        );
+      }
+      await pool.query("DELETE FROM kennion.client_memory WHERE group_name = $1 AND id NOT IN (SELECT id FROM kennion.client_memory WHERE group_name = $1 ORDER BY created_at DESC, id DESC LIMIT 40)", [groupName]);
+      return this.listMemory(groupName);
+    },
+
     async getFile(id) {
       const { rows } = await pool.query(
         `SELECT f.id, f.thread_id, f.filename, f.mime, f.size, f.data, f.role, COALESCE(t.group_name, f.group_name) AS group_name, COALESCE(t.staff, false) AS staff
@@ -1006,6 +1069,41 @@ export function createDb(url) {
       );
       await pool.query("UPDATE kennion.chat_threads SET updated_at = now() WHERE id = $1", [threadId]);
       return shapeMessage(rows[0]);
+    },
+
+    async listBenchmarks() {
+      const { rows } = await pool.query("SELECT * FROM kennion.benchmarks ORDER BY metric, size_band, region, year DESC, id");
+      return rows.map(shapeBenchmark);
+    },
+    async addBenchmarks(list, status, by) {
+      const out = [];
+      for (const r of list) {
+        const { rows } = await pool.query(
+          `INSERT INTO kennion.benchmarks (metric, size_band, region, value, year, source, source_url, note, status, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+          [r.metric, r.sizeBand, r.region, r.value, r.year, r.source, r.sourceUrl, r.note, status, by || null],
+        );
+        out.push(shapeBenchmark(rows[0]));
+      }
+      return out;
+    },
+    async updateBenchmark(id, patch) {
+      const { rows } = await pool.query(
+        `UPDATE kennion.benchmarks SET
+           value = COALESCE($2, value), year = COALESCE($3, year), source = COALESCE($4, source), source_url = COALESCE($5, source_url),
+           note = COALESCE($6, note), status = COALESCE($7, status), size_band = COALESCE($8, size_band), region = COALESCE($9, region), updated_at = now()
+         WHERE id = $1 RETURNING *`,
+        [id, patch.value ?? null, patch.year ?? null, patch.source ?? null, patch.sourceUrl ?? null, patch.note ?? null, patch.status ?? null, patch.sizeBand ?? null, patch.region ?? null],
+      );
+      return rows[0] ? shapeBenchmark(rows[0]) : null;
+    },
+    async deleteBenchmark(id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.benchmarks WHERE id = $1", [id]);
+      return rowCount > 0;
+    },
+    async clearProposedBenchmarks() {
+      const { rowCount } = await pool.query("DELETE FROM kennion.benchmarks WHERE status = 'proposed'");
+      return rowCount;
     },
 
     /** Which carriers have a logo on file, with when. */

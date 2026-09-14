@@ -436,8 +436,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                         {label}
                         <PctInput label={label} value={value} min={min} onCommit={set} />
                         <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
+                        {min > 0 && <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 400, color: value <= min ? C.orange : C.faint, whiteSpace: "nowrap" }}>Minimum {min}%</span>}
                       </div>
-                      <input type="range" min={min} max={100} step={1} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
+                      {/* The bar always runs 0 to 100 so half way looks like half; a drag below the floor snaps back up to it. */}
+                      <input type="range" min={0} max={100} step={1} value={value} onChange={(e) => set(Math.max(min, Number(e.target.value)))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
                     </label>
                   ))}
                 </div>

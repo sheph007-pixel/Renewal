@@ -18,7 +18,7 @@ import {
   useRoute,
   type GroupTab,
 } from "@/lib/router";
-import { clearSession, loadSession, saveSession } from "@/lib/session";
+import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/session";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -33,6 +33,7 @@ import SignUp from "@/views/SignUp";
 import SyncMark from "@/views/SyncMark";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import Assistant from "@/views/Assistant";
+import Benchmarking from "@/views/Benchmarking";
 import ChatWidget from "@/views/ChatWidget";
 import { resetChat } from "@/lib/chat";
 import type { AccountManager } from "@/lib/model";
@@ -54,6 +55,7 @@ const TAB_LABEL: Record<GroupTab, string> = {
   changes: "What's Changing For 2027",
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
+  benchmarks: "Benchmarking",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
 };
@@ -200,6 +202,7 @@ export default function App() {
     setManager((p.accountManager as AccountManager) || null);
     setAssistantOn(!!p.assistant);
     saveSession({ kind: "group", code: group.code });
+    setPageGroup({ token: (p.linkToken as string | null) || null, code: group.code });
   }, []);
 
   /**
@@ -519,7 +522,9 @@ export default function App() {
                   ? "Assistant"
                   : page.tab === "data"
                     ? "Data Check"
-                    : "Import"
+                    : page.tab === "benchmarks"
+                      ? "Benchmarks"
+                      : "Import"
       } — Rate Administration`;
     document.title = t;
   }, [page, g]);
@@ -532,6 +537,7 @@ export default function App() {
     // The group session cookie is the server's to clear.
     void fetch("/api/signout", { method: "POST" }).catch(() => undefined);
     resetChat();
+    setPageGroup(null);
     setAssistantOn(false);
     setData(null);
     setEmail("");
@@ -737,7 +743,9 @@ export default function App() {
         ? "What Employee Navigator has on file besides medical"
         : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
-          : `Calendar Year (January 1 – December 31, ${planYear})`;
+          : tab === "benchmarks"
+            ? "How your group compares with employers of its size, from published surveys"
+            : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup" || tab === "changes"
@@ -763,7 +771,7 @@ export default function App() {
     supplemental: 4,
     signup: 5,
   };
-  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "options", "supplemental", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "options", "benchmarks", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
@@ -912,6 +920,8 @@ export default function App() {
                 onContributionReset={() => setContributionOverride(null)}
                 onToggleSelected={toggleSelected}
               />
+            ) : tab === "benchmarks" ? (
+              <Benchmarking />
             ) : tab === "supplemental" ? (
               <SupplementalPackage />
             ) : (
