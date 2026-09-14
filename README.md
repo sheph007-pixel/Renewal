@@ -36,7 +36,7 @@ as a link, and a reload comes back to the same place.
 | --- | --- |
 | `/` | Group sign-in |
 | `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
-| `/<group-slug>/<tab>` | …its other pages: `assistant`, `changes`, `current`, `options`, `benchmarks`, `supplemental`, `signup` |
+| `/<group-slug>/<tab>` | …its other pages: `assistant`, `changes`, `current`, `options`, `supplemental`, `signup` |
 | `/<group-slug>/assistant/<id>` | One conversation with the assistant |
 | `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
 | `/current` | Current Medical Plan(s) |
@@ -47,7 +47,6 @@ as a link, and a reload comes back to the same place.
 | `/admin/rates` | Rate Administration — Plans & Rates |
 | `/admin/import` | Rate Administration — Import |
 | `/admin/assistant` | Rate Administration — Assistant: conversations, playbook, try it as a group |
-| `/admin/benchmarks` | Rate Administration — Benchmarks: survey figures, proposed and approved |
 
 Sections within a page are `#hash` anchors — `/options#shortlist`, say — and
 each group page lists its sections under the heading as "On this page" links.
@@ -589,32 +588,16 @@ Claude Opus 5 for the life of the process if the account cannot use it.
 member with two groups open in two tabs would otherwise have the second
 sign-in answer the first tab's questions with the wrong group's figures.
 Every request a group's page makes — chat, memory, attachments, documents,
-benchmarks, support tickets — names its own group in a header carrying that
+support tickets — names its own group in a header carrying that
 group's own credential (`X-Kennion-Group-Token`, the permanent-link token,
 or `X-Kennion-Group-Code`), and the server answers for that group
 (`groupForPage`). A header naming no real group is refused, never ignored.
 
-**Benchmarks.** `server/benchmarks.js` keeps six figures employers ask
-about — employee-only premium, the employer's share of it, deductible,
-out-of-pocket maximum, participation (enrolled over eligible) and plans
-offered — from published surveys (KFF Employer Health Benefits Survey,
-Mercer, SHRM, BLS, MEPS-IC) in `kennion.benchmarks`, one figure per row with
-its source, year, firm-size band on the ACA line (2-50, 51+, all) and place
-(Alabama, the South, national). **Update from the surveys** on
-`/admin/benchmarks` has the model search and load a fresh set, replacing
-what it loaded before; rows staff add by hand stay. The admin page shows
-every group against the benchmarks in one table. The client's
-**Benchmarking** page compares the group (enrollment-weighted employee-only
-rate × 12, the employer's share from the Employee Navigator split,
-deductible and out-of-pocket max from the plan designs on file) with the
-rows that fit its size and place, closest cut first; the assistant's
-`lookup_benchmarks` tool reads the same comparison so recommendations carry
-the market context with its source.
-
 **Research.** The assistant can search the web (Anthropic's server-side
 `web_search` tool, up to five searches a turn) for what the group's figures
 do not cover — an ACA affordability percentage, an IRS limit, a carrier's
-network, a regulation — and says what it found and where in words. It
+network, a regulation, how employers of their size compare (KFF, MEPS-IC)
+— and says what it found and where in words. It
 never searches for the group's own numbers. `KENNION_WEB_SEARCH=0` turns it
 off.
 
@@ -856,7 +839,6 @@ node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
 node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
-node scripts/test-benchmarks.mjs      # boots the server on 5083: load, hand rows, compare per group
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
