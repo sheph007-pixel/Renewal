@@ -8,6 +8,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /                    group sign-in (/?code=XXXX signs that group in)
  *   /:slug               a signed-in group's own pages — Welcome
  *   /:slug/assistant     …Assistant (and /:slug/assistant/:id, one conversation)
+ *   /:slug/changes       …an old address: What's Changing is a section of Welcome now
  *   /:slug/changes       …What's Changing For 2027
  *   /:slug/current       …Your 2026 Medical Plans
  *   /:slug/options       …New 2027 Medical Options
@@ -42,7 +43,7 @@ export interface Route {
 }
 
 /** The pages a signed-in group has, in the order the side navigation lists them. */
-export type GroupTab = "home" | "assistant" | "changes" | "current" | "options" | "supplemental" | "signup";
+export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemental" | "signup";
 
 export type Page =
   | { kind: "signin"; staff: boolean }
@@ -136,16 +137,18 @@ export function parsePath(path: string): Page {
   // A group's permanent address: the token stays in the bar, so the page can
   // be bookmarked and shared without a code being typed.
   const thread = (raw: string | undefined) => (raw ? Number(raw) : undefined);
+  // What's Changing is a section of Welcome now; an old link to its page lands there.
+  const tabOf = (raw: string | undefined): GroupTab => (raw === "changes" || !raw ? "home" : (raw as GroupTab));
   const s = path.match(new RegExp(`^\\/g\\/([a-z0-9][a-z0-9-]{0,79})\\/([A-Za-z0-9_-]{8,64})${TAB_TAIL}$`));
-  if (s) return { kind: "group", tab: (s[3] as GroupTab) || "home", token: s[2], slug: s[1], thread: thread(s[4]) };
+  if (s) return { kind: "group", tab: tabOf(s[3]), token: s[2], slug: s[1], thread: thread(s[4]) };
   // Addresses minted before the slug: the token alone. The base address is the
   // home page now, so an old bookmark lands there and is rewritten to the
   // readable spelling; nothing it used to reach has moved further than a click.
   const t = path.match(new RegExp(`^\\/g\\/([A-Za-z0-9_-]{8,64})${TAB_TAIL}$`));
-  if (t) return { kind: "group", tab: (t[2] as GroupTab) || "home", token: t[1], thread: thread(t[3]) };
+  if (t) return { kind: "group", tab: tabOf(t[2]), token: t[1], thread: thread(t[3]) };
   // The short address: the slug alone, the session being a cookie.
   const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})${TAB_TAIL}$`));
-  if (g && !RESERVED.has(g[1])) return { kind: "group", tab: (g[2] as GroupTab) || "home", slug: g[1], thread: thread(g[3]) };
+  if (g && !RESERVED.has(g[1])) return { kind: "group", tab: tabOf(g[2]), slug: g[1], thread: thread(g[3]) };
   const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data)(?:\/(.+))?$/);
   if (m) {
     const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data";
