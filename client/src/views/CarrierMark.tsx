@@ -1,4 +1,4 @@
-import { brandOf, logoUrl, useCarrierLogos } from "@/lib/carrier-logos";
+import { brandOf } from "@/lib/carrier-logos";
 
 interface Props {
   name: string;
@@ -12,20 +12,33 @@ interface Props {
 }
 
 /**
- * A carrier's mark: its logo when one is on file, otherwise a lettered badge
- * in the carrier's colour. Sits inline beside the carrier's name in a grid
- * row, a plan card, or a heading.
+ * A carrier's icon: a rounded tile in the carrier's brand colour with a short
+ * mark, drawn by the system so every carrier reads the same way at any size.
+ * Sits inline beside the carrier's name in a grid row, a plan card, or a heading.
  */
 export default function CarrierMark({ name, size = 22, withName = true, fontSize = 13, color }: Props) {
-  const { has, version } = useCarrierLogos();
   const brand = brandOf(name);
-  const mark = has(name) ? (
-    <img src={logoUrl(name, version)} alt={name} style={{ height: size, maxWidth: size * 4, width: "auto", objectFit: "contain", display: "block", flex: "none" }} />
-  ) : (
+  const mark = (
     <span
       aria-hidden={withName}
       title={withName ? undefined : name}
-      style={{ display: "inline-grid", placeItems: "center", flex: "none", height: size, minWidth: size, padding: `0 ${Math.round(size * 0.22)}px`, borderRadius: Math.round(size * 0.24), background: brand.bg, color: brand.fg, fontSize: Math.round(size * 0.42), fontWeight: 700, letterSpacing: "0.3px", lineHeight: 1 }}
+      style={{
+        display: "inline-grid",
+        placeItems: "center",
+        flex: "none",
+        height: size,
+        minWidth: size,
+        padding: `0 ${Math.round(size * 0.2)}px`,
+        borderRadius: Math.round(size * 0.26),
+        background: `linear-gradient(135deg, ${brand.bg} 0%, ${brand.bg} 70%, rgba(255,255,255,0.18) 100%), ${brand.bg}`,
+        boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.12)",
+        color: brand.fg,
+        fontSize: Math.round(size * (brand.short.length > 2 ? 0.36 : 0.44)),
+        fontWeight: 700,
+        letterSpacing: "0.2px",
+        lineHeight: 1,
+        fontFamily: "Sora, Manrope, -apple-system, sans-serif",
+      }}
     >
       {brand.short}
     </span>

@@ -8,18 +8,27 @@ import { useEffect, useSyncExternalStore } from "react";
  */
 export const carrierSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
-/** A badge colour per carrier, close to the brand, for the fallback mark. */
+/**
+ * Each carrier's icon: its brand colour and a short mark, so every carrier
+ * gets a consistent icon the system draws itself rather than a logo file
+ * that may not sit well at grid size. Colours are the carriers' primary
+ * brand colours; edit here to tune.
+ */
 const BRAND: Record<string, { bg: string; fg: string; short: string }> = {
   unitedhealthcare: { bg: "#002677", fg: "#ffffff", short: "UHC" },
   gravie: { bg: "#F26B3A", fg: "#ffffff", short: "G" },
-  nationwide: { bg: "#1C57A5", fg: "#ffffff", short: "NW" },
+  nationwide: { bg: "#1C57A5", fg: "#ffffff", short: "N" },
   "angle-health": { bg: "#5B3DF5", fg: "#ffffff", short: "A" },
-  cobalt: { bg: "#0F4C81", fg: "#ffffff", short: "C" },
+  cobalt: { bg: "#0047AB", fg: "#ffffff", short: "C" },
   healthez: { bg: "#00A3A1", fg: "#ffffff", short: "EZ" },
   ebpa: { bg: "#2E7D32", fg: "#ffffff", short: "EB" },
-  "bcbs-of-alabama": { bg: "#0057B8", fg: "#ffffff", short: "BC" },
-  guardian: { bg: "#0A2F5A", fg: "#ffffff", short: "GU" },
+  "bcbs-of-alabama": { bg: "#005EB8", fg: "#ffffff", short: "BC" },
+  guardian: { bg: "#0E7C86", fg: "#ffffff", short: "G" },
   vsp: { bg: "#00539B", fg: "#ffffff", short: "VSP" },
+  cigna: { bg: "#0033A0", fg: "#ffffff", short: "CI" },
+  aetna: { bg: "#7D3F98", fg: "#ffffff", short: "AE" },
+  surest: { bg: "#002677", fg: "#ffffff", short: "SU" },
+  humana: { bg: "#5C8A2E", fg: "#ffffff", short: "HU" },
 };
 
 export function brandOf(name: string): { bg: string; fg: string; short: string } {
