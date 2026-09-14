@@ -130,17 +130,58 @@ const withFiles = await (await fetch(`${base}/api/chat/threads/${tid}`, { header
 assert.equal(withFiles.messages.filter((m) => (m.files || []).length).length, 3, "three answers carry a document when read back");
 console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as downloadable files — ok");
 
+// Attachments: a client uploads a file, sends it with a question, and it is
+// on the question for good; nobody else's message can claim it.
+{
+  const csv = "Plan,EE,ES\nOther Broker Silver,510.00,1020.00\n";
+  const up = await fetch(`${base}/api/chat/attachments?filename=${encodeURIComponent("other broker.csv")}`, { method: "POST", headers: { cookie, "Content-Type": "text/csv" }, body: csv });
+  assert.equal(up.status, 200);
+  const { file: att } = await up.json();
+  assert.match(att.filename, /other broker\.csv/);
+  assert.equal(att.size, csv.length);
+  assert.equal((await fetch(`${base}/api/chat/attachments?filename=x.csv`, { method: "POST", headers: { "Content-Type": "text/csv" }, body: csv })).status, 401, "no cookie, no upload");
+  const bad = await fetch(`${base}/api/chat/attachments?filename=${encodeURIComponent("archive.zip")}`, { method: "POST", headers: { cookie, "Content-Type": "application/zip" }, body: "PK" });
+  assert.equal(bad.status, 400, "a zip is refused");
+  // Another group cannot send it.
+  const theirs = await send({ content: "What is this?", attachments: [att.id] }, otherCookie);
+  const theirQ = theirs.events.find((e) => e.event === "question");
+  assert.equal(theirQ, undefined, "another group's message does not pick up the file");
+  const theirDone = theirs.events[theirs.events.length - 1];
+  assert.equal(theirDone.event, "done");
+  // The owner sends it.
+  const r = await send({ threadId: tid, content: "How does this other quote compare?", attachments: [att.id], page: "options" });
+  const q = r.events.find((e) => e.event === "question");
+  assert.ok(q, "the question is echoed back with its attachment");
+  assert.deepEqual(q.data.message.files.map((f) => f.id), [att.id]);
+  const reply = r.events.filter((e) => e.event === "text").map((e) => e.data.text).join("");
+  assert.match(reply, /I read other broker\.csv/, "the model was given the attachment");
+  // Once claimed it cannot be claimed again, and it downloads by the owner's cookie.
+  const again = await send({ threadId: tid, content: "again", attachments: [att.id] });
+  assert.equal(again.events.find((e) => e.event === "question"), undefined, "a claimed file is not attached twice");
+  const dl = await fetch(`${base}/api/chat/files/${att.id}`, { headers: { cookie } });
+  assert.equal(dl.status, 200);
+  assert.equal(await dl.text(), csv);
+  assert.equal((await fetch(`${base}/api/chat/files/${att.id}`, { headers: { cookie: otherCookie } })).status, 404);
+  const back = await (await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie } })).json();
+  const qm = back.messages.find((m) => m.role === "user" && m.files.length);
+  assert.ok(qm && qm.files[0].id === att.id, "the attachment reads back on the question");
+  // Clean up the other group's stray thread so later counts hold.
+  const otherList = await (await fetch(`${base}/api/chat/threads`, { headers: { cookie: otherCookie } })).json();
+  for (const t of otherList.threads) await fetch(`${base}/api/chat/threads/${t.id}`, { method: "DELETE", headers: { cookie: otherCookie } });
+  console.log("assistant: attachments upload, attach to the question, reach the model, stay with the owner — ok");
+}
+
 // The admin: every conversation, transcripts, flags, the playbook, a staff trial.
 const staffAuth = { Authorization: `Bearer ${staff.token}` };
 assert.equal((await fetch(`${base}/api/admin/chat/threads`, { headers: { cookie } })).status, 401, "a group cannot read the admin log");
 let log = await (await fetch(`${base}/api/admin/chat/threads`, { headers: staffAuth })).json();
 assert.equal(log.threads.length, 1);
 assert.equal(log.threads[0].groupName, mine.name);
-assert.equal(log.threads[0].messages, 10);
+assert.equal(log.threads[0].messages, 14);
 assert.equal(log.threads[0].preview, "What do we spend on medical today?");
 assert.equal(log.stats.groups, 1);
 const transcript = await (await fetch(`${base}/api/admin/chat/threads/${tid}`, { headers: staffAuth })).json();
-assert.equal(transcript.messages.length, 10);
+assert.equal(transcript.messages.length, 14);
 assert.equal(transcript.thread.groupName, mine.name);
 const adminFile = await fetch(`${base}/api/admin/chat/files/${pdfFile.id}`, { headers: staffAuth });
 assert.equal(adminFile.status, 200, "staff can open a client's document");

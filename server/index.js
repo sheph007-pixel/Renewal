@@ -20,7 +20,7 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
 import { DEFAULT_PLAYBOOK, assistantEnabled, replyTo, titleFor } from "./assistant.js";
-import { expandUpload, prepareForModel } from "./intake.js";
+import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
@@ -1284,15 +1284,35 @@ function memoryChatStore() {
       return m;
     },
     async addFile(threadId, filename, mime, data) {
-      const f = { id: nextFile++, threadId: Number(threadId), filename, mime, size: data.length, data };
+      const f = { id: nextFile++, threadId: Number(threadId), groupName: null, role: "assistant", filename, mime, size: data.length, data };
       files.set(f.id, f);
       return { id: f.id, filename, mime, size: f.size };
+    },
+    async addPendingFile(groupName, filename, mime, data) {
+      const f = { id: nextFile++, threadId: null, groupName, role: "user", filename, mime, size: data.length, data, createdAt: Date.now() };
+      files.set(f.id, f);
+      return { id: f.id, filename, mime, size: f.size };
+    },
+    async claimFiles(ids, groupName, threadId) {
+      const out = [];
+      for (const id of ids) {
+        const f = files.get(Number(id));
+        if (!f || f.threadId != null || f.groupName !== groupName) continue;
+        f.threadId = Number(threadId);
+        out.push({ id: f.id, filename: f.filename, mime: f.mime, size: f.size });
+      }
+      return out;
+    },
+    async sweepPendingFiles() {
+      let n = 0;
+      for (const [id, f] of files) if (f.threadId == null && Date.now() - f.createdAt > 86_400_000) files.delete(id) && n++;
+      return n;
     },
     async getFile(id) {
       const f = files.get(Number(id));
       if (!f) return null;
-      const t = threads.get(f.threadId);
-      return { ...f, groupName: t ? t.groupName : null, staff: t ? t.staff : false };
+      const t = f.threadId != null ? threads.get(f.threadId) : null;
+      return { ...f, groupName: t ? t.groupName : f.groupName, staff: t ? t.staff : false };
     },
     async adminListThreads({ group, q, flagged, limit = 500 } = {}) {
       const needle = (q || "").toLowerCase();
@@ -1382,7 +1402,7 @@ async function assistantData(g) {
  * stored answer, or `error` {error}. The question is stored before the
  * model is asked; the answer once it is complete.
  */
-async function streamTurn({ g, thread, content, page, compact = false, res }) {
+async function streamTurn({ g, thread, content, page, compact = false, attachments = [], res }) {
   if (chatBusy.has(thread.id)) return res.status(409).json({ error: "Wait for the current answer to finish." });
   chatBusy.add(thread.id);
   res.status(200);
@@ -1398,7 +1418,9 @@ async function streamTurn({ g, thread, content, page, compact = false, res }) {
   };
   try {
     send("thread", { id: thread.id, title: thread.title });
-    await chatStore.addMessage(thread.id, "user", content, page);
+    const attached = await chatStore.claimFiles(attachments, g.name, thread.id);
+    const question = await chatStore.addMessage(thread.id, "user", content, page, attached);
+    if (attached.length) send("question", { message: question });
     const history = await chatStore.listMessages(thread.id);
     const data = await assistantData(g);
     const { text, files } = await replyTo({
@@ -1407,6 +1429,10 @@ async function streamTurn({ g, thread, content, page, compact = false, res }) {
       page,
       compact,
       playbook,
+      readFile: async (id) => {
+        const f = await chatStore.getFile(id);
+        return f && f.threadId === thread.id ? f : null;
+      },
       onText: (t) => send("text", { text: t }),
       onStatus: (t) => send("status", { text: t }),
       keep: async (doc) => {
@@ -1477,6 +1503,26 @@ app.get("/api/chat/files/:id", async (req, res) => {
   sendChatFile(res, f);
 });
 
+/**
+ * A file the client wants to show the assistant — another broker's quote, a
+ * spreadsheet, a screenshot. Uploaded on its own first (the body is the file,
+ * the name in the query), held for the group, and claimed by the message
+ * that sends it. The same kinds the proposal reader takes.
+ */
+const CHAT_ATTACHMENT_MAX = 15 * 1024 * 1024;
+app.post("/api/chat/attachments", express.raw({ type: () => true, limit: CHAT_ATTACHMENT_MAX }), async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const filename = String(req.query.filename || "").replace(/[\\/]/g, "_").trim().slice(0, 200) || "attachment";
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const c = classify(filename, String(req.get("content-type") || ""));
+  if (c.type === "unsupported" || c.type === "email" || c.type === "msg") {
+    return res.status(400).json({ error: `"${filename}" is not a type the assistant reads. Attach a PDF, image, Excel, Word, CSV or text file.` });
+  }
+  const file = await chatStore.addPendingFile(g.name, filename, c.mime, req.body);
+  res.json({ file });
+});
+
 app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => {
   const g = groupFromCookie(req);
   if (!g) return res.status(401).json({ error: "no session" });
@@ -1495,7 +1541,8 @@ app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => 
   } else {
     thread = await chatStore.createThread(g.name, titleFor(content));
   }
-  await streamTurn({ g, thread, content, page, compact: body.compact === true, res });
+  const attachments = Array.isArray(body.attachments) ? body.attachments.map(threadId).filter(Boolean).slice(0, 5) : [];
+  await streamTurn({ g, thread, content, page, compact: body.compact === true, attachments, res });
 });
 
 // ---- The admin's side of the assistant ---------------------------------
@@ -3705,6 +3752,7 @@ async function boot() {
   await loadMarketRules();
   await loadGroupCookieSecret();
   await loadPlaybook();
+  chatStore.sweepPendingFiles().catch((e) => console.error("chat attachments sweep:", e.message));
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.

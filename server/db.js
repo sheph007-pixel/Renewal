@@ -287,13 +287,19 @@ ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS flag_note text;
 ALTER TABLE kennion.chat_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb;
 CREATE TABLE IF NOT EXISTS kennion.chat_files (
   id            bigserial PRIMARY KEY,
-  thread_id     bigint NOT NULL REFERENCES kennion.chat_threads(id) ON DELETE CASCADE,
+  thread_id     bigint REFERENCES kennion.chat_threads(id) ON DELETE CASCADE,
   filename      text NOT NULL,
   mime          text NOT NULL,
   size          integer NOT NULL,
   data          bytea NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
+-- A client can attach a file to a question. It is uploaded first, held for
+-- the group with no thread, then claimed by the message that sends it; one
+-- left unclaimed is swept after a day. role says who put it there.
+ALTER TABLE kennion.chat_files ALTER COLUMN thread_id DROP NOT NULL;
+ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS group_name text;
+ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'assistant';
 `;
 
 const shapeThread = (r) => ({
@@ -916,21 +922,47 @@ export function createDb(url) {
     /** Keep a document the assistant made for a thread. Returns its record without the bytes. */
     async addFile(threadId, filename, mime, data) {
       const { rows } = await pool.query(
-        `INSERT INTO kennion.chat_files (thread_id, filename, mime, size, data) VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO kennion.chat_files (thread_id, filename, mime, size, data, role) VALUES ($1, $2, $3, $4, $5, 'assistant')
          RETURNING id, filename, mime, size`,
         [threadId, filename, mime, data.length, data],
       );
       return { id: Number(rows[0].id), filename: rows[0].filename, mime: rows[0].mime, size: rows[0].size };
     },
 
+    /** A client's attachment, held for the group until a message claims it. */
+    async addPendingFile(groupName, filename, mime, data) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_files (group_name, filename, mime, size, data, role) VALUES ($1, $2, $3, $4, $5, 'user')
+         RETURNING id, filename, mime, size`,
+        [groupName, filename, mime, data.length, data],
+      );
+      return { id: Number(rows[0].id), filename: rows[0].filename, mime: rows[0].mime, size: rows[0].size };
+    },
+
+    /** Attach the group's pending files to a thread. Only files it uploaded and has not yet sent count. */
+    async claimFiles(ids, groupName, threadId) {
+      if (!ids.length) return [];
+      const { rows } = await pool.query(
+        `UPDATE kennion.chat_files SET thread_id = $3 WHERE id = ANY($1::bigint[]) AND group_name = $2 AND thread_id IS NULL
+         RETURNING id, filename, mime, size`,
+        [ids, groupName, threadId],
+      );
+      return rows.map((r) => ({ id: Number(r.id), filename: r.filename, mime: r.mime, size: r.size }));
+    },
+
+    async sweepPendingFiles() {
+      const { rowCount } = await pool.query("DELETE FROM kennion.chat_files WHERE thread_id IS NULL AND created_at < now() - interval '1 day'");
+      return rowCount;
+    },
+
     async getFile(id) {
       const { rows } = await pool.query(
-        `SELECT f.id, f.thread_id, f.filename, f.mime, f.size, f.data, t.group_name, t.staff
-           FROM kennion.chat_files f JOIN kennion.chat_threads t ON t.id = f.thread_id WHERE f.id = $1`,
+        `SELECT f.id, f.thread_id, f.filename, f.mime, f.size, f.data, f.role, COALESCE(t.group_name, f.group_name) AS group_name, COALESCE(t.staff, false) AS staff
+           FROM kennion.chat_files f LEFT JOIN kennion.chat_threads t ON t.id = f.thread_id WHERE f.id = $1`,
         [id],
       );
       const r = rows[0];
-      return r ? { id: Number(r.id), threadId: Number(r.thread_id), filename: r.filename, mime: r.mime, size: r.size, data: r.data, groupName: r.group_name, staff: !!r.staff } : null;
+      return r ? { id: Number(r.id), threadId: r.thread_id == null ? null : Number(r.thread_id), filename: r.filename, mime: r.mime, size: r.size, data: r.data, role: r.role, groupName: r.group_name, staff: !!r.staff } : null;
     },
 
     async renameThread(groupName, id, title) {

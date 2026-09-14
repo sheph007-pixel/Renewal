@@ -60,8 +60,9 @@ function Transcript({ messages }: { messages: ChatMessage[] }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {messages.map((m) =>
         m.role === "user" ? (
-          <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "85%", padding: "8px 12px", borderRadius: 12, borderBottomRightRadius: 4, background: C.navy, color: "#fff", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
-            {m.content}
+          <div key={m.id} style={{ alignSelf: "flex-end", maxWidth: "85%", display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+            <div style={{ padding: "8px 12px", borderRadius: 12, borderBottomRightRadius: 4, background: C.navy, color: "#fff", fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.content}</div>
+            <FileChips files={m.files || []} href={(f) => `/api/admin/chat/files/${f.id}`} align="right" />
           </div>
         ) : (
           <div key={m.id} style={{ fontSize: 13, lineHeight: 1.55, color: C.ink, padding: "2px 0" }}>

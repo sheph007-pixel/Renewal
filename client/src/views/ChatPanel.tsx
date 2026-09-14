@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { C } from "@/lib/ui";
-import { loadThread, sendMessage, useChat, type ChatFile, type ChatMessage } from "@/lib/chat";
+import { ATTACHMENT_ACCEPT, loadThread, sendMessage, uploadAttachment, useChat, type ChatFile, type ChatMessage } from "@/lib/chat";
 import Markdown from "@/views/Markdown";
 
 const KIND: Record<string, string> = {
@@ -10,15 +10,17 @@ const KIND: Record<string, string> = {
 };
 const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
 
-/** A document the assistant made, as a download. */
-export function FileChips({ files, href }: { files: ChatFile[]; href: (f: ChatFile) => string }) {
+const kindOf = (f: ChatFile) => KIND[f.mime] || (/^image\//.test(f.mime) ? "IMG" : /csv|text\/plain/.test(f.mime) ? "TXT" : "FILE");
+
+/** A document the assistant made, or one the client attached, as a download. */
+export function FileChips({ files, href, align = "left" }: { files: ChatFile[]; href: (f: ChatFile) => string; align?: "left" | "right" }) {
   if (!files.length) return null;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, justifyContent: align === "right" ? "flex-end" : "flex-start" }}>
       {files.map((f) => (
         <a key={f.id} className="chat-file" href={href(f)} download={f.filename} style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "7px 12px 7px 9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, color: C.ink, textDecoration: "none", maxWidth: "100%" }}>
           <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", width: 28, height: 28, borderRadius: 6, background: C.blueTint, color: C.blueInk, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.3px" }}>
-            {KIND[f.mime] || "FILE"}
+            {kindOf(f)}
           </span>
           <span style={{ minWidth: 0 }}>
             <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 280 }}>{f.filename}</span>
@@ -27,6 +29,21 @@ export function FileChips({ files, href }: { files: ChatFile[]; href: (f: ChatFi
         </a>
       ))}
     </div>
+  );
+}
+
+/** A file waiting to go with the next question, with a way to take it back. */
+function PendingChip({ f, uploading, onRemove }: { f: { name: string; size: number }; uploading: boolean; onRemove: () => void }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 6px 5px 10px", borderRadius: 8, border: `1px solid ${C.blueEdge}`, background: C.blueTint, color: C.blueInk, fontSize: 12, maxWidth: "100%" }}>
+      <span style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 220 }}>{f.name}</span>
+      <span style={{ color: C.muted, flex: "none" }}>{uploading ? "uploading…" : sizeOf(f.size)}</span>
+      <button onClick={onRemove} aria-label={`Remove ${f.name}`} title="Remove" style={{ flex: "none", width: 20, height: 20, borderRadius: 5, border: "none", background: "transparent", color: C.blueInk, cursor: "pointer", display: "grid", placeItems: "center" }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+    </span>
   );
 }
 
@@ -78,8 +95,11 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
   const chat = useChat();
   const [draft, setDraft] = useState("");
   const [loadError, setLoadError] = useState("");
+  /** Files picked for the next question: uploaded as soon as they are chosen. */
+  const [pending, setPending] = useState<{ key: number; name: string; size: number; file: ChatFile | null; error?: string }[]>([]);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   const messages: ChatMessage[] = threadId != null ? chat.messages[threadId] || [] : [];
   const streaming = chat.streaming && chat.streaming.threadId === threadId ? chat.streaming : chat.streaming && threadId == null && chat.streaming.threadId == null ? chat.streaming : null;
@@ -102,11 +122,30 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
     if (autoFocus) input.current?.focus();
   }, [autoFocus, threadId]);
 
+  const uploading = pending.some((p) => !p.file && !p.error);
+  const attachments = pending.map((p) => p.file).filter((f): f is ChatFile => !!f);
+
+  const pick = (list: FileList | null) => {
+    if (!list) return;
+    const room = Math.max(0, 5 - pending.length);
+    Array.from(list)
+      .slice(0, room)
+      .forEach((file) => {
+        const key = Date.now() + Math.random();
+        setPending((ps) => [...ps, { key, name: file.name, size: file.size, file: null }]);
+        uploadAttachment(file)
+          .then((f) => setPending((ps) => ps.map((p) => (p.key === key ? { ...p, file: f } : p))))
+          .catch((e: Error) => setPending((ps) => ps.map((p) => (p.key === key ? { ...p, error: e.message } : p))));
+      });
+    if (picker.current) picker.current.value = "";
+  };
+
   const ask = (text: string) => {
     const content = text.trim();
-    if (!content || busy) return;
+    if ((!content && !attachments.length) || busy || uploading) return;
     setDraft("");
-    void sendMessage(threadId, content, page, onThread, compact).catch(() => undefined);
+    setPending([]);
+    void sendMessage(threadId, content || `Please look at ${attachments.map((f) => f.filename).join(", ")}.`, page, onThread, compact, attachments).catch(() => undefined);
     input.current?.focus();
   };
 
@@ -146,10 +185,11 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
         )}
         {messages.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} style={{ display: "flex", justifyContent: "flex-end", margin: "10px 0" }}>
+            <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", margin: "10px 0" }}>
               <div style={{ maxWidth: "85%", padding: compact ? "8px 12px" : "9px 14px", borderRadius: 14, borderBottomRightRadius: 4, background: C.navy, color: "#fff", fontSize: fs, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {m.content}
               </div>
+              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} align="right" />
             </div>
           ) : (
             <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
@@ -183,14 +223,42 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
         )}
       </div>
       <div style={{ flex: "none", padding: compact ? "8px 12px 12px" : "10px 22px 16px", borderTop: `1px solid ${C.hairline}` }}>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, border: `1px solid ${C.inputEdge}`, borderRadius: 12, padding: "6px 6px 6px 12px", background: C.card }}>
+        {pending.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {pending.map((p) =>
+              p.error ? (
+                <span key={p.key} role="alert" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 10px", borderRadius: 8, border: `1px solid ${C.redEdge}`, background: C.redTint, color: C.red, fontSize: 12 }}>
+                  {p.error}
+                  <button onClick={() => setPending((ps) => ps.filter((x) => x.key !== p.key))} aria-label="Dismiss" style={{ border: "none", background: "transparent", color: C.red, cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1 }}>
+                    &times;
+                  </button>
+                </span>
+              ) : (
+                <PendingChip key={p.key} f={p} uploading={!p.file} onRemove={() => setPending((ps) => ps.filter((x) => x.key !== p.key))} />
+              ),
+            )}
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, border: `1px solid ${C.inputEdge}`, borderRadius: 12, padding: "6px 6px 6px 6px", background: C.card }}>
+          <input ref={picker} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => pick(e.target.files)} />
+          <button
+            onClick={() => picker.current?.click()}
+            disabled={busy || pending.length >= 5}
+            aria-label="Attach a file"
+            title="Attach a file — a quote, a spreadsheet, a screenshot"
+            style={{ flex: "none", width: 32, height: 32, borderRadius: 9, border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 11.5 12.5 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a1.5 1.5 0 0 1-2.1-2.1L16 6.7" />
+            </svg>
+          </button>
           <textarea
             ref={input}
             className="chat-input"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
-            placeholder={messages.length ? "Keep the conversation going…" : "Ask a question…"}
+            placeholder={pending.length ? "Ask about the file…" : messages.length ? "Keep the conversation going…" : "Ask a question…"}
             rows={1}
             maxLength={4000}
             disabled={busy && threadId == null}
@@ -198,10 +266,13 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
           />
           <button
             onClick={() => ask(draft)}
-            disabled={busy || !draft.trim()}
+            disabled={busy || uploading || (!draft.trim() && !attachments.length)}
             aria-label="Send"
             title="Send (Enter)"
-            style={{ flex: "none", width: 32, height: 32, borderRadius: 9, border: "none", background: busy || !draft.trim() ? C.hairline : C.blue, color: busy || !draft.trim() ? C.ghost : "#fff", cursor: busy || !draft.trim() ? "default" : "pointer", display: "grid", placeItems: "center" }}
+            style={(() => {
+              const off = busy || uploading || (!draft.trim() && !attachments.length);
+              return { flex: "none", width: 32, height: 32, borderRadius: 9, border: "none", background: off ? C.hairline : C.blue, color: off ? C.ghost : "#fff", cursor: off ? "default" : "pointer", display: "grid", placeItems: "center" };
+            })()}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 19V5M5 12l7-7 7 7" />
