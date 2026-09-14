@@ -13,7 +13,7 @@ with its access code and sees two things:
    as one grid of every plan from every carrier, lowest cost first. Above it,
    **Employer Contribution**: four monthly figures by tier and Apply, which
    drive an Employer Cost column (contribution × enrolled per tier, never more
-   than the premium). Filter tabs — Carrier, Deductible and OOP Max by range,
+   than the premium). Filter tabs — Carrier, Network Type (PPO, EPO or RBP, read off the proposal), Deductible and OOP Max by range,
    Funding, Total Cost ($ to $$$$, sorted either way) — and a search; each row
    is carrier, plan, deductible, OOP max, employer cost and total monthly, and
    clicking it opens a plan card: total monthly cost, benefits, composite

@@ -1,4 +1,4 @@
-import { TIERS, networkDirectory, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { TIERS, networkDirectory, networkTypeOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 
@@ -50,6 +50,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     ["Urgent care", p.uc],
     ["Hospital", p.hospital],
     ["Prescription drugs", p.rx],
+    ["Network type", networkTypeOf(p)],
     ["Network", p.network],
   ];
   const type = p.type && p.type !== p.label && p.type !== fundingOf(p) ? p.type : null;
@@ -81,7 +82,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
  */
 export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
-  const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network"].includes(label)) : m.benefits;
+  const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network"].includes(label)) : m.benefits;
   return (
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>

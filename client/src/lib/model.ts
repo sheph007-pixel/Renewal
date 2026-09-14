@@ -677,6 +677,26 @@ const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "S
  * "is my doctor in it?" — so every place a Gravie plan names its network links
  * there. Null for a network with no public directory on file.
  */
+/**
+ * How a plan's network works, which is the first thing an employer asks:
+ * PPO (in and out of network, the carrier's contracted rates), EPO (in
+ * network only) or RBP (reference-based pricing — no network; claims paid at
+ * a multiple of Medicare, which is how Cobalt's self-funded plans work). Read
+ * off what the proposal says — the plan's name, its type, the network it is
+ * priced on — with the carrier as the fallback rule: UnitedHealthcare's Choice
+ * Plus and Cigna Open Access Plus are PPO networks; Gravie's EPO sheet says
+ * EPO; Cobalt is RBP. Null when nothing on the quote says.
+ */
+export type NetworkType = "PPO" | "EPO" | "RBP";
+export const NETWORK_TYPES: NetworkType[] = ["PPO", "EPO", "RBP"];
+export function networkTypeOf(p: { plan?: string | null; type?: string | null; network?: string | null; carrier?: string | null; planType?: string | null }): NetworkType | null {
+  const text = [p.plan, p.type, p.planType, p.network].filter(Boolean).join(" ");
+  if (/\bRBP\b|reference[\s-]?based/i.test(text) || /cobalt/i.test(p.carrier || "")) return "RBP";
+  if (/\bEPO\b/i.test(text)) return "EPO";
+  if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b/i.test(text)) return "PPO";
+  return null;
+}
+
 export function networkDirectory(network: string | null | undefined): { name: string; url: string } | null {
   const s = String(network || "");
   if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {
