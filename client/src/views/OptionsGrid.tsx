@@ -157,6 +157,32 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     if (floorEE > 0 && (applied.EE || 0) < floorEE) onApply({ ...applied, EE: floorEE });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floorEE, applied.EE]);
+  // Percentage mode: a share of the least expensive plan, turned into dollars
+  // per tier, so the contribution is still one fixed amount on every plan.
+  // Employees % applies to the employee-only rate; Dependents % to what each
+  // family tier adds on top of it.
+  const [mode, setMode] = useState<"amount" | "percent">("amount");
+  const [pctEE, setPctEE] = useState(50);
+  const [pctDep, setPctDep] = useState(0);
+  const basePlan = useMemo(() => {
+    const priced = plans.filter((p) => p.rates.EE != null && p.rates.EE > 0);
+    return priced.sort((a, b) => (a.rates.EE || 0) - (b.rates.EE || 0))[0] || null;
+  }, [plans]);
+  const fromPercent = (ee: number, dep: number): Record<TierKey, number> => {
+    const base = basePlan?.rates;
+    const eeRate = base?.EE || 0;
+    const eeDollars = Math.ceil((eeRate * ee) / 100);
+    return TIERS.reduce((acc, t) => {
+      const rate = base?.[t.key] ?? null;
+      const extra = t.key === "EE" || rate == null ? 0 : Math.max(0, rate - eeRate);
+      return { ...acc, [t.key]: t.key === "EE" ? eeDollars : eeDollars + Math.ceil((extra * dep) / 100) };
+    }, {} as Record<TierKey, number>);
+  };
+  const setPercent = (ee: number, dep: number) => {
+    setPctEE(ee);
+    setPctDep(dep);
+    setDraft(toDraft(fromPercent(ee, dep)));
+  };
   const canApply = draftValid && draftDirty && !belowFloor;
   const apply = () => {
     if (!canApply) return;
@@ -324,7 +350,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
             Employer Contribution
             <InfoTip title="You Set The Budget">
-              Enter what you will pay each month for each coverage tier and press Apply. That amount is the same on every plan, so your cost is fixed no matter which plan an employee picks. An employee who chooses a plan that costs more than your contribution pays the difference; one who chooses a cheaper plan pays less. Carriers require at least 50% of the lowest employee-only rate.
+              Enter what you will pay each month for each coverage tier and press Apply. That amount is the same on every plan, so your cost is fixed no matter which plan an employee picks. An employee who chooses a plan that costs more than your contribution pays the difference; one who chooses a cheaper plan pays less. Carriers require at least 50% of the lowest employee-only rate. Prefer to think in percentages? Switch to Percentage: the shares you pick on the least expensive plan become the dollar amounts.
             </InfoTip>
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
@@ -337,6 +363,50 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </button>
         {contribOpen && (
           <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.hairline}` }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, marginTop: 14 }}>
+              <div role="radiogroup" aria-label="How to set the contribution" style={{ display: "flex", gap: 6 }}>
+                {(["amount", "percent"] as const).map((m) => (
+                  <button
+                    key={m}
+                    role="radio"
+                    aria-checked={mode === m}
+                    onClick={() => {
+                      setMode(m);
+                      if (m === "percent") setPercent(pctEE, pctDep);
+                    }}
+                    style={{ ...chip(mode === m), fontWeight: 600 }}
+                  >
+                    {m === "amount" ? "Monthly Defined Amount" : "Percentage"}
+                  </button>
+                ))}
+              </div>
+              {mode === "percent" && basePlan && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-end" }}>
+                  {(
+                    [
+                      ["Employees", pctEE, 50, (v: number) => setPercent(v, pctDep), `of the employee-only rate on the least expensive plan (${basePlan.plan}, ${money0(basePlan.rates.EE || 0)})`],
+                      ["Dependents", pctDep, 0, (v: number) => setPercent(pctEE, v), "of what spouse and child coverage adds on that plan"],
+                    ] as [string, number, number, (v: number) => void, string][]
+                  ).map(([label, value, min, set, hint]) => (
+                    <label key={label} style={{ display: "block", minWidth: 220 }} title={`${label}: ${hint}`}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                        {label}
+                        <input
+                          value={value}
+                          inputMode="numeric"
+                          aria-label={`${label} percentage`}
+                          onChange={(e) => set(Math.max(min, Math.min(100, Number(e.target.value.replace(/[^\d]/g, "")) || 0)))}
+                          style={{ ...textInput, width: 62, padding: "5px 8px", fontSize: 14, fontWeight: 600, textAlign: "right", ...num }}
+                        />
+                        <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
+                      </div>
+                      <input type="range" min={min} max={100} step={1} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
+                      <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{hint}</div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
               {TIERS.map((t) => (
                 <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
@@ -356,6 +426,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <input
                       value={draft[t.key]}
                       inputMode="numeric"
+                      readOnly={mode === "percent"}
+                      title={mode === "percent" ? "Set by the percentages above" : undefined}
                       aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
                       onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d]/g, "") }))}
                       onBlur={() => {
@@ -364,7 +436,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       onKeyDown={(e) => {
                         if (e.key === "Enter") apply();
                       }}
-                      style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, ...num }}
+                      style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, background: mode === "percent" ? C.hairline : C.card, ...num }}
                     />
                   </div>
                 </label>
