@@ -65,14 +65,14 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Carrier", "Network Type", "Network", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Carrier", "Network Type", "Network", "Provider Directory", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const rows = list.map((p) => {
     const s = costSplit(p, applied, counts);
-    return [carrierOf(p), netType(p), p.network ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    return [carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
   });
   const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -715,21 +715,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...cell, color: C.body, whiteSpace: "nowrap" }}>
                     <div style={{ fontWeight: 600, color: networkTypeOf(p) ? C.ink : C.faint }}>{netType(p)}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>{networkOf(p) || ""}</div>
-                    {networkDirectory(p.network) && (
-                      <>
-                        {" · "}
-                        <a
-                          href={networkDirectory(p.network)!.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={networkDirectory(p.network)!.name}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ color: C.blue, fontSize: 12 }}
-                        >
-                          Find a doctor
-                        </a>
-                      </>
-                    )}
                   </td>
                   <td style={cell}>
                     <div>{p.plan}</div>
