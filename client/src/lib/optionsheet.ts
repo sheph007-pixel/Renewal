@@ -68,7 +68,11 @@ export function downloadOptions(
       rows.push([`${m.carrier} · ${m.plan}`, m.funding + (m.type ? ` · ${m.type}` : "")]);
       rows.push(["Total Monthly Cost", m.monthly ?? ""]);
       rows.push(["Basis", m.basis]);
-      for (const [label, value] of m.benefits) rows.push([label, value]);
+      // The lookups ride along in a third column, so the sheet has the addresses too.
+      for (const [label, value] of m.benefits) {
+        const link = label === "Network" ? m.links.directory : label === "Pharmacy (PBM)" ? m.links.formulary : null;
+        rows.push(link && value !== "—" ? [label, value, link.url] : [label, value]);
+      }
       rows.push(["Monthly Composite Rates", "Rate", "Employer", "Employee"]);
       for (const t of m.tiers) rows.push([`${t.label} (${t.count})`, t.rate ?? "", t.er ?? "", t.ee ?? ""]);
       rows.push(["Total Monthly Employer Cost", m.er ?? ""]);

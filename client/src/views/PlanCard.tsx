@@ -1,4 +1,4 @@
-import { TIERS, networkDirectory, networkTypeOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 
@@ -11,6 +11,7 @@ import CarrierMark from "@/views/CarrierMark";
  */
 export interface CardModel {
   carrier: string;
+  links: { directory: { name: string; url: string } | null; formulary: { name: string; url: string } | null };
   plan: string;
   funding: string;
   type: string | null;
@@ -54,17 +55,20 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     ["Prescription drugs", p.rx],
     ["Network type", networkTypeOf(p)],
     ["Network", p.network],
+    ["Pharmacy (PBM)", pbmOf(p.carrier)?.name ?? null],
   ];
   const type = p.type && p.type !== p.label && p.type !== fundingOf(p) ? p.type : null;
   return {
     carrier: carrierOf(p),
+    /** Where to look things up on this plan: the provider directory and the PBM's formulary, where Kennion has the link. */
+    links: { directory: networkDirectory(p.network), formulary: pbmOf(p.carrier) },
     plan: p.plan,
     funding: fundingOf(p),
     type,
     basis: basisOf(p),
     quoted: !!p.quoted,
     monthly: p.monthly,
-    // The same eight rows on every plan, so cards read alike; "—" where the carrier's document does not say.
+    // The same rows on every plan, so cards read alike; "—" where the carrier's document (or Kennion's links) does not say.
     benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== "On the proposal" ? v : "—"]),
     tiers: TIERS.map((t) => {
       const s = tierSplit(p, contribution, t.key);
@@ -120,7 +124,7 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
  */
 export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
-  const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network"].includes(label)) : m.benefits;
+  const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network", "Pharmacy (PBM)"].includes(label)) : m.benefits;
   return (
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
@@ -139,17 +143,18 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
         <tbody>
           {benefits.map(([label, value]) => {
-            const dir = label === "Network" ? networkDirectory(value) : null;
+            // Lookups sit on their row: the directory on Network, the formulary on Pharmacy.
+            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find a doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
                 <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
                   {value}
-                  {dir && (
+                  {link && value !== "—" && (
                     <>
                       {" · "}
-                      <a href={dir.url} target="_blank" rel="noreferrer" title={dir.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
-                        Find a doctor
+                      <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {link.text}
                       </a>
                     </>
                   )}

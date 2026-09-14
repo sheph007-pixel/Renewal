@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
@@ -65,14 +65,14 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Carrier", "Network Type", "Network", "Provider Directory", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const rows = list.map((p) => {
     const s = costSplit(p, applied, counts);
-    return [carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    return [carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
   });
   const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
