@@ -2104,13 +2104,54 @@ async function loadXmlVerify() {
     console.error("could not load the stored-export check:", e.message);
   }
 }
-async function verifyStoredXml(by) {
+/** The last import's export, read again from the gzip kept in the database. */
+async function readStoredExport() {
   const last = recentImports[0];
   if (!db) throw new Error("No database: the export is not stored, so there is nothing to re-read.");
   if (!last || !last.id) throw new Error("No Employee Navigator export has been imported yet.");
   const rec = await db.importRaw(last.id);
   if (!rec || !rec.raw_gzip) throw new Error("The last import was made before exports were kept; import the file again and it will be.");
   const { companies, failures } = await parseEnStream(Readable.from([rec.raw_gzip]).pipe(zlib.createGunzip()));
+  return { last, rec, companies, failures };
+}
+
+/**
+ * Fields a later parser learned to keep, filled in for groups imported
+ * before it did — from the export already in the database, so nobody has
+ * to upload the file again. Today: each plan's full Employee Navigator
+ * name (`enName`). Runs in the background at boot; the payload is updated
+ * in place, keeping when and by whom the group was imported.
+ */
+async function backfillFromStoredExport() {
+  if (!db) return;
+  const wanting = groups.filter((g) => (g.plans || []).some((p) => !p.enName));
+  if (!wanting.length) return;
+  const { companies } = await readStoredExport();
+  let filled = 0;
+  for (const c of companies) {
+    const g = matchExisting(c.group.name);
+    if (!g || !(g.plans || []).some((p) => !p.enName)) continue;
+    const names = new Map((c.group.plans || []).map((p) => [p.plan, p.enName]));
+    let changed = false;
+    for (const p of g.plans || []) {
+      const full = names.get(p.plan);
+      if (full && !p.enName) {
+        p.enName = full;
+        changed = true;
+      }
+    }
+    if (!changed) continue;
+    await db.updateGroupPayload(g.name, g);
+    filled++;
+  }
+  if (filled) {
+    rebuild();
+    console.log(`stored export: filled in full plan names for ${filled} group(s)`);
+  }
+}
+
+async function verifyStoredXml(by) {
+  const { last, rec, companies, failures } = await readStoredExport();
   const result = compareToExport(companies, groups, matchExisting);
   xmlVerify = {
     importId: last.id,
@@ -4214,6 +4255,9 @@ async function boot() {
   // Proposals read before the reader asked for per-plan benefits, re-read in
   // the background so the plan cards fill in. Never blocks boot.
   void backfillPlanBenefits().catch((e) => console.error("proposals: benefits re-read:", e.message));
+  // Groups imported before the parser kept each plan's full Employee Navigator
+  // name get it from the export already in the database. Never blocks boot.
+  void backfillFromStoredExport().catch((e) => console.error("stored export: backfill:", e.message));
   // The inbox: first the key pair a file can be sealed to (made on the first
   // boot, kept in settings, its public half in every deploy log), then any
   // files placed in the bucket or at a URL, once every group is known to

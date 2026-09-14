@@ -476,6 +476,14 @@ export function createDb(url) {
       );
     },
 
+    /**
+     * Rewrite a group's payload in place — a field filled in from the stored
+     * export, say — without touching when or by whom it was imported.
+     */
+    async updateGroupPayload(name, payload) {
+      await pool.query("UPDATE kennion.groups SET payload = $2 WHERE name = $1", [name, payload]);
+    },
+
     /** Staff edit to a group's code, ALE bucket, broker label, renewal state, or archived state. */
     async setMeta(groupName, field, value, by) {
       const col =
