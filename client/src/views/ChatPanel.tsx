@@ -12,13 +12,33 @@ const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M
 
 const kindOf = (f: ChatFile) => KIND[f.mime] || (/^image\//.test(f.mime) ? "IMG" : /csv|text\/plain/.test(f.mime) ? "TXT" : "FILE");
 
+/**
+ * Fetch a file with extra headers and hand it to the browser as a download —
+ * for the admin, whose routes want the staff token a plain link cannot send.
+ */
+async function downloadWith(url: string, filename: string, headers: Record<string, string>) {
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error(`Could not download (${r.status})`);
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
 /** A document the assistant made, or one the client attached, as a download. */
-export function FileChips({ files, href, align = "left" }: { files: ChatFile[]; href: (f: ChatFile) => string; align?: "left" | "right" }) {
+export function FileChips({ files, href, align = "left", headers }: { files: ChatFile[]; href: (f: ChatFile) => string; align?: "left" | "right"; headers?: Record<string, string> }) {
   if (!files.length) return null;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, justifyContent: align === "right" ? "flex-end" : "flex-start" }}>
       {files.map((f) => (
-        <a key={f.id} className="chat-file" href={href(f)} download={f.filename} style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "7px 12px 7px 9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, color: C.ink, textDecoration: "none", maxWidth: "100%" }}>
+        <a key={f.id} className="chat-file" href={href(f)} download={f.filename} onClick={headers ? (e) => {
+          e.preventDefault();
+          void downloadWith(href(f), f.filename, headers).catch((err: Error) => window.alert(err.message));
+        } : undefined} style={{ display: "inline-flex", alignItems: "center", gap: 9, padding: "7px 12px 7px 9px", borderRadius: 9, border: `1px solid ${C.border}`, background: C.card, color: C.ink, textDecoration: "none", maxWidth: "100%" }}>
           <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", width: 28, height: 28, borderRadius: 6, background: C.blueTint, color: C.blueInk, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.3px" }}>
             {kindOf(f)}
           </span>
