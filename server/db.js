@@ -239,7 +239,32 @@ CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   updated_by   text,
   PRIMARY KEY (group_name, plan, census_tier)
 );
+
+-- A client's conversations with the assistant, one thread per conversation
+-- and its turns beneath it. Scoped to the group, so an employer only ever
+-- sees its own; the assistant's answers are kept so a thread reads back the
+-- same way it was written.
+CREATE TABLE IF NOT EXISTS kennion.chat_threads (
+  id            bigserial PRIMARY KEY,
+  group_name    text NOT NULL,
+  title         text,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_threads_group_idx ON kennion.chat_threads (group_name, updated_at DESC);
+CREATE TABLE IF NOT EXISTS kennion.chat_messages (
+  id            bigserial PRIMARY KEY,
+  thread_id     bigint NOT NULL REFERENCES kennion.chat_threads(id) ON DELETE CASCADE,
+  role          text NOT NULL CHECK (role IN ('user','assistant')),
+  content       text NOT NULL,
+  page          text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON kennion.chat_messages (thread_id, id);
 `;
+
+const shapeThread = (r) => ({ id: Number(r.id), title: r.title, createdAt: r.created_at, updatedAt: r.updated_at });
+const shapeMessage = (r) => ({ id: Number(r.id), role: r.role, content: r.content, page: r.page, createdAt: r.created_at });
 
 const shapeStats = (r) => ({
   filename: r.filename,
@@ -749,6 +774,67 @@ export function createDb(url) {
           monthly: num(pl.monthly),
         })),
       };
+    },
+
+    /** A group's conversations, most recently active first. */
+    async listThreads(groupName) {
+      const { rows } = await pool.query(
+        `SELECT id, title, created_at, updated_at FROM kennion.chat_threads
+          WHERE group_name = $1 ORDER BY updated_at DESC, id DESC LIMIT 200`,
+        [groupName],
+      );
+      return rows.map(shapeThread);
+    },
+
+    async createThread(groupName, title) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_threads (group_name, title) VALUES ($1, $2)
+         RETURNING id, title, created_at, updated_at`,
+        [groupName, title || null],
+      );
+      return shapeThread(rows[0]);
+    },
+
+    /** One thread, only if it belongs to the group asking. */
+    async getThread(groupName, id) {
+      const { rows } = await pool.query(
+        "SELECT id, title, created_at, updated_at FROM kennion.chat_threads WHERE id = $1 AND group_name = $2",
+        [id, groupName],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    async renameThread(groupName, id, title) {
+      const { rows } = await pool.query(
+        `UPDATE kennion.chat_threads SET title = $3 WHERE id = $1 AND group_name = $2
+         RETURNING id, title, created_at, updated_at`,
+        [id, groupName, title],
+      );
+      return rows[0] ? shapeThread(rows[0]) : null;
+    },
+
+    async deleteThread(groupName, id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.chat_threads WHERE id = $1 AND group_name = $2", [id, groupName]);
+      return rowCount > 0;
+    },
+
+    async listMessages(threadId) {
+      const { rows } = await pool.query(
+        "SELECT id, role, content, page, created_at FROM kennion.chat_messages WHERE thread_id = $1 ORDER BY id",
+        [threadId],
+      );
+      return rows.map(shapeMessage);
+    },
+
+    /** Append one turn and bump the thread so it sorts to the top. */
+    async addMessage(threadId, role, content, page) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_messages (thread_id, role, content, page) VALUES ($1, $2, $3, $4)
+         RETURNING id, role, content, page, created_at`,
+        [threadId, role, content, page || null],
+      );
+      await pool.query("UPDATE kennion.chat_threads SET updated_at = now() WHERE id = $1", [threadId]);
+      return shapeMessage(rows[0]);
     },
 
     async stats() {

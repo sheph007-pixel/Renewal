@@ -36,7 +36,8 @@ as a link, and a reload comes back to the same place.
 | --- | --- |
 | `/` | Group sign-in |
 | `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
-| `/<group-slug>/<tab>` | …its other pages: `changes`, `current`, `options`, `supplemental`, `signup` |
+| `/<group-slug>/<tab>` | …its other pages: `assistant`, `changes`, `current`, `options`, `supplemental`, `signup` |
+| `/<group-slug>/assistant/<id>` | One conversation with the assistant |
 | `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
 | `/current` | Current Medical Plan(s) |
 | `/options` | 2027 Medical Plan Options |
@@ -535,6 +536,29 @@ lock records who set it and when, and is lifted from the same place.
 payload; `scripts/test-rates-audit.mts` drives the whole round trip, including
 that an untouched workbook is a no-op, and the lock.
 
+## The Assistant
+
+Every client page has a chat box in the bottom-right corner, and the rail has
+an **Assistant** tab. They are two views of the same thing: the corner box is
+for a quick question from wherever the client is (it opens on their most
+recent conversation, with a new one a click away), and the Assistant page is
+the full view — every conversation down the left, grouped by day, with rename,
+delete and search, and the open one on the right with room for a comparison
+table.
+
+Each answer is written with the group's own figures in front of the model
+(`server/assistant.js`, `describeGroup`): the plans and tier rates in force,
+the employer/employee split where Employee Navigator has one, every carrier
+quote on file for 2027 with its plans and rates, this month's billing, the
+last Sign Up submission, and the account manager to hand off to. It is the
+same allow-listed view the group's pages get — no census, no other company —
+so the assistant cannot say anything the client could not already read on the
+site. The question notes which page it was asked from. Replies stream over
+server-sent events (`POST /api/chat/send`); conversations are kept in
+`kennion.chat_threads` / `kennion.chat_messages`, scoped to the group, and in
+memory when there is no database. The box and the tab only show when the
+server has an Anthropic key (the sign-in payload says so).
+
 ## Privacy
 
 The census carries names, ages, genders, ZIPs and premiums for over 1,300
@@ -754,13 +778,15 @@ Parser and pricing checks, no database or key needed:
 node scripts/test-en-parse.mjs && node scripts/test-en-tiers.mjs && node scripts/test-en-ancillary.mjs
 node scripts/test-carrier-stats.mjs && node scripts/test-funding.mjs && node scripts/test-ancillary.mjs
 node scripts/test-group-payload.mjs   # boots the server on 5077 and checks group isolation
+node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
 
 `KENNION_FAKE_AI=1` makes the server treat a text upload whose body is a JSON
-extraction as Claude's reading of it, so the whole proposal path can be walked
-locally without a key. It is for local runs only; never set it in a deployment.
+extraction as Claude's reading of it, and answers the assistant with a canned
+reply, so the whole proposal path and the chat can be walked locally without a
+key. It is for local runs only; never set it in a deployment.
 
 ## Deploy
 
@@ -774,6 +800,6 @@ it fails trying to `rmdir` that mount point with `EBUSY`.
 
 Environment variables, all optional: `DATABASE_URL` (Postgres), `ADMIN_EMAIL`
 and `ADMIN_CODE` for staff sign-in, `ANTHROPIC_API_KEY` (or `CLAUDE`) so uploaded
-proposals are read and matched to groups, `DATA_DIR` for a writable volume when there is
+proposals are read and matched to groups and the assistant can answer, `DATA_DIR` for a writable volume when there is
 no database, and `PORT` (defaults to 5000). Set the admin values in Railway
 so the real credentials are not the ones committed here.

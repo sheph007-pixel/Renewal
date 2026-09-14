@@ -19,6 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
+import { assistantEnabled, describeGroup, replyTo, titleFor } from "./assistant.js";
 import { expandUpload, prepareForModel } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -991,6 +992,8 @@ app.post("/api/signin", async (req, res) => {
       : null,
     linkToken: g.linkToken || null,
     slug: g.slug,
+    // Whether the assistant can answer: the chat box only shows when it can.
+    assistant: assistantEnabled(),
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
     // contact details travel to the client.
     accountManager: managerContact(g.manager),
@@ -1080,6 +1083,174 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
 
   console.log(`sign-up received: ${g.name} — ${plans.length} plan(s)`);
   res.json({ ok: true, submittedAt: record.submitted_at });
+});
+
+/**
+ * The assistant. A group's conversations are its own: every route reads the
+ * session cookie and scopes to that group, the way the invoice link does.
+ * Without a database the threads live in memory until the next deploy, which
+ * is enough to try it; Postgres keeps them.
+ */
+function memoryChatStore() {
+  const threads = new Map();
+  const messages = new Map();
+  let nextThread = 1;
+  let nextMessage = 1;
+  const mine = (groupName, id) => {
+    const t = threads.get(Number(id));
+    return t && t.groupName === groupName ? t : null;
+  };
+  const shape = ({ groupName: _g, ...t }) => t;
+  return {
+    async listThreads(groupName) {
+      return [...threads.values()]
+        .filter((t) => t.groupName === groupName)
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : b.id - a.id))
+        .map(shape);
+    },
+    async createThread(groupName, title) {
+      const now = new Date().toISOString();
+      const t = { id: nextThread++, groupName, title: title || null, createdAt: now, updatedAt: now };
+      threads.set(t.id, t);
+      messages.set(t.id, []);
+      return shape(t);
+    },
+    async getThread(groupName, id) {
+      const t = mine(groupName, id);
+      return t ? shape(t) : null;
+    },
+    async renameThread(groupName, id, title) {
+      const t = mine(groupName, id);
+      if (!t) return null;
+      t.title = title;
+      return shape(t);
+    },
+    async deleteThread(groupName, id) {
+      const t = mine(groupName, id);
+      if (!t) return false;
+      threads.delete(t.id);
+      messages.delete(t.id);
+      return true;
+    },
+    async listMessages(threadId) {
+      return [...(messages.get(Number(threadId)) || [])];
+    },
+    async addMessage(threadId, role, content, page) {
+      const m = { id: nextMessage++, role, content, page: page || null, createdAt: new Date().toISOString() };
+      messages.get(Number(threadId)).push(m);
+      threads.get(Number(threadId)).updatedAt = m.createdAt;
+      return m;
+    },
+  };
+}
+const chatStore = db || memoryChatStore();
+/** Threads with a reply in flight, so two sends on one thread do not interleave. */
+const chatBusy = new Set();
+
+const CHAT_MESSAGE_MAX = 4000;
+const threadId = (raw) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+app.get("/api/chat/threads", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  res.json({ threads: await chatStore.listThreads(g.name) });
+});
+
+app.get("/api/chat/threads/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  const thread = id && (await chatStore.getThread(g.name, id));
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread, messages: await chatStore.listMessages(id) });
+});
+
+app.post("/api/chat/threads/:id", express.json({ limit: "4kb" }), async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  const title = String((req.body || {}).title || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!id || !title) return res.status(400).json({ error: "A title is needed." });
+  const thread = await chatStore.renameThread(g.name, id, title);
+  if (!thread) return res.status(404).json({ error: "No such conversation." });
+  res.json({ thread });
+});
+
+app.delete("/api/chat/threads/:id", async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  if (!id || !(await chatStore.deleteThread(g.name, id))) return res.status(404).json({ error: "No such conversation." });
+  res.json({ ok: true });
+});
+
+/**
+ * One turn: the question is stored, the reply streams back as server-sent
+ * events and is stored once complete. With no thread named, a new one is
+ * opened and announced first, so the widget and the Assistant page can pick
+ * it up. Events: `thread` {id, title}, `text` {text}, `done` {message},
+ * `error` {error}.
+ */
+app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => {
+  const g = groupFromCookie(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  if (!assistantEnabled()) return res.status(503).json({ error: "The assistant is not available right now." });
+  const body = req.body || {};
+  const content = String(body.content || "").trim();
+  if (!content) return res.status(400).json({ error: "Type a question first." });
+  if (content.length > CHAT_MESSAGE_MAX) return res.status(400).json({ error: `Keep a message under ${CHAT_MESSAGE_MAX} characters.` });
+  const page = /^[a-z]{1,20}$/.test(String(body.page || "")) ? body.page : null;
+
+  let thread;
+  if (body.threadId != null && body.threadId !== "") {
+    const id = threadId(body.threadId);
+    thread = id && (await chatStore.getThread(g.name, id));
+    if (!thread) return res.status(404).json({ error: "No such conversation." });
+  } else {
+    thread = await chatStore.createThread(g.name, titleFor(content));
+  }
+  if (chatBusy.has(thread.id)) return res.status(409).json({ error: "Wait for the current answer to finish." });
+  chatBusy.add(thread.id);
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  // no-transform keeps the compression middleware from buffering the stream.
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  const send = (event, payload) => {
+    if (res.writableEnded) return;
+    res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+    if (typeof res.flush === "function") res.flush();
+  };
+
+  try {
+    send("thread", { id: thread.id, title: thread.title });
+    await chatStore.addMessage(thread.id, "user", content, page);
+    const history = await chatStore.listMessages(thread.id);
+    const signup = await latestSignup(g.name);
+    const context = describeGroup({
+      group: clientGroupView(g),
+      proposals: clientProposals(g.name),
+      funding: fundingSnapshot(g.name),
+      manager: managerContact(g.manager),
+      splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
+      signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+      renewal: g.renewal,
+    });
+    const reply = await replyTo({ context, history, page, onText: (text) => send("text", { text }) });
+    const message = await chatStore.addMessage(thread.id, "assistant", reply, page);
+    send("done", { message });
+  } catch (e) {
+    console.error(`assistant: ${g.name}:`, e.message);
+    send("error", { error: e.message || "The assistant could not answer that. Try again." });
+  } finally {
+    chatBusy.delete(thread.id);
+    res.end();
+  }
 });
 
 /**

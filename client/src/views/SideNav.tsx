@@ -49,6 +49,13 @@ function TabIcon({ tab }: { tab: GroupTab }) {
           <path d="M6 10v9a1 1 0 0 0 1 1h3.5v-6h3v6H17a1 1 0 0 0 1-1v-9" />
         </svg>
       );
+    case "assistant":
+      return (
+        <svg {...s}>
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" />
+          <path d="M8.5 8.5h7M8.5 11.5h4.5" />
+        </svg>
+      );
     case "changes":
       return (
         <svg {...s}>
