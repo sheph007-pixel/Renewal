@@ -3,6 +3,12 @@ body {
   margin: 0;
   padding: 0;
 }
+/* A page taller than the window grows a scrollbar; without a reserved gutter
+   the centred content shifts sideways between tabs. */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
 body {
   background: #f5f7f9;
   color: #333333;

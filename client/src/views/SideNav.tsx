@@ -4,9 +4,8 @@ import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
+import SupportTicket from "@/views/SupportTicket";
 
-/** Where a client opens a support ticket directly, without going through email. */
-export const SUPPORT_URL = "https://support.kennion.com/support/tickets/new";
 
 export interface NavItem {
   tab: GroupTab;
@@ -293,6 +292,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
  * who wants the width back; collapsed or not, the links are the same links.
  */
 export default function SideNav({ items, current, collapsed, onToggle, homeHref, groupName, manager, onExit }: Props) {
+  const [ticket, setTicket] = useState(false);
   const toggle = (
     <button
       className="collapse-btn"
@@ -421,9 +421,9 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" title="Employee Navigator" style={{ display: "grid", placeItems: "center", padding: 6, color: C.railMuted }}>
               <GridIcon />
             </a>
-            <a href={SUPPORT_URL} target="_blank" rel="noreferrer" title="Support Ticket" style={{ display: "grid", placeItems: "center", padding: 6, color: C.railMuted }}>
+            <button onClick={() => setTicket(true)} title="Support Ticket" style={{ display: "grid", placeItems: "center", padding: 6, background: "none", border: "none", color: C.railMuted, cursor: "pointer" }}>
               <TicketIcon />
-            </a>
+            </button>
             <button onClick={onExit} title="Log Out" style={{ display: "grid", placeItems: "center", padding: 6, background: "none", border: "none", color: C.railMuted, cursor: "pointer" }}>
               <LogOutIcon />
             </button>
@@ -434,7 +434,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
 
             <div className="rail-links" style={{ padding: "6px 8px 8px", borderTop: `1px solid ${C.railLine}` }}>
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
-              <LinkRow icon={<TicketIcon />} label="Support Ticket" href={SUPPORT_URL} external />
+              <LinkRow icon={<TicketIcon />} label="Support Ticket" onClick={() => setTicket(true)} />
               <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
             </div>
             <div className="rail-brand" style={{ padding: "0 18px 12px", fontSize: 10.5, color: C.railMuted, letterSpacing: "0.2px" }}>
@@ -443,6 +443,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
           </>
         )}
       </div>
+      {ticket && <SupportTicket onClose={() => setTicket(false)} />}
     </div>
   );
 }

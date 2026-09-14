@@ -1033,6 +1033,97 @@ app.post("/api/signout", (req, res) => {
  * group already marked Renewed or Non-renewed is not moved backwards by a
  * second submission.
  */
+/**
+ * A support ticket from the portal: priority, requester email, subject,
+ * description and one optional attachment. Stored, then emailed to Kennion
+ * through Resend (the RESEND / Resend key on the service). A failed email is
+ * recorded on the row and logged; the client still sees the ticket accepted.
+ */
+const SUPPORT_TO = (process.env.SUPPORT_TO || "hunter@kennion.com,support@kennion.com").split(",").map((x) => x.trim()).filter(Boolean);
+const SUPPORT_FROM = process.env.SUPPORT_FROM || "BenSync Support <support@kennion.com>";
+const RESEND_KEY = process.env.RESEND_API_KEY || process.env.Resend || process.env.RESEND || "";
+const PRIORITIES = ["Low", "Medium", "High", "Urgent"];
+const escapeHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+async function sendSupportEmail(t, g) {
+  if (!RESEND_KEY) throw new Error("no Resend key on the service");
+  const lines = [
+    ["Group", g.name],
+    ["Priority", t.priority],
+    ["Requester", t.requester],
+    ["Manager", typeof g.manager === "string" ? g.manager : (g.manager && g.manager.name) || "—"],
+  ];
+  const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
+    <h2 style="margin:0 0 12px;font-size:17px">Support ticket · ${escapeHtml(g.name)}</h2>
+    <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
+    <div style="font-weight:600;margin-bottom:4px">${escapeHtml(t.subject)}</div>
+    <div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(t.description)}</div>
+    <p style="margin-top:18px;color:#888;font-size:12px">Sent from the BenSync client portal · ticket #${t.id}</p>
+  </div>`;
+  const body = {
+    from: SUPPORT_FROM,
+    to: SUPPORT_TO,
+    reply_to: t.requester,
+    subject: `[${t.priority}] ${g.name}: ${t.subject}`,
+    html,
+    text: `Support ticket #${t.id}\nGroup: ${g.name}\nPriority: ${t.priority}\nRequester: ${t.requester}\n\n${t.subject}\n\n${t.description}`,
+  };
+  if (t.file) body.attachments = [{ filename: t.file.name, content: t.file.base64 }];
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 300)}`);
+}
+
+let supportTickets = [];
+app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res) => {
+  const body = req.body || {};
+  const caller = signinKey(req);
+  if (throttled(caller)) return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  const { g, guessed } = groupFromRequest(req);
+  if (!g) {
+    if (!guessed) return res.status(401).json({ error: "no session" });
+    noteFail(caller);
+    return res.status(404).json({ error: "no such group" });
+  }
+  const priority = PRIORITIES.includes(body.priority) ? body.priority : "Low";
+  const requester = String(body.requester || "").trim().slice(0, 200);
+  const subject = String(body.subject || "").trim().slice(0, 200);
+  const description = String(body.description || "").trim().slice(0, 20000);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requester)) return res.status(400).json({ error: "Enter the email address we should reply to." });
+  if (!subject) return res.status(400).json({ error: "Give the ticket a subject." });
+  if (!description) return res.status(400).json({ error: "Describe what you need." });
+  let file = null;
+  if (body.file && typeof body.file === "object" && typeof body.file.base64 === "string" && body.file.base64) {
+    const name = String(body.file.name || "attachment").replace(/[^\w.\- ]+/g, "_").slice(0, 120);
+    if (body.file.base64.length > 8 * 1024 * 1024 * 1.4) return res.status(413).json({ error: "Attachments up to 8 MB." });
+    file = { name, base64: body.file.base64 };
+  }
+  let record;
+  try {
+    if (db) record = await db.addSupportTicket({ groupName: g.name, priority, requester, subject, description, attachment: file ? file.name : null });
+    else {
+      record = { id: supportTickets.length + 1, group_name: g.name, priority, requester, subject, submitted_at: new Date().toISOString() };
+      supportTickets = [record, ...supportTickets];
+    }
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  let emailed = true;
+  try {
+    await sendSupportEmail({ ...record, description, file }, g);
+    if (db) await db.markSupportTicketEmailed(record.id, null);
+  } catch (e) {
+    emailed = false;
+    console.error(`support ticket #${record.id} (${g.name}) stored but not emailed:`, e.message);
+    if (db) await db.markSupportTicketEmailed(record.id, e.message).catch(() => {});
+  }
+  console.log(`support ticket #${record.id}: ${g.name} — ${priority} — ${subject}${emailed ? "" : " (email failed)"}`);
+  res.json({ ok: true, id: record.id, emailed });
+});
+
 app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) => {
   const body = req.body || {};
   const caller = signinKey(req);
