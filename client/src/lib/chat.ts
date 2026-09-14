@@ -140,7 +140,7 @@ const localId = () => -Math.floor(Math.random() * 1e9) - 1;
  * once the answer is complete; the thread list and messages update as the
  * reply streams in.
  */
-export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void): Promise<number> {
+export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void, compact = false): Promise<number> {
   const question: ChatMessage = { id: localId(), role: "user", content, createdAt: new Date().toISOString() };
   let id = threadId;
   const fresh = (tid: number | null): Streaming => ({ threadId: tid, text: "", status: "", files: [] });
@@ -153,7 +153,7 @@ export async function sendMessage(threadId: number | null, content: string, page
   const r = await fetch("/api/chat/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ threadId: id, content, page }),
+    body: JSON.stringify({ threadId: id, content, page, compact }),
   });
   if (!r.ok || !r.body) {
     const error = await failure(r);

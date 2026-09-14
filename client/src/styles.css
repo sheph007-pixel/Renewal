@@ -358,6 +358,18 @@ button,
   text-decoration: none !important;
   color: #16714A !important;
 }
+/* In the corner box a table has to fit the box. */
+.chat-box .md table {
+  font-size: 11.5px;
+}
+.chat-box .md th,
+.chat-box .md td {
+  padding: 4px 5px !important;
+}
+.chat-box .md p,
+.chat-box .md li {
+  overflow-wrap: anywhere;
+}
 /* What the assistant writes. */
 .md > :first-child {
   margin-top: 0 !important;

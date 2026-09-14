@@ -106,7 +106,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
     const content = text.trim();
     if (!content || busy) return;
     setDraft("");
-    void sendMessage(threadId, content, page, onThread).catch(() => undefined);
+    void sendMessage(threadId, content, page, onThread, compact).catch(() => undefined);
     input.current?.focus();
   };
 
