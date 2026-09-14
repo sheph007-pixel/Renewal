@@ -252,9 +252,11 @@ button,
   right: 22px;
   bottom: 88px;
   z-index: 59;
-  width: 400px;
+  width: 420px;
   max-width: calc(100vw - 32px);
-  height: min(640px, calc(100vh - 112px));
+  /* Tall: from just under the top of the window down to the launcher. */
+  height: calc(100vh - 110px);
+  max-height: 900px;
   display: flex;
   flex-direction: column;
   border-radius: 14px;

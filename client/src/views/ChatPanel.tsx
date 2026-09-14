@@ -259,14 +259,14 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             )}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, border: `1px solid ${C.inputEdge}`, borderRadius: 12, padding: "6px 6px 6px 6px", background: C.card }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, border: `1px solid ${C.inputEdge}`, borderRadius: 14, padding: 8, background: C.card, boxShadow: "0 1px 2px rgba(15, 42, 71, 0.05)" }}>
           <input ref={picker} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => pick(e.target.files)} />
           <button
             onClick={() => picker.current?.click()}
             disabled={busy || pending.length >= 5}
             aria-label="Attach a file"
             title="Attach a file — a quote, a spreadsheet, a screenshot"
-            style={{ flex: "none", width: 32, height: 32, borderRadius: 9, border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
+            style={{ flex: "none", width: 36, height: 36, borderRadius: 10, border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 11.5 12.5 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a1.5 1.5 0 0 1-2.1-2.1L16 6.7" />
@@ -279,10 +279,10 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
             placeholder={pending.length ? "Ask about the file…" : messages.length ? "Keep the conversation going…" : "Ask a question…"}
-            rows={1}
+            rows={2}
             maxLength={4000}
             disabled={busy && threadId == null}
-            style={{ flex: 1, resize: "none", border: "none", outline: "none", background: "transparent", fontSize: fs, lineHeight: 1.45, color: C.ink, maxHeight: 140, padding: "6px 0" }}
+            style={{ flex: 1, resize: "none", border: "none", outline: "none", background: "transparent", fontSize: fs + 1, lineHeight: 1.5, color: C.ink, minHeight: 48, maxHeight: 180, padding: "8px 4px" }}
           />
           <button
             onClick={() => ask(draft)}
@@ -291,7 +291,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             title="Send (Enter)"
             style={(() => {
               const off = busy || uploading || (!draft.trim() && !attachments.length);
-              return { flex: "none", width: 32, height: 32, borderRadius: 9, border: "none", background: off ? C.hairline : C.blue, color: off ? C.ghost : "#fff", cursor: off ? "default" : "pointer", display: "grid", placeItems: "center" };
+              return { flex: "none", width: 36, height: 36, borderRadius: 10, border: "none", background: off ? C.hairline : C.blue, color: off ? C.ghost : "#fff", cursor: off ? "default" : "pointer", display: "grid", placeItems: "center" };
             })()}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
