@@ -733,11 +733,9 @@ export default function App() {
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
-    tab === "options" || tab === "signup"
+    tab === "options" || tab === "signup" || tab === "supplemental"
       ? "Effective January 1, 2027"
-      : tab === "supplemental"
-        ? "What Employee Navigator has on file besides medical"
-        : tab === "assistant"
+      : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
           : `Calendar Year (January 1 – December 31, ${planYear})`;
 
