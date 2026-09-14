@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { TIERS, censusCounts, costSplit, fmtDed, money0, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
@@ -79,6 +79,44 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
   a.download = `${g.name.replace(/[^\w]+/g, "-")}-2027-options.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** A small ⓘ that opens a short explanation on hover, focus or tap. */
+function InfoTip({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        setOpen((v) => !v);
+      }}
+    >
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label={`About ${title}`}
+        aria-expanded={open}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        style={{ display: "grid", placeItems: "center", width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${C.blue}`, color: C.blue, fontSize: 11.5, fontWeight: 700, lineHeight: 1, cursor: "help", fontFamily: "Georgia, serif", fontStyle: "italic" }}
+      >
+        i
+      </span>
+      {open && (
+        <span
+          role="tooltip"
+          style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 30, width: 320, padding: "12px 14px", borderRadius: 10, background: C.card, color: C.ink, border: `1px solid ${C.border}`, boxShadow: "0 10px 30px rgba(11,33,56,0.18)", fontSize: 13, fontWeight: 400, lineHeight: 1.55, textAlign: "left", textTransform: "none" }}
+        >
+          <span style={{ display: "block", fontWeight: 700, marginBottom: 4 }}>{title}</span>
+          {children}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
@@ -283,7 +321,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           aria-expanded={contribOpen}
           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
         >
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Employer Contribution</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
+            Employer Contribution
+            <InfoTip title="You Set The Budget">
+              Enter what you will pay each month for each coverage tier and press Apply. That amount is the same on every plan, so your cost is fixed no matter which plan an employee picks. An employee who chooses a plan that costs more than your contribution pays the difference; one who chooses a cheaper plan pays less. Carriers require at least 50% of the lowest employee-only rate.
+            </InfoTip>
+          </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
               <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo across {totals.enrolled} enrolled
