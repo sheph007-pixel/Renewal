@@ -24,7 +24,7 @@ export interface CardModel {
   ee: number | null;
   premium: number | null;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
-  source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string; models: string[] } | null } | null;
+  source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
 }
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
@@ -83,46 +83,31 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
 }
 
 /**
- * The card's footer: whether the figures above were checked against the
- * carrier's document by two models, when, and the document itself. A plan
- * whose audit found something reads as under review; one not yet audited
- * says so; an illustrative plan has no footer.
+ * The card's footer: the figures above were checked against the carrier's
+ * own quote, and when. The document itself and who did the checking are
+ * Kennion's business, on the Proposals page; the client sees the verdict.
+ * A plan whose audit found something reads as under review; one not yet
+ * audited says so; an illustrative plan has no footer.
  */
 function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   const a = source.audit;
   const when = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const href = `/api/group/proposals/${source.proposalId}/file`;
-  const link = (
-    <a href={href} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
-      View carrier proposal
-    </a>
-  );
+  const foot = { display: "flex", flexWrap: "wrap" as const, alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 };
   if (a && a.status === "pass") {
     return (
-      <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+      <div className="noprint" style={foot} title="The plan name, benefits and rates shown here were checked against the carrier's own quote">
         <span style={{ color: C.green, fontWeight: 600 }}>✓ Proposal Audit Completed</span>
-        <span>
-          {when(a.completedAt)}
-          {a.models.length ? ` · ${a.models.join(" + ")}` : ""}
-        </span>
-        <span>· {link}</span>
+        <span>{when(a.completedAt)}</span>
       </div>
     );
   }
   return (
-    <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+    <div className="noprint" style={foot}>
       <span style={{ color: C.amber, fontWeight: 600 }}>{a ? "Proposal audit: under review by Kennion" : "Proposal audit pending"}</span>
-      <span>· {link}</span>
     </div>
   );
 }
 
-/**
- * `compact` is the proposal card: only the tiers with people in them, one
- * rate each, deductible / OOP / network, and the three totals. The popup and
- * the printed proposal use the full card, with every benefit and the
- * employer / employee split per tier.
- */
 export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
   const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network", "Pharmacy (PBM)"].includes(label)) : m.benefits;

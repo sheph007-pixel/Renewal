@@ -238,11 +238,10 @@ export interface GroupProposal {
   audit?: ProposalAudit | null;
 }
 
-/** Whether the figures read off a proposal were checked against the document, when, and by which models. */
+/** Whether the figures read off a proposal were checked against the document, and when. */
 export interface ProposalAudit {
   status: "pass" | "issues" | "unreadable";
   completedAt: string;
-  models: string[];
 }
 
 /** What Employee Navigator billed the group for the month — counts and rates only. */
