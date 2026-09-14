@@ -4,7 +4,7 @@
 // against what is printed. Both must find nothing wrong for the audit to
 // pass. It runs once when a proposal is read (and again on demand), and the
 // result rides with the proposal so the client's plan cards can say the
-// figures were checked, with a link to the document itself.
+// figures were checked and when; the document itself stays with staff.
 import Anthropic from "@anthropic-ai/sdk";
 import { prepareForModel } from "./intake.js";
 
@@ -146,8 +146,8 @@ export async function auditProposal({ filename, mime, buffer, extracted }) {
   return { completedAt, status, models, mismatches, notes };
 }
 
-/** What a client's page is told: the outcome, when, and which models — never the notes. */
+/** What a client's page is told: the outcome and when — never the notes, never which models. */
 export function auditForClient(a) {
   if (!a || !a.status) return null;
-  return { status: a.status, completedAt: a.completedAt, models: (a.models || []).filter((m) => m.verdict === "pass" || m.verdict === "issues").map((m) => m.model.replace(/\s*\(.*\)$/, "")) };
+  return { status: a.status, completedAt: a.completedAt };
 }

@@ -83,25 +83,17 @@ const page = await (await fetch(`${base}/api/signin`, { method: "POST", headers:
 const pr = (page.proposals || []).find((p) => p.slot === "Gravie");
 assert.ok(pr, "the client sees its Gravie proposal");
 assert.equal(pr.id, row.id);
-assert.deepEqual(Object.keys(pr.audit).sort(), ["completedAt", "models", "status"]);
+assert.deepEqual(Object.keys(pr.audit).sort(), ["completedAt", "status"], "the client is told the outcome and when, nothing about who checked");
 assert.equal(pr.audit.status, "pass");
-assert.deepEqual(pr.audit.models, ["Claude", "ChatGPT"]);
 assert.deepEqual(
   pr.plans.map((p) => p.name),
   ["Gravie Copay 1500 PPO"],
   "PPO only: the EPO version never reaches the client",
 );
 
-// The document behind the plan: the group can open it; another group cannot;
-// a page naming its group in the header can, whatever the cookie says.
-const mineHeader = mine.linkToken ? { "X-Kennion-Group-Token": mine.linkToken } : { "X-Kennion-Group-Code": mine.code };
-assert.equal((await fetch(`${base}/api/group/proposals/${row.id}/file`)).status, 401);
-const doc = await fetch(`${base}/api/group/proposals/${row.id}/file`, { headers: { cookie } });
-assert.equal(doc.status, 200);
-assert.match(doc.headers.get("content-disposition") || "", /inline/);
-assert.equal((await fetch(`${base}/api/group/proposals/${row.id}/file`, { headers: { cookie: otherCookie } })).status, 404, "another group's cookie cannot open it");
-assert.equal((await fetch(`${base}/api/group/proposals/${row.id}/file`, { headers: { cookie: otherCookie, ...mineHeader } })).status, 200, "the page's own group wins over the cookie");
-assert.equal((await fetch(`${base}/api/admin/proposals/${row.id}/file`, { headers: { cookie } })).status, 401, "the staff route still needs a staff token");
+// The carrier's document stays with staff: no client route serves it.
+assert.equal((await fetch(`${base}/api/group/proposals/${row.id}/file`, { headers: { cookie } })).status, 404);
+assert.equal((await fetch(`${base}/api/admin/proposals/${row.id}/file`, { headers: { cookie } })).status, 401, "the staff route needs a staff token");
 
 // Run it again on demand, and for everything at once.
 assert.equal((await fetch(`${base}/api/admin/proposals/${row.id}/audit`, { method: "POST", headers: staffAuth })).status, 200);

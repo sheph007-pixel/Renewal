@@ -4103,23 +4103,6 @@ app.post("/api/admin/proposals/:id/audit", requireStaff, async (req, res) => {
   res.json({ ok: true });
 });
 
-/**
- * The carrier's own document behind a plan, for the group it was quoted
- * for: the page names the group, and the proposal must be filed under it.
- */
-app.get("/api/group/proposals/:id/file", async (req, res) => {
-  const g = groupForPage(req);
-  if (!g) return res.status(401).json({ error: "no session" });
-  const id = Number(req.params.id);
-  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
-  if (!row || row.group_name !== g.name || row.kind === "invoice" || row.status === "container") return res.status(404).json({ error: "No such proposal." });
-  const f = await proposalStore.getProposalFile(id).catch(() => null);
-  if (!f) return res.status(404).json({ error: "No such proposal." });
-  res.setHeader("Content-Type", f.mime);
-  res.setHeader("Content-Disposition", `inline; filename="${f.filename.replace(/"/g, "")}"`);
-  res.send(f.data);
-});
-
 app.delete("/api/admin/proposals/:id", requireStaff, async (req, res) => {
   const ok = await proposalStore.deleteProposal(Number(req.params.id)).catch(() => false);
   if (!ok) return res.status(404).json({ error: "No such proposal." });

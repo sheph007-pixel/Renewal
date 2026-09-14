@@ -269,10 +269,11 @@ and shows on the Proposals page as a pill (Audit passed · date, or how many
 things to check, with the mismatch table under Details) and an **Audit**
 button to run it again; `POST /api/admin/proposals/audit` runs it for every
 current proposal not yet audited (`?all=1` for all). On the client's side a
-quoted plan's card ends with **✓ Proposal Audit Completed**, the date, the
-models, and **View carrier proposal**, which opens the document from
-`/api/group/proposals/:id/file` — for the group it was quoted for only. A
-plan whose audit found something reads "under review by Kennion" instead.
+quoted plan's card ends with **✓ Proposal Audit Completed** and the date —
+nothing about which models checked, and no link to the carrier's document,
+which stays with staff (the raw quote lists EPO twins and options Kennion
+does not offer). A plan whose audit found something reads "under review by
+Kennion" instead.
 The audit runs once per reading; a re-read runs it again.
 
 ### Gravie rate workbooks
