@@ -3,7 +3,7 @@
 // the assistant's briefing no longer carries a headcount at all.
 // Run with: node scripts/test-data-audit.mjs
 import assert from "node:assert/strict";
-import { auditGroup, auditData, rosterHeadcount, CHECKS } from "../server/data-audit.js";
+import { auditGroup, auditData, rosterHeadcount, compareToExport, CHECKS } from "../server/data-audit.js";
 import { describeGroup } from "../server/assistant.js";
 
 const member = (plan, tier, premium, er = premium * 0.7) => ({ first: "A", last: "B", tier, plan, premium, employerCost: er, employeeCost: premium - er, spAges: [], chAges: [] });
@@ -101,6 +101,45 @@ const qc = q.checks.find((c) => c.key === "quotes");
 assert.equal(qc.level, "warn");
 assert.match(qc.detail, /1 of 1 plans have no rates/);
 assert.match(qc.detail, /priced on 9 enrolled; the group has 4/);
+
+// The month's billing, plan by plan and tier by tier against the census and
+// the XML's rates: a head more or less is timing; a different rate, a plan
+// billed that the XML does not carry, or a tier two people out is flagged.
+const billedClean = { medical: { participants: 4, monthly: 2600, byPlan: {
+  "EBPA Gold": { lines: 3, monthly: 2100, byTier: { Employee: { n: 2, rate: 500 }, "Employee + Spouse": { n: 1, rate: 1100 } } },
+  "EBPA Silver": { lines: 1, monthly: 500, byTier: { "Employee + Family": { n: 1, rate: 500 } } },
+} } };
+const bc = auditGroup({ g: clean(), admin, split, billing: billedClean, fundingMonth: "2026-09" }).checks.find((c) => c.key === "billing");
+assert.equal(bc.level, "ok", bc.detail);
+assert.match(bc.detail, /3 tiers checked/);
+const billedOff = { medical: { participants: 4, monthly: 2615, byPlan: {
+  "EBPA Gold": { lines: 3, monthly: 2115, byTier: { Employee: { n: 2, rate: 500 }, "Employee + Spouse": { n: 1, rate: 1115 } } },
+  "EBPA Silver": { lines: 1, monthly: 500, byTier: { "Employee + Family": { n: 3, rate: 500 } } },
+  "EBPA Bronze": { lines: 2, monthly: 800, byTier: { Employee: { n: 2, rate: 400 } } },
+} } };
+const bo = auditGroup({ g: clean(), admin, split, billing: billedOff, fundingMonth: "2026-09" }).checks.find((c) => c.key === "billing");
+assert.equal(bo.level, "warn");
+assert.match(bo.detail, /EBPA Gold ES: billed at \$1,115\.00, the XML's rate is \$1,100\.00/);
+assert.match(bo.detail, /EBPA Silver FAM: 3 billed, 1 in the XML/);
+assert.match(bo.detail, /Billed but not in this group's XML: EBPA Bronze \(2 billed\)/);
+
+// The stored export re-read against the portal: exact matches, drift named
+// field by field, companies on one side only.
+const exportOf = (g, patch = {}) => ({ group: { name: g.name, enrolled: g.enrolled, monthly: g.monthly, lives: g.lives, plans: g.plans.map((p) => ({ plan: p.plan, enrolled: p.enrolled, monthly: p.monthly })), lines: g.lines, ...patch } });
+const portal = [clean(), { ...clean(), name: "Drifted" }, { ...clean(), name: "Left", archived: false, eligible: true }, { ...clean(), name: "Gone", archived: true }];
+const match = (name) => portal.find((g) => g.name === name) || null;
+const cmp = compareToExport(
+  [exportOf(portal[0]), exportOf(portal[1], { enrolled: 5, monthly: 3100, plans: [{ plan: "EBPA Gold", enrolled: 4, monthly: 2600 }, { plan: "EBPA Silver", enrolled: 1, monthly: 500 }] }), exportOf({ ...clean(), name: "Brand New" })],
+  portal,
+  match,
+);
+assert.equal(cmp.companies, 3);
+assert.equal(cmp.matched, 1);
+assert.deepEqual(cmp.differ.map((d) => d.name), ["Drifted"]);
+assert.match(cmp.differ[0].fields.join(" | "), /enrolled 4 in the portal, 5 in the export/);
+assert.match(cmp.differ[0].fields.join(" | "), /EBPA Gold: 3 at \$2,100 in the portal, 4 at \$2,600 in the export/);
+assert.deepEqual(cmp.missingFromPortal.map((m) => m.name), ["Brand New"]);
+assert.deepEqual(cmp.notInFile.map((m) => m.name), ["Left"], "archived groups are not expected in the file");
 
 // The whole roster: live groups checked, the rest listed, worst first.
 const all = auditData([

@@ -818,7 +818,7 @@ is always about the data as it stands. The checks, in the order shown:
 | Headcount | The Employee Navigator roster (status Active) against who is enrolled. Flagged when the roster is more than three times the enrolled count and 20 people over — the sign of a roster full of part-time, ineligible or never-closed records. Never shown to a client or to the assistant. |
 | Size category | The 2-50 / 51+ bucket the client's Group Size badge shows: set by staff, or defaulted from the enrolled count — and flagged when the roster would put it on the other side of the line. |
 | Program carrier | On EBPA, HealthEZ or BCBS of Alabama, with every plan's carrier read rather than assumed. |
-| This month's billing | The funding workbook's participants and premium for the group against the XML's captive plans. |
+| This month's billing | The funding workbook against the XML for the group's captive plans: the month's participants and premium, then every billed plan and tier against the census's heads and the XML's billed rate for that tier — a rate that differs by a cent, a tier two people out, or a plan billed that the group's XML does not carry is flagged. |
 | Supplemental lines | Whether dental, vision, life and the rest were captured for the group. |
 | 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount. |
 | Account manager | One is assigned, so the assistant names a person rather than the fallback contact. |
@@ -834,6 +834,39 @@ the company page, and shows **what the assistant is told** — the briefing
 exactly what the client's assistant knows before the client asks. Aggregates
 only: no member is named anywhere in a result (`scripts/test-data-audit.mjs`
 and `scripts/test-group-payload.mjs` hold that line).
+
+The tab is the one place all three Employee Navigator files are set against
+each other and against what clients are served:
+
+- **The three files, audited** sits at the top — the same snapshot audit the
+  Import tab shows: which files are in, every carrier in the Carrier Stats
+  report against the portal on the report's own basis, billing against the
+  XML, and Claude's read of it.
+- **The stored export, re-read.** The XML is kept in Postgres, gzip-compressed,
+  with every import (`kennion.imports.raw_gzip`). This parses that file again
+  from scratch and sets every company in it against the group the portal
+  serves — enrolled, premium, each plan's heads and premium, supplemental
+  lines — and lists what differs field by field, which companies are in the
+  file but not the portal, and which the portal serves but the file no longer
+  carries. Run on request (`POST /api/admin/data-audit/verify-xml`; a full
+  export takes a little while); the result is kept in `kennion.settings` under
+  `dataCheck.xmlVerify`, says which export it was run against, and is marked
+  stale once a newer export lands.
+- **Every group, checked** — the per-group checks above. The check runs at boot
+  and after every upload as well as on request, and each result is kept in
+  `kennion.audits` under a fingerprint of the data it describes (the three
+  uploads, the stored-export re-read and the findings), so the same state is
+  one row updated in place and any change is a new one: what was found, and
+  when, is never lost.
+- **Claude's read** of the findings, on request (`POST
+  /api/admin/data-audit/read`): which groups to look at first, the most likely
+  cause and the one thing to do, and what is expected rather than wrong. The
+  checks are arithmetic done on the server; the model explains them and never
+  decides a figure. A read is kept in `kennion.audits` under the same
+  fingerprint, so the same state of the data is never read twice.
+
+There is one AI in the portal, Claude (the Anthropic SDK in `server/ai.js` and
+`server/assistant.js`); nothing else reads or writes the data.
 
 ## Known gaps
 

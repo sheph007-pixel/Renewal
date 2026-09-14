@@ -125,6 +125,15 @@ assert.ok(["2-50", "51+"].includes(payload.group.sizeCategory), "the staff size 
   assert.ok(!/Active employees on the census/.test(one.briefing), "no roster headcount in the assistant's briefing");
   assert.match(one.briefing, /no verified count of the company's total or benefit-eligible employees/);
   assert.equal((await fetch(`${base}/api/admin/data-audit`, { headers: { Authorization: `Bearer ${mine.code}` } })).status, 401, "staff only");
+  // Without a database no export is stored, and the re-read says so rather than pretending.
+  const v = await fetch(`${base}/api/admin/data-audit/verify-xml`, { method: "POST", headers: auth });
+  assert.equal(v.status, 400);
+  assert.match((await v.json()).error, /No database|No Employee Navigator export/);
+  // The read is canned under KENNION_FAKE_AI and comes back for the same state of the data.
+  const rd = await (await fetch(`${base}/api/admin/data-audit/read`, { method: "POST", headers: auth })).json();
+  assert.match(rd.read.text, /Canned data check read/);
+  const again = await (await fetch(`${base}/api/admin/data-audit`, { headers: auth })).json();
+  assert.equal(again.read.text, rd.read.text, "the read is kept for this state of the data");
 }
 
 // 7. Codes are guessable by design, so guessing is throttled.

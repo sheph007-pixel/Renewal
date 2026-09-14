@@ -16,6 +16,7 @@ import { classifyPlans, premiumBreakdown, tierKeyOf } from "./en-parse.js";
 const r2 = (n) => Math.round(n * 100) / 100;
 const close = (a, b, tolFrac, tolAbs) => Math.abs(a - b) <= Math.max(tolAbs, tolFrac * Math.abs(b));
 const money0 = (n) => "$" + Math.round(Number(n) || 0).toLocaleString("en-US");
+const money2 = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TIER_KEYS = ["EE", "ES", "EC", "FAM"];
 const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
 const LEVEL_RANK = { ok: 0, info: 0, warn: 1, fail: 2 };
@@ -115,16 +116,19 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     add("tiers", "ok", `EE ${g.tiers.EE ?? 0} · ES ${g.tiers.ES ?? 0} · EC ${g.tiers.EC ?? 0} · FAM ${g.tiers.FAM ?? 0} (no census on this row).`);
   }
 
+  // Heads per plan and tier, from the census — what the pages price and what
+  // the month's billing is checked against.
+  const counts = {};
+  for (const m of members || []) {
+    const k = tierKeyOf(m.tier) || "EE";
+    const c = (counts[m.plan] = counts[m.plan] || { EE: 0, ES: 0, EC: 0, FAM: 0 });
+    c[k]++;
+  }
+
   // Rates: a billed rate for every tier somebody is in, and the rates times
   // the heads coming to what the plan bills.
   {
     const rates = g.rates || {};
-    const counts = {};
-    for (const m of members || []) {
-      const k = tierKeyOf(m.tier) || "EE";
-      const c = (counts[m.plan] = counts[m.plan] || { EE: 0, ES: 0, EC: 0, FAM: 0 });
-      c[k]++;
-    }
     const missing = [];
     const offSchedule = [];
     let billedTiers = 0;
@@ -201,7 +205,9 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     else add("carrier", "ok", `${(g.programs || []).join(", ") || g.tpa || "—"}${g.tpa && (g.programs || []).length > 1 ? ` (billed under ${g.tpa})` : ""}.`);
   }
 
-  // Billing: this month's funding workbook against the XML for the captive plans.
+  // Billing: this month's funding workbook against the XML for the captive
+  // plans — the group's totals, then every billed plan and tier against the
+  // census's heads and the XML's billed rate for that tier.
   {
     const xmlN = breakdown.groupHealthEnrolled;
     const xml$ = breakdown.groupHealthMonthly;
@@ -210,8 +216,42 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     else {
       const billN = billing.medical?.participants || 0;
       const bill$ = billing.medical?.monthly || 0;
-      const ok = close(bill$, xml$, 0.01, 50) && close(billN, xmlN, 0.02, 2);
-      add("billing", ok ? "ok" : "warn", `${fundingMonth}: ${billN} participants, ${money0(bill$)} billed; the XML has ${xmlN} enrolled at ${money0(xml$)}.${ok ? "" : " The month's billing and the export disagree — a hire or termination since the export, or a rate change."}`);
+      const totalsOk = close(bill$, xml$, 0.01, 50) && close(billN, xmlN, 0.02, 2);
+      const inXml = new Map(plans.map((p) => [p.plan, p]));
+      const rates = g.rates || {};
+      const diffs = [];
+      const extra = [];
+      let tiersChecked = 0;
+      for (const [plan, p] of Object.entries(billing.medical?.byPlan || {})) {
+        const xp = inXml.get(plan);
+        if (!xp) {
+          extra.push(`${plan} (${p.lines} billed)`);
+          continue;
+        }
+        if (!members) {
+          // No census on this row: the plan's headcount is all there is to compare.
+          if (Math.abs((p.lines || 0) - (xp.enrolled || 0)) > 2) diffs.push(`${plan}: ${p.lines} billed, ${xp.enrolled} in the XML`);
+          continue;
+        }
+        for (const [tier, t] of Object.entries(p.byTier || {})) {
+          const k = tierKeyOf(tier);
+          if (!k) continue;
+          tiersChecked++;
+          const xmlHeads = (counts[plan] || {})[k] || 0;
+          const xmlRate = rates[plan] ? rates[plan][tier] : null;
+          if (Math.abs((t.n || 0) - xmlHeads) > 1) diffs.push(`${plan} ${k}: ${t.n} billed, ${xmlHeads} in the XML`);
+          if (t.rate != null && xmlRate != null && Math.abs(Number(t.rate) - Number(xmlRate)) > 0.01) diffs.push(`${plan} ${k}: billed at ${money2(t.rate)}, the XML's rate is ${money2(xmlRate)}`);
+        }
+      }
+      const ok = totalsOk && !diffs.length && !extra.length;
+      const head = `${fundingMonth}: ${billN} participants, ${money0(bill$)} billed; the XML has ${xmlN} enrolled at ${money0(xml$)}.`;
+      const tail = [
+        totalsOk ? null : "The month's total and the export disagree — a hire or termination since the export, or a rate change.",
+        diffs.length ? `Plan by plan: ${diffs.slice(0, 8).join("; ")}${diffs.length > 8 ? `; and ${diffs.length - 8} more` : ""}.` : null,
+        extra.length ? `Billed but not in this group's XML: ${extra.join(", ")}.` : null,
+        ok && tiersChecked ? ` Every billed plan and tier agrees with the census and the XML's rates (${tiersChecked} tier${tiersChecked === 1 ? "" : "s"} checked).` : null,
+      ].filter(Boolean);
+      add("billing", ok ? "ok" : "warn", [head, ...tail].join(" ").replace(/\s+/g, " "));
     }
   }
 
@@ -328,4 +368,48 @@ export function auditData(bundles) {
   else if (!counts.warn && !counts.fail) headline = `All ${counts.checked} groups are in order.`;
   else headline = `${counts.ok} of ${counts.checked} groups in order; ${counts.fail ? `${counts.fail} with a problem, ` : ""}${counts.warn} to look at. Most often: ${top.join(", ")}.`;
   return { generated: new Date().toISOString(), headline, counts, byCheck, checks: CHECKS, rows };
+}
+
+/**
+ * The stored export, re-read, against what the portal holds. `companies` is
+ * a fresh parse of the gzip kept with the last import (parseEnStream's
+ * output); `groups` the server's groups; `match` finds a group for an
+ * export name the way an import does (exact, then normalised). A company
+ * whose figures differ from its group is listed field by field, so drift —
+ * a partial import, a re-import that skipped it, an edit by hand — shows up
+ * as what changed rather than as a bare "differs".
+ */
+export function compareToExport(companies, groups, match) {
+  const seen = new Set();
+  const differ = [];
+  const missingFromPortal = [];
+  let matched = 0;
+  for (const c of companies) {
+    const x = c.group;
+    const g = match(x.name);
+    if (!g) {
+      missingFromPortal.push({ name: x.name, enrolled: x.enrolled, monthly: r2(x.monthly || 0) });
+      continue;
+    }
+    seen.add(g.name);
+    const fields = [];
+    if ((x.enrolled || 0) !== (g.enrolled || 0)) fields.push(`enrolled ${g.enrolled} in the portal, ${x.enrolled} in the export`);
+    if (!close(x.monthly || 0, g.monthly || 0, 0.001, 1)) fields.push(`medical ${money0(g.monthly)} in the portal, ${money0(x.monthly)} in the export`);
+    if ((x.lives || 0) !== (g.lives || 0)) fields.push(`covered lives ${g.lives} / ${x.lives}`);
+    const gp = new Map((g.plans || []).map((p) => [p.plan, p]));
+    for (const p of x.plans || []) {
+      const q = gp.get(p.plan);
+      if (!q) fields.push(`plan ${p.plan} (${p.enrolled} enrolled) is in the export, not the portal`);
+      else if ((q.enrolled || 0) !== (p.enrolled || 0) || !close(q.monthly || 0, p.monthly || 0, 0.001, 1)) fields.push(`${p.plan}: ${q.enrolled} at ${money0(q.monthly)} in the portal, ${p.enrolled} at ${money0(p.monthly)} in the export`);
+      gp.delete(p.plan);
+    }
+    for (const q of gp.values()) fields.push(`plan ${q.plan} (${q.enrolled} enrolled) is in the portal, not the export`);
+    const gl = Array.isArray(g.lines) ? g.lines.length : null;
+    const xl = Array.isArray(x.lines) ? x.lines.length : 0;
+    if (gl != null && gl !== xl) fields.push(`${gl} supplemental line${gl === 1 ? "" : "s"} in the portal, ${xl} in the export`);
+    if (fields.length) differ.push({ name: g.name, fields });
+    else matched++;
+  }
+  const notInFile = groups.filter((g) => !seen.has(g.name) && !g.archived && g.eligible !== false).map((g) => ({ name: g.name, enrolled: g.enrolled || 0 }));
+  return { companies: companies.length, matched, differ, missingFromPortal, notInFile };
 }

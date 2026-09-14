@@ -326,6 +326,32 @@ export async function explainAudit(payload) {
     .trim();
 }
 
+/**
+ * Claude's read of the data check: which groups to look at first and why,
+ * from the per-group findings (aggregates and group names only — the checks
+ * themselves are arithmetic done on the server; the model explains, it does
+ * not decide a number).
+ */
+export async function explainDataCheck(payload) {
+  if (fakeAi()) return "Canned data check read (KENNION_FAKE_AI).";
+  if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    output_config: { effort: "medium" },
+    system:
+      "You are a benefits data analyst reviewing a brokerage's renewal portal, group by group. The portal holds a snapshot built from three Employee Navigator files — the XML export (each company's enrollments, tier rates and premiums), the Carrier Stats report (Employee Navigator's own totals per carrier) and the month's funding workbook (what each group was actually billed, per plan and tier). Every group has been run through arithmetic checks on the server; you are given only the findings that were not clean: per group, which checks warned or failed and the exact wording, plus the outcome of re-reading the stored XML against what the portal holds, and the cross-file verdict by carrier. Every number in the payload is computed, not estimated — do not recompute or second-guess them; explain them. Write for a benefits advisor in plain language, no code, under 350 words: one sentence on whether the data is fit for clients today; then the groups to look at first, in order, each with the most likely cause and the one thing to do (re-import, set the size category, file an invoice, ask the TPA about a rate); then anything that is expected rather than wrong — a roster count that is Employee Navigator's Active status rather than an eligible headcount, a one-person timing difference between the export and the month's billing — said plainly so nobody chases it.",
+    messages: [{ role: "user", content: JSON.stringify(payload) }],
+  });
+  if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
+  return response.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+}
+
 export async function explainReconciliation(payload) {
   if (fakeAi()) return "Canned explanation (KENNION_FAKE_AI).";
   if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");

@@ -11,16 +11,16 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { newSecret, verifyTotp, otpauthUrl, newRecoveryCodes, hashCode, spendRecovery } from "./totp.js";
 import { parseEnStream, premiumBreakdown, classifyPlans, newDiagnostics, mergeDiagnostics } from "./en-parse.js";
 import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
+import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { auditData } from "./data-audit.js";
+import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -740,6 +740,10 @@ async function refreshAudit() {
       console.error("could not save the audit:", e.message);
     }
   }
+  // The per-group data check runs on the same occasions — boot and every
+  // upload — and its result is kept beside the snapshot audit in Postgres,
+  // one row per state of the data, so what was found and when is never lost.
+  await keepDataCheck();
   if (result.complete && !read && aiEnabled() && auditReadInFlight !== fingerprint) {
     auditReadInFlight = fingerprint;
     audit.reading = true;
@@ -2015,8 +2019,164 @@ function dataAuditBundles() {
   }));
 }
 
-app.get("/api/admin/data-audit", requireStaff, (_req, res) => {
-  res.json({ audit: auditData(dataAuditBundles()) });
+/**
+ * The stored export, re-read. The gzip kept with the last import is parsed
+ * again and every company set against the group the portal holds, so drift
+ * between the file Employee Navigator gave us and what clients are served
+ * is caught — a re-import that skipped a company, a partial apply, an edit
+ * by hand. Kept in settings so the result survives a deploy; the tab says
+ * which export it was run against and whether a newer one has landed.
+ */
+const XML_VERIFY_KEY = "dataCheck.xmlVerify";
+let xmlVerify = null;
+let xmlVerifying = false;
+async function loadXmlVerify() {
+  if (!db) return;
+  try {
+    const saved = await db.getSetting(XML_VERIFY_KEY);
+    if (saved && typeof saved === "object") xmlVerify = saved;
+  } catch (e) {
+    console.error("could not load the stored-export check:", e.message);
+  }
+}
+async function verifyStoredXml(by) {
+  const last = recentImports[0];
+  if (!db) throw new Error("No database: the export is not stored, so there is nothing to re-read.");
+  if (!last || !last.id) throw new Error("No Employee Navigator export has been imported yet.");
+  const rec = await db.importRaw(last.id);
+  if (!rec || !rec.raw_gzip) throw new Error("The last import was made before exports were kept; import the file again and it will be.");
+  const { companies, failures } = await parseEnStream(Readable.from([rec.raw_gzip]).pipe(zlib.createGunzip()));
+  const result = compareToExport(companies, groups, matchExisting);
+  xmlVerify = {
+    importId: last.id,
+    filename: last.filename,
+    uploadedAt: last.uploaded_at,
+    ranAt: new Date().toISOString(),
+    ranBy: by || null,
+    rawSize: rec.raw_size || null,
+    ...result,
+    rejected: failures.map((f) => ({ name: f.name, reason: f.reason })),
+  };
+  try {
+    await db.setSetting(XML_VERIFY_KEY, xmlVerify, by || null);
+  } catch (e) {
+    console.error("could not keep the stored-export check:", e.message);
+  }
+  return xmlVerify;
+}
+const xmlVerifyView = () => {
+  if (!xmlVerify) return null;
+  const last = recentImports[0];
+  return { ...xmlVerify, stale: !!(last && String(last.uploaded_at) !== String(xmlVerify.uploadedAt)), running: xmlVerifying };
+};
+
+/**
+ * Claude's read of the data check — once per state of the data (the three
+ * uploads, the stored-export check and the findings), kept in the audits
+ * table under its own fingerprint so nobody presses anything twice.
+ */
+let dataRead = null;
+const dataCheckFingerprint = (audit) =>
+  [
+    "datacheck-v1",
+    recentImports[0] ? recentImports[0].uploaded_at : "-",
+    carrierStats ? carrierStats.uploadedAt : "-",
+    funding ? funding.uploadedAt : "-",
+    xmlVerify ? xmlVerify.ranAt : "-",
+    audit.counts.ok,
+    audit.counts.warn,
+    audit.counts.fail,
+    audit.rows.filter((r) => r.status !== "ok" && r.status !== "skip").map((r) => `${r.name}:${r.checks.filter((c) => c.level === "warn" || c.level === "fail").map((c) => c.key).join(",")}`).join(";"),
+  ].join("|");
+async function dataReadFor(audit) {
+  const fingerprint = dataCheckFingerprint(audit);
+  if (dataRead && dataRead.fingerprint === fingerprint) return dataRead;
+  if (db) {
+    try {
+      const saved = await db.getAudit(fingerprint);
+      if (saved && saved.read) {
+        dataRead = { fingerprint, text: saved.read, at: saved.createdAt };
+        return dataRead;
+      }
+    } catch (e) {
+      console.error("could not load the data check read:", e.message);
+    }
+  }
+  return null;
+}
+const dataReadView = (read) => (read ? { text: read.text, at: read.at } : null);
+
+/**
+ * Run the data check and keep its result in the audits table under the
+ * fingerprint of the data it describes: the same state is one row, updated
+ * in place; a change to any file or finding is a new row. Never fatal.
+ */
+async function keepDataCheck() {
+  let audit;
+  try {
+    audit = auditData(dataAuditBundles());
+  } catch (e) {
+    console.error("data check:", e.message);
+    return null;
+  }
+  if (db) {
+    try {
+      await db.saveAudit(dataCheckFingerprint(audit), { kind: "datacheck", generated: audit.generated, headline: audit.headline, counts: audit.counts, byCheck: audit.byCheck, groups: audit.rows.map((r) => ({ name: r.name, status: r.status, flagged: r.checks.filter((c) => c.level === "warn" || c.level === "fail").map((c) => `${c.label}: ${c.detail}`) })) }, null);
+    } catch (e) {
+      console.error("could not keep the data check:", e.message);
+    }
+  }
+  return audit;
+}
+
+app.get("/api/admin/data-audit", requireStaff, async (_req, res) => {
+  const audit = (await keepDataCheck()) || auditData(dataAuditBundles());
+  const read = await dataReadFor(audit);
+  res.json({ audit, xml: xmlVerifyView(), read: dataReadView(read), snapshot: audit && audit.counts ? (auditSnapshotView()) : null });
+});
+
+/** The cross-file verdict the Import tab shows, for the same page. */
+function auditSnapshotView() {
+  return audit ? { generated: audit.generated, complete: audit.complete, verdict: audit.verdict, files: audit.files } : null;
+}
+
+app.post("/api/admin/data-audit/verify-xml", requireStaff, async (req, res) => {
+  if (xmlVerifying) return res.status(409).json({ error: "The export is being re-read now; try again in a moment." });
+  xmlVerifying = true;
+  try {
+    const result = await verifyStoredXml(req.staffEmail || null);
+    res.json({ xml: { ...result, stale: false, running: false } });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  } finally {
+    xmlVerifying = false;
+  }
+});
+
+app.post("/api/admin/data-audit/read", requireStaff, async (_req, res) => {
+  if (!aiEnabled()) return res.status(400).json({ error: "AI is off on this server (no API key)." });
+  const audit = auditData(dataAuditBundles());
+  const cached = await dataReadFor(audit);
+  if (cached) return res.json({ read: dataReadView(cached) });
+  const fingerprint = dataCheckFingerprint(audit);
+  const payload = {
+    headline: audit.headline,
+    counts: audit.counts,
+    byCheck: audit.byCheck,
+    groups: audit.rows
+      .filter((r) => r.status === "warn" || r.status === "fail")
+      .map((r) => ({ name: r.name, status: r.status, enrolled: r.figures.enrolled, monthly: r.figures.monthly, roster: r.figures.roster, findings: r.checks.filter((c) => c.level !== "ok").map((c) => ({ check: c.label, level: c.level, detail: c.detail })) })),
+    storedExport: xmlVerify ? { filename: xmlVerify.filename, uploadedAt: xmlVerify.uploadedAt, companies: xmlVerify.companies, matched: xmlVerify.matched, differ: xmlVerify.differ, missingFromPortal: xmlVerify.missingFromPortal, notInFile: xmlVerify.notInFile, stale: xmlVerifyView().stale } : null,
+    threeFiles: auditSnapshotView(),
+  };
+  try {
+    const text = await explainDataCheck(payload);
+    dataRead = { fingerprint, text, at: new Date().toISOString() };
+    if (db) await db.saveAudit(fingerprint, { kind: "datacheck", counts: audit.counts, headline: audit.headline }, text).catch((e) => console.error("could not keep the data check read:", e.message));
+    res.json({ read: dataReadView(dataRead) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /**
@@ -3843,6 +4003,7 @@ async function boot() {
   await loadMarketRules();
   await loadGroupCookieSecret();
   await loadPlaybook();
+  await loadXmlVerify();
   chatStore.sweepPendingFiles().catch((e) => console.error("chat attachments sweep:", e.message));
   rebuild();
   // An import that covered the roster before this rule existed still says

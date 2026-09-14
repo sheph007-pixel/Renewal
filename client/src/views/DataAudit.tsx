@@ -3,6 +3,7 @@ import { C, num, panel, pill, th } from "@/lib/ui";
 import { money0 } from "@/lib/model";
 import Link from "@/lib/Link";
 import { groupPath } from "@/lib/router";
+import AuditPanel from "@/views/AuditPanel";
 
 type Level = "ok" | "info" | "warn" | "fail";
 type Status = Level | "skip";
@@ -43,10 +44,120 @@ interface DataAuditResult {
   rows: Row[];
 }
 
+/** The stored Employee Navigator export, re-read and set against what the portal holds. */
+interface XmlVerify {
+  filename: string | null;
+  uploadedAt: string;
+  ranAt: string;
+  ranBy: string | null;
+  rawSize: number | null;
+  companies: number;
+  matched: number;
+  differ: { name: string; fields: string[] }[];
+  missingFromPortal: { name: string; enrolled: number; monthly: number }[];
+  notInFile: { name: string; enrolled: number }[];
+  rejected: { name: string; reason: string }[];
+  /** A newer export has been imported since this was run. */
+  stale: boolean;
+  running: boolean;
+}
+
 interface Props {
   token: string;
   /** Whether the server has an Anthropic key — the assistant's briefing only matters when it does. */
   ai: boolean;
+}
+
+const when = (s: string) => new Date(s).toLocaleString();
+const mb = (n: number | null) => (n ? `${(n / 1048576).toFixed(1)} MB gzipped` : "");
+
+/**
+ * The stored export re-read against the portal: is what clients are served
+ * still what Employee Navigator's file says? Run on request (a full export
+ * takes a little while to parse); the last result is kept in the database.
+ */
+function StoredExport({ token, xml, onResult }: { token: string; xml: XmlVerify | null; onResult: (x: XmlVerify) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/admin/data-audit/verify-xml", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      onResult(j.xml);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const problems = xml ? xml.differ.length + xml.missingFromPortal.length + xml.notInFile.length : 0;
+  const status: Status = !xml ? "skip" : problems ? "warn" : "ok";
+  return (
+    <section style={{ ...panel, marginTop: 16, padding: "18px 22px", borderLeft: `4px solid ${status === "ok" ? C.green : status === "warn" ? C.amber : C.hairline}` }} aria-label="Stored export">
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>The Stored Export, Re-read</h2>
+        {xml && <span style={{ ...tone(status), marginLeft: "auto" }}>{status === "ok" ? "Matches" : "Needs a look"}</span>}
+      </div>
+      <p style={{ margin: "8px 0 0", fontSize: 13.5, color: C.body, lineHeight: 1.6, maxWidth: 900 }}>
+        The Employee Navigator XML is kept in the database with every import. This reads that file again from scratch and sets
+        every company in it against the group the portal serves &mdash; enrolled, premium, each plan, supplemental lines &mdash; so a
+        company the import skipped, a partial apply or a figure changed since is caught against the source itself.
+      </p>
+      {xml ? (
+        <>
+          <p style={{ margin: "10px 0 0", fontSize: 14, color: C.ink, lineHeight: 1.6 }}>
+            {xml.matched} of {xml.companies} companies in <strong>{xml.filename || "the export"}</strong> match the portal exactly
+            {xml.differ.length ? `; ${xml.differ.length} differ` : ""}
+            {xml.missingFromPortal.length ? `; ${xml.missingFromPortal.length} in the file but not in the portal` : ""}
+            {xml.notInFile.length ? `; ${xml.notInFile.length} served by the portal but not in the file` : ""}.
+          </p>
+          <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted }}>
+            Export imported {when(xml.uploadedAt)}{xml.rawSize ? ` · ${mb(xml.rawSize)}` : ""} · re-read {when(xml.ranAt)}{xml.ranBy ? ` by ${xml.ranBy}` : ""}
+            {xml.stale && <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), marginLeft: 8 }}>A newer export has been imported since — run again</span>}
+          </div>
+          {xml.differ.length > 0 && (
+            <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
+              {xml.differ.map((d) => (
+                <li key={d.name}>
+                  <Link href={groupPath(d.name)} style={{ color: C.blue, fontWeight: 500 }}>{d.name}</Link>: {d.fields.join("; ")}
+                </li>
+              ))}
+            </ul>
+          )}
+          {xml.missingFromPortal.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 13, color: C.body }}>
+              In the file, not in the portal: {xml.missingFromPortal.map((m) => `${m.name} (${m.enrolled} enrolled)`).join(", ")}.
+            </div>
+          )}
+          {xml.notInFile.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 13, color: C.body }}>
+              Served by the portal, not in the file: {xml.notInFile.map((m) => `${m.name} (${m.enrolled} enrolled)`).join(", ")}. A company that has left should be archived.
+            </div>
+          )}
+          {xml.rejected.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 12.5, color: C.muted }}>
+              Company records the parser could not use: {xml.rejected.map((r) => `${r.name} (${r.reason})`).join("; ")}.
+            </div>
+          )}
+        </>
+      ) : (
+        <p style={{ margin: "10px 0 0", fontSize: 13, color: C.faint }}>Not run yet.</p>
+      )}
+      <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center" }}>
+        <button
+          onClick={() => void run()}
+          disabled={busy}
+          style={{ padding: "7px 14px", fontSize: 13, borderRadius: 4, cursor: busy ? "default" : "pointer", color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }}
+        >
+          {busy ? "Re-reading the export…" : xml ? "Re-read the stored export again" : "Re-read the stored export"}
+        </button>
+        {error && <span style={{ fontSize: 13, color: C.red }}>{error}</span>}
+      </div>
+    </section>
+  );
 }
 
 const tone = (s: Status) =>
@@ -159,12 +270,18 @@ function GroupChecks({ row, token, ai }: { row: Row; token: string; ai: boolean 
  */
 export default function DataAudit({ token, ai }: Props) {
   const [audit, setAudit] = useState<DataAuditResult | null>(null);
+  const [xml, setXml] = useState<XmlVerify | null>(null);
+  const [read, setRead] = useState<{ text: string; at: string } | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [issuesOnly, setIssuesOnly] = useState(true);
   const [showSkipped, setShowSkipped] = useState(false);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  /** Bumped with every run so the three-file audit at the top re-reads too. */
+  const [version, setVersion] = useState(0);
 
   const load = async () => {
     setLoading(true);
@@ -174,10 +291,28 @@ export default function DataAudit({ token, ai }: Props) {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || r.statusText);
       setAudit(j.audit);
+      setXml(j.xml || null);
+      setRead(j.read || null);
+      setVersion((v) => v + 1);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const askClaude = async () => {
+    setReading(true);
+    setReadError(null);
+    try {
+      const r = await fetch("/api/admin/data-audit/read", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.statusText);
+      setRead(j.read);
+    } catch (e) {
+      setReadError((e as Error).message);
+    } finally {
+      setReading(false);
     }
   };
   useEffect(() => {
@@ -212,6 +347,17 @@ export default function DataAudit({ token, ai }: Props) {
 
   return (
     <>
+      <AuditPanel token={token} version={version} ai={ai} />
+
+      <StoredExport
+        token={token}
+        xml={xml}
+        onResult={(x) => {
+          setXml(x);
+          setRead(null);
+        }}
+      />
+
       <section
         style={{ ...panel, marginTop: 16, padding: "18px 22px", borderLeft: `4px solid ${overall === "ok" ? C.green : overall === "warn" ? C.amber : overall === "fail" ? C.red : C.hairline}` }}
         aria-label="Data check"
@@ -254,6 +400,31 @@ export default function DataAudit({ token, ai }: Props) {
                 ))}
               </div>
             )}
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.hairline}` }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>Claude&rsquo;s Read</span>
+                {ai ? (
+                  <button
+                    onClick={() => void askClaude()}
+                    disabled={reading}
+                    style={{ background: "none", border: "none", padding: 0, fontSize: 13, color: C.blue, cursor: reading ? "default" : "pointer" }}
+                  >
+                    {reading ? "Reading the findings…" : read ? "Read again" : "Ask Claude what to look at first"}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 12.5, color: C.faint }}>AI is off on this server (no API key); the checks above stand on their own.</span>
+                )}
+                {read && <span style={{ fontSize: 12, color: C.faint }}>read {when(read.at)} · kept in the database for this state of the data</span>}
+              </div>
+              {readError && <div style={{ marginTop: 6, fontSize: 13, color: C.red }}>Could not get a read: {readError}</div>}
+              {read && <div style={{ marginTop: 8, fontSize: 13, color: C.body, lineHeight: 1.65, whiteSpace: "pre-wrap", maxWidth: 900 }}>{read.text}</div>}
+              {!read && ai && (
+                <div style={{ marginTop: 6, fontSize: 12.5, color: C.muted, maxWidth: 900 }}>
+                  The numbers above are arithmetic done on the server against the three Employee Navigator files. Claude reads
+                  the findings and says which groups to look at first and why; it does not decide a figure.
+                </div>
+              )}
+            </div>
           </>
         )}
       </section>
