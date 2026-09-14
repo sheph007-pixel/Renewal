@@ -34,7 +34,6 @@ import SignUp from "@/views/SignUp";
 import SyncMark from "@/views/SyncMark";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import Assistant from "@/views/Assistant";
-import Benchmarking from "@/views/Benchmarking";
 import ChatWidget from "@/views/ChatWidget";
 import { resetChat } from "@/lib/chat";
 import type { AccountManager } from "@/lib/model";
@@ -56,7 +55,6 @@ const TAB_LABEL: Record<GroupTab, string> = {
   changes: "What's Changing For 2027",
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
-  benchmarks: "Benchmarking",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
 };
@@ -523,9 +521,7 @@ export default function App() {
                   ? "Assistant"
                   : page.tab === "data"
                     ? "Data Check"
-                    : page.tab === "benchmarks"
-                      ? "Benchmarks"
-                      : "Import"
+                    : "Import"
       } — Rate Administration`;
     document.title = t;
   }, [page, g]);
@@ -744,9 +740,7 @@ export default function App() {
         ? "What Employee Navigator has on file besides medical"
         : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
-          : tab === "benchmarks"
-            ? "How your group compares with employers of its size, from published surveys"
-            : `Calendar Year (January 1 – December 31, ${planYear})`;
+          : `Calendar Year (January 1 – December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup" || tab === "changes"
@@ -772,7 +766,7 @@ export default function App() {
     supplemental: 3,
     signup: 4,
   };
-  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "benchmarks", "supplemental", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
@@ -955,8 +949,6 @@ export default function App() {
                 onContributionReset={() => setContributionOverride(null)}
                 onToggleSelected={toggleSelected}
               />
-            ) : tab === "benchmarks" ? (
-              <Benchmarking />
             ) : tab === "supplemental" ? (
               <SupplementalPackage />
             ) : (

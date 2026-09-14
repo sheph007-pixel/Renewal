@@ -42,12 +42,12 @@ export interface Route {
 }
 
 /** The pages a signed-in group has, in the order the side navigation lists them. */
-export type GroupTab = "home" | "assistant" | "changes" | "current" | "options" | "benchmarks" | "supplemental" | "signup";
+export type GroupTab = "home" | "assistant" | "changes" | "current" | "options" | "supplemental" | "signup";
 
 export type Page =
   | { kind: "signin"; staff: boolean }
   | { kind: "group"; tab: GroupTab; token?: string; slug?: string; thread?: number }
-  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "benchmarks" | "data"; group: string | null }
+  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data"; group: string | null }
   | { kind: "unknown" };
 
 export const PATHS = {
@@ -60,7 +60,6 @@ export const PATHS = {
   proposals: "/admin/proposals",
   import: "/admin/import",
   assistantAdmin: "/admin/assistant",
-  benchmarksAdmin: "/admin/benchmarks",
   data: "/admin/data",
 } as const;
 
@@ -68,7 +67,7 @@ export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent
 
 /** First path segments that are pages of their own, never a group's slug. */
 const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz"]);
-const TABS = "assistant|changes|current|options|benchmarks|supplemental|signup";
+const TABS = "assistant|changes|current|options|supplemental|signup";
 /** The Assistant page may name one conversation: `/:slug/assistant/:id`. */
 const TAB_TAIL = `(?:\\/(${TABS})(?:\\/(\\d{1,12}))?)?`;
 
@@ -147,9 +146,9 @@ export function parsePath(path: string): Page {
   // The short address: the slug alone, the session being a cookie.
   const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})${TAB_TAIL}$`));
   if (g && !RESERVED.has(g[1])) return { kind: "group", tab: (g[2] as GroupTab) || "home", slug: g[1], thread: thread(g[3]) };
-  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|benchmarks|data)(?:\/(.+))?$/);
+  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data)(?:\/(.+))?$/);
   if (m) {
-    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "benchmarks" | "data";
+    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data";
     return { kind: "admin", tab, group: tab === "groups" && m[2] ? safeDecode(m[2]) : null };
   }
   return { kind: "unknown" };
