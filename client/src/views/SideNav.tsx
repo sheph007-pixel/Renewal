@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { BenSyncDark, C } from "@/lib/ui";
 import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
@@ -178,6 +178,110 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
 }
 
 /**
+ * The account manager as one quiet row — avatar and name — that opens a
+ * small card with phone, email and a meeting link. Contact details are a
+ * click away rather than a block of text in the navigation.
+ */
+function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const avatar = (
+    <span
+      aria-hidden
+      style={{ display: "grid", placeItems: "center", flex: "none", width: compact ? 30 : 28, height: compact ? 30 : 28, borderRadius: "50%", background: C.railActive, border: `1px solid ${C.railLine}`, color: "#fff", fontSize: 11, fontWeight: 700 }}
+    >
+      {monogram(manager.name)}
+    </span>
+  );
+  return (
+    <div ref={box} className="rail-manager" style={{ position: "relative", margin: compact ? 0 : "0 8px 6px" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title={compact ? `${manager.name} · Your Account Manager` : undefined}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: compact ? "center" : "flex-start",
+          gap: 10,
+          width: "100%",
+          padding: compact ? 0 : "6px 8px",
+          borderRadius: 8,
+          background: open ? C.railActive : "none",
+          border: "none",
+          color: C.railInk,
+          cursor: "pointer",
+          textAlign: "left",
+          textTransform: "none",
+        }}
+      >
+        {avatar}
+        {!compact && (
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
+            <span style={{ display: "block", fontSize: 11, color: C.railMuted }}>Your Account Manager</span>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label={`Contact ${manager.name}`}
+          style={{
+            position: "absolute",
+            left: compact ? "calc(100% + 10px)" : 0,
+            bottom: compact ? 0 : "calc(100% + 6px)",
+            width: 232,
+            padding: "12px 14px",
+            borderRadius: 10,
+            background: "#fff",
+            color: C.ink,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+            zIndex: 20,
+          }}
+        >
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" }}>Your Account Manager</div>
+          <div style={{ marginTop: 2, fontSize: 14.5, fontWeight: 700, color: C.ink }}>{manager.name}</div>
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5, fontSize: 13 }}>
+            {manager.phone && <a href={telHref(manager.phone)}>{manager.phone}</a>}
+            {manager.email && (
+              <a href={`mailto:${manager.email}`} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {manager.email}
+              </a>
+            )}
+          </div>
+          {manager.calendly && (
+            <a
+              className="cta"
+              href={manager.calendly}
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: "block", marginTop: 12, padding: "8px 12px", borderRadius: 6, background: C.blue, color: "#fff", fontSize: 13, fontWeight: 600, textAlign: "center" }}
+            >
+              Schedule A Meeting &#8599;
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The client's navigation: a dark rail down the left with their name at the
  * top, the pages in the middle, and who to call at the bottom. It stays put
  * while a long rate grid scrolls past it, and collapses to icons for anyone
@@ -308,15 +412,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
       <div className="rail-foot" style={{ marginTop: "auto" }}>
         {collapsed ? (
           <div style={{ padding: "8px 8px 12px", borderTop: `1px solid ${C.railLine}`, display: "grid", gap: 6, justifyItems: "center" }}>
-            {manager?.name && (
-              <a
-                href={manager.email ? `mailto:${manager.email}` : telHref(manager.phone || "")}
-                title={manager.name}
-                style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: "50%", background: C.railActive, color: "#fff", fontSize: 12, fontWeight: 700 }}
-              >
-                {monogram(manager.name)}
-              </a>
-            )}
+            {manager?.name && <ManagerRow manager={manager} compact />}
             <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" title="Employee Navigator" style={{ display: "grid", placeItems: "center", padding: 6, color: C.railMuted }}>
               <GridIcon />
             </a>
@@ -329,39 +425,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
           </div>
         ) : (
           <>
-            {manager?.name && (
-              <div className="rail-manager" style={{ margin: "0 8px 6px", padding: "9px 10px", borderRadius: 8, background: C.railActive }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span
-                    aria-hidden
-                    style={{ display: "grid", placeItems: "center", flex: "none", width: 30, height: 30, borderRadius: "50%", background: C.railLine, color: "#fff", fontSize: 11.5, fontWeight: 700 }}
-                  >
-                    {monogram(manager.name)}
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.4px", color: C.railMuted, textTransform: "uppercase" }}>Your account manager</div>
-                    <div style={{ marginTop: 1, fontSize: 13.5, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 3 }}>
-                  {manager.phone && (
-                    <a href={telHref(manager.phone)} style={{ fontSize: 12.5, color: C.railInk }}>
-                      {manager.phone}
-                    </a>
-                  )}
-                  {manager.email && (
-                    <a href={`mailto:${manager.email}`} style={{ fontSize: 12.5, color: C.railInk, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {manager.email}
-                    </a>
-                  )}
-                  {manager.calendly && (
-                    <a href={manager.calendly} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: C.tealInk, fontWeight: 600 }}>
-                      Schedule a Meeting &#8599;
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
+            {manager?.name && <ManagerRow manager={manager} />}
 
             <div className="rail-links" style={{ padding: "6px 8px 8px", borderTop: `1px solid ${C.railLine}` }}>
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />

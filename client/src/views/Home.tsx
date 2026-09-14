@@ -72,7 +72,7 @@ export default function Home({ g, currentHref, optionsHref, supplementalHref, si
         <p style={p}>
           If you would like to talk any of it through, I would be glad to.{" "}
           <a href={HUNTER.calendly} target="_blank" rel="noreferrer" style={link}>
-            Schedule a call with me &rarr;
+            Schedule A Call With Me &rarr;
           </a>
         </p>
         <p style={{ ...p, marginTop: 26, marginBottom: 0 }}>

@@ -48,7 +48,7 @@ export default function ContactCard({
         {manager.calendly && (
           <div style={line}>
             <a href={manager.calendly} target="_blank" rel="noreferrer" style={{ color: C.blue }}>
-              Schedule a Meeting &#8599;
+              Schedule A Meeting &#8599;
             </a>
           </div>
         )}
