@@ -14,8 +14,6 @@ interface Props {
 /** Where the box remembers being open, per browser. */
 const OPEN_KEY = "kennion.chat.open";
 
-const SUGGEST = ["What's changing for my group in 2027?", "Which quoted option is closest to what we have now?", "What do we spend on medical today?"];
-
 /**
  * The chat box in the corner of every page. It opens on the most recent
  * conversation, so a question from one page can be carried on from the next,
@@ -83,10 +81,9 @@ export default function ChatWidget({ page, assistantHref }: Props) {
               threadId={current}
               page={page}
               onThread={(id) => setThreadId(id)}
-              suggestions={SUGGEST}
               compact
               autoFocus
-              welcome="Hi — I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your 2027 options, or your renewal."
+              welcome="Hi — I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your options, or your renewal."
             />
           </div>
         </div>
