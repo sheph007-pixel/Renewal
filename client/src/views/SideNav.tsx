@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { C } from "@/lib/ui";
+import { BenSyncDark, C } from "@/lib/ui";
 import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
@@ -40,7 +40,7 @@ const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeL
 
 /** One small line icon per page, so the rail reads at a glance. */
 function TabIcon({ tab }: { tab: GroupTab }) {
-  const s = { width: 17, height: 17, viewBox: "0 0 24 24", ...stroke };
+  const s = { width: 15, height: 15, viewBox: "0 0 24 24", ...stroke };
   switch (tab) {
     case "home":
       return (
@@ -138,9 +138,9 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "7px 12px",
+    padding: "6px 10px",
     borderRadius: 7,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: 500,
     color: C.railInk,
     textDecoration: "none",
@@ -214,27 +214,32 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
       <div
         className="brand"
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: collapsed ? "center" : "space-between",
-          gap: 10,
-          padding: collapsed ? "14px 8px 10px" : "16px 14px 14px",
+          padding: collapsed ? "12px 8px 8px" : "14px 14px 10px",
           borderBottom: `1px solid ${C.railLine}`,
         }}
       >
-        <Link href={homeHref} aria-label={`${groupName} home`} title={groupName} style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, color: "inherit", textDecoration: "none" }}>
+        {!collapsed && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+            <Link href={homeHref} aria-label="BenSync home" style={{ display: "block", lineHeight: 0 }}>
+              <img src={BenSyncDark} alt="BenSync" style={{ height: 18, display: "block" }} />
+            </Link>
+            {toggle}
+          </div>
+        )}
+        <Link href={homeHref} aria-label={`${groupName} home`} title={groupName} style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, minWidth: 0, color: "inherit", textDecoration: "none" }}>
           <span
             aria-hidden
             style={{
               display: "grid",
               placeItems: "center",
               flex: "none",
-              width: 34,
-              height: 34,
+              width: 26,
+              height: 26,
               borderRadius: "50%",
-              background: C.teal,
-              color: "#fff",
-              fontSize: 13,
+              background: C.railActive,
+              border: `1px solid ${C.railLine}`,
+              color: C.teal,
+              fontSize: 10.5,
               fontWeight: 700,
               letterSpacing: "0.3px",
             }}
@@ -245,11 +250,11 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             <span style={{ minWidth: 0 }}>
               <span
                 style={{
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
+                  display: "block",
+                  whiteSpace: "nowrap",
                   overflow: "hidden",
-                  fontSize: 14,
+                  textOverflow: "ellipsis",
+                  fontSize: 13,
                   fontWeight: 600,
                   lineHeight: 1.25,
                   color: "#fff",
@@ -258,15 +263,14 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
               >
                 {groupName}
               </span>
-              <span style={{ display: "block", marginTop: 2, fontSize: 11.5, color: C.railMuted }}>2027 Renewal</span>
+              <span style={{ display: "block", marginTop: 1, fontSize: 11, color: C.railMuted }}>2027 Renewal</span>
             </span>
           )}
         </Link>
-        {!collapsed && toggle}
       </div>
       {collapsed && <div style={{ display: "grid", placeItems: "center", padding: "8px 0 0" }}>{toggle}</div>}
 
-      <nav className="rail-nav" aria-label="Pages" style={{ padding: "10px 10px 6px", display: "flex", flexDirection: "column", gap: 2 }}>
+      <nav className="rail-nav" aria-label="Pages" style={{ padding: "8px 8px 6px", display: "flex", flexDirection: "column", gap: 1 }}>
         {items.map((it) => {
           const on = it.tab === current;
           return (
@@ -280,13 +284,13 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: collapsed ? "center" : "flex-start",
-                gap: 11,
-                padding: collapsed ? "10px 0" : "9px 11px",
-                borderRadius: 8,
+                gap: 10,
+                padding: collapsed ? "9px 0" : "7px 10px",
+                borderRadius: 7,
                 background: on ? C.railActive : "transparent",
                 color: on ? "#fff" : it.cta ? C.tealInk : C.railInk,
                 fontWeight: on || it.cta ? 600 : 500,
-                fontSize: 13.5,
+                fontSize: 13,
                 textDecoration: "none",
               }}
             >
@@ -327,7 +331,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
         ) : (
           <>
             {manager?.name && (
-              <div className="rail-manager" style={{ margin: "0 10px 8px", padding: "11px 12px", borderRadius: 10, background: C.railActive }}>
+              <div className="rail-manager" style={{ margin: "0 8px 6px", padding: "9px 10px", borderRadius: 8, background: C.railActive }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span
                     aria-hidden
@@ -360,12 +364,12 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
               </div>
             )}
 
-            <div className="rail-links" style={{ padding: "8px 10px 10px", borderTop: `1px solid ${C.railLine}` }}>
+            <div className="rail-links" style={{ padding: "6px 8px 8px", borderTop: `1px solid ${C.railLine}` }}>
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
               <LinkRow icon={<TicketIcon />} label="Support Ticket" href={SUPPORT_URL} external />
               <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
             </div>
-            <div className="rail-brand" style={{ padding: "0 22px 14px", fontSize: 11, color: C.railMuted, letterSpacing: "0.2px" }}>
+            <div className="rail-brand" style={{ padding: "0 18px 12px", fontSize: 10.5, color: C.railMuted, letterSpacing: "0.2px" }}>
               Powered by <span style={{ color: C.railInk, fontWeight: 600 }}>Kennion Benefit Advisors</span>
             </div>
           </>

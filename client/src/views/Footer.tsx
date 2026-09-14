@@ -26,6 +26,9 @@ export default function Footer() {
       >
         All above rates and benefits are for general information and discussion only. Rates are
         determined by the carrier and are not final until the group is enrolled with the carrier.
+        <div style={{ marginTop: 8 }}>
+          <span style={{ fontWeight: 700, color: C.muted }}>BenSync</span> · Powered by Kennion Benefit Advisors
+        </div>
       </div>
     </div>
   );
