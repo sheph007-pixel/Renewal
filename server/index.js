@@ -177,10 +177,13 @@ function cobaltApplies(name) {
   return hits.length === 1;
 }
 
-/** The slots that apply to one group: every carrier but Cobalt, which is by arrangement. */
-function slotsForGroup(name) {
-  const hasCobalt = Object.values(proposalSlotsByGroup[name] || {}).length > 0;
-  return SLOTS.filter((sl) => sl !== "Cobalt" || cobaltApplies(name) || hasCobalt);
+/**
+ * The slots that apply to one group. Cobalt is no longer offered as a 2027
+ * option, so its slot is not shown anywhere; a Cobalt document already on
+ * file stays stored and is simply not served.
+ */
+function slotsForGroup(_name) {
+  return SLOTS.filter((sl) => sl !== "Cobalt");
 }
 
 /**
@@ -1823,9 +1826,9 @@ function clientUhc(g) {
   };
 }
 
-/** A group's current proposals as a client sees them: PPO only when the rule says so. */
+/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt. */
 function clientProposals(name) {
-  const list = currentProposals[name] || [];
+  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt");
   if (!ppoOnly()) return list;
   return list.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
 }
@@ -2953,7 +2956,13 @@ async function loadMarketRules() {
     console.error("could not read the market rules:", e.message);
   }
 }
-const ppoOnly = () => marketRules.networks === "ppo-only";
+/**
+ * Kennion offers PPO plans only. Every carrier's quote carries EPO twins
+ * (UnitedHealthcare's E-coded plans, Gravie's EPO sheet on Cigna); they are
+ * never shown to a client, whatever the stored setting says — the switch
+ * that once turned this off is gone, so it cannot be flipped by accident.
+ */
+const ppoOnly = () => true;
 /** A proposal plan that is an EPO: says so in its network, its type, or its name. */
 const isEpoPlan = (pl) =>
   /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
@@ -3029,7 +3038,7 @@ app.get("/api/admin/market-rules", requireStaff, (req, res) => {
 
 app.post("/api/admin/market-rules", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
   const networks = String((req.body || {}).networks || "");
-  if (!["ppo-only", "all"].includes(networks)) return res.status(400).json({ error: "networks must be ppo-only or all" });
+  if (networks !== "ppo-only") return res.status(400).json({ error: "Kennion offers PPO plans only; EPO plans are never shown and the rule cannot be turned off." });
   const next = { ...marketRules, networks, by: req.staffEmail || null, at: new Date().toISOString() };
   try {
     if (db) await db.setSetting("marketRules", next, req.staffEmail || null);
