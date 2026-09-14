@@ -162,6 +162,9 @@ ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS context jsonb;
 -- the older one, which is kept and marked.
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS slot text;
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS superseded_by bigint;
+-- The two-model check of the stored reading against the document itself:
+-- {completedAt, status pass|issues|unreadable, models[], mismatches[], notes}.
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS audit jsonb;
 
 -- Employee Navigator's Carrier Stats report, one row per upload. The latest
 -- one is the independent check the XML import is reconciled against.
@@ -670,7 +673,7 @@ export function createDb(url) {
       const { rows } = await pool.query(
         `SELECT id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                 status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                kind, parent_id, context, slot, superseded_by
+                kind, parent_id, context, slot, superseded_by, audit
            FROM kennion.proposals ORDER BY uploaded_at DESC, id DESC`,
       );
       return rows;
@@ -678,13 +681,14 @@ export function createDb(url) {
 
     /** Change any of the reviewable fields on a proposal. */
     async updateProposal(id, fields) {
-      const allowed = ["group_name", "carrier", "extracted", "summary", "confidence", "status", "assigned_by", "error", "slot", "superseded_by"];
+      const allowed = ["group_name", "carrier", "extracted", "summary", "confidence", "status", "assigned_by", "error", "slot", "superseded_by", "audit"];
       const sets = [];
       const vals = [];
       for (const k of allowed) {
         if (!(k in fields)) continue;
-        vals.push(k === "extracted" ? JSON.stringify(fields[k]) : fields[k]);
-        sets.push(`${k} = $${vals.length}${k === "extracted" ? "::jsonb" : ""}`);
+        const json = k === "extracted" || k === "audit";
+        vals.push(json ? JSON.stringify(fields[k]) : fields[k]);
+        sets.push(`${k} = $${vals.length}${json ? "::jsonb" : ""}`);
       }
       if (!sets.length) return null;
       vals.push(id);
@@ -693,7 +697,7 @@ export function createDb(url) {
           WHERE id = $${vals.length}
           RETURNING id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                     status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                    kind, parent_id, context, slot, superseded_by`,
+                    kind, parent_id, context, slot, superseded_by, audit`,
         vals,
       );
       return rows[0] || null;

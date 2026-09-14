@@ -18,6 +18,7 @@ import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
+import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { auditData, compareToExport } from "./data-audit.js";
@@ -2953,7 +2954,10 @@ async function loadMarketRules() {
     console.error("could not read the market rules:", e.message);
   }
 }
-const ppoOnly = () => marketRules.networks === "ppo-only";
+// Kennion offers PPO options only. The quotes carry EPO versions too (Gravie
+// prices every design both ways; UHC's menu has EPO rows); none of them reach
+// a client, whatever the stored setting says.
+const ppoOnly = () => true;
 /** A proposal plan that is an EPO: says so in its network, its type, or its name. */
 const isEpoPlan = (pl) =>
   /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
@@ -3029,7 +3033,7 @@ app.get("/api/admin/market-rules", requireStaff, (req, res) => {
 
 app.post("/api/admin/market-rules", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
   const networks = String((req.body || {}).networks || "");
-  if (!["ppo-only", "all"].includes(networks)) return res.status(400).json({ error: "networks must be ppo-only or all" });
+  if (networks !== "ppo-only") return res.status(400).json({ error: "Kennion offers PPO options only; EPO plans are never shown." });
   const next = { ...marketRules, networks, by: req.staffEmail || null, at: new Date().toISOString() };
   try {
     if (db) await db.setSetting("marketRules", next, req.staffEmail || null);
@@ -3389,6 +3393,7 @@ async function proposalsChanged() {
         summary: r.summary || null,
         filename: r.filename,
         uploadedAt: r.uploaded_at,
+        audit: auditForClient(r.audit),
       });
     }
     currentProposals = current;
@@ -3484,6 +3489,33 @@ async function backfillPlanBenefits() {
   console.log(`proposals: benefits re-read done for ${want.length} proposal(s)`);
 }
 
+/** Proposals with an audit running, so two clicks do not run it twice. */
+const auditing = new Set();
+
+/**
+ * Check a proposal's stored reading against its document with both models
+ * and keep the result on the row. Never throws: a failure is recorded on the
+ * row so the admin can see it and run it again.
+ */
+async function runProposalAudit(id) {
+  if (auditing.has(id)) return;
+  auditing.add(id);
+  try {
+    const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
+    if (!row || !f) return;
+    const audit = await auditProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted || {} });
+    await proposalStore.updateProposal(id, { audit });
+    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} mismatches)` : ""}`);
+  } catch (e) {
+    console.error(`proposal ${id} audit failed:`, e.message);
+    await proposalStore.updateProposal(id, { audit: { completedAt: new Date().toISOString(), status: "unreadable", models: [], mismatches: [], notes: `The audit failed: ${e.message}` } }).catch(() => undefined);
+  } finally {
+    auditing.delete(id);
+    await proposalsChanged().catch(() => undefined);
+  }
+}
+
 async function runAnalysis(id, file, keepAssignment) {
   try {
     if (!aiEnabled()) {
@@ -3544,7 +3576,9 @@ async function runAnalysis(id, file, keepAssignment) {
     } else {
       Object.assign(fields, { group_name: null, status: "unassigned", assigned_by: null });
     }
-    await proposalStore.updateProposal(id, fields);
+    await proposalStore.updateProposal(id, { ...fields, audit: null });
+    // A fresh reading is checked against the document before it is trusted.
+    if (Array.isArray(fields.extracted.plans) && fields.extracted.plans.length) void runProposalAudit(id);
   } catch (e) {
     console.error(`proposal ${id} analysis failed:`, e.message);
     // A failed read leaves a proposal where it was filed; only one that was
@@ -3969,6 +4003,17 @@ app.get("/api/admin/proposals/:id/file", requireStaff, async (req, res) => {
   res.send(f.data);
 });
 
+/** Audit every current proposal that has never been audited (or, with all=1, every current one). */
+app.post("/api/admin/proposals/audit", requireStaff, async (req, res) => {
+  const all = String(req.query.all || "") === "1";
+  const rows = (await proposalStore.listProposals()).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
+  const todo = rows.filter((r) => all || !r.audit);
+  (async () => {
+    for (const r of todo) await runProposalAudit(r.id);
+  })();
+  res.json({ queued: todo.length });
+});
+
 /** Assign, reassign, confirm, or relabel a proposal. */
 /**
  * Re-read every proposal whose extraction predates the current questions —
@@ -4040,6 +4085,33 @@ app.post("/api/admin/proposals/:id/analyze", requireStaff, async (req, res) => {
   await proposalStore.updateProposal(id, { status: "analyzing", error: null });
   void runAnalysis(id, { buffer: f.data, mime: f.mime, filename: f.filename, context: current?.context || null }, keep);
   res.json({ ok: true });
+});
+
+/** Run the two-model audit on one proposal again. */
+app.post("/api/admin/proposals/:id/audit", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  if (!row) return res.status(404).json({ error: "No such proposal." });
+  if (!row.extracted || !Array.isArray(row.extracted.plans) || !row.extracted.plans.length) return res.status(400).json({ error: "Nothing read from this proposal yet; re-read it first." });
+  void runProposalAudit(id);
+  res.json({ ok: true });
+});
+
+/**
+ * The carrier's own document behind a plan, for the group it was quoted
+ * for: the page names the group, and the proposal must be filed under it.
+ */
+app.get("/api/group/proposals/:id/file", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = Number(req.params.id);
+  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  if (!row || row.group_name !== g.name || row.kind === "invoice" || row.status === "container") return res.status(404).json({ error: "No such proposal." });
+  const f = await proposalStore.getProposalFile(id).catch(() => null);
+  if (!f) return res.status(404).json({ error: "No such proposal." });
+  res.setHeader("Content-Type", f.mime);
+  res.setHeader("Content-Disposition", `inline; filename="${f.filename.replace(/"/g, "")}"`);
+  res.send(f.data);
 });
 
 app.delete("/api/admin/proposals/:id", requireStaff, async (req, res) => {
@@ -4116,6 +4188,15 @@ async function boot() {
   await loadPlaybook();
   await loadXmlVerify();
   chatStore.sweepPendingFiles().catch((e) => console.error("chat attachments sweep:", e.message));
+  // Proposals read before the audit existed get checked now, one at a time,
+  // so every plan a client can open carries a verdict.
+  if (aiEnabled() && process.env.KENNION_FAKE_AI !== "1") {
+    (async () => {
+      const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
+      if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
+      for (const r of rows) await runProposalAudit(r.id);
+    })().catch((e) => console.error("proposal audit sweep:", e.message));
+  }
   rebuild();
   // An import that covered the roster before this rule existed still says
   // who has left: every census-only group it did not touch.

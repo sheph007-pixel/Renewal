@@ -30,6 +30,70 @@ export interface Proposal {
   superseded_by?: number | null;
   parent_id?: number | null;
   context?: { subject?: string; from?: string; date?: string | null; body?: string; emailFilename?: string } | null;
+  /** The two-model check of the stored reading against the document. */
+  audit?: ProposalAudit | null;
+}
+
+export interface ProposalAudit {
+  completedAt: string;
+  status: "pass" | "issues" | "unreadable";
+  models: { model: string; verdict: string; mismatches: { plan: string; field: string; stored: string; onDocument: string }[]; notes: string }[];
+  mismatches: { plan: string; field: string; stored: string; onDocument: string; by: string }[];
+  notes: string;
+}
+
+/** The audit as a pill: passed, found something, or not run. */
+function AuditPill({ a }: { a: ProposalAudit | null | undefined }) {
+  if (!a) return <span style={pill(C.faint, "#f2f4f5", "#e0e4e6")} title="Not yet checked against the document">Audit pending</span>;
+  const when = new Date(a.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const who = a.models
+    .filter((m) => m.verdict === "pass" || m.verdict === "issues")
+    .map((m) => m.model.replace(/\s*\(.*\)$/, ""))
+    .join(" + ");
+  if (a.status === "pass") return <span style={pill(C.green, C.greenTint, C.greenEdge)} title={`${who} agree the stored plans match the document`}>✓ Audit passed · {when}</span>;
+  if (a.status === "issues") return <span style={pill(C.amber, C.amberTint, C.amberEdge)} title={a.notes}>⚠ Audit: {a.mismatches.length} to check · {when}</span>;
+  return <span style={pill(C.red, C.redTint, C.redEdge)} title={a.notes}>Audit could not run</span>;
+}
+
+/** What the audit found, plan by plan. */
+function AuditDetail({ a }: { a: ProposalAudit }) {
+  return (
+    <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 6, background: a.status === "pass" ? C.greenTint : a.status === "issues" ? C.amberTint : C.redTint, fontSize: 12.5, color: C.body, lineHeight: 1.5 }}>
+      <div style={{ fontWeight: 600, color: C.ink }}>
+        Proposal audit · {new Date(a.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+      </div>
+      {a.models.map((m) => (
+        <div key={m.model}>
+          <strong>{m.model}</strong>: {m.verdict}
+          {m.notes ? ` — ${m.notes}` : ""}
+        </div>
+      ))}
+      {a.mismatches.length > 0 && (
+        <table style={{ marginTop: 6, borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr>
+              {["Plan", "Field", "Stored", "On the document", "Found by"].map((h) => (
+                <th key={h} style={{ textAlign: "left", padding: "2px 10px 2px 0", color: C.faint, fontWeight: 600 }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {a.mismatches.map((x, i) => (
+              <tr key={i}>
+                <td style={{ padding: "2px 10px 2px 0" }}>{x.plan}</td>
+                <td style={{ padding: "2px 10px 2px 0" }}>{x.field}</td>
+                <td style={{ padding: "2px 10px 2px 0", color: C.red }}>{x.stored || "—"}</td>
+                <td style={{ padding: "2px 10px 2px 0", color: C.green }}>{x.onDocument || "—"}</td>
+                <td style={{ padding: "2px 10px 2px 0", color: C.faint }}>{x.by.replace(/\s*\(.*\)$/, "")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 interface Extraction {
@@ -415,6 +479,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
         <span style={{ fontSize: 12, color: C.ghost }} title={`${fmtSize(p.size)}${p.uploaded_by ? ` · uploaded by ${p.uploaded_by}` : ""}`}>
           {p.carrier || "Carrier unknown"} · {fmtWhen(p.uploaded_at)}
         </span>
+        {!!x?.plans?.length && p.status !== "analyzing" && !p.superseded_by && <AuditPill a={p.audit} />}
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           {p.status !== "analyzing" && (
             <select
@@ -464,6 +529,11 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
           <button onClick={() => void post(`/api/admin/proposals/${p.id}/analyze`)} style={linkBtn} disabled={p.status === "analyzing"}>
             Re-read
           </button>
+          {!!x?.plans?.length && (
+            <button onClick={() => void post(`/api/admin/proposals/${p.id}/audit`)} style={linkBtn} disabled={p.status === "analyzing"} title="Check the stored plans against the document with Claude and ChatGPT">
+              Audit
+            </button>
+          )}
           {confirmDelete ? (
             <>
               <button onClick={() => void post(`/api/admin/proposals/${p.id}`, undefined, "DELETE")} style={{ ...linkBtn, color: C.red, fontWeight: 600 }}>
@@ -527,6 +597,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
           ⚠ {x.audit_flags.length === 1 ? x.audit_flags[0] : `${x.audit_flags.length} things to check`}
         </div>
       )}
+      {open && p.audit && <AuditDetail a={p.audit} />}
       {open && x && <Extracted x={x} />}
     </div>
   );
