@@ -19,6 +19,7 @@ import {
   type GroupTab,
 } from "@/lib/router";
 import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/session";
+import Link from "@/lib/Link";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -763,24 +764,30 @@ export default function App() {
   const hrefFor = (t: GroupTab) => (g ? groupHome(g, t) : t === "options" ? PATHS.options : PATHS.current);
 
   // Welcome carries no step — it is where you start, not part of the count —
-  // so the five real pages run 1 through 5, Sign Up included.
+  // so the four real pages run 1 through 4, Sign Up included. Medical Plans
+  // is one step: today's plans and the 2027 options are two tabs on it.
   const TAB_STEP: Partial<Record<GroupTab, number>> = {
     changes: 1,
     current: 2,
-    options: 3,
-    supplemental: 4,
-    signup: 5,
+    supplemental: 3,
+    signup: 4,
   };
-  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "options", "benchmarks", "supplemental", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "assistant", "changes", "current", "benchmarks", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
       href: hrefFor(t),
-      label: TAB_LABEL[t],
+      label: t === "current" ? "Medical Plans" : TAB_LABEL[t],
       step: TAB_STEP[t],
       mark: t === "home" ? "home" : undefined,
       cta: t === "signup",
+      also: t === "current" ? (["options"] as GroupTab[]) : undefined,
     }));
+  /** Medical Plans is one page in the rail with two tabs on it: today's plans, and the 2027 options. */
+  const medicalTabs: { tab: GroupTab; label: string }[] = [
+    { tab: "current", label: "Current 2026 Medical Plans" },
+    { tab: "options", label: "New 2027 Medical Options" },
+  ];
 
   const shut = navCollapsed && !narrow;
   const assistantHref = (thread?: number | null) => groupHome(g, "assistant", thread);
@@ -846,7 +853,7 @@ export default function App() {
                       <SyncMark size={18} />
                     </span>
                   )}
-                  {tab === "assistant" ? "BenSync AI Assistant" : TAB_LABEL[tab]}
+                  {tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
                 </h1>
                 <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
                   {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
@@ -871,6 +878,34 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {(tab === "current" || tab === "options") && (
+              <nav aria-label="Medical Plans" className="noprint" style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: `1px solid ${C.border}` }}>
+                {medicalTabs.map((t) => {
+                  const on = t.tab === tab;
+                  return (
+                    <Link
+                      key={t.tab}
+                      href={hrefFor(t.tab)}
+                      aria-current={on ? "page" : undefined}
+                      style={{
+                        display: "block",
+                        padding: "8px 14px 10px",
+                        marginBottom: -1,
+                        fontSize: 14,
+                        fontWeight: on ? 600 : 500,
+                        color: on ? C.ink : C.body,
+                        textDecoration: "none",
+                        borderBottom: `3px solid ${on ? C.orange : "transparent"}`,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            )}
 
             {tab === "assistant" ? (
               <Assistant threadId={page.thread} hrefFor={assistantHref} groupName={g.name} />

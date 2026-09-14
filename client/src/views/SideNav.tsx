@@ -12,12 +12,14 @@ export interface NavItem {
   tab: GroupTab;
   href: string;
   label: string;
-  /** This page's step number, 1 through 5 — Welcome carries none. Kept for prev / next. */
+  /** This page's step number, 1 through 4 — Welcome carries none. */
   step?: number;
   /** Welcome's badge shows a house instead of a number. */
   mark?: "home";
   /** True only for Sign Up: the one page that is an action rather than a read. */
   cta?: boolean;
+  /** Other pages this row stands for: Medical Plans covers both the 2026 and the 2027 page. */
+  also?: GroupTab[];
 }
 
 /** The rail's width, which the shell reads as `--rail` to move the page over. */
@@ -383,7 +385,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
 
       <nav className="rail-nav" aria-label="Pages" style={{ padding: "8px 8px 6px", display: "flex", flexDirection: "column", gap: 1 }}>
         {items.map((it) => {
-          const on = it.tab === current;
+          const on = it.tab === current || (it.also || []).includes(current);
           return (
             <Link
               key={it.tab}
