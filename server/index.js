@@ -1082,28 +1082,43 @@ async function sendSupportEmail(t, g) {
     ["Manager", typeof g.manager === "string" ? g.manager : (g.manager && g.manager.name) || "—"],
   ];
   const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
-    <h2 style="margin:0 0 12px;font-size:17px">Support ticket · ${escapeHtml(g.name)}</h2>
+    <h2 style="margin:0 0 12px;font-size:17px">Support ticket ${ticketRef(t.id)} · ${escapeHtml(g.name)}</h2>
     <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
     <div style="font-weight:600;margin-bottom:4px">${escapeHtml(t.subject)}</div>
     <div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(t.description)}</div>
-    <p style="margin-top:18px;color:#888;font-size:12px">Sent from the BenSync client portal · ticket #${t.id}</p>
+    <p style="margin-top:18px;color:#888;font-size:12px">Sent from the BenSync client portal · ${ticketRef(t.id)}</p>
   </div>`;
   const body = {
     from: SUPPORT_FROM,
     to: SUPPORT_TO,
     reply_to: t.requester,
-    subject: `[${t.priority}] ${g.name}: ${t.subject}`,
+    subject: `[${ticketRef(t.id)} · ${t.priority}] ${g.name}: ${t.subject}`,
     html,
-    text: `Support ticket #${t.id}\nGroup: ${g.name}\nPriority: ${t.priority}\nRequester: ${t.requester}\n\n${t.subject}\n\n${t.description}`,
+    text: `Support ticket ${ticketRef(t.id)}\nGroup: ${g.name}\nPriority: ${t.priority}\nRequester: ${t.requester}\n\n${t.subject}\n\n${t.description}`,
   };
   if (t.file) body.attachments = [{ filename: t.file.name, content: t.file.base64 }];
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const send = async (b) => {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(b),
+    });
+    const text = await r.text();
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${text.slice(0, 300)}`);
+  };
+  try {
+    await send(body);
+  } catch (e) {
+    // Until kennion.com is verified in Resend, its built-in sender still
+    // delivers to the account owner: the ticket reaches Hunter either way.
+    if (!/not verified/i.test(e.message)) throw e;
+    console.error("support email: kennion.com is not verified in Resend; sending from onboarding@resend.dev to", SUPPORT_TO[0]);
+    await send({ ...body, from: "BenSync Support <onboarding@resend.dev>", to: [SUPPORT_TO[0]] });
+  }
 }
+
+/** The reference a client sees: BS-1001 rather than a bare row number. */
+const ticketRef = (id) => `BS-${1000 + Number(id)}`;
 
 let supportTickets = [];
 app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res) => {
@@ -1149,7 +1164,7 @@ app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res)
     if (db) await db.markSupportTicketEmailed(record.id, e.message).catch(() => {});
   }
   console.log(`support ticket #${record.id}: ${g.name} — ${priority} — ${subject}${emailed ? "" : " (email failed)"}`);
-  res.json({ ok: true, id: record.id, emailed });
+  res.json({ ok: true, id: record.id, ref: ticketRef(record.id), emailed });
 });
 
 app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) => {
