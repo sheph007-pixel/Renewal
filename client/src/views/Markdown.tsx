@@ -71,11 +71,11 @@ function blocks(text: string): ReactNode[] {
       while (i < lines.length && isTableRow(lines[i])) rows.push(cells(lines[i++]));
       out.push(
         <div key={k++} style={{ overflowX: "auto", margin: "8px 0" }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: "100%" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>
             <thead>
               <tr>
                 {head.map((c, j) => (
-                  <th key={j} style={{ textAlign: j ? "right" : "left", padding: "6px 8px", borderBottom: `1px solid ${C.border}`, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
+                  <th key={j} style={{ textAlign: j ? "right" : "left", padding: "6px 8px", borderBottom: `1px solid ${C.border}`, fontWeight: 600, color: C.ink, verticalAlign: "bottom" }}>
                     {inline(c)}
                   </th>
                 ))}

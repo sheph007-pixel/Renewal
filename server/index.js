@@ -1382,7 +1382,7 @@ async function assistantData(g) {
  * stored answer, or `error` {error}. The question is stored before the
  * model is asked; the answer once it is complete.
  */
-async function streamTurn({ g, thread, content, page, res }) {
+async function streamTurn({ g, thread, content, page, compact = false, res }) {
   if (chatBusy.has(thread.id)) return res.status(409).json({ error: "Wait for the current answer to finish." });
   chatBusy.add(thread.id);
   res.status(200);
@@ -1405,6 +1405,7 @@ async function streamTurn({ g, thread, content, page, res }) {
       data,
       history,
       page,
+      compact,
       playbook,
       onText: (t) => send("text", { text: t }),
       onStatus: (t) => send("status", { text: t }),
@@ -1494,7 +1495,7 @@ app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => 
   } else {
     thread = await chatStore.createThread(g.name, titleFor(content));
   }
-  await streamTurn({ g, thread, content, page, res });
+  await streamTurn({ g, thread, content, page, compact: body.compact === true, res });
 });
 
 // ---- The admin's side of the assistant ---------------------------------
