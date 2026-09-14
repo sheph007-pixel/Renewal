@@ -9,7 +9,7 @@ with its access code and sees two things:
    named employee detail with ages, tier and per-person EE/ER/total, switchable
    between monthly, semi-monthly, bi-weekly and weekly.
 2. **2027 Medical Plan Options** — the shopped market (UnitedHealthcare Level
-   Funded, Gravie, Nationwide, Angle, Cobalt), every plan costed at the group's own census,
+   Funded, Gravie, Nationwide, Angle), every plan costed at the group's own census,
    as one grid of every plan from every carrier, lowest cost first. Above it,
    **Employer Contribution**: four monthly figures by tier and Apply, which
    drive an Employer Cost column (contribution × enrolled per tier, never more
@@ -238,8 +238,8 @@ want the whole book rather than the block the portal serves.
 
 ### PPO only
 
-A rule, kept in `kennion.settings` under `marketRules` and on by default:
-**a client is never shown an EPO plan.** UnitedHealthcare's menu carries an
+A fixed rule: **a client is never shown an EPO plan.** Kennion offers PPO
+plans only. UnitedHealthcare's menu carries an
 E-coded EPO twin of most P-coded PPO plans, and Gravie prices every design
 twice, EPO and PPO; the EPO sits a few dollars under the PPO and adds a choice
 without adding a decision. So the server keeps EPO plans out of every client
@@ -247,9 +247,13 @@ payload — off the UHC menu, out of each carrier proposal's plan list — and a
 current plan the UHC mapping had pointed at an EPO is mapped to its PPO twin
 (same deductible, out-of-pocket max and coinsurance) so the like-for-like
 comparison still holds. Nothing is deleted: the stored quotes and proposals
-keep every plan, and staff pages still see them. The rule is fixed:
-`GET /api/admin/market-rules` reads it, and a `POST` asking for `"all"` is
-refused. The assistant is told the same and never presents an EPO option.
+keep every plan, and staff pages still see them. The switch that once turned
+the rule off is gone (`POST /api/admin/market-rules` accepts `ppo-only` and
+nothing else), and the client itself drops any EPO row that reaches it.
+
+Cobalt is not offered as a 2027 option: its slot is not shown on any group,
+its proposals are not served to clients, and the assistant does not name it.
+Anything already uploaded stays stored.
 
 ### Proposal audit
 
@@ -341,11 +345,9 @@ puts the whole set through the current questions. **List**
 and **By group** remain for working through a batch one file at a time.
 
 Each group holds one proposal per **slot** — UHC
-Fully Insured, UHC Level Funded, Gravie, Nationwide and Angle (Angle Health),
-plus Cobalt (a self-funded quote) for the groups Cobalt is quoting, listed in
-`server/data/cobalt-groups.json` and matched by normalised name. A group not on
-that list shows a dash in the Cobalt column and is never counted as missing it;
-upload a Cobalt proposal for one and the slot appears, so nothing is hidden. Surest is a
+Fully Insured, UHC Level Funded, Gravie, Nationwide and Angle (Angle Health).
+Cobalt is no longer a 2027 option: its slot is not shown, and a Cobalt
+document already uploaded stays stored but is not served. Surest is a
 UnitedHealthcare product, so a Surest quote fills that group's
 UnitedHealthcare slot for the funding it is written on. Claude fills the slot
 from the carrier and funding it reads; staff can change it. A document that

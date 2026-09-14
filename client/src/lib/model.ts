@@ -646,7 +646,7 @@ export interface MarketPlan {
 }
 
 /** The four proposal slots a group's 2027 options are built from, in the order they are shown. */
-export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt"];
+export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle"];
 
 /** "$1,500" / "1500.00" / "$1,500 individual" → 1500; anything unreadable → null. */
 export function moneyNum(v: string | number | null | undefined): number | null {
@@ -723,7 +723,12 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
   const counts = censusCounts(g);
   const out: MarketPlan[] = [];
   for (const pr of data.proposals || []) {
+    // Cobalt is not offered for 2027, and Kennion offers PPO plans only: the
+    // server already keeps both out of the payload; this holds the line if
+    // an older payload or a new source ever carries them.
+    if (pr.slot === "Cobalt") continue;
     for (const pl of pr.plans || []) {
+      if (networkTypeOf({ plan: pl.name, planType: pl.planType, network: pl.network }) === "EPO") continue;
       const rates = {} as Record<TierKey, number | null>;
       TIERS.forEach((t) => {
         const v = pl.rates?.[t.key];
