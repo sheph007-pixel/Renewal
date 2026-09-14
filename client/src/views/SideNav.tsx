@@ -263,7 +263,6 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
               >
                 {groupName}
               </span>
-              <span style={{ display: "block", marginTop: 1, fontSize: 11, color: C.railMuted }}>2027 Renewal</span>
             </span>
           )}
         </Link>
