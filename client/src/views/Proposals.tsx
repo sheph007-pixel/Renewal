@@ -1137,6 +1137,20 @@ export default function Proposals({ token, groups }: Props) {
                 ))}
               </section>
             )}
+            {withRows.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 0 6px", borderBottom: `1px solid ${C.hairline}`, fontSize: 12.5, color: C.muted }}>
+                <span>Plan names are read exactly as the carrier prints them; proposals read before that rule may still carry placement labels.</span>
+                <button
+                  onClick={() => {
+                    if (!window.confirm("Re-read every current proposal with the models? Each is read again and then audited. This takes a while and uses the AI budget.")) return;
+                    void fetch("/api/admin/proposals/reanalyze", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) }).then(() => load());
+                  }}
+                  style={{ ...linkBtn, fontWeight: 600 }}
+                >
+                  Re-read every proposal
+                </button>
+              </div>
+            )}
             {withRows.map(({ g, rows: rs }) => (
               <section key={g.name} style={{ padding: "12px 0 4px" }}>
                 <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.ink, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
