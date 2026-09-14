@@ -326,6 +326,68 @@ export async function explainAudit(payload) {
     .trim();
 }
 
+/**
+ * Claude's read of the data check: which groups to look at first and why,
+ * from the per-group findings (aggregates and group names only — the checks
+ * themselves are arithmetic done on the server; the model explains, it does
+ * not decide a number).
+ */
+const DATA_CHECK_SYSTEM =
+  "You are a benefits data analyst reviewing a brokerage's renewal portal, group by group. The portal holds a snapshot built from three Employee Navigator files — the XML export (each company's enrollments, tier rates and premiums), the Carrier Stats report (Employee Navigator's own totals per carrier) and the month's funding workbook (what each group was actually billed, per plan and tier). Every group has been run through arithmetic checks on the server; you are given only the findings that were not clean: per group, which checks warned or failed and the exact wording, plus the outcome of re-reading the stored XML against what the portal holds, and the cross-file verdict by carrier. Every number in the payload is computed, not estimated — do not recompute or second-guess them; explain them. Write for a benefits advisor in plain language, no code, under 350 words: one sentence on whether the data is fit for clients today; then the groups to look at first, in order, each with the most likely cause and the one thing to do (re-import, set the size category, file an invoice, ask the TPA about a rate); then anything that is expected rather than wrong — a roster count that is Employee Navigator's Active status rather than an eligible headcount, a one-person timing difference between the export and the month's billing — said plainly so nobody chases it.";
+
+export async function explainDataCheck(payload) {
+  if (fakeAi()) return "Canned data check read (KENNION_FAKE_AI).";
+  if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  const response = await client.messages.create({
+    model: MODEL,
+    max_tokens: 4000,
+    output_config: { effort: "medium" },
+    system: DATA_CHECK_SYSTEM,
+    messages: [{ role: "user", content: JSON.stringify(payload) }],
+  });
+  if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
+  return response.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+}
+
+/**
+ * The second opinion: the same findings read by ChatGPT, independently of
+ * Claude, so two models that agree on what to look at first are worth more
+ * than one. The key is the `ChatGPT` variable on Railway (or
+ * OPENAI_API_KEY); the model can be pinned with CHATGPT_MODEL. Plain HTTPS
+ * to OpenAI's chat completions endpoint — no SDK to carry for one call.
+ * Same payload, same rules: aggregates and group names only, and the model
+ * explains the arithmetic, it never decides a figure.
+ */
+const chatgptKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
+const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
+export const chatgptEnabled = () => !!chatgptKey() || fakeAi();
+
+export async function secondReadDataCheck(payload) {
+  if (fakeAi()) return "Canned second read (KENNION_FAKE_AI).";
+  if (!chatgptKey()) throw new Error("ChatGPT is off: no ChatGPT (or OPENAI_API_KEY) variable is set.");
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatgptKey()}` },
+    body: JSON.stringify({
+      model: CHATGPT_MODEL(),
+      messages: [
+        { role: "system", content: DATA_CHECK_SYSTEM },
+        { role: "user", content: JSON.stringify(payload) },
+      ],
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(j.error && j.error.message) || r.statusText}`);
+  const text = j.choices && j.choices[0] && j.choices[0].message ? String(j.choices[0].message.content || "").trim() : "";
+  if (!text) throw new Error("ChatGPT returned no text.");
+  return text;
+}
+
 export async function explainReconciliation(payload) {
   if (fakeAi()) return "Canned explanation (KENNION_FAKE_AI).";
   if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");

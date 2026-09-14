@@ -621,8 +621,13 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
                 Discard
               </button>
             )}
-            <button onClick={() => void savePlaybook()} disabled={!pb || !dirty || pbState === "saving"} style={{ ...primaryBtn, opacity: !pb || !dirty || pbState === "saving" ? 0.5 : 1 }}>
-              Save Playbook
+            <button
+              onClick={() => void savePlaybook()}
+              disabled={!pb || !dirty || pbState === "saving"}
+              title={!pb ? "Loading the playbook…" : dirty ? "Save these changes" : "Everything is saved. Change something above and this turns on."}
+              style={{ ...primaryBtn, opacity: !pb || !dirty || pbState === "saving" ? 0.5 : 1 }}
+            >
+              {pbState === "saving" ? "Saving…" : !pb || dirty ? "Save Playbook" : "Saved ✓"}
             </button>
           </div>
 

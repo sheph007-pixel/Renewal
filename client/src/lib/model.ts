@@ -86,7 +86,11 @@ export interface Member {
 }
 
 export interface GroupPlan {
+  /** The plan as the portal files it: Employee Navigator's name with the trailing year dropped. */
   plan: string;
+  /** The full name as Employee Navigator spells it, year and all. Absent on the shipped census. */
+  enName?: string;
+  /** The carrier or administrator, as Employee Navigator's plan catalog names it. */
   tpa: string;
   enrolled: number;
   monthly: number;
@@ -105,11 +109,10 @@ export interface Group {
   tpa: string;
   enrolled: number;
   /**
-   * Active employees on the census as of the last import, whether or not
-   * they took medical. Absent on a group imported before this field
-   * existed.
+   * The ACA size bucket staff set for the group (or the default from its
+   * enrolled count): the one figure the Group Size badge reads.
    */
-  medicalEligible?: number;
+  sizeCategory?: "2-50" | "51+";
   lives: number;
   tiers?: Record<TierKey, number>;
   monthly?: number;
@@ -132,15 +135,17 @@ export interface Group {
 }
 
 /**
- * ACA's small/large group line: 2-50 employees is small, 51+ is large. Off
- * the group's own headcount (active employees on the census, whether or not
- * they took medical) rather than just who is medically enrolled. Null when
- * there is no headcount to go on.
+ * ACA's small/large group line: 2-50 employees is small, 51+ is large. Reads
+ * the size category staff keep on the company page — the same one Rate
+ * Administration shows — so the client and the admin never disagree. It
+ * used to be derived from the Employee Navigator roster count, which counts
+ * everyone not marked terminated and put small groups over the line. Null
+ * when no category is on file.
  */
 export function groupSizeLabel(g: Group): string | null {
-  const n = g.medicalEligible ?? g.enrolled;
-  if (!n || n < 1) return null;
-  return n <= 50 ? "Small Group 2-50" : "Large Group 51+";
+  if (g.sizeCategory === "51+") return "Large Group 51+";
+  if (g.sizeCategory === "2-50") return "Small Group 2-50";
+  return null;
 }
 
 /** One supplemental benefit in force: no member detail, group totals only. */
@@ -665,6 +670,20 @@ function slotPresentation(slot: string, carrier: string | null, planType: string
  * gets to override with a differently-worded network name.
  */
 const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie"]);
+
+/**
+ * Where a client looks up a doctor on a plan's network. Gravie's plans run on
+ * Cigna's Open Access Plus (OAP) network, and Cigna's public directory answers
+ * "is my doctor in it?" — so every place a Gravie plan names its network links
+ * there. Null for a network with no public directory on file.
+ */
+export function networkDirectory(network: string | null | undefined): { name: string; url: string } | null {
+  const s = String(network || "");
+  if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {
+    return { name: "Cigna Open Access Plus directory", url: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001" };
+  }
+  return null;
+}
 
 /**
  * The plans on a group's proposals, priced at its census. A plan with no rate

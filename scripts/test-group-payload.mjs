@@ -99,6 +99,57 @@ for (const field of ["broker", "manager", "renewal", "sic", "sicDesc", "division
   assert.equal(payload.group[field], undefined, `${field} is not a client's business`);
 }
 
+// 6a. Each plan carries its carrier for the Carrier column; the full Employee
+// Navigator name rides along once the group has been imported from an export.
+for (const p of payload.group.plans) {
+  assert.ok(typeof p.tpa === "string", `plan ${p.plan} names its carrier`);
+  if (p.enName != null) assert.ok(p.enName.startsWith(p.plan), "the full name is the filed name plus the year");
+}
+
+// 6b. The client sees the size category staff keep, never the Employee
+// Navigator roster count: that counts everyone not marked terminated and is
+// a staff figure on the Data Check, not a headcount for a client page or the
+// assistant.
+assert.equal(payload.group.medicalEligible, undefined, "the roster count does not reach a client");
+assert.ok(["2-50", "51+"].includes(payload.group.sizeCategory), "the staff size category does");
+
+// 6c. The data check: every group's figures, and the briefing the assistant
+// answers from — staff only, aggregates only, and the roster count named to
+// staff is never told to the assistant.
+{
+  const auth = { Authorization: `Bearer ${staff.token}` };
+  const r = await fetch(`${base}/api/admin/data-audit`, { headers: auth });
+  assert.equal(r.status, 200);
+  const { audit } = await r.json();
+  assert.ok(audit.counts.checked >= roster.length, "every live group is checked");
+  assert.ok(audit.rows.some((x) => x.name === mine.name));
+  const row = audit.rows.find((x) => x.name === mine.name);
+  assert.ok(row.checks.length > 10, "a full set of checks per group");
+  assert.ok(!JSON.stringify(audit).includes('"first"'), "no member record in the audit");
+  const one = await (await fetch(`${base}/api/admin/data-audit/${encodeURIComponent(mine.name)}`, { headers: auth })).json();
+  assert.equal(one.group.name, mine.name);
+  assert.match(one.briefing, new RegExp(`Enrolled in medical: ${mine.enrolled} employees`));
+  assert.ok(!/Active employees on the census/.test(one.briefing), "no roster headcount in the assistant's briefing");
+  assert.match(one.briefing, /no verified count of the company's total or benefit-eligible employees/);
+  assert.equal((await fetch(`${base}/api/admin/data-audit`, { headers: { Authorization: `Bearer ${mine.code}` } })).status, 401, "staff only");
+  // Without a database no export is stored, and the re-read says so rather than pretending.
+  const v = await fetch(`${base}/api/admin/data-audit/verify-xml`, { method: "POST", headers: auth });
+  assert.equal(v.status, 400);
+  assert.match((await v.json()).error, /No database|No Employee Navigator export/);
+  // The read is canned under KENNION_FAKE_AI and comes back for the same state of the data.
+  const rd = await (await fetch(`${base}/api/admin/data-audit/read`, { method: "POST", headers: auth })).json();
+  assert.match(rd.read.text, /Canned data check read/);
+  const again = await (await fetch(`${base}/api/admin/data-audit`, { headers: auth })).json();
+  assert.equal(again.read.text, rd.read.text, "the read is kept for this state of the data");
+  // The second reader is independent: its own read, kept under its own key.
+  assert.equal(again.chatgpt, true, "canned under KENNION_FAKE_AI");
+  const second = await (await fetch(`${base}/api/admin/data-audit/read?by=chatgpt`, { method: "POST", headers: auth })).json();
+  assert.match(second.read.text, /Canned second read/);
+  const both = await (await fetch(`${base}/api/admin/data-audit`, { headers: auth })).json();
+  assert.equal(both.secondRead.text, second.read.text);
+  assert.equal(both.read.text, rd.read.text, "Claude's read is untouched by the second");
+}
+
 // 7. Codes are guessable by design, so guessing is throttled.
 const guess = (code, ip) =>
   fetch(`${base}/api/signin`, {

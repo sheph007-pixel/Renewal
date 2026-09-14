@@ -11,15 +11,16 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
-import { PassThrough } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { newSecret, verifyTotp, otpauthUrl, newRecoveryCodes, hashCode, spendRecovery } from "./totp.js";
 import { parseEnStream, premiumBreakdown, classifyPlans, newDiagnostics, mergeDiagnostics } from "./en-parse.js";
 import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit } from "./ai.js";
-import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
+import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
@@ -739,6 +740,10 @@ async function refreshAudit() {
       console.error("could not save the audit:", e.message);
     }
   }
+  // The per-group data check runs on the same occasions — boot and every
+  // upload — and its result is kept beside the snapshot audit in Postgres,
+  // one row per state of the data, so what was found and when is never lost.
+  await keepDataCheck();
   if (result.complete && !read && aiEnabled() && auditReadInFlight !== fingerprint) {
     auditReadInFlight = fingerprint;
     audit.reading = true;
@@ -1717,7 +1722,11 @@ const CLIENT_GROUP_FIELDS = [
   "linkToken",
   "tpa",
   "enrolled",
-  "medicalEligible",
+  // The ALE bucket staff set (or the default from enrolled), for the Group
+  // Size badge. The Employee Navigator roster count that used to travel here
+  // as `medicalEligible` counts everyone not marked terminated — part-time,
+  // ineligible, never closed — and is a staff figure now (see data-audit.js).
+  "sizeCategory",
   "lives",
   "tiers",
   "planTiers",
@@ -1734,23 +1743,6 @@ const CLIENT_GROUP_FIELDS = [
   "lines",
 ];
 
-/**
- * Active (non-terminated) headcount from a group's stored import
- * diagnostics — the same figure `medicalEligible` is meant to be, but read
- * fresh off data already on the group rather than whatever value was
- * computed at import time. That matters because the definition changed
- * after some groups were imported: their stored `medicalEligible` is
- * stale, but the raw counts it should have been built from are already
- * sitting in `diagnostics` from that same import, so there is no need to
- * re-upload anything to correct it.
- */
-function activeEmployeeCount(diagnostics) {
-  const employees = diagnostics && diagnostics.employees;
-  if (!employees || typeof employees.total !== "number") return null;
-  const skipped = Object.values(employees.skipped || {}).reduce((n, x) => n + x, 0);
-  return employees.total - skipped;
-}
-
 function clientGroupView(g) {
   const { members } = g;
   const planTiers = {};
@@ -1766,8 +1758,6 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
-  const active = activeEmployeeCount(g.diagnostics);
-  if (active != null) out.medicalEligible = active;
   // Whether supplemental has ever been read for this group, and what it
   // comes to — the same figures the Groups page shows staff.
   const breakdown = premiumBreakdown(g);
@@ -2068,6 +2058,253 @@ app.get("/api/admin/audit", requireStaff, async (req, res) => {
     await refreshAudit();
   }
   res.json({ audit });
+});
+
+/**
+ * The data check: every group against itself and against every file the
+ * portal holds about it (server/data-audit.js). Computed on request from
+ * what is in memory — it is cheap — so it is always about the data as it
+ * stands, including a rate keyed in a minute ago.
+ */
+function dataAuditBundles() {
+  const byName = new Map(adminGroups.map((a) => [a.name, a]));
+  const latestImportAt = recentImports[0] ? recentImports[0].uploaded_at : null;
+  return groups.map((g) => ({
+    g,
+    admin: byName.get(g.name) || {},
+    split: splitFor(g),
+    proposals: clientProposals(g.name),
+    billing: (funding && funding.summary[g.name]) || null,
+    fundingMonth: funding ? funding.month : null,
+    // The assigned manager by name; none means the assistant gets the fallback contact.
+    manager: g.manager ? managerContact(g.manager).name || null : null,
+    latestImportAt,
+  }));
+}
+
+/**
+ * The stored export, re-read. The gzip kept with the last import is parsed
+ * again and every company set against the group the portal holds, so drift
+ * between the file Employee Navigator gave us and what clients are served
+ * is caught — a re-import that skipped a company, a partial apply, an edit
+ * by hand. Kept in settings so the result survives a deploy; the tab says
+ * which export it was run against and whether a newer one has landed.
+ */
+const XML_VERIFY_KEY = "dataCheck.xmlVerify";
+let xmlVerify = null;
+let xmlVerifying = false;
+async function loadXmlVerify() {
+  if (!db) return;
+  try {
+    const saved = await db.getSetting(XML_VERIFY_KEY);
+    if (saved && typeof saved === "object") xmlVerify = saved;
+  } catch (e) {
+    console.error("could not load the stored-export check:", e.message);
+  }
+}
+/** The last import's export, read again from the gzip kept in the database. */
+async function readStoredExport() {
+  const last = recentImports[0];
+  if (!db) throw new Error("No database: the export is not stored, so there is nothing to re-read.");
+  if (!last || !last.id) throw new Error("No Employee Navigator export has been imported yet.");
+  const rec = await db.importRaw(last.id);
+  if (!rec || !rec.raw_gzip) throw new Error("The last import was made before exports were kept; import the file again and it will be.");
+  const { companies, failures } = await parseEnStream(Readable.from([rec.raw_gzip]).pipe(zlib.createGunzip()));
+  return { last, rec, companies, failures };
+}
+
+/**
+ * Fields a later parser learned to keep, filled in for groups imported
+ * before it did — from the export already in the database, so nobody has
+ * to upload the file again. Today: each plan's full Employee Navigator
+ * name (`enName`). Runs in the background at boot; the payload is updated
+ * in place, keeping when and by whom the group was imported.
+ */
+async function backfillFromStoredExport() {
+  if (!db) return;
+  const wanting = groups.filter((g) => (g.plans || []).some((p) => !p.enName));
+  if (!wanting.length) return;
+  const { companies } = await readStoredExport();
+  let filled = 0;
+  for (const c of companies) {
+    const g = matchExisting(c.group.name);
+    if (!g || !(g.plans || []).some((p) => !p.enName)) continue;
+    const names = new Map((c.group.plans || []).map((p) => [p.plan, p.enName]));
+    let changed = false;
+    for (const p of g.plans || []) {
+      const full = names.get(p.plan);
+      if (full && !p.enName) {
+        p.enName = full;
+        changed = true;
+      }
+    }
+    if (!changed) continue;
+    await db.updateGroupPayload(g.name, g);
+    filled++;
+  }
+  if (filled) {
+    rebuild();
+    console.log(`stored export: filled in full plan names for ${filled} group(s)`);
+  }
+}
+
+async function verifyStoredXml(by) {
+  const { last, rec, companies, failures } = await readStoredExport();
+  const result = compareToExport(companies, groups, matchExisting);
+  xmlVerify = {
+    importId: last.id,
+    filename: last.filename,
+    uploadedAt: last.uploaded_at,
+    ranAt: new Date().toISOString(),
+    ranBy: by || null,
+    rawSize: rec.raw_size || null,
+    ...result,
+    rejected: failures.map((f) => ({ name: f.name, reason: f.reason })),
+  };
+  try {
+    await db.setSetting(XML_VERIFY_KEY, xmlVerify, by || null);
+  } catch (e) {
+    console.error("could not keep the stored-export check:", e.message);
+  }
+  return xmlVerify;
+}
+const xmlVerifyView = () => {
+  if (!xmlVerify) return null;
+  const last = recentImports[0];
+  return { ...xmlVerify, stale: !!(last && String(last.uploaded_at) !== String(xmlVerify.uploadedAt)), running: xmlVerifying };
+};
+
+/**
+ * Claude's read of the data check — once per state of the data (the three
+ * uploads, the stored-export check and the findings), kept in the audits
+ * table under its own fingerprint so nobody presses anything twice.
+ */
+/** One read per reader — Claude, and ChatGPT as the second opinion — each kept under its own fingerprint. */
+const dataReads = { claude: null, chatgpt: null };
+const dataCheckFingerprint = (audit, who = "claude") =>
+  [
+    who === "chatgpt" ? "datacheck-gpt-v1" : "datacheck-v1",
+    recentImports[0] ? recentImports[0].uploaded_at : "-",
+    carrierStats ? carrierStats.uploadedAt : "-",
+    funding ? funding.uploadedAt : "-",
+    xmlVerify ? xmlVerify.ranAt : "-",
+    audit.counts.ok,
+    audit.counts.warn,
+    audit.counts.fail,
+    audit.rows.filter((r) => r.status !== "ok" && r.status !== "skip").map((r) => `${r.name}:${r.checks.filter((c) => c.level === "warn" || c.level === "fail").map((c) => c.key).join(",")}`).join(";"),
+  ].join("|");
+async function dataReadFor(audit, who = "claude") {
+  const fingerprint = dataCheckFingerprint(audit, who);
+  const have = dataReads[who];
+  if (have && have.fingerprint === fingerprint) return have;
+  if (db) {
+    try {
+      const saved = await db.getAudit(fingerprint);
+      if (saved && saved.read) {
+        dataReads[who] = { fingerprint, text: saved.read, at: saved.createdAt };
+        return dataReads[who];
+      }
+    } catch (e) {
+      console.error("could not load the data check read:", e.message);
+    }
+  }
+  return null;
+}
+const dataReadView = (read) => (read ? { text: read.text, at: read.at } : null);
+
+/**
+ * Run the data check and keep its result in the audits table under the
+ * fingerprint of the data it describes: the same state is one row, updated
+ * in place; a change to any file or finding is a new row. Never fatal.
+ */
+async function keepDataCheck() {
+  let audit;
+  try {
+    audit = auditData(dataAuditBundles());
+  } catch (e) {
+    console.error("data check:", e.message);
+    return null;
+  }
+  if (db) {
+    try {
+      await db.saveAudit(dataCheckFingerprint(audit), { kind: "datacheck", generated: audit.generated, headline: audit.headline, counts: audit.counts, byCheck: audit.byCheck, groups: audit.rows.map((r) => ({ name: r.name, status: r.status, flagged: r.checks.filter((c) => c.level === "warn" || c.level === "fail").map((c) => `${c.label}: ${c.detail}`) })) }, null);
+    } catch (e) {
+      console.error("could not keep the data check:", e.message);
+    }
+  }
+  return audit;
+}
+
+app.get("/api/admin/data-audit", requireStaff, async (_req, res) => {
+  const audit = (await keepDataCheck()) || auditData(dataAuditBundles());
+  const read = await dataReadFor(audit, "claude");
+  const second = await dataReadFor(audit, "chatgpt");
+  res.json({ audit, xml: xmlVerifyView(), read: dataReadView(read), secondRead: dataReadView(second), chatgpt: chatgptEnabled(), snapshot: auditSnapshotView() });
+});
+
+/** The cross-file verdict the Import tab shows, for the same page. */
+function auditSnapshotView() {
+  return audit ? { generated: audit.generated, complete: audit.complete, verdict: audit.verdict, files: audit.files } : null;
+}
+
+app.post("/api/admin/data-audit/verify-xml", requireStaff, async (req, res) => {
+  if (xmlVerifying) return res.status(409).json({ error: "The export is being re-read now; try again in a moment." });
+  xmlVerifying = true;
+  try {
+    const result = await verifyStoredXml(req.staffEmail || null);
+    res.json({ xml: { ...result, stale: false, running: false } });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  } finally {
+    xmlVerifying = false;
+  }
+});
+
+/** `?by=chatgpt` asks the second reader; anything else asks Claude. Each read is kept for this state of the data. */
+app.post("/api/admin/data-audit/read", requireStaff, async (req, res) => {
+  const who = String(req.query.by || "") === "chatgpt" ? "chatgpt" : "claude";
+  if (who === "claude" && !aiEnabled()) return res.status(400).json({ error: "AI is off on this server (no API key)." });
+  if (who === "chatgpt" && !chatgptEnabled()) return res.status(400).json({ error: "ChatGPT is off on this server: no ChatGPT (or OPENAI_API_KEY) variable is set." });
+  const audit = auditData(dataAuditBundles());
+  const cached = await dataReadFor(audit, who);
+  if (cached) return res.json({ read: dataReadView(cached) });
+  const fingerprint = dataCheckFingerprint(audit, who);
+  const payload = {
+    headline: audit.headline,
+    counts: audit.counts,
+    byCheck: audit.byCheck,
+    groups: audit.rows
+      .filter((r) => r.status === "warn" || r.status === "fail")
+      .map((r) => ({ name: r.name, status: r.status, enrolled: r.figures.enrolled, monthly: r.figures.monthly, roster: r.figures.roster, findings: r.checks.filter((c) => c.level !== "ok").map((c) => ({ check: c.label, level: c.level, detail: c.detail })) })),
+    storedExport: xmlVerify ? { filename: xmlVerify.filename, uploadedAt: xmlVerify.uploadedAt, companies: xmlVerify.companies, matched: xmlVerify.matched, differ: xmlVerify.differ, missingFromPortal: xmlVerify.missingFromPortal, notInFile: xmlVerify.notInFile, stale: xmlVerifyView().stale } : null,
+    threeFiles: auditSnapshotView(),
+  };
+  try {
+    const text = who === "chatgpt" ? await secondReadDataCheck(payload) : await explainDataCheck(payload);
+    dataReads[who] = { fingerprint, text, at: new Date().toISOString() };
+    if (db) await db.saveAudit(fingerprint, { kind: who === "chatgpt" ? "datacheck-second" : "datacheck", counts: audit.counts, headline: audit.headline }, text).catch((e) => console.error("could not keep the data check read:", e.message));
+    res.json({ read: dataReadView(dataReads[who]) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * One group in full: its checks, and the briefing the assistant is handed
+ * word for word — the same describeGroup() text every answer is written
+ * from — so staff can read exactly what a client's assistant knows.
+ */
+app.get("/api/admin/data-audit/:name", requireStaff, async (req, res) => {
+  const g = matchExisting(String(req.params.name || ""));
+  if (!g) return res.status(404).json({ error: "No such group." });
+  const bundle = dataAuditBundles().find((b) => b.g.name === g.name);
+  const [row] = auditData([bundle]).rows;
+  try {
+    const briefing = describeGroup(await assistantData(g));
+    res.json({ group: row, briefing });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 /**
@@ -3877,6 +4114,7 @@ async function boot() {
   await loadMarketRules();
   await loadGroupCookieSecret();
   await loadPlaybook();
+  await loadXmlVerify();
   chatStore.sweepPendingFiles().catch((e) => console.error("chat attachments sweep:", e.message));
   rebuild();
   // An import that covered the roster before this rule existed still says
@@ -3903,6 +4141,9 @@ async function boot() {
   // Proposals read before the reader asked for per-plan benefits, re-read in
   // the background so the plan cards fill in. Never blocks boot.
   void backfillPlanBenefits().catch((e) => console.error("proposals: benefits re-read:", e.message));
+  // Groups imported before the parser kept each plan's full Employee Navigator
+  // name get it from the export already in the database. Never blocks boot.
+  void backfillFromStoredExport().catch((e) => console.error("stored export: backfill:", e.message));
   // The inbox: first the key pair a file can be sealed to (made on the first
   // boot, kept in settings, its public half in every deploy log), then any
   // files placed in the bucket or at a URL, once every group is known to

@@ -38,15 +38,17 @@ as a link, and a reload comes back to the same place.
 | `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
 | `/<group-slug>/<tab>` | …its other pages: `assistant`, `changes`, `current`, `options`, `supplemental`, `signup` |
 | `/<group-slug>/assistant/<id>` | One conversation with the assistant |
+| | The rail lists **Medical Plans** once; the page has two tabs, *Current 2026 Medical Plans* (`current`) and *New 2027 Medical Options* (`options`), to switch between. |
 | `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
-| `/current` | Current Medical Plan(s) |
-| `/options` | 2027 Medical Plan Options |
+| `/current` | Current Medical Plan(s) — the first tab of **Medical Plans** |
+| `/options` | 2027 Medical Plan Options — the second tab of **Medical Plans** |
 | `/admin` | Staff sign-in |
 | `/admin/groups` | Rate Administration — Groups |
 | `/admin/groups/<company name>` | One company's page |
 | `/admin/rates` | Rate Administration — Plans & Rates |
 | `/admin/import` | Rate Administration — Import |
 | `/admin/assistant` | Rate Administration — Assistant: conversations, playbook, try it as a group |
+| `/admin/data` | Rate Administration — Data Check: every group's figures checked, and what the assistant is told |
 
 Sections within a page are `#hash` anchors — `/options#shortlist`, say — and
 each group page lists its sections under the heading as "On this page" links.
@@ -254,7 +256,12 @@ back on.
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
 **PPO** sheets each price the same 67 plan designs on Cigna Open Access Plus
 (the EPO version has no out-of-network cover, the PPO does), so every group's
-Gravie quote is the same 134 plans at that group's own rates. Some workbooks
+Gravie quote is the same 134 plans at that group's own rates. Wherever a
+Gravie plan names its network — the Options grid, a plan card, the popup —
+it carries a **Find a doctor** link to Cigna's public Open Access Plus
+directory (`networkDirectory()` in `client/src/lib/model.ts`), and the
+assistant gives the same link when a client asks whether a doctor is in
+network on a Gravie plan. Some workbooks
 also carry a "Narrow Network" sheet (Cigna LocalPlus, offered in a few areas)
 and a static benefits grid; both are left out. `server/gravie-parse.js` reads
 a workbook, and a zip of them — through the inbox or
@@ -554,7 +561,20 @@ quote on file for 2027 with its plans and rates, this month's billing, the
 last Sign Up submission, and the account manager to hand off to. It is the
 same allow-listed view the group's pages get — no census, no other company —
 so the assistant cannot say anything the client could not already read on the
-site. The question notes which page it was asked from. Replies stream over
+site. The question notes which page it was asked from.
+
+**Headcount.** The only headcount the assistant is given is who is enrolled.
+The briefing used to carry the Employee Navigator roster count as "active
+employees on the census" — every `<Employee>` in the company's export whose
+status is not Terminated — and the assistant repeated it when a client asked
+how many employees they had. That count is not eligibility: Employee
+Navigator's *Active* status covers part-time and PRN staff, classes that are
+not benefit-eligible and records nobody ever closed, so on some groups it ran
+to many times the enrolled figure (326 against 40 enrolled on one). It is now
+a staff figure on the **Data Check** tab, the briefing says plainly that no
+verified total or eligible headcount is on file and that the account manager
+can confirm one from the census, and the client's **Group Size** badge reads
+the size category staff keep on the company page rather than that count. Replies stream over
 server-sent events (`POST /api/chat/send`); conversations are kept in
 `kennion.chat_threads` / `kennion.chat_messages`, scoped to the group, and in
 memory when there is no database. The box and the tab only show when the
@@ -813,6 +833,87 @@ before ingest. Each ingested file is archived to the bucket under `archive/`,
 and the result of every entry is logged, never thrown, so a bad file cannot
 keep the site from booting. Clear `INBOX_INGEST` once the log shows the file
 landed, or the next boot ingests it again.
+
+## The Data Check tab
+
+The snapshot audit on the Import tab reconciles the three Employee Navigator
+files with each other in aggregate. **Data Check** (`/admin/data`,
+`server/data-audit.js`) is per company: every group on the roster checked
+against itself and against every other file the portal holds about it, so a
+wrong figure is caught here before a client reads it on a page or hears it
+from the assistant. It is computed on request from what is in memory, so it
+is always about the data as it stands. The checks, in the order shown:
+
+| Check | What it looks at |
+| --- | --- |
+| Enrolled count | The group's enrolled figure equals what its plans add to, what its tiers add to, and the census it was built from. |
+| Premium | The monthly medical premium equals the plans' total and the census's, and annual is twelve times it. |
+| Coverage tiers | Every enrolled person is on a coverage level the pages can price. |
+| Billed rates | A billed rate behind every tier somebody is in, and the rates × heads reproducing what each plan bills (else "off schedule"). |
+| Employer/employee split | Whether payroll's split came through, or the pages say Pending. |
+| Headcount | The Employee Navigator roster (status Active) against who is enrolled. Flagged when the roster is more than three times the enrolled count and 20 people over — the sign of a roster full of part-time, ineligible or never-closed records. Never shown to a client or to the assistant. |
+| Size category | The 2-50 / 51+ bucket the client's Group Size badge shows: set by staff, or defaulted from the enrolled count — and flagged when the roster would put it on the other side of the line. |
+| Program carrier | On EBPA, HealthEZ or BCBS of Alabama, with every plan's carrier read rather than assumed. |
+| This month's billing | The funding workbook against the XML for the group's captive plans: the month's participants and premium, then every billed plan and tier against the census's heads and the XML's billed rate for that tier — a rate that differs by a cent, a tier two people out, or a plan billed that the group's XML does not carry is flagged. |
+| Supplemental lines | Whether dental, vision, life and the rest were captured for the group. |
+| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount. |
+| Account manager | One is assigned, so the assistant names a person rather than the fallback contact. |
+| Client access | The code and a permanent link. |
+| Import | When the group was last imported, and whether the newest export still carried it. |
+| Identity | Duplicate spellings of the same company, and whether contacts came through. |
+
+Groups that need a look come first; "only groups that need a look" is the
+default view, and archived or not-in-program companies can be shown for a
+complete roster. Opening a group lists every check with its verdict, links to
+the company page, and shows **what the assistant is told** — the briefing
+`describeGroup()` builds for that group, word for word, so staff can read
+exactly what the client's assistant knows before the client asks. Aggregates
+only: no member is named anywhere in a result (`scripts/test-data-audit.mjs`
+and `scripts/test-group-payload.mjs` hold that line).
+
+The tab is the one place all three Employee Navigator files are set against
+each other and against what clients are served:
+
+- **The three files, audited** sits at the top — the same snapshot audit the
+  Import tab shows: which files are in, every carrier in the Carrier Stats
+  report against the portal on the report's own basis, billing against the
+  XML, and Claude's read of it.
+- **The stored export, re-read.** The XML is kept in Postgres, gzip-compressed,
+  with every import (`kennion.imports.raw_gzip`). This parses that file again
+  from scratch and sets every company in it against the group the portal
+  serves — enrolled, premium, each plan's heads and premium, supplemental
+  lines — and lists what differs field by field, which companies are in the
+  file but not the portal, and which the portal serves but the file no longer
+  carries. Run on request (`POST /api/admin/data-audit/verify-xml`; a full
+  export takes a little while); the result is kept in `kennion.settings` under
+  `dataCheck.xmlVerify`, says which export it was run against, and is marked
+  stale once a newer export lands.
+- **Every group, checked** — the per-group checks above. The check runs at boot
+  and after every upload as well as on request, and each result is kept in
+  `kennion.audits` under a fingerprint of the data it describes (the three
+  uploads, the stored-export re-read and the findings), so the same state is
+  one row updated in place and any change is a new one: what was found, and
+  when, is never lost.
+- **Claude's read** of the findings, on request (`POST
+  /api/admin/data-audit/read`): which groups to look at first, the most likely
+  cause and the one thing to do, and what is expected rather than wrong. The
+  checks are arithmetic done on the server; the model explains them and never
+  decides a figure. A read is kept in `kennion.audits` under the same
+  fingerprint, so the same state of the data is never read twice.
+
+- **A second read (ChatGPT)**, on request (`POST
+  /api/admin/data-audit/read?by=chatgpt`): the same findings read by ChatGPT
+  without seeing Claude's answer, so two readers that agree on what to look at
+  first are worth more than one. The key is the `ChatGPT` variable on Railway
+  (`CHATGPT_API_KEY` or `OPENAI_API_KEY` also work); the model defaults to
+  `gpt-5` and can be pinned with `CHATGPT_MODEL`. Kept in `kennion.audits`
+  under its own fingerprint. Without the variable the button says so.
+
+Two models read the findings; neither decides a figure. Every number on the
+tab is arithmetic done on the server against the three Employee Navigator
+files, and the checks are the record where the two reads differ. Claude is
+also the assistant's model (`server/assistant.js`); ChatGPT is used for this
+second read only.
 
 ## Known gaps
 

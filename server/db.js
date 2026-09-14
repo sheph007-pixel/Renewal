@@ -444,6 +444,14 @@ export function createDb(url) {
       );
     },
 
+    /**
+     * Rewrite a group's payload in place — a field filled in from the stored
+     * export, say — without touching when or by whom it was imported.
+     */
+    async updateGroupPayload(name, payload) {
+      await pool.query("UPDATE kennion.groups SET payload = $2 WHERE name = $1", [name, payload]);
+    },
+
     /** Staff edit to a group's code, ALE bucket, broker label, renewal state, or archived state. */
     async setMeta(groupName, field, value, by) {
       const col =
@@ -631,7 +639,7 @@ export function createDb(url) {
     /** Most recent uploads, newest first, for the import history panel. */
     async recentImports(limit = 8) {
       const { rows } = await pool.query(
-        `SELECT filename, uploaded_at, uploaded_by, companies_found, companies_applied, diagnostics
+        `SELECT id, filename, uploaded_at, uploaded_by, companies_found, companies_applied, diagnostics, raw_size
            FROM kennion.imports ORDER BY uploaded_at DESC LIMIT $1`,
         [limit],
       );

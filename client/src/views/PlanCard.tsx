@@ -1,4 +1,4 @@
-import { TIERS, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { TIERS, networkDirectory, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 
@@ -99,12 +99,25 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
         <tbody>
-          {benefits.map(([label, value]) => (
-            <tr key={label}>
-              <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
-              <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>{value}</td>
-            </tr>
-          ))}
+          {benefits.map(([label, value]) => {
+            const dir = label === "Network" ? networkDirectory(value) : null;
+            return (
+              <tr key={label}>
+                <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
+                <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
+                  {value}
+                  {dir && (
+                    <>
+                      {" · "}
+                      <a href={dir.url} target="_blank" rel="noreferrer" title={dir.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        Find a doctor
+                      </a>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <div>
