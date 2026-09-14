@@ -26,7 +26,7 @@ const MAX_ROUNDS = 5;
 /**
  * What staff can change from the admin, with what it starts as. Each list
  * item can be switched off without being deleted, so a rule can be tried
- * both ways; order is the order the model reads them.
+ * both ways; every line carries the same weight.
  */
 const item = (text) => ({ id: Math.random().toString(36).slice(2, 10), text, on: true });
 export const DEFAULT_PLAYBOOK = {
@@ -302,7 +302,7 @@ function playbookText(playbook) {
   const on = (list) => list.filter((x) => x.on !== false);
   const parts = [`## Who you are\n${p.persona}`];
   const rules = on(p.rules);
-  if (rules.length) parts.push(`## Rules from Kennion — follow these, in order of importance\n${rules.map((r) => `- ${r.text}`).join("\n")}`);
+  if (rules.length) parts.push(`## Rules from Kennion — follow every one of these; they all carry equal weight\n${rules.map((r) => `- ${r.text}`).join("\n")}`);
   const facts = on(p.facts);
   if (facts.length) parts.push(`## Facts about the program — true unless the client's figures say otherwise\n${facts.map((r) => `- ${r.text}`).join("\n")}`);
   const faq = on(p.faq);

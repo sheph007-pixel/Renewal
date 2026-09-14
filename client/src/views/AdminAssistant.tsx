@@ -63,8 +63,8 @@ const same = (a: PlaybookBody, b: PlaybookBody) => JSON.stringify([a.persona, a.
 
 const rowBtn = { display: "grid", placeItems: "center", width: 24, height: 24, border: "none", borderRadius: 5, background: "transparent", color: C.faint, cursor: "pointer", flex: "none" } as const;
 
-/** One editable line in a list: on/off, the text, move, remove. */
-function LineRow({ line, first, last, onChange, onMove, onRemove }: { line: Line; first: boolean; last: boolean; onChange: (l: Line) => void; onMove: (d: -1 | 1) => void; onRemove: () => void }) {
+/** One editable line in a list: on/off, the text, remove. Every line carries the same weight. */
+function LineRow({ line, onChange, onRemove }: { line: Line; onChange: (l: Line) => void; onRemove: () => void }) {
   return (
     <div className="pb-row" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 6px 6px 8px", borderRadius: 7, background: line.on ? "transparent" : C.zebra }}>
       <input type="checkbox" checked={line.on} onChange={(e) => onChange({ ...line, on: e.target.checked })} title={line.on ? "On — the assistant follows this" : "Off — kept but not used"} style={{ marginTop: 5, accentColor: C.blue, cursor: "pointer" }} />
@@ -83,12 +83,6 @@ function LineRow({ line, first, last, onChange, onMove, onRemove }: { line: Line
         onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
       />
       <span className="pb-tools" style={{ display: "flex", gap: 2, marginTop: 2 }}>
-        <button onClick={() => onMove(-1)} disabled={first} title="Move up" aria-label="Move up" style={{ ...rowBtn, opacity: first ? 0.3 : 1 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 14l6-6 6 6" /></svg>
-        </button>
-        <button onClick={() => onMove(1)} disabled={last} title="Move down" aria-label="Move down" style={{ ...rowBtn, opacity: last ? 0.3 : 1 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 10l6 6 6-6" /></svg>
-        </button>
         <button onClick={onRemove} title="Remove" aria-label="Remove" style={rowBtn}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
@@ -107,13 +101,6 @@ function LineList({ title, hint, lines, onChange, placeholder, suggestions }: { 
     onChange([...lines, { id: newId(), text: t, on: true }]);
     setDraft("");
   };
-  const move = (i: number, d: -1 | 1) => {
-    const j = i + d;
-    if (j < 0 || j >= lines.length) return;
-    const next = [...lines];
-    [next[i], next[j]] = [next[j], next[i]];
-    onChange(next);
-  };
   const unused = (suggestions || []).filter((s) => !lines.some((l) => l.text === s));
   return (
     <div>
@@ -124,8 +111,8 @@ function LineList({ title, hint, lines, onChange, placeholder, suggestions }: { 
       <div style={{ fontSize: 12, color: C.muted, margin: "2px 0 6px" }}>{hint}</div>
       <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, background: C.card }}>
         {!lines.length && <div style={{ padding: "10px 12px", fontSize: 12.5, color: C.faint }}>None yet.</div>}
-        {lines.map((l, i) => (
-          <LineRow key={l.id} line={l} first={i === 0} last={i === lines.length - 1} onChange={(nl) => onChange(lines.map((x) => (x.id === l.id ? nl : x)))} onMove={(d) => move(i, d)} onRemove={() => onChange(lines.filter((x) => x.id !== l.id))} />
+        {lines.map((l) => (
+          <LineRow key={l.id} line={l} onChange={(nl) => onChange(lines.map((x) => (x.id === l.id ? nl : x)))} onRemove={() => onChange(lines.filter((x) => x.id !== l.id))} />
         ))}
         <div style={{ display: "flex", gap: 6, padding: 6, borderTop: lines.length ? `1px solid ${C.hairline}` : "none" }}>
           <input
@@ -489,7 +476,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
           <div style={{ flex: "1 1 420px" }}>
             <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>Playbook</h2>
             <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 760 }}>
-              How the assistant is told to behave. It reads all of this on every question, so a change takes effect the next time anyone asks — no deploy. Untick an item to try the assistant without it; the order of rules is the order of importance.
+              How the assistant is told to behave. It reads all of this on every question, so a change takes effect the next time anyone asks — no deploy. Untick an item to try the assistant without it. Every rule carries the same weight.
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginLeft: "auto" }}>
@@ -530,7 +517,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
           <div>
             <LineList
               title="Rules"
-              hint="What to always do, never do, or say a certain way. One rule per line; the first ones carry the most weight."
+              hint="What to always do, never do, or say a certain way. One rule per line. They all carry the same weight, in no particular order."
               lines={draft.rules}
               onChange={(rules) => setDraft({ ...draft, rules })}
               placeholder="e.g. Never describe the move as a rate increase."
