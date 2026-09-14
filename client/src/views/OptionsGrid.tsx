@@ -351,7 +351,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
             Employer Contribution
             <InfoTip title="You Set The Budget">
-              Enter what you will pay each month for each coverage tier and press Apply. That amount is the same on every plan, so your cost is fixed no matter which plan an employee picks. An employee who chooses a plan that costs more than your contribution pays the difference; one who chooses a cheaper plan pays less. Carriers require at least 50% of the lowest employee-only rate. Prefer to think in percentages? Switch to Percentage: the shares you pick on the least expensive plan become the dollar amounts.
+              You decide what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks. If they choose a plan that costs more, they pay the difference, so your budget never moves. Carriers require at least half the lowest employee-only rate.
             </InfoTip>
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
@@ -389,7 +389,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       ["Dependents", pctDep, 0, (v: number) => setPercent(pctEE, v), "of what spouse and child coverage adds on that plan"],
                     ] as [string, number, number, (v: number) => void, string][]
                   ).map(([label, value, min, set, hint]) => (
-                    <label key={label} style={{ display: "block", minWidth: 220 }} title={`${label}: ${hint}`}>
+                    <label key={label} style={{ display: "block", width: 260 }} title={`${label}: ${hint}`}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                         {label}
                         <input
@@ -402,7 +402,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                         <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
                       </div>
                       <input type="range" min={min} max={100} step={1} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
-                      <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{hint}</div>
                     </label>
                   ))}
                 </div>
