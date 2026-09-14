@@ -266,10 +266,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const actionsFor = (p: MarketPlan) => (
     <>
       <button onClick={() => toggleHeart(p.plan)} disabled={!selected[p.plan] && favoritesFull} title={!selected[p.plan] && favoritesFull ? `Up to ${MAX_FAVORITES} favorites` : undefined} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
-        {selected[p.plan] ? "♥ On your shortlist" : "♡ Add to shortlist"}
+        {selected[p.plan] ? "♥ On Your Shortlist" : "♡ Add To Shortlist"}
       </button>
       <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(inProposal(p.plan)), padding: "7px 12px", fontSize: 13 }}>
-        {inProposal(p.plan) ? "✓ In comparison" : "+ Add to comparison"}
+        {inProposal(p.plan) ? "✓ In Comparison" : "+ Add To Comparison"}
       </button>
     </>
   );
@@ -417,7 +417,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </button>
           {proposal.length > 0 && (
             <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
-              {compareOpen ? "Hide comparison" : "View comparison"}
+              {compareOpen ? "Hide Comparison" : "View Comparison"}
             </button>
           )}
           <input
@@ -432,7 +432,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </button>
           {filtering && (
             <button onClick={clearAll} style={{ ...chip(false), color: C.blue }}>
-              Clear all
+              Clear All
             </button>
           )}
         </div>

@@ -31,6 +31,11 @@ select,
 textarea {
   font-family: inherit;
 }
+/* Every call to action reads in Title Case, small words included. */
+button,
+.cta {
+  text-transform: capitalize;
+}
 .printonly {
   display: none;
 }
@@ -198,17 +203,7 @@ textarea {
     font-size: 12.5px;
   }
   .shell > .sidebar .rail-manager {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 6px 12px;
     margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: none !important;
-  }
-  .shell > .sidebar .rail-manager > div:first-child {
-    flex: 1 1 100%;
   }
   .shell > .main {
     margin-left: 0;
