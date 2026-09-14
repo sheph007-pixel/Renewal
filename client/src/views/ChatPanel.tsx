@@ -205,26 +205,24 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
         )}
         {messages.map((m) =>
           m.role === "user" ? (
-            <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", margin: "10px 0" }}>
-              <div style={{ maxWidth: "85%", padding: compact ? "8px 12px" : "9px 14px", borderRadius: 14, borderBottomRightRadius: 4, background: C.navy, color: "#fff", fontSize: fs, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", margin: "6px 0" }}>
+              <div className="chat-bubble me" style={{ maxWidth: "80%", padding: compact ? "8px 13px" : "9px 15px", borderRadius: 18, borderBottomRightRadius: 5, background: "#0B84FE", color: "#fff", fontSize: fs, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {m.content}
               </div>
               <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} align="right" />
             </div>
           ) : (
-            <div key={m.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
-              <Mark size={compact ? 22 : 26} />
-              <div className="chat-answer" style={{ minWidth: 0, flex: 1, fontSize: fs, lineHeight: 1.55, color: C.ink }}>
+            <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", margin: "6px 0" }}>
+              <div className="chat-answer chat-bubble them" style={{ maxWidth: "85%", minWidth: 0, padding: compact ? "8px 13px" : "9px 15px", borderRadius: 18, borderBottomLeftRadius: 5, background: "#E9E9EB", fontSize: fs, lineHeight: 1.45, color: "#1c1c1e", wordBreak: "break-word" }}>
                 <Markdown text={m.content} />
-                <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} />
               </div>
+              <FileChips files={m.files || []} href={(f) => `/api/chat/files/${f.id}`} />
             </div>
           ),
         )}
         {streaming && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "12px 0" }}>
-            <Mark size={compact ? 22 : 26} />
-            <div className="chat-answer" style={{ minWidth: 0, flex: 1, fontSize: fs, lineHeight: 1.55, color: C.ink }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", margin: "6px 0" }}>
+            <div className="chat-answer chat-bubble them" style={{ maxWidth: "85%", minWidth: 0, padding: compact ? "8px 13px" : "9px 15px", borderRadius: 18, borderBottomLeftRadius: 5, background: "#E9E9EB", fontSize: fs, lineHeight: 1.45, color: "#1c1c1e", wordBreak: "break-word" }}>
               {streaming.text ? <Markdown text={streaming.text} /> : !streaming.status ? <Typing /> : null}
               {streaming.status && (
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: streaming.text ? 8 : 0, fontSize: 12.5, color: C.muted }}>
@@ -232,8 +230,8 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
                   {streaming.status}
                 </div>
               )}
-              <FileChips files={streaming.files} href={(f) => `/api/chat/files/${f.id}`} />
             </div>
+            <FileChips files={streaming.files} href={(f) => `/api/chat/files/${f.id}`} />
           </div>
         )}
         {chat.error && !streaming && (
@@ -242,7 +240,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
           </div>
         )}
       </div>
-      <div style={{ flex: "none", padding: compact ? "8px 12px 12px" : "10px 22px 16px", borderTop: `1px solid ${C.hairline}` }}>
+      <div style={{ flex: "none", padding: compact ? "8px 12px 12px" : "10px 22px 16px", borderTop: `1px solid ${C.hairline}`, background: "#F6F6F7" }}>
         {pending.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
             {pending.map((p) =>
@@ -259,14 +257,14 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             )}
           </div>
         )}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, border: `1px solid ${C.inputEdge}`, borderRadius: 14, padding: 8, background: C.card, boxShadow: "0 1px 2px rgba(15, 42, 71, 0.05)" }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, border: "1px solid #D5D5DA", borderRadius: 22, padding: 5, background: "#fff" }}>
           <input ref={picker} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => pick(e.target.files)} />
           <button
             onClick={() => picker.current?.click()}
             disabled={busy || pending.length >= 5}
             aria-label="Attach a file"
             title="Attach a file — a quote, a spreadsheet, a screenshot"
-            style={{ flex: "none", width: 36, height: 36, borderRadius: 10, border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
+            style={{ flex: "none", width: 34, height: 34, borderRadius: "50%", border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 11.5 12.5 20a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.5 3.5 0 0 1 5 5l-9.2 9.2a1.5 1.5 0 0 1-2.1-2.1L16 6.7" />
@@ -278,11 +276,11 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
-            placeholder={pending.length ? "Ask about the file…" : messages.length ? "Keep the conversation going…" : "Ask a question…"}
-            rows={2}
+            aria-label="Message"
+            rows={1}
             maxLength={4000}
             disabled={busy && threadId == null}
-            style={{ flex: 1, resize: "none", border: "none", outline: "none", background: "transparent", fontSize: fs + 1, lineHeight: 1.5, color: C.ink, minHeight: 48, maxHeight: 180, padding: "8px 4px" }}
+            style={{ flex: 1, resize: "none", border: "none", outline: "none", background: "transparent", fontSize: fs + 1, lineHeight: 1.5, color: C.ink, minHeight: 36, maxHeight: 180, padding: "7px 8px" }}
           />
           <button
             onClick={() => ask(draft)}
@@ -291,7 +289,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             title="Send (Enter)"
             style={(() => {
               const off = busy || uploading || (!draft.trim() && !attachments.length);
-              return { flex: "none", width: 36, height: 36, borderRadius: 10, border: "none", background: off ? C.hairline : C.blue, color: off ? C.ghost : "#fff", cursor: off ? "default" : "pointer", display: "grid", placeItems: "center" };
+              return { flex: "none", width: 34, height: 34, borderRadius: "50%", border: "none", background: off ? "#D5D5DA" : "#0B84FE", color: off ? C.ghost : "#fff", cursor: off ? "default" : "pointer", display: "grid", placeItems: "center" };
             })()}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
