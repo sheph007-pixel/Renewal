@@ -1,13 +1,15 @@
 import { TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
+import InfoTip from "@/views/InfoTip";
 
 /**
  * One plan, the way a broker's comparison card reads: the carrier and plan,
- * one big Total Monthly Cost, the benefits, the composite rates with how
- * many are enrolled in each tier and what employer and employee each pay
- * at the applied contribution, then the three totals. The same card is the
- * popup, the proposal on screen, the printed proposal and the Excel block.
+ * one big Average Monthly Cost per Enrolled Employee with the Total Monthly
+ * Bill under it, the benefits, the composite rates with how many are
+ * enrolled in each tier and what employer and employee each pay at the
+ * applied contribution, then the three totals. The same card is the popup,
+ * the proposal on screen, the printed proposal and the Excel block.
  */
 export interface CardModel {
   /** UH3, GR1 — the handle the client, Kennion and the assistant all use for this plan. */
@@ -25,6 +27,8 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
+  /** Everyone enrolled, across the tiers — what the bill is averaged over. */
+  enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
   source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
 }
@@ -81,6 +85,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     er: sp?.er ?? null,
     ee: sp?.ee ?? null,
     premium: sp?.total ?? p.monthly,
+    enrolled: TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0),
     source: p.quoted ? { proposalId: p.quoted.proposalId, audit: p.quoted.audit || null } : null,
   };
 }
@@ -125,9 +130,18 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         </div>
         <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
       </div>
+      {/* The headline is the bill averaged over everyone enrolled — the figure
+          a client can hold against a paycheck — with the whole bill under it. */}
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
-        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.monthly == null ? "—" : money(m.monthly)}</div>
-        <div style={{ fontSize: 12.5, color: C.muted }}>Total Monthly Bill</div>
+        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.premium == null || !m.enrolled ? "—" : money(m.premium / m.enrolled)}</div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: C.muted }}>
+          Average Monthly Cost per Enrolled Employee
+          <InfoTip text="Total monthly bill divided by enrolled employees. Includes company and employee contributions; actual rates vary by coverage tier." />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginTop: 3, ...num }}>
+          <span style={{ fontWeight: 500, color: C.muted }}>Total Monthly Bill: </span>
+          {m.premium == null ? "—" : money(m.premium)}
+        </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
@@ -186,8 +200,8 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
           {(
             [
               ["Your Company Pays", m.er, true],
-              ["Employee Cost", m.ee, true],
-              ["Monthly Premium", m.premium, false],
+              ["Your Employees Pay", m.ee, true],
+              ["Total Monthly Bill", m.premium, false],
             ] as [string, number | null, boolean][]
           ).map(([label, v, strong]) => {
             const pct = strong && v != null && m.premium ? Math.round((v / m.premium) * 100) : null;

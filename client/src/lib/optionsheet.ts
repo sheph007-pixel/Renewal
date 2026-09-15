@@ -66,7 +66,9 @@ export function downloadOptions(
     for (const p of proposed) {
       const m = cardModel(p, contribution, counts);
       rows.push([`${m.carrier} · ${m.plan}`, m.funding + (m.type ? ` · ${m.type}` : "")]);
-      rows.push(["Total Monthly Cost", m.monthly ?? ""]);
+      // The card's headline: the bill averaged over everyone enrolled, then the bill.
+      rows.push(["Average Monthly Cost per Enrolled Employee", m.premium != null && m.enrolled ? Math.round((m.premium / m.enrolled) * 100) / 100 : ""]);
+      rows.push(["Total Monthly Bill", m.premium ?? ""]);
       rows.push(["Basis", m.basis]);
       // The lookups ride along in a third column, so the sheet has the addresses too.
       for (const [label, value] of m.benefits) {
@@ -75,9 +77,9 @@ export function downloadOptions(
       }
       rows.push(["Monthly Composite Rates", "Rate", "Employer", "Employee"]);
       for (const t of m.tiers) rows.push([`${t.label} (${t.count})`, t.rate ?? "", t.er ?? "", t.ee ?? ""]);
-      rows.push(["Total Monthly Employer Cost", m.er ?? ""]);
-      rows.push(["Total Monthly Employee Cost", m.ee ?? ""]);
-      rows.push(["Monthly Premium", m.premium ?? ""]);
+      rows.push(["Your Company Pays", m.er ?? ""]);
+      rows.push(["Your Employees Pay", m.ee ?? ""]);
+      rows.push(["Total Monthly Bill", m.premium ?? ""]);
       rows.push([]);
     }
     const ps = XLSX.utils.aoa_to_sheet(rows);
