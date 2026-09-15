@@ -171,6 +171,18 @@ console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as down
   console.log("assistant: attachments upload, attach to the question, reach the model, stay with the owner — ok");
 }
 
+// A conversation a page starts under its own name (Plan recommendations)
+// keeps that name, so the button finds it again instead of starting over.
+{
+  const named = await send({ threadId: null, content: "Please give me your plan recommendations for my group.", page: "options", compact: true, title: "  Plan   recommendations " });
+  const t = named.events.find((e) => e.event === "thread");
+  assert.equal(t.data.title, "Plan recommendations", "the page's title, tidied, not one made from the question");
+  const list = (await (await fetch(`${base}/api/chat/threads`, { headers: { cookie } })).json()).threads;
+  assert.equal(list.filter((x) => x.title === "Plan recommendations").length, 1);
+  await fetch(`${base}/api/chat/threads/${t.data.id}`, { method: "DELETE", headers: { cookie } });
+  console.log("assistant: a page-named conversation keeps its name — ok");
+}
+
 // The Documents tab: every file the assistant made and every attachment, in
 // one list, newest first; a file added there is kept; one removed is gone
 // from its answer too; nobody else's list has any of it.

@@ -636,8 +636,13 @@ delete and search, and the open one on the right with room for a comparison
 table.
 
 **Get Plan Recommendations.** Above the 2027 grid, under a "Browse All
-Plans" heading, a button opens the chat box on a new conversation and asks
-for recommendations on the client's behalf. The assistant answers straight
+Plans" heading, a button opens the chat box on a conversation named "Plan
+recommendations" and asks for recommendations on the client's behalf. It
+does this once: the send carries the name (`title` on `POST
+/api/chat/send`), and while the group has a conversation of that name the
+button reads "View Plan Recommendations" and reopens it — the picks
+already given, and whatever followed — rather than asking again
+(`askAssistant` in `client/src/lib/chat.ts`). The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer
 Benefits — each by option ID with its monthly cost at the group's census,
 says which it would start with, and closes by asking for a budget or
