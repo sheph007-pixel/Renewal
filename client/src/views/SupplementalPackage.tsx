@@ -3,11 +3,9 @@ import { money } from "@/lib/model";
 import {
   CARRIERS,
   FREQUENCIES,
-  SUPPLEMENTAL_EFFECTIVE,
   SUPPLEMENTAL_FOOTNOTE,
   SUPPLEMENTAL_SECTIONS,
   SUPPLEMENTAL_TIERS,
-  SUPPLEMENTAL_YEAR,
   convertRate,
   downloadSupplementalSheet,
   frequencyLabel,
@@ -16,9 +14,10 @@ import {
 import { C, chip, h2, num, panel, sectionHead, th } from "@/lib/ui";
 
 /**
- * The Kennion supplemental package — one rate grid per product line. The
- * rates are the same for every group, so this page takes no group data; the
- * only state is the pay frequency the rates are shown at.
+ * The Kennion supplemental package — one rate grid per product line, each
+ * with the carrier's provider search beside its heading. The rates are the
+ * same for every group, so this page takes no group data; the only state is
+ * the pay frequency the rates are shown at.
  */
 export default function SupplementalPackage() {
   const [freq, setFreq] = useState<Frequency>("monthly");
@@ -27,6 +26,9 @@ export default function SupplementalPackage() {
   const headCell = { ...th, background: C.headerBg, color: "#fff", borderBottom: "none", padding: "11px 10px" };
   const cell = { padding: "10px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14, background: C.card };
   const numCell = { ...cell, textAlign: "right" as const, ...num };
+
+  /** The carrier's provider search, on the grids where a client looks one up: Guardian's on dental, VSP's on vision. */
+  const providerLink = (s: { product: string; carrier: string }) => (/dental|vision/i.test(s.product) ? CARRIERS.find((c) => c.name.toLowerCase().startsWith(s.carrier.toLowerCase())) ?? null : null);
 
   async function exportExcel() {
     setBusy(true);
@@ -43,12 +45,7 @@ export default function SupplementalPackage() {
         className="anchor"
         style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}
       >
-        <div>
-          <h2 style={h2}>Supplemental Package</h2>
-          <div style={{ marginTop: 4, fontSize: 13, color: C.muted }}>
-            {SUPPLEMENTAL_YEAR} calendar year · rates effective {SUPPLEMENTAL_EFFECTIVE} · the same for every Kennion group
-          </div>
-        </div>
+        <h2 style={h2}>Supplemental Package</h2>
         <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
           <div role="group" aria-label="Pay frequency" style={{ display: "flex", gap: 4 }}>
             {FREQUENCIES.map((f) => (
@@ -78,18 +75,6 @@ export default function SupplementalPackage() {
         </div>
       </div>
 
-      <div className="cardgrid" style={{ marginBottom: 18 }}>
-        {CARRIERS.map((c) => (
-          <div key={c.name} className="panel" style={{ ...panel, padding: "14px 16px" }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{c.name}</div>
-            <div style={{ marginTop: 3, fontSize: 13, color: C.body, lineHeight: 1.55 }}>{c.covers}</div>
-            <a href={c.href} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8, fontSize: 13.5, color: C.blue }}>
-              {c.linkLabel} ↗
-            </a>
-          </div>
-        ))}
-      </div>
-
       <div style={{ fontSize: 13, color: C.muted, margin: "0 0 10px" }}>
         Showing <strong style={{ color: C.ink, fontWeight: 600 }}>{frequencyLabel(freq)}</strong> rates
         {freq !== "monthly" ? " (monthly × 12 ÷ pay periods, rounded to the cent)" : ""}.
@@ -97,8 +82,15 @@ export default function SupplementalPackage() {
 
       {SUPPLEMENTAL_SECTIONS.map((s) => (
         <div key={s.id} style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: C.ink, margin: "0 0 6px" }}>
-            {s.product} <span style={{ color: C.faint, fontWeight: 400 }}>·</span> {s.carrier}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 0 6px" }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: C.ink }}>
+              {s.product} <span style={{ color: C.faint, fontWeight: 400 }}>·</span> {s.carrier}
+            </div>
+            {providerLink(s) && (
+              <a className="noprint" href={providerLink(s)!.href} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 500, color: C.blue, background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none", whiteSpace: "nowrap" }}>
+                {providerLink(s)!.linkLabel} ↗
+              </a>
+            )}
           </div>
           <div className="panel" style={{ ...panel, padding: 0, overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
