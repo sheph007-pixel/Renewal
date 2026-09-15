@@ -934,7 +934,7 @@ export default function App() {
             )}
 
             {tab === "assistant" ? (
-              <Assistant threadId={page.thread} hrefFor={assistantHref} groupName={g.name} />
+              <Assistant threadId={page.thread} hrefFor={assistantHref} />
             ) : tab === "home" ? (
               <>
                 <Home
