@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
+import InfoTip from "@/views/InfoTip";
 
 /**
  * Every 2027 plan from every carrier, one grid, lowest cost first.
@@ -89,44 +90,6 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
   a.download = `${g.name.replace(/[^\w]+/g, "-")}-2027-options.csv`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-/** A small ⓘ that opens a short explanation on hover, focus or tap. */
-function InfoTip({ title, children, align = "left", onDark = false }: { title: string; children: ReactNode; align?: "left" | "right"; onDark?: boolean }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span
-      style={{ position: "relative", display: "inline-flex" }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onClick={(e) => {
-        e.stopPropagation();
-        setOpen((v) => !v);
-      }}
-    >
-      <span
-        role="button"
-        tabIndex={0}
-        aria-label={`About ${title}`}
-        aria-expanded={open}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-        style={{ display: "grid", placeItems: "center", width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${onDark ? "rgba(255,255,255,0.7)" : C.blue}`, color: onDark ? "#fff" : C.blue, fontSize: 11.5, fontWeight: 700, lineHeight: 1, cursor: "help", fontFamily: "Georgia, serif", fontStyle: "italic" }}
-      >
-        i
-      </span>
-      {open && (
-        <span
-          role="tooltip"
-          style={{ position: "absolute", top: "calc(100% + 8px)", ...(align === "right" ? { right: 0 } : { left: 0 }), zIndex: 30, width: 320, padding: "12px 14px", borderRadius: 10, background: C.card, color: C.ink, border: `1px solid ${C.border}`, boxShadow: "0 10px 30px rgba(11,33,56,0.18)", fontSize: 13, fontWeight: 400, lineHeight: 1.55, textAlign: "left", textTransform: "none" }}
-        >
-          <span style={{ display: "block", fontWeight: 700, marginBottom: 4 }}>{title}</span>
-          {children}
-        </span>
-      )}
-    </span>
-  );
 }
 
 /**
@@ -429,9 +392,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
             Employer Contribution
-            <InfoTip title="You Set The Budget">
-              You decide what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks. If they choose a plan that costs more, they pay the difference, so your budget never moves. Carriers require at least half the lowest employee-only rate.
-            </InfoTip>
+            <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. Carriers require at least half the lowest employee-only rate." color={C.blue} />
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
@@ -767,14 +728,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {h}
                     {k === "er" && (
-                      <InfoTip title="Your Company Pays" align="right" onDark>
-                        Your company's share after employee contributions.
-                      </InfoTip>
+                      <InfoTip text="Your company's share after employee contributions." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                     {k === "total" && (
-                      <InfoTip title="Total Monthly Bill" align="right" onDark>
-                        The full amount billed, including company and employee contributions.
-                      </InfoTip>
+                      <InfoTip text="The full amount billed, including company and employee contributions." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                   </span>
                   {k && sortBy === k ? (costDir > 0 ? " ▲" : " ▼") : ""}
