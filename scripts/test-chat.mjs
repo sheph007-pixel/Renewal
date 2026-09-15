@@ -171,6 +171,42 @@ console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as down
   console.log("assistant: attachments upload, attach to the question, reach the model, stay with the owner — ok");
 }
 
+// The Documents tab: every file the assistant made and every attachment, in
+// one list, newest first; a file added there is kept; one removed is gone
+// from its answer too; nobody else's list has any of it.
+{
+  assert.equal((await fetch(`${base}/api/chat/files`)).status, 401, "no cookie, no list");
+  let docs = (await (await fetch(`${base}/api/chat/files`, { headers: { cookie } })).json()).files;
+  assert.equal(docs.length, 5, `four documents the assistant made and one attachment: ${JSON.stringify(docs.map((f) => [f.role, f.filename]))}`);
+  assert.deepEqual(docs.map((f) => f.role).sort(), ["assistant", "assistant", "assistant", "assistant", "user"]);
+  assert.ok(docs.every((f) => f.threadId === tid && typeof f.createdAt === "string"), "each names its conversation");
+  assert.ok(docs.every((f) => f.threadTitle === "What do we spend on medical today?"), "with its title");
+  assert.deepEqual((await (await fetch(`${base}/api/chat/files`, { headers: { cookie: otherCookie } })).json()).files, [], "another group's list is empty");
+  const kept = await fetch(`${base}/api/chat/files?filename=${encodeURIComponent("board deck.pdf")}`, { method: "POST", headers: { cookie, "Content-Type": "application/pdf" }, body: "%PDF-1.4 fake" });
+  assert.equal(kept.status, 200, "a file added to the Documents tab is kept");
+  const keptFile = (await kept.json()).file;
+  assert.equal(keptFile.role, "user");
+  assert.equal(keptFile.threadId, null);
+  assert.equal((await fetch(`${base}/api/chat/files?filename=x.zip`, { method: "POST", headers: { cookie, "Content-Type": "application/zip" }, body: "PK" })).status, 400, "not a kind the portal keeps");
+  docs = (await (await fetch(`${base}/api/chat/files`, { headers: { cookie } })).json()).files;
+  assert.equal(docs.length, 6);
+  assert.equal(docs[0].id, keptFile.id, "newest first");
+  const dl = await fetch(`${base}/api/chat/files/${keptFile.id}`, { headers: { cookie } });
+  assert.equal(dl.status, 200, "a kept file downloads");
+  assert.equal(await dl.text(), "%PDF-1.4 fake");
+  assert.equal((await fetch(`${base}/api/chat/files/${keptFile.id}`, { headers: { cookie: otherCookie } })).status, 404);
+  assert.equal((await fetch(`${base}/api/chat/files/${memoFile.id}`, { method: "DELETE", headers: { cookie: otherCookie } })).status, 404, "another group cannot remove it");
+  assert.equal((await fetch(`${base}/api/chat/files/${memoFile.id}`, { method: "DELETE", headers: { cookie } })).status, 200);
+  assert.equal((await fetch(`${base}/api/chat/files/${memoFile.id}`, { headers: { cookie } })).status, 404, "gone");
+  const after = await (await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie } })).json();
+  assert.ok(!after.messages.some((m) => (m.files || []).some((f) => f.id === memoFile.id)), "the answer no longer lists it");
+  assert.equal(after.messages.filter((m) => (m.files || []).length).length, 4, "the other documents stay on their turns");
+  assert.equal((await fetch(`${base}/api/chat/files/${keptFile.id}`, { method: "DELETE", headers: { cookie } })).status, 200);
+  docs = (await (await fetch(`${base}/api/chat/files`, { headers: { cookie } })).json()).files;
+  assert.equal(docs.length, 4);
+  console.log("assistant: the Documents tab lists, keeps and removes the group's files — ok");
+}
+
 // The admin: every conversation, transcripts, flags, the playbook, a staff trial.
 const staffAuth = { Authorization: `Bearer ${staff.token}` };
 assert.equal((await fetch(`${base}/api/admin/chat/threads`, { headers: { cookie } })).status, 401, "a group cannot read the admin log");

@@ -668,6 +668,13 @@ remove any, and a box to add one of their own (`POST /api/chat/memory`) —
 the way an assistant's memory usually works; staff see and edit them in the
 conversation drawer on `/admin/assistant` (`/api/chat/memory`,
 `/api/admin/chat/memory`).
+The Assistant page has two tabs, **Chat** and **Documents**. Documents is
+one place for every file of the group's: what the assistant made in its
+conversations (comparisons, memos), what the client attached to a
+question, and what the client adds there itself (`POST /api/chat/files`,
+kept until removed, never swept) — newest first, each linking back to its
+conversation, with Download and Delete (`GET`/`DELETE /api/chat/files`; a
+deleted file leaves the answer it hung on too).
 The model is Claude Fable 5.1 (`KENNION_MODEL` overrides), falling back to
 Claude Opus 5 for the life of the process if the account cannot use it.
 

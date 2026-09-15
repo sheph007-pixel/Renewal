@@ -9,9 +9,9 @@ const KIND: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
 };
-const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
+export const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`);
 
-const kindOf = (f: ChatFile) => KIND[f.mime] || (/^image\//.test(f.mime) ? "IMG" : /csv|text\/plain/.test(f.mime) ? "TXT" : "FILE");
+export const kindOf = (f: ChatFile) => KIND[f.mime] || (/^image\//.test(f.mime) ? "IMG" : /csv|text\/plain/.test(f.mime) ? "TXT" : "FILE");
 
 /**
  * Fetch a file with extra headers and hand it to the browser as a download —

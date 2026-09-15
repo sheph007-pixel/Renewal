@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { C, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { navigate } from "@/lib/router";
-import { deleteThread, forgetMemory, loadMemory, loadThreads, rememberMemory, renameThread, useChat, type ChatThread, type MemoryLine } from "@/lib/chat";
-import ChatPanel from "@/views/ChatPanel";
+import { ATTACHMENT_ACCEPT, deleteFile, deleteThread, downloadFile, forgetMemory, loadFiles, loadMemory, loadThreads, rememberMemory, renameThread, uploadDocument, useChat, type ChatFile, type ChatThread, type MemoryLine } from "@/lib/chat";
+import ChatPanel, { kindOf, sizeOf } from "@/views/ChatPanel";
 
 interface Props {
   /** The conversation open, from the address; undefined is a fresh one. */
@@ -191,9 +191,127 @@ function MemoryButton({ lines }: { lines: MemoryLine[] }) {
   );
 }
 
+type Tab = "chat" | "documents";
+
+/**
+ * Documents: everything the assistant has made for the group — comparisons,
+ * memos — and every file the group has attached or added here, in one
+ * place, newest first, to download or remove. A file made in a
+ * conversation links back to it.
+ */
+function Documents({ hrefFor }: { hrefFor: (thread?: number | null) => string }) {
+  const chat = useChat();
+  const [files, setFiles] = useState<ChatFile[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const refresh = () => loadFiles().then(setFiles).catch((e: Error) => setError(e.message));
+  useEffect(() => {
+    void refresh();
+  }, []);
+  // A reply that just finished may have made a document.
+  useEffect(() => {
+    if (!chat.streaming) void refresh();
+  }, [chat.streaming]);
+
+  const add = async (list: FileList | null) => {
+    if (!list || !list.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      for (const f of Array.from(list)) await uploadDocument(f);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = "";
+    }
+  };
+  const remove = (f: ChatFile) => {
+    if (!window.confirm(`Remove "${f.filename}"? This cannot be undone.`)) return;
+    void deleteFile(f.id)
+      .then(refresh)
+      .catch((e: Error) => setError(e.message));
+  };
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "");
+  const from = (f: ChatFile) => (f.role === "assistant" ? "Made by the assistant" : f.threadId != null ? "Attached to a question" : "Added here");
+
+  const th: CSSProperties = { textAlign: "left", padding: "8px 12px", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.4px", textTransform: "uppercase", color: C.faint, borderBottom: `1px solid ${C.hairline}`, whiteSpace: "nowrap" };
+  const td: CSSProperties = { padding: "10px 12px", fontSize: 13, borderBottom: `1px solid ${C.hairline}`, verticalAlign: "middle" };
+  const tool: CSSProperties = { fontSize: 12.5, fontWeight: 600, padding: "6px 10px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.card, color: C.blueInk, cursor: "pointer" };
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.hairline}` }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Documents</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Everything the assistant has made for you, and anything you have added — kept here, to open any time.</div>
+        </div>
+        <input ref={input} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => void add(e.target.files)} />
+        <button onClick={() => input.current?.click()} disabled={busy} style={{ ...tool, background: C.blue, color: "#fff", border: "none", padding: "8px 14px", opacity: busy ? 0.6 : 1 }}>
+          {busy ? "Adding…" : "+ Add a document"}
+        </button>
+      </div>
+      {error && <div style={{ margin: "10px 18px 0", padding: "8px 12px", borderRadius: 7, background: C.redTint, color: C.red, fontSize: 12.5 }}>{error}</div>}
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {files && files.length === 0 && (
+          <div style={{ padding: "28px 18px", fontSize: 13, lineHeight: 1.6, color: C.muted }}>
+            Nothing yet. A comparison or memo the assistant builds for you lands here, as does any file you attach to a question or add with the button above.
+          </div>
+        )}
+        {files && files.length > 0 && (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={th}>Document</th>
+                <th style={th}>From</th>
+                <th style={th}>Date</th>
+                <th style={{ ...th, textAlign: "right" }}>Size</th>
+                <th style={th} />
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f) => (
+                <tr key={f.id}>
+                  <td style={td}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 10, minWidth: 0, maxWidth: "100%" }}>
+                      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", width: 30, height: 30, borderRadius: 6, background: C.blueTint, color: C.blueInk, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.3px" }}>{kindOf(f)}</span>
+                      <span style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420 }}>{f.filename}</span>
+                    </span>
+                  </td>
+                  <td style={{ ...td, color: C.muted, fontSize: 12.5 }}>
+                    {from(f)}
+                    {f.threadId != null && (
+                      <>
+                        {" · "}
+                        <Link href={hrefFor(f.threadId)} style={{ color: C.blueInk }}>{f.threadTitle || "Conversation"}</Link>
+                      </>
+                    )}
+                  </td>
+                  <td style={{ ...td, color: C.muted, fontSize: 12.5, whiteSpace: "nowrap" }}>{when(f.createdAt)}</td>
+                  <td style={{ ...td, color: C.muted, fontSize: 12.5, textAlign: "right", whiteSpace: "nowrap" }}>{sizeOf(f.size)}</td>
+                  <td style={{ ...td, whiteSpace: "nowrap", textAlign: "right" }}>
+                    <span style={{ display: "inline-flex", gap: 6 }}>
+                      <button onClick={() => void downloadFile(`/api/chat/files/${f.id}`, f.filename).catch((e: Error) => setError(e.message))} style={tool}>Download</button>
+                      <button onClick={() => remove(f)} style={{ ...tool, color: C.red }}>Delete</button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Assistant({ threadId, hrefFor, groupName }: Props) {
   const chat = useChat();
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<Tab>("chat");
+  // Opening a conversation (from a document's link, say) shows the chat.
+  useEffect(() => setTab("chat"), [threadId]);
 
   useEffect(() => {
     loadThreads().catch(() => undefined);
@@ -222,8 +340,14 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
     });
   };
 
+  const tabStyle = (on: boolean): CSSProperties => ({ padding: "10px 18px", fontSize: 14, fontWeight: 700, color: on ? C.blueInk : C.muted, background: "transparent", border: "none", borderBottom: `3px solid ${on ? C.blueInk : "transparent"}`, cursor: "pointer", marginBottom: -1 });
   return (
-    <div className="chat-page" style={{ ...panel, display: "flex", overflow: "hidden", height: "calc(100vh - 150px)", minHeight: 480 }}>
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <div role="tablist" style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.hairline}`, marginBottom: 12 }}>
+        <button role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")} style={tabStyle(tab === "chat")}>Chat</button>
+        <button role="tab" aria-selected={tab === "documents"} onClick={() => setTab("documents")} style={tabStyle(tab === "documents")}>Documents</button>
+      </div>
+    <div className="chat-page" style={{ ...panel, display: tab === "chat" ? "flex" : "none", overflow: "hidden", height: "calc(100vh - 200px)", minHeight: 480 }}>
       <aside className="chat-list" style={{ width: 260, flex: "none", display: "flex", flexDirection: "column", borderRight: `1px solid ${C.hairline}`, background: C.zebra }}>
         <div style={{ padding: "12px 12px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
           <Link
@@ -266,6 +390,12 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
           welcome={`Hi ${groupName} team — I'm the BenSync AI Assistant, backed by your Kennion team. I have your current plans, the carriers' quotes and this month's billing in front of me. Ask me anything, or tell me what you need drafted.`}
         />
       </div>
+    </div>
+      {tab === "documents" && (
+        <div style={{ ...panel, display: "flex", flexDirection: "column", overflow: "hidden", height: "calc(100vh - 200px)", minHeight: 480 }}>
+          <Documents hrefFor={(t) => hrefFor(t)} />
+        </div>
+      )}
     </div>
   );
 }
