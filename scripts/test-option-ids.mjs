@@ -82,9 +82,19 @@ assert.ok(!lf.extracted.previous_plan_ids, "the carry-over list is cleared once 
 await upload("uhc-lf-v2.json", "UHC Level Funded", reading("UnitedHealthcare", "level funded", [plan("P4000i8021B Choice Plus", "P4000i8021B", 625), plan("P3500i100ES21B", "P3500i100ES21B", 645), plan("P6000i100LX21B", "P6000i100LX21B", 580)]));
 const lf2 = await settled("uhc-lf-v2.json");
 assert.deepEqual(storedIds(lf2), ["UH1:P4000i8021B Choice Plus", "UH3:P3500i100ES21B", "UH6:P6000i100LX21B"], "kept by code, kept by name, new number never reuses UH2");
-const all = (await (await fetch(`${base}/api/admin/proposals`, { headers: staffAuth })).json()).proposals;
-assert.equal(all.find((r) => r.id === lf.id).superseded_by, lf2.id);
+let all = (await (await fetch(`${base}/api/admin/proposals`, { headers: staffAuth })).json()).proposals;
+assert.ok(!all.some((r) => r.id === lf.id), "one proposal per slot: the replaced one is deleted, not kept as superseded");
+assert.equal(all.filter((r) => r.slot === "UHC Level Funded" && r.group_name === mine.name).length, 1);
 assert.deepEqual(await clientIds("UHC Level Funded"), ["UH1:P4000i8021B Choice Plus", "UH3:P3500i100ES21B", "UH6:P6000i100LX21B"]);
+
+// 4b. A third quote in the slot, after the old row is gone: UH2 stays retired
+//     and the numbers the deleted row handed down are still honoured.
+await upload("uhc-lf-v3.json", "UHC Level Funded", reading("UnitedHealthcare", "level funded", [plan("P5000i10021B", "P5000i10021B", 605), plan("P3500i100ES21B", "P3500i100ES21B", 650)]));
+const lf3 = await settled("uhc-lf-v3.json");
+assert.deepEqual(storedIds(lf3), ["UH7:P5000i10021B", "UH3:P3500i100ES21B"], "a plan that came back after its number was retired gets a fresh one; a surviving plan keeps its number");
+all = (await (await fetch(`${base}/api/admin/proposals`, { headers: staffAuth })).json()).proposals;
+assert.equal(all.filter((r) => r.slot === "UHC Level Funded" && r.group_name === mine.name).length, 1, "still one proposal in the slot");
+assert.ok(!all.some((r) => r.superseded_by), "nothing is ever left marked superseded");
 
 // 5. Gravie: its own prefix; the EPO twin is not stored, so the PPO designs
 //    read GR1, GR2 … with nothing missing.
@@ -106,10 +116,10 @@ const signup = await fetch(`${base}/api/group/signup`, { method: "POST", headers
 assert.equal(signup.status, 200, await signup.text());
 const { comparisonTable } = await import("../server/documents.js");
 const page = await (await fetch(`${base}/api/signin`, { method: "POST", headers: { ...json, cookie }, body: "{}" })).json();
-const table = comparisonTable({ group: page.group, proposals: page.proposals, plans: ["UH6", "GR1"], includeCurrent: false });
+const table = comparisonTable({ group: page.group, proposals: page.proposals, plans: ["UH7", "GR1"], includeCurrent: false });
 assert.deepEqual(
   table.rows.filter((r) => r.section === "2027 options").map((r) => r.name),
-  ["UH6 · P6000i100LX21B", "GR1 · Gravie Copay 1500 PPO"],
+  ["UH7 · P5000i10021B", "GR1 · Gravie Copay 1500 PPO"],
 );
 
 console.log("option ids: UH/GR per group in carrier order, kept across re-reads and newer quotes, never reused, on sign-up and in the comparison — ok", { group: mine.name });
