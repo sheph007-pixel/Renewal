@@ -46,10 +46,39 @@ function StackIcon({ color }: { color: string }) {
   );
 }
 
+/** A small group mark for the "Monthly Amounts for N Enrolled Employees" line. */
+function GroupIcon({ color }: { color: string }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 19c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M17 14.5c2.3 0 4 1.3 4.6 3.5" />
+    </svg>
+  );
+}
+
+/**
+ * A small ⓘ beside a label; the explanation shows on hover and on keyboard
+ * focus (the bubble is `.info-tip` in styles.css), and is read out as the
+ * icon's label.
+ */
+export function InfoTip({ text, color }: { text: string; color?: string }) {
+  return (
+    <span className="info-tip" tabIndex={0} role="img" aria-label={text} data-tip={text} style={{ color: color || C.faint }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 11v5M12 8h.01" />
+      </svg>
+    </span>
+  );
+}
+
 /** One big colorful number: what it is, the figure, and the year alongside the month. */
 function SpendTile({
   icon,
   label,
+  tip,
   amount,
   pct,
   bg,
@@ -58,6 +87,8 @@ function SpendTile({
 }: {
   icon: ReactNode;
   label: string;
+  /** What the figure means, on the ⓘ beside the label. */
+  tip: string;
   amount: number;
   pct?: number;
   bg: string;
@@ -73,7 +104,10 @@ function SpendTile({
         >
           {icon}
         </span>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: fg }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: fg, display: "inline-flex", alignItems: "center", gap: 5 }}>
+          {label}
+          <InfoTip text={tip} color={fg} />
+        </div>
         {pct != null && (
           <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: fg }}>{pct}%</span>
         )}
@@ -88,12 +122,12 @@ function SpendTile({
 }
 
 /**
- * The dashboard a client actually opens this page to see: Employer Cost,
- * Employee Cost and Monthly Premium — the same three names the grid below
- * uses for its own totals, on a group basis rather than broken out by plan,
- * since two plans under one contribution strategy do not each get their own
- * "the employer's share." Read straight off the grid's own totals, so the
- * two can never disagree.
+ * The dashboard a client actually opens this page to see: Your Company
+ * Pays, Your Employees Pay and Total Monthly Bill — the grid below's
+ * employer cost, employee cost and premium, on a group basis rather than
+ * broken out by plan, since two plans under one contribution strategy do
+ * not each get their own "the employer's share." Read straight off the
+ * grid's own totals, so the two can never disagree.
  */
 export default function SpendDashboard({ totals, contribution, enrolled }: Props) {
   const erPct = totals.total ? Math.round((totals.er / totals.total) * 1000) / 10 : 0;
@@ -106,7 +140,10 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
           Current Group Plan
         </div>
         <div style={{ textAlign: "right" }}>
-          <span style={{ fontSize: 12, color: C.faint }}>{enrolled} enrolled</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: C.ink }}>
+            <GroupIcon color={C.ink} />
+            Monthly Amounts for {enrolled} Enrolled Employee{enrolled === 1 ? "" : "s"}
+          </span>
           <div style={{ marginTop: 2, fontSize: 11, color: C.ghost }}>
             Data pulled from Employee Navigator, for illustrative purposes only.{" "}
             <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
@@ -119,7 +156,8 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 14 }}>
         <SpendTile
           icon={<BuildingIcon color="#fff" />}
-          label="Employer Cost"
+          label="Your Company Pays"
+          tip="Your company’s monthly share after employee contributions."
           amount={totals.er}
           pct={erPct}
           bg={C.blueTint}
@@ -128,7 +166,8 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         />
         <SpendTile
           icon={<PersonIcon color="#fff" />}
-          label="Employee Cost"
+          label="Your Employees Pay"
+          tip="The combined monthly contribution from all enrolled employees."
           amount={totals.ee}
           pct={eePct}
           bg={C.amberTint}
@@ -137,7 +176,8 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         />
         <SpendTile
           icon={<StackIcon color="#fff" />}
-          label="Monthly Premium"
+          label="Total Monthly Bill"
+          tip="The total of company and employee contributions."
           amount={totals.total}
           bg={C.greenTint}
           edge={C.greenEdge}
@@ -184,11 +224,11 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <div style={{ marginTop: 6, display: "flex", gap: 16, fontSize: 11.5, color: C.faint }}>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.blue, marginRight: 5 }} />
-            Employer Cost {money(totals.er)}
+            Your Company Pays {money(totals.er)}
           </span>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.orange, marginRight: 5 }} />
-            Employee Cost {money(totals.ee)}
+            Your Employees Pay {money(totals.ee)}
           </span>
         </div>
       </div>
@@ -197,7 +237,10 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
           2027 Medical Options, but muted and disabled: this is what today's
           plan already fixed, not something to type over. */}
       <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
-        <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: C.ink }}>Estimated Employer Contribution (PEPM)</div>
+        <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: C.ink, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          Estimated Employer Contribution
+          <InfoTip text="Estimated amount your company pays per enrolled employee each month, by coverage tier." />
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
           {contribution.map((t) => (
             <div key={t.key} style={{ flex: "1 1 130px", minWidth: 130 }}>
