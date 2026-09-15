@@ -60,9 +60,23 @@ export interface ChatState {
   messages: Record<number, ChatMessage[]>;
   streaming: Streaming | null;
   error: string | null;
+  /** Whether the corner chat box is open. */
+  open: boolean;
+  /** A question a page asked on the client's behalf: the box opens a new conversation and sends it. */
+  pendingAsk: string | null;
 }
 
-let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null };
+/** Where the box remembers being open, per browser tab. */
+const OPEN_KEY = "kennion.chat.open";
+const rememberedOpen = () => {
+  try {
+    return sessionStorage.getItem(OPEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: rememberedOpen(), pendingAsk: null };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<ChatState>) {
@@ -82,7 +96,34 @@ export function useChat(): ChatState {
 
 /** Sign-out: forget everything, so the next group in this tab starts clean. */
 export function resetChat() {
-  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null });
+  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: false, pendingAsk: null });
+}
+
+/** Open or close the corner chat box; remembered for this tab. */
+export function setChatOpen(open: boolean) {
+  try {
+    sessionStorage.setItem(OPEN_KEY, open ? "1" : "0");
+  } catch {
+    // Storage blocked: the box still opens for this page load.
+  }
+  set({ open });
+}
+
+/**
+ * Start a new conversation with a question asked on the client's behalf —
+ * the Medical Plans page's "Get Plan Recommendations" button. The box opens
+ * and sends it as soon as it is showing.
+ */
+export function askAssistant(question: string) {
+  set({ pendingAsk: question });
+  setChatOpen(true);
+}
+
+/** The box takes the pending question once it has sent it. */
+export function takePendingAsk(): string | null {
+  const q = state.pendingAsk;
+  if (q != null) set({ pendingAsk: null });
+  return q;
 }
 
 export async function loadMemory() {

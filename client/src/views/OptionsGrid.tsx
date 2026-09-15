@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, num, panel, textInput } from "@/lib/ui";
+import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
+import { askAssistant } from "@/lib/chat";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 
@@ -30,9 +31,14 @@ export interface GridProps {
   appliedChanged: boolean;
   onApply: (values: Record<TierKey, number>) => void;
   onReset: () => void;
+  /** The assistant is on for this group, so "Get Plan Recommendations" can open it. */
+  assistantOn?: boolean;
 }
 
 type Tab = "carrier" | "network" | "ded" | "oop" | "cost";
+
+/** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
+const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
 /** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
@@ -164,7 +170,7 @@ function PctInput({ label, value, min, onCommit }: { label: string; value: numbe
   );
 }
 
-export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset }: GridProps) {
+export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset, assistantOn = false }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [networks, setNetworks] = useState<Set<string>>(new Set());
@@ -511,6 +517,25 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Browse the grid, or ask the assistant for a short list first. */}
+      <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "6px 0 10px" }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Browse All Plans</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+            {plans.length} quoted plan{plans.length === 1 ? "" : "s"} — filter, compare, or let the assistant narrow it down.
+          </div>
+        </div>
+        {assistantOn && (
+          <button onClick={() => askAssistant(RECOMMEND_ASK)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title="The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+              <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
+            </svg>
+            Get Plan Recommendations
+          </button>
         )}
       </div>
 

@@ -1465,6 +1465,40 @@ async function assistantData(g) {
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
     renewal: g.renewal,
     planDesigns: data.planDesigns,
+    census: censusProfile(g),
+  };
+}
+
+/**
+ * The group's people as aggregates only — average and range of employee
+ * ages, how many are under 30 or 55 and over, how many carry a spouse or
+ * children — so the assistant can say which plans suit the workforce.
+ * Never a name, never one person's age: the census itself stays with staff.
+ */
+function censusProfile(g) {
+  const members = Array.isArray(g.members) ? g.members : [];
+  const ages = members.map((m) => Number(m.age)).filter((a) => Number.isFinite(a) && a > 0);
+  if (!ages.length) return null;
+  const sorted = [...ages].sort((a, b) => a - b);
+  const mean = ages.reduce((s, a) => s + a, 0) / ages.length;
+  const sd = Math.sqrt(ages.reduce((s, a) => s + (a - mean) ** 2, 0) / ages.length);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const band = (lo, hi) => ages.filter((a) => a >= lo && a <= hi).length;
+  const spouses = members.filter((m) => Array.isArray(m.spAges) && m.spAges.length).length;
+  const withChildren = members.filter((m) => Array.isArray(m.chAges) && m.chAges.length).length;
+  const children = members.reduce((s, m) => s + (Array.isArray(m.chAges) ? m.chAges.length : 0), 0);
+  const spread = sd < 8 ? "narrow" : sd < 13 ? "moderate" : "wide";
+  return {
+    employees: ages.length,
+    average: Math.round(mean),
+    median,
+    youngest: sorted[0],
+    oldest: sorted[sorted.length - 1],
+    spread,
+    bands: { under30: band(0, 29), from30to44: band(30, 44), from45to54: band(45, 54), from55: band(55, 200) },
+    spouses,
+    withChildren,
+    children,
   };
 }
 
