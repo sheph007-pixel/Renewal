@@ -727,8 +727,14 @@ export function networkDirectory(network: string | null | undefined): { name: st
   if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {
     return { name: "Cigna Open Access Plus directory", url: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001" };
   }
+  if (/choice\s*plus|united|uhc/i.test(s)) {
+    return { name: "UnitedHealthcare Choice Plus directory", url: UHC_DIRECTORY };
+  }
   return null;
 }
+
+/** UnitedHealthcare's Choice Plus provider search (a guest link, no sign-in). */
+export const UHC_DIRECTORY = "https://connect.werally.com/guest/eyJkZWxzeXMiOiI1MiIsInBsYW5OYW1lIjoiQ2hvaWNlIFBsdXMifQouGJEydhvvIF0CEkL7OR4zyxz11_MPxoMvtvbzh-eZw";
 
 /** An option ID split for sorting: UH12 → ["UH", 12]; a plan without one sorts last. */
 export function optionSortKey(id?: string | null): [string, number] {
