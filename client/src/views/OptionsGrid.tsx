@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
-import { askAssistant } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 
@@ -173,6 +173,13 @@ function PctInput({ label, value, min, onCommit }: { label: string; value: numbe
 
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset, assistantOn = false }: GridProps) {
   const [tab, setTab] = useState<Tab | null>(null);
+  // Whether the group already has its recommendations conversation: the
+  // button then reopens it rather than asking again.
+  const chat = useChat();
+  useEffect(() => {
+    if (assistantOn && !chat.loaded) loadThreads().catch(() => undefined);
+  }, [assistantOn, chat.loaded]);
+  const recommended = chat.loaded && !!threadTitled(RECOMMENDATIONS_TITLE);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [networks, setNetworks] = useState<Set<string>>(new Set());
   const [fundings, setFundings] = useState<Set<string>>(new Set());
@@ -547,12 +554,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </div>
         </div>
         {assistantOn && (
-          <button onClick={() => askAssistant(RECOMMEND_ASK)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title="The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census">
+          <button onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={recommended ? "Open the recommendations the assistant already gave you" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
               <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
             </svg>
-            Get Plan Recommendations
+            {recommended ? "View Plan Recommendations" : "Get Plan Recommendations"}
           </button>
         )}
       </div>

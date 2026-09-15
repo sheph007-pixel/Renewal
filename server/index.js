@@ -1752,7 +1752,10 @@ app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => 
     thread = id && (await chatStore.getThread(g.name, id));
     if (!thread) return res.status(404).json({ error: "No such conversation." });
   } else {
-    thread = await chatStore.createThread(g.name, titleFor(content));
+    // A page can name the conversation it starts (Plan recommendations), so
+    // the same button finds it again instead of starting over.
+    const title = String(body.title || "").replace(/\s+/g, " ").trim().slice(0, 120);
+    thread = await chatStore.createThread(g.name, title || titleFor(content));
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments.map(threadId).filter(Boolean).slice(0, 5) : [];
   await streamTurn({ g, thread, content, page, compact: body.compact === true, attachments, res });

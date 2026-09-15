@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { loadThreads, sendMessage, setChatOpen, takePendingAsk, useChat } from "@/lib/chat";
+import { loadThreads, sendMessage, setChatOpen, takePendingAsk, takePendingThread, useChat } from "@/lib/chat";
 import ChatPanel from "@/views/ChatPanel";
 
 interface Props {
@@ -29,14 +29,21 @@ export default function ChatWidget({ page, assistantHref }: Props) {
     if (open && !chat.loaded) loadThreads().catch(() => undefined);
   }, [open, chat.loaded]);
 
-  // A question asked for the client from a page: fresh conversation, sent now.
+  // A question asked for the client from a page: fresh conversation, sent now,
+  // under the page's name for it when it gave one.
   useEffect(() => {
     if (!open || chat.pendingAsk == null || chat.streaming) return;
     const q = takePendingAsk();
     if (q == null) return;
     setThreadId("new");
-    void sendMessage(null, q, page, (id) => setThreadId(id), true).catch(() => undefined);
+    void sendMessage(null, q.question, page, (id) => setThreadId(id), true, [], q.title).catch(() => undefined);
   }, [open, chat.pendingAsk, chat.streaming, page]);
+  // A conversation a page asked the box to open again — the recommendations already given.
+  useEffect(() => {
+    if (!open || chat.pendingThread == null) return;
+    const id = takePendingThread();
+    if (id != null) setThreadId(id);
+  }, [open, chat.pendingThread]);
 
   const toggle = () => setOpen(!open);
 

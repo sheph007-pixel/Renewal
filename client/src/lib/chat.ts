@@ -63,7 +63,9 @@ export interface ChatState {
   /** Whether the corner chat box is open. */
   open: boolean;
   /** A question a page asked on the client's behalf: the box opens a new conversation and sends it. */
-  pendingAsk: string | null;
+  pendingAsk: { question: string; title: string | null } | null;
+  /** A conversation a page asked the box to open, by id. */
+  pendingThread: number | null;
 }
 
 /** Where the box remembers being open, per browser tab. */
@@ -76,7 +78,7 @@ const rememberedOpen = () => {
   }
 };
 
-let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: rememberedOpen(), pendingAsk: null };
+let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: rememberedOpen(), pendingAsk: null, pendingThread: null };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<ChatState>) {
@@ -96,7 +98,7 @@ export function useChat(): ChatState {
 
 /** Sign-out: forget everything, so the next group in this tab starts clean. */
 export function resetChat() {
-  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: false, pendingAsk: null });
+  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: false, pendingAsk: null, pendingThread: null });
 }
 
 /** Open or close the corner chat box; remembered for this tab. */
@@ -109,21 +111,47 @@ export function setChatOpen(open: boolean) {
   set({ open });
 }
 
+/** The name of the conversation the Get Plan Recommendations button starts, and finds again. */
+export const RECOMMENDATIONS_TITLE = "Plan recommendations";
+
+/** The group's conversation of that name, if it has one. */
+export function threadTitled(title: string): ChatThread | undefined {
+  return state.threads.find((t) => (t.title || "").trim().toLowerCase() === title.toLowerCase());
+}
+
 /**
- * Start a new conversation with a question asked on the client's behalf —
- * the Medical Plans page's "Get Plan Recommendations" button. The box opens
- * and sends it as soon as it is showing.
+ * A question asked on the client's behalf — the Medical Plans page's "Get
+ * Plan Recommendations" button. With a title, the conversation is made
+ * once: the first press starts it under that name and sends the question;
+ * a later press opens the same conversation again, recommendations and
+ * all, rather than asking anew. Without a title, a fresh conversation.
  */
-export function askAssistant(question: string) {
-  set({ pendingAsk: question });
+export async function askAssistant(question: string, title: string | null = null) {
+  if (title) {
+    if (!state.loaded) await loadThreads().catch(() => undefined);
+    const existing = threadTitled(title);
+    if (existing) {
+      set({ pendingThread: existing.id, pendingAsk: null });
+      setChatOpen(true);
+      return;
+    }
+  }
+  set({ pendingAsk: { question, title }, pendingThread: null });
   setChatOpen(true);
 }
 
 /** The box takes the pending question once it has sent it. */
-export function takePendingAsk(): string | null {
+export function takePendingAsk(): { question: string; title: string | null } | null {
   const q = state.pendingAsk;
   if (q != null) set({ pendingAsk: null });
   return q;
+}
+
+/** The box takes the conversation it was asked to open. */
+export function takePendingThread(): number | null {
+  const id = state.pendingThread;
+  if (id != null) set({ pendingThread: null });
+  return id;
 }
 
 export async function loadMemory() {
@@ -274,7 +302,7 @@ export async function downloadFile(url: string, filename: string): Promise<void>
  * once the answer is complete; the thread list and messages update as the
  * reply streams in.
  */
-export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void, compact = false, attachments: ChatFile[] = []): Promise<number> {
+export async function sendMessage(threadId: number | null, content: string, page: string, onThread?: (id: number) => void, compact = false, attachments: ChatFile[] = [], title: string | null = null): Promise<number> {
   const question: ChatMessage = { id: localId(), role: "user", content, files: attachments, createdAt: new Date().toISOString() };
   let id = threadId;
   const fresh = (tid: number | null): Streaming => ({ threadId: tid, text: "", status: "", files: [] });
@@ -287,7 +315,7 @@ export async function sendMessage(threadId: number | null, content: string, page
   const r = await fetch("/api/chat/send", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...groupHeaders() },
-    body: JSON.stringify({ threadId: id, content, page, compact, attachments: attachments.map((f) => f.id) }),
+    body: JSON.stringify({ threadId: id, content, page, compact, attachments: attachments.map((f) => f.id), ...(title && id == null ? { title } : {}) }),
   });
   if (!r.ok || !r.body) {
     const error = await failure(r);
