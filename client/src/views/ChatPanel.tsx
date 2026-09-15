@@ -298,6 +298,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             </svg>
           </button>
         </div>
+        <div style={{ textAlign: "center", fontSize: compact ? 10.5 : 11.5, color: C.faint, marginTop: 6, lineHeight: 1.3 }}>AI can make mistakes. Please verify important information.</div>
       </div>
     </div>
   );
