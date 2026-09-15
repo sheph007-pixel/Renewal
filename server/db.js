@@ -327,6 +327,9 @@ CREATE TABLE IF NOT EXISTS kennion.chat_files (
 ALTER TABLE kennion.chat_files ALTER COLUMN thread_id DROP NOT NULL;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS group_name text;
 ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'assistant';
+-- A file the client put in its Documents tab itself, with no conversation:
+-- kept for the group until the client removes it, never swept.
+ALTER TABLE kennion.chat_files ADD COLUMN IF NOT EXISTS kept boolean NOT NULL DEFAULT false;
 -- What the assistant remembers about a group between conversations: the
 -- preferences the client stated (budget, priorities, must-haves, what they
 -- ruled out). One line each; the client and staff can remove any of them.
@@ -353,6 +356,7 @@ const shapeThread = (r) => ({
   ...(r.flagged_at !== undefined ? { flaggedAt: r.flagged_at, flagNote: r.flag_note || null } : {}),
   ...(r.n !== undefined ? { messages: Number(r.n), preview: r.preview || null } : {}),
 });
+const shapeFile = (r) => ({ id: Number(r.id), threadId: r.thread_id == null ? null : Number(r.thread_id), threadTitle: r.thread_title || null, filename: r.filename, mime: r.mime, size: r.size, role: r.role, createdAt: r.created_at });
 const shapeMessage = (r) => ({ id: Number(r.id), role: r.role, content: r.content, page: r.page, files: r.files || [], createdAt: r.created_at });
 
 const shapeStats = (r) => ({
@@ -1020,8 +1024,58 @@ export function createDb(url) {
     },
 
     async sweepPendingFiles() {
-      const { rowCount } = await pool.query("DELETE FROM kennion.chat_files WHERE thread_id IS NULL AND created_at < now() - interval '1 day'");
+      const { rowCount } = await pool.query("DELETE FROM kennion.chat_files WHERE thread_id IS NULL AND NOT kept AND created_at < now() - interval '1 day'");
       return rowCount;
+    },
+
+    /**
+     * A group's documents, newest first: everything the assistant made in
+     * its conversations, everything the client attached to a question, and
+     * what the client put in the Documents tab itself. Without the bytes.
+     */
+    async listFiles(groupName) {
+      const { rows } = await pool.query(
+        `SELECT f.id, f.thread_id, f.filename, f.mime, f.size, f.role, f.created_at, t.title AS thread_title
+           FROM kennion.chat_files f LEFT JOIN kennion.chat_threads t ON t.id = f.thread_id
+          WHERE (t.id IS NOT NULL AND t.group_name = $1 AND NOT t.staff) OR (f.thread_id IS NULL AND f.group_name = $1 AND f.kept)
+          ORDER BY f.created_at DESC, f.id DESC LIMIT 500`,
+        [groupName],
+      );
+      return rows.map(shapeFile);
+    },
+
+    /** A file the client keeps in its Documents tab, outside any conversation. */
+    async addKeptFile(groupName, filename, mime, data) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.chat_files (group_name, filename, mime, size, data, role, kept) VALUES ($1, $2, $3, $4, $5, 'user', true)
+         RETURNING id, thread_id, filename, mime, size, role, created_at, NULL::text AS thread_title`,
+        [groupName, filename, mime, data.length, data],
+      );
+      return shapeFile(rows[0]);
+    },
+
+    /**
+     * Remove one of the group's documents; the answer or question it hung
+     * on no longer lists it. False when it is not the group's to remove.
+     */
+    async deleteFile(groupName, id) {
+      const { rows } = await pool.query(
+        `DELETE FROM kennion.chat_files f USING (
+            SELECT f2.id FROM kennion.chat_files f2 LEFT JOIN kennion.chat_threads t ON t.id = f2.thread_id
+             WHERE f2.id = $2 AND ((t.id IS NOT NULL AND t.group_name = $1 AND NOT t.staff) OR (f2.thread_id IS NULL AND f2.group_name = $1))
+          ) own WHERE f.id = own.id RETURNING f.thread_id`,
+        [groupName, id],
+      );
+      if (!rows[0]) return false;
+      if (rows[0].thread_id != null) {
+        await pool.query(
+          `UPDATE kennion.chat_messages
+              SET files = COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(files) e WHERE (e->>'id')::bigint <> $2), '[]'::jsonb)
+            WHERE thread_id = $1 AND files @> jsonb_build_array(jsonb_build_object('id', $2::bigint))`,
+          [rows[0].thread_id, id],
+        );
+      }
+      return true;
     },
 
     async listMemory(groupName) {

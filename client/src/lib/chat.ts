@@ -20,6 +20,11 @@ export interface ChatFile {
   filename: string;
   mime: string;
   size: number;
+  /** On the Documents tab: who put it there, which conversation, when. */
+  role?: "user" | "assistant";
+  threadId?: number | null;
+  threadTitle?: string | null;
+  createdAt?: string;
 }
 
 export interface ChatMessage {
@@ -177,6 +182,49 @@ export async function uploadAttachment(file: File): Promise<ChatFile> {
   });
   if (!r.ok) throw new Error(await failure(r));
   return ((await r.json()) as { file: ChatFile }).file;
+}
+
+/** The group's documents, newest first: made by the assistant, attached to a question, or kept here. */
+export async function loadFiles(): Promise<ChatFile[]> {
+  const r = await fetch("/api/chat/files", { headers: groupHeaders() });
+  if (!r.ok) throw new Error(await failure(r));
+  return ((await r.json()) as { files: ChatFile[] }).files;
+}
+
+/** Keep a file in the Documents tab, outside any conversation. */
+export async function uploadDocument(file: File): Promise<ChatFile> {
+  if (file.size > ATTACHMENT_MAX_BYTES) throw new Error(`${file.name} is larger than 15 MB.`);
+  const r = await fetch(`/api/chat/files?filename=${encodeURIComponent(file.name)}`, {
+    method: "POST",
+    headers: { "Content-Type": file.type || "application/octet-stream", ...groupHeaders() },
+    body: file,
+  });
+  if (!r.ok) throw new Error(await failure(r));
+  return ((await r.json()) as { file: ChatFile }).file;
+}
+
+export async function deleteFile(id: number): Promise<void> {
+  const r = await fetch(`/api/chat/files/${id}`, { method: "DELETE", headers: groupHeaders() });
+  if (!r.ok) throw new Error(await failure(r));
+  // The answer or question it hung on no longer lists it.
+  const messages: Record<number, ChatMessage[]> = {};
+  for (const [tid, list] of Object.entries(state.messages)) messages[Number(tid)] = list.map((m) => (m.files?.some((f) => f.id === id) ? { ...m, files: m.files.filter((f) => f.id !== id) } : m));
+  set({ messages });
+}
+
+/** Fetch a file with the session headers and hand it to the browser as a download. */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const r = await fetch(url, { headers: groupHeaders() });
+  if (!r.ok) throw new Error(await failure(r));
+  const blob = await r.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
 }
 
 /**

@@ -1269,6 +1269,19 @@ function memoryChatStore() {
     return t && t.groupName === groupName && t.staff === !!staff ? t : null;
   };
   const list = (t) => ({ ...t, messages: (messages.get(t.id) || []).length, preview: ((messages.get(t.id) || []).find((m) => m.role === "user") || {}).content || null });
+  // A file is the group's when it hangs on one of its own conversations, or
+  // it put the file in its Documents tab itself.
+  const owned = (f, groupName) => {
+    if (f.threadId != null) {
+      const t = threads.get(f.threadId);
+      return !!t && t.groupName === groupName && !t.staff;
+    }
+    return f.kept && f.groupName === groupName;
+  };
+  const shapeFile = (f) => {
+    const t = f.threadId != null ? threads.get(f.threadId) : null;
+    return { id: f.id, threadId: f.threadId, threadTitle: t ? t.title : null, filename: f.filename, mime: f.mime, size: f.size, role: f.role, createdAt: new Date(f.createdAt).toISOString() };
+  };
   const byActivity = (a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : b.id - a.id);
   return {
     async listThreads(groupName) {
@@ -1312,14 +1325,32 @@ function memoryChatStore() {
       return m;
     },
     async addFile(threadId, filename, mime, data) {
-      const f = { id: nextFile++, threadId: Number(threadId), groupName: null, role: "assistant", filename, mime, size: data.length, data };
+      const f = { id: nextFile++, threadId: Number(threadId), groupName: null, role: "assistant", filename, mime, size: data.length, data, createdAt: Date.now(), kept: false };
       files.set(f.id, f);
       return { id: f.id, filename, mime, size: f.size };
     },
     async addPendingFile(groupName, filename, mime, data) {
-      const f = { id: nextFile++, threadId: null, groupName, role: "user", filename, mime, size: data.length, data, createdAt: Date.now() };
+      const f = { id: nextFile++, threadId: null, groupName, role: "user", filename, mime, size: data.length, data, createdAt: Date.now(), kept: false };
       files.set(f.id, f);
       return { id: f.id, filename, mime, size: f.size };
+    },
+    async addKeptFile(groupName, filename, mime, data) {
+      const f = { id: nextFile++, threadId: null, groupName, role: "user", filename, mime, size: data.length, data, createdAt: Date.now(), kept: true };
+      files.set(f.id, f);
+      return shapeFile(f);
+    },
+    async listFiles(groupName) {
+      return [...files.values()]
+        .filter((f) => owned(f, groupName))
+        .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id)
+        .map(shapeFile);
+    },
+    async deleteFile(groupName, id) {
+      const f = files.get(Number(id));
+      if (!f || !(owned(f, groupName) || (f.threadId == null && f.groupName === groupName))) return false;
+      files.delete(f.id);
+      for (const m of messages.get(f.threadId) || []) m.files = (m.files || []).filter((x) => x.id !== f.id);
+      return true;
     },
     async claimFiles(ids, groupName, threadId) {
       const out = [];
@@ -1333,7 +1364,7 @@ function memoryChatStore() {
     },
     async sweepPendingFiles() {
       let n = 0;
-      for (const [id, f] of files) if (f.threadId == null && Date.now() - f.createdAt > 86_400_000) files.delete(id) && n++;
+      for (const [id, f] of files) if (f.threadId == null && !f.kept && Date.now() - f.createdAt > 86_400_000) files.delete(id) && n++;
       return n;
     },
     async listMemory(groupName) {
@@ -1578,6 +1609,23 @@ app.delete("/api/chat/threads/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * The group's Documents tab: every file the assistant made in its
+ * conversations, every file the client attached to a question, and what
+ * the client put here itself — one place, to download or remove.
+ */
+app.get("/api/chat/files", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  res.json({ files: await chatStore.listFiles(g.name) });
+});
+app.delete("/api/chat/files/:id", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const id = threadId(req.params.id);
+  if (!id || !(await chatStore.deleteFile(g.name, id))) return res.status(404).json({ error: "No such file." });
+  res.json({ ok: true });
+});
 /** A document the assistant made for this group, by the session cookie alone. */
 app.get("/api/chat/files/:id", async (req, res) => {
   const g = groupForPage(req);
@@ -1605,6 +1653,18 @@ app.post("/api/chat/attachments", express.raw({ type: () => true, limit: CHAT_AT
   }
   const file = await chatStore.addPendingFile(g.name, filename, c.mime, req.body);
   res.json({ file });
+});
+/** A file the client keeps in its Documents tab, outside any conversation: the same kinds. */
+app.post("/api/chat/files", express.raw({ type: () => true, limit: CHAT_ATTACHMENT_MAX }), async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const filename = String(req.query.filename || "").replace(/[\\/]/g, "_").trim().slice(0, 200) || "document";
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const c = classify(filename, String(req.get("content-type") || ""));
+  if (c.type === "unsupported" || c.type === "email" || c.type === "msg") {
+    return res.status(400).json({ error: `"${filename}" is not a kind the portal keeps. Add a PDF, image, Excel, Word, CSV or text file.` });
+  }
+  res.json({ file: await chatStore.addKeptFile(g.name, filename, c.mime, req.body) });
 });
 
 app.post("/api/chat/send", express.json({ limit: "32kb" }), async (req, res) => {
