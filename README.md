@@ -618,6 +618,21 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**Get Plan Recommendations.** Above the 2027 grid, under a "Browse All
+Plans" heading, a button opens the chat box on a new conversation and asks
+for recommendations on the client's behalf. The assistant answers straight
+away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer
+Benefits — each by option ID with its monthly cost at the group's census,
+says which it would start with, and closes by asking for a budget or
+must-haves so it can sharpen them. For this the model is handed a census
+profile (`censusProfile` in `server/index.js`): the number of enrolled
+employees, average, median, youngest and oldest age, whether the range is
+narrow, moderate or wide, counts by age band, and how many cover a spouse
+or children. Aggregates only — no name and no one person's age leaves the
+server. A young, tightly grouped workforce with few dependants can be
+pointed at a higher-deductible design; a wide range or an older workforce
+gets a Best Fit pick that protects the people most likely to use care.
+
 Each answer is written with the group's own figures in front of the model
 (`server/assistant.js`, `describeGroup`): the plans and tier rates in force,
 the employer/employee split where Employee Navigator has one, every carrier

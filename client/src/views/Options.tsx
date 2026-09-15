@@ -20,6 +20,8 @@ interface Props {
   onContributionApply: (values: Record<TierKey, number>) => void;
   onContributionReset: () => void;
   onToggleSelected: (plan: string) => void;
+  /** Whether the assistant is on for this group: the Get Plan Recommendations button needs it. */
+  assistantOn?: boolean;
 }
 
 /**
@@ -41,6 +43,7 @@ export default function Options({
   onContributionApply,
   onContributionReset,
   onToggleSelected,
+  assistantOn = false,
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
   const short = plans.filter((p) => selected[p.plan]);
@@ -49,6 +52,7 @@ export default function Options({
     <div>
       <OptionsGrid
         g={g}
+        assistantOn={assistantOn}
         plans={plans}
         totals={totals}
         selected={selected}

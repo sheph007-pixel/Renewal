@@ -973,6 +973,7 @@ export default function App() {
               <Options
                 data={data}
                 g={g}
+                assistantOn={assistantOn}
                 totals={totals}
                 selected={selected}
                 signUpHref={hrefFor("signup")}

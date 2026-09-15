@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { loadThreads, useChat } from "@/lib/chat";
+import { loadThreads, sendMessage, setChatOpen, takePendingAsk, useChat } from "@/lib/chat";
 import ChatPanel from "@/views/ChatPanel";
 
 interface Props {
@@ -11,24 +11,17 @@ interface Props {
   assistantHref: (thread?: number | null) => string;
 }
 
-/** Where the box remembers being open, per browser. */
-const OPEN_KEY = "kennion.chat.open";
-
 /**
  * The chat box in the corner of every page. It opens on the most recent
  * conversation, so a question from one page can be carried on from the next,
  * and a new one is a click away. The Assistant page is the same
- * conversations with room to read.
+ * conversations with room to read. A page can also open it with a question
+ * of its own (askAssistant): a new conversation starts and the question is sent.
  */
 export default function ChatWidget({ page, assistantHref }: Props) {
   const chat = useChat();
-  const [open, setOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem(OPEN_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const open = chat.open;
+  const setOpen = setChatOpen;
   /** Null: the newest thread, or a fresh one when there is none. */
   const [threadId, setThreadId] = useState<number | null | "new">(null);
 
@@ -36,16 +29,16 @@ export default function ChatWidget({ page, assistantHref }: Props) {
     if (open && !chat.loaded) loadThreads().catch(() => undefined);
   }, [open, chat.loaded]);
 
-  const toggle = () => {
-    setOpen((v) => {
-      try {
-        sessionStorage.setItem(OPEN_KEY, v ? "0" : "1");
-      } catch {
-        // Storage blocked: the box still opens for this page load.
-      }
-      return !v;
-    });
-  };
+  // A question asked for the client from a page: fresh conversation, sent now.
+  useEffect(() => {
+    if (!open || chat.pendingAsk == null || chat.streaming) return;
+    const q = takePendingAsk();
+    if (q == null) return;
+    setThreadId("new");
+    void sendMessage(null, q, page, (id) => setThreadId(id), true).catch(() => undefined);
+  }, [open, chat.pendingAsk, chat.streaming, page]);
+
+  const toggle = () => setOpen(!open);
 
   const current: number | null = threadId === "new" ? null : threadId != null ? threadId : chat.threads[0]?.id ?? null;
   const title = current != null ? chat.threads.find((t) => t.id === current)?.title || "Conversation" : "New conversation";
