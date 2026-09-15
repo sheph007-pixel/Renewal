@@ -2,7 +2,9 @@
 // gets UH1, GR1 …, numbered per group in carrier order; UnitedHealthcare's
 // two proposals share a sequence; a re-read keeps numbers; a newer proposal
 // in the same slot hands surviving plans their old numbers and never reuses
-// a retired one; the EPO twin keeps its number but never reaches the client;
+// a retired one; an EPO twin is never stored, so it carries no number and
+// never reaches the client; a slot stored before that rule is cleaned and
+// renumbered once, compactly;
 // the sign-up carries the IDs; the comparison finds a plan by ID.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -84,11 +86,20 @@ const all = (await (await fetch(`${base}/api/admin/proposals`, { headers: staffA
 assert.equal(all.find((r) => r.id === lf.id).superseded_by, lf2.id);
 assert.deepEqual(await clientIds("UHC Level Funded"), ["UH1:P4000i8021B Choice Plus", "UH3:P3500i100ES21B", "UH6:P6000i100LX21B"]);
 
-// 5. Gravie: its own prefix; the EPO twin is numbered but never shown.
-await upload("gravie.json", "Gravie", reading("Gravie", "level funded", [plan("Gravie Copay 1500 PPO", "G1500", 610, { network: "Cigna OAP (PPO)" }), plan("Gravie Copay 1500 EPO", "G1500E", 590, { network: "Cigna OAP (EPO)", plan_type: "EPO" })]));
+// 5. Gravie: its own prefix; the EPO twin is not stored, so the PPO designs
+//    read GR1, GR2 … with nothing missing.
+await upload("gravie.json", "Gravie", reading("Gravie", "level funded", [plan("Gravie Copay 1500 PPO", "G1500", 610, { network: "Cigna OAP (PPO)" }), plan("Gravie Copay 1500 EPO", "G1500E", 590, { network: "Cigna OAP (EPO)", plan_type: "EPO" }), plan("Gravie Copay 2500 PPO", "G2500", 580, { network: "Cigna OAP (PPO)" })]));
 const gr = await settled("gravie.json");
-assert.deepEqual(storedIds(gr), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 1500 EPO"]);
-assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO"], "PPO only: GR2 exists but never reaches the client");
+assert.deepEqual(storedIds(gr), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "EPO twins are never stored");
+assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "PPO only, and the numbers run without gaps");
+
+// 5b. A slot stored before that rule — EPO twins holding numbers — is
+//     cleaned and renumbered once, compactly, and nothing from the old
+//     sequence leaks.
+await upload("gravie-legacy.json", "Gravie", reading("Gravie", "level funded", [plan("Gravie Copay 1500 PPO", "G1500", 610, { network: "Cigna OAP (PPO)", option_id: "GR1" }), plan("Gravie Copay 1500 EPO", "G1500E", 590, { network: "Cigna OAP (EPO)", plan_type: "EPO", option_id: "GR2" }), plan("Gravie Copay 2500 PPO", "G2500", 580, { network: "Cigna OAP (PPO)", option_id: "GR3" }), plan("Gravie Copay 2500 EPO", "G2500E", 560, { network: "Cigna OAP (EPO)", plan_type: "EPO", option_id: "GR4" })]));
+const grl = await settled("gravie-legacy.json");
+assert.deepEqual(storedIds(grl), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "the old GR1–GR4 becomes GR1–GR2, EPO twins gone");
+assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"]);
 
 // 6. The sign-up carries the ID with the name, and the comparison finds a plan by ID.
 const signup = await fetch(`${base}/api/group/signup`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ code: mine.code, plans: ["UH1 · P4000i8021B Choice Plus"], note: "" }) });

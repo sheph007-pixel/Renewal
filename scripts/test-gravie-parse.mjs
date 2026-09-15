@@ -1,6 +1,7 @@
 // A Gravie rate workbook, built here the way Gravie lays one out, read back:
-// header facts, subscribers by tier, every plan on every rate sheet with its
-// network, and the proposal shape the Options page prices from.
+// header facts, subscribers by tier, every plan on the PPO sheet — Kennion
+// offers PPO only, so the EPO sheet is never read — and the proposal shape
+// the Options page prices from.
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "../server/gravie-parse.js";
@@ -43,29 +44,28 @@ assert.equal(p.quoteNumber, "00099999");
 assert.equal(p.effectiveDate, "2027-01-01", "Excel serial 46388 is 1 Jan 2027");
 assert.equal(p.generated, "2026-09-08");
 assert.deepEqual(p.tiers, { EE: 10, ES: 2, EC: 1, FAM: 3, total: 16 });
-assert.equal(p.plans.length, 3, "the EPO and PPO sheets only: no Narrow Network, nothing from the benefits grid");
-assert.deepEqual(p.plans.map((x) => x.variant), ["EPO", "EPO", "PPO"]);
-assert.equal(p.plans[0].network, "Cigna Open Access Plus (EPO)");
-assert.equal(p.plans[2].network, "Cigna Open Access Plus (PPO)");
+assert.equal(p.plans.length, 1, "the PPO sheet only: no EPO sheet, no Narrow Network, nothing from the benefits grid");
+assert.deepEqual(p.plans.map((x) => x.variant), ["PPO"]);
+assert.equal(p.plans[0].network, "Cigna Open Access Plus (PPO)");
 assert.equal(p.plans[0].planType, "QHDHP");
-assert.deepEqual(p.plans[1].rates, { EE: 500, ES: 1000, EC: 900, FAM: 1500 });
-assert.equal(p.plans[1].coinsurance, 0);
-assert.equal(p.plans[2].sheet, "PPO");
+assert.deepEqual(p.plans[0].rates, { EE: 360, ES: 720, EC: 620, FAM: 1030 });
+assert.equal(p.plans[0].coinsurance, 0);
+assert.equal(p.plans[0].sheet, "PPO");
 
 const x = gravieExtracted(p);
 assert.equal(x.carrier, "Gravie");
 assert.equal(x.funding, "level funded");
 assert.equal(x.quote_id, "00099999");
 assert.equal(x.enrolled_on_document, 16);
-assert.equal(x.plans.length, 3);
-assert.equal(x.plans[0].monthly_total, 350 * 10 + 700 * 2 + 600 * 1 + 1000 * 3, "priced on the quoted tiers");
+assert.equal(x.plans.length, 1);
+assert.equal(x.plans[0].monthly_total, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3, "priced on the quoted tiers");
 assert.equal(x.plans[0].deductible, "$5000/$10000");
 
 const rows = gravieQuoteRows(p);
-assert.equal(rows.length, 3);
-assert.deepEqual(rows.map((r) => r.network), ["EPO", "EPO", "PPO"], "the rows carry EPO or PPO, the one thing that differs");
-assert.equal(rows[2].monthly, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3);
-assert.equal(rows[0].name, "Gravie QHDHP $5,000 Ded/$5,000 OOPM EPO");
+assert.equal(rows.length, 1);
+assert.deepEqual(rows.map((r) => r.network), ["PPO"], "PPO rows only");
+assert.equal(rows[0].monthly, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3);
+assert.equal(rows[0].name, "Gravie QHDHP $5,000 Ded/$5,000 OOPM");
 assert.match(x.summary, /quote 00099999/);
 
 {
