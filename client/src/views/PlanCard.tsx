@@ -42,8 +42,8 @@ export function fundingOf(p: MarketPlan): string {
   return p.label || "Quoted";
 }
 
-/** Where the figures come from: the carrier's own quote for this group, a quote still out, or an estimate scaled from comparable groups. */
-export const basisOf = (p: MarketPlan) => (p.quoted ? "Carrier Quote" : p.pending ? "Quote Requested" : "Illustrative Estimate");
+/** Where the figures come from: always the carrier's own quote for this group — read off its proposal, or quoted on the menu. */
+export const basisOf = (p: MarketPlan) => (p.quoted ? "Carrier Proposal" : "Carrier Quote");
 
 export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
   const sp = costSplit(p, contribution, counts);

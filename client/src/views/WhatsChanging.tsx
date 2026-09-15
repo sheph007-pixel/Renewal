@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  hasDirectQuote,
   marketSummary,
   money,
   money0,
@@ -28,7 +27,6 @@ interface Props {
  */
 export default function WhatsChanging({ data, g, rows, totals, optionsHref, signUpHref }: Props) {
   const summary = useMemo(() => marketSummary(data, g, rows, totals.total), [data, g, rows, totals.total]);
-  const direct = hasDirectQuote(data, g);
 
   const card = { ...panel, padding: "18px 20px" };
 
@@ -40,10 +38,10 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
 
       <div style={card}>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: C.body, textWrap: "pretty" as const }}>
-          Your 2026 program ends December 31. For 2027, we took {g.name}&rsquo;s census to
-          UnitedHealthcare and Gravie and priced every plan on their menus —{" "}
-          {summary.pricedCount} option{summary.pricedCount === 1 ? "" : "s"} in all, effective January 1, 2027.
-          {!direct && " Underwriting for your group is still open, so figures below are indicative until firm rates arrive."}
+          Your 2026 program ends December 31. For 2027, we took {g.name}&rsquo;s census to the carriers;
+          every option shown carries their own rates for your group —{" "}
+          {summary.pricedCount} option{summary.pricedCount === 1 ? "" : "s"} so far, effective January 1, 2027.
+          {summary.pricedCount === 0 && " Quotes for your group are still arriving, and the figures below fill in as they do."}
         </p>
 
         <div
@@ -71,7 +69,7 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
             <div style={{ fontSize: 12, color: C.faint }}>
               {summary.delta == null
                 ? "quotes arriving"
-                : `${summary.delta >= 0 ? "+" : "−"}${money0(Math.abs(summary.delta))} / mo vs today${direct ? "" : " (indicative)"}`}
+                : `${summary.delta >= 0 ? "+" : "−"}${money0(Math.abs(summary.delta))} / mo vs today`}
             </div>
           </div>
         </div>
