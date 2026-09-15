@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { C, panel } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { navigate } from "@/lib/router";
-import { deleteThread, forgetMemory, loadMemory, loadThreads, renameThread, useChat, type ChatThread, type MemoryLine } from "@/lib/chat";
+import { deleteThread, forgetMemory, loadMemory, loadThreads, rememberMemory, renameThread, useChat, type ChatThread, type MemoryLine } from "@/lib/chat";
 import ChatPanel from "@/views/ChatPanel";
 
 interface Props {
@@ -83,31 +83,108 @@ function ThreadRow({ t, on, href, onRename, onDelete }: { t: ChatThread; on: boo
  * the one open on the right, with room to read a comparison table. The
  * corner box on the other pages is the same conversations, smaller.
  */
-/**
- * What the assistant remembers about the group — the preferences the client
- * has stated — with a way to drop any line. It shows only once there is
- * something to show.
- */
-function MemoryPanel({ lines }: { lines: MemoryLine[] }) {
-  const [openPanel, setOpenPanel] = useState(true);
-  if (!lines.length) return null;
+/** A small head-and-spark mark for Memory, the way an assistant's memory is usually shown. */
+function MemoryIcon() {
   return (
-    <div style={{ flex: "none", borderTop: `1px solid ${C.hairline}`, background: C.card, maxHeight: "40%", display: "flex", flexDirection: "column" }}>
-      <button onClick={() => setOpenPanel((v) => !v)} aria-expanded={openPanel} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", padding: "9px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", textTransform: "none" }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.4px", textTransform: "uppercase", color: C.faint }}>What it remembers about you</span>
-        <span style={{ fontSize: 11, color: C.faint }}>{openPanel ? "Hide" : `${lines.length}`}</span>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9.5 3.5a4 4 0 0 0-4 4v1.2A3.5 3.5 0 0 0 4 12a3.5 3.5 0 0 0 1.5 2.9V16a4 4 0 0 0 4 4h.5V3.5h-.5Z" />
+      <path d="M14.5 3.5a4 4 0 0 1 4 4v1.2A3.5 3.5 0 0 1 20 12a3.5 3.5 0 0 1-1.5 2.9V16a4 4 0 0 1-4 4H14V3.5h.5Z" />
+      <path d="M12 3.5V20" />
+    </svg>
+  );
+}
+
+/**
+ * Memory: what the assistant keeps in mind about the group between
+ * conversations — the preferences the client has stated, and anything they
+ * add here themselves. A button in the rail with a count; it opens a panel
+ * listing every line with a way to remove it, and a box to add one. The
+ * assistant records lines on its own as the client talks; this is where the
+ * client sees, adds to and prunes them.
+ */
+function MemoryButton({ lines }: { lines: MemoryLine[] }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const add = async () => {
+    const text = draft.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await rememberMemory(text);
+      setDraft("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title="What the assistant remembers about you"
+        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${open ? C.blueEdge : C.hairline}`, background: open ? C.blueTint : C.card, color: C.ink, fontSize: 13, fontWeight: 500, cursor: "pointer", textAlign: "left" }}
+      >
+        <span style={{ display: "grid", placeItems: "center", color: C.blue }}>
+          <MemoryIcon />
+        </span>
+        <span style={{ flex: 1 }}>Memory</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: lines.length ? C.blueInk : C.faint, background: lines.length ? C.blueTint : C.zebra, border: `1px solid ${lines.length ? C.blueEdge : C.hairline}`, borderRadius: 10, padding: "1px 7px" }}>{lines.length}</span>
       </button>
-      {openPanel && (
-        <div style={{ overflowY: "auto", padding: "0 8px 10px" }}>
-          {lines.map((m) => (
-            <div key={m.id} className="chat-thread" style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "5px 6px 5px 10px", borderRadius: 6, fontSize: 12.5, lineHeight: 1.45, color: C.body }}>
-              <span style={{ flex: 1, minWidth: 0 }}>{m.text}</span>
-              <button className="chat-tool chat-thread-tools" onClick={() => void forgetMemory(m.id)} title="Forget this" aria-label="Forget this" style={{ flex: "none" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-          ))}
-          <div style={{ padding: "6px 10px 0", fontSize: 11, color: C.faint, lineHeight: 1.45 }}>Its recommendations follow these. Tell it when something changes, or remove a line.</div>
+      {open && (
+        <div role="dialog" aria-label="Memory" style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 20, width: 340, maxWidth: "calc(100vw - 32px)", background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 12px 32px rgba(11,33,56,0.18)", padding: "12px 12px 10px" }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>What the assistant remembers about you</div>
+          <div style={{ marginTop: 2, fontSize: 11.5, color: C.faint, lineHeight: 1.45 }}>Its answers and recommendations follow these. It adds lines as you talk; you can add or remove any.</div>
+          <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
+            {lines.length === 0 && <div style={{ padding: "8px 2px", fontSize: 12.5, color: C.muted }}>Nothing yet. Tell it what matters to you, or add a line below.</div>}
+            {lines.map((m) => (
+              <div key={m.id} className="chat-thread" style={{ display: "flex", alignItems: "flex-start", gap: 6, padding: "5px 4px 5px 8px", borderRadius: 6, fontSize: 12.5, lineHeight: 1.45, color: C.body }}>
+                <span style={{ flex: 1, minWidth: 0 }}>{m.text}</span>
+                <button className="chat-tool chat-thread-tools" onClick={() => void forgetMemory(m.id)} title="Remove" aria-label="Remove" style={{ flex: "none" }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void add();
+            }}
+            style={{ marginTop: 8, display: "flex", gap: 6 }}
+          >
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Add something to remember…"
+              maxLength={300}
+              aria-label="Add a memory"
+              style={{ flex: 1, minWidth: 0, fontSize: 12.5, padding: "7px 10px", border: `1px solid ${C.inputEdge}`, borderRadius: 7, outline: "none" }}
+            />
+            <button type="submit" disabled={!draft.trim() || busy} style={{ padding: "7px 12px", fontSize: 12.5, fontWeight: 600, borderRadius: 7, border: `1px solid ${C.blue}`, background: C.blue, color: "#fff", cursor: draft.trim() && !busy ? "pointer" : "default", opacity: draft.trim() && !busy ? 1 : 0.5 }}>
+              Add
+            </button>
+          </form>
+          {error && <div style={{ marginTop: 6, fontSize: 12, color: C.red }}>{error}</div>}
         </div>
       )}
     </div>
@@ -158,6 +235,7 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
             </svg>
             New conversation
           </Link>
+          <MemoryButton lines={chat.memory} />
           {chat.threads.length > 6 && (
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search conversations" style={{ fontSize: 12.5, padding: "7px 10px", border: `1px solid ${C.inputEdge}`, borderRadius: 7, outline: "none", background: C.card }} />
           )}
@@ -177,7 +255,6 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
             </div>
           ))}
         </div>
-        <MemoryPanel lines={chat.memory} />
       </aside>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <ChatPanel

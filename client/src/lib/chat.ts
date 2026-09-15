@@ -85,6 +85,13 @@ export async function loadMemory() {
   if (r.ok) set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
 }
 
+/** Add a line the assistant should keep in mind from now on. */
+export async function rememberMemory(text: string) {
+  const r = await fetch("/api/chat/memory", { method: "POST", headers: { ...groupHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+  if (!r.ok) throw new Error(await failure(r));
+  set({ memory: ((await r.json()) as { memory: MemoryLine[] }).memory });
+}
+
 /** Drop one remembered line; the assistant no longer sees it. */
 export async function forgetMemory(id: number) {
   const r = await fetch(`/api/chat/memory/${id}`, { method: "DELETE", headers: groupHeaders() });
