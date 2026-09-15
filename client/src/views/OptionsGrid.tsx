@@ -714,8 +714,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       )}
 
-      {/* Every dollar figure below is a month at the group's own enrollment. */}
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 7, margin: "0 2px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+      {/* Every dollar figure below is a month at the group's own enrollment.
+          Left, over the first column, on the same 10px margin as the cells. */}
+      <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", gap: 7, margin: "0 10px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: C.blue }}>
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
@@ -754,7 +755,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     background: C.headerBg,
                     fontWeight: 700,
                     whiteSpace: "nowrap",
-                    textAlign: i >= 4 && i <= 7 ? "right" : "left",
+                    // Every column reads from the left, headings and figures
+                    // alike, on one margin; the digits stay tabular so the
+                    // dollar columns still line up under each other.
+                    textAlign: "left",
                     width: i >= 8 ? 52 : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
@@ -784,7 +788,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const heart = !!selected[p.plan];
               const added = inProposal(p.plan);
               const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
-              const right = { ...cell, textAlign: "right" as const, ...num };
+              const numCell = { ...cell, textAlign: "left" as const, ...num };
               return (
                 <tr key={p.plan} className="rowlink" onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "—"}</td>
@@ -803,12 +807,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
                     </div>
                   </td>
-                  <td style={right}>{fmtDed(p.ded)}</td>
-                  <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
-                  <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
+                  <td style={numCell}>{fmtDed(p.ded)}</td>
+                  <td style={numCell}>{p.oop == null ? "—" : money0(p.oop)}</td>
+                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : "—"}
                   </td>
-                  <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
+                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
