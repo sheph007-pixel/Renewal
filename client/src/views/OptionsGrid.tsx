@@ -715,8 +715,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       )}
 
       {/* Every dollar figure below is a month at the group's own enrollment.
-          Left, over the first column, on the same 10px margin as the cells. */}
-      <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", gap: 7, margin: "0 10px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+          Right, above the table, on the same 10px margin as the cells. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 7, margin: "0 10px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: C.blue }}>
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
