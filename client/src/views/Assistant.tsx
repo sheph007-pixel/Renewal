@@ -10,7 +10,6 @@ interface Props {
   threadId: number | undefined;
   /** The address of a conversation (or, with nothing, of a fresh one). */
   hrefFor: (thread?: number | null) => string;
-  groupName: string;
 }
 
 /** "Today", "Yesterday", "This week", "Earlier" — how the list is grouped. */
@@ -306,7 +305,7 @@ function Documents({ hrefFor }: { hrefFor: (thread?: number | null) => string })
   );
 }
 
-export default function Assistant({ threadId, hrefFor, groupName }: Props) {
+export default function Assistant({ threadId, hrefFor }: Props) {
   const chat = useChat();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("chat");
@@ -340,12 +339,25 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
     });
   };
 
-  const tabStyle = (on: boolean): CSSProperties => ({ padding: "10px 18px", fontSize: 14, fontWeight: 700, color: on ? C.blueInk : C.muted, background: "transparent", border: "none", borderBottom: `3px solid ${on ? C.blueInk : "transparent"}`, cursor: "pointer", marginBottom: -1 });
+  // Two plain buttons side by side, the open one filled: both read as
+  // clickable, and which is open is obvious at a glance.
+  const tabStyle = (on: boolean): CSSProperties => ({ display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 22px", fontSize: 14, fontWeight: 600, color: on ? "#fff" : C.ink, background: on ? C.blue : C.card, border: `1px solid ${on ? C.blue : C.border}`, borderRadius: 8, cursor: "pointer", boxShadow: on ? "none" : "0 1px 2px rgba(16,24,40,0.05)" });
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div role="tablist" style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.hairline}`, marginBottom: 12 }}>
-        <button role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")} style={tabStyle(tab === "chat")}>Chat</button>
-        <button role="tab" aria-selected={tab === "documents"} onClick={() => setTab("documents")} style={tabStyle(tab === "documents")}>Documents</button>
+      <div role="tablist" aria-label="Chat or Documents" style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")} style={tabStyle(tab === "chat")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5v-8Z" />
+          </svg>
+          Chat
+        </button>
+        <button role="tab" aria-selected={tab === "documents"} onClick={() => setTab("documents")} style={tabStyle(tab === "documents")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+            <path d="M14 3v5h5M9 13h6M9 17h6" />
+          </svg>
+          Documents
+        </button>
       </div>
     <div className="chat-page" style={{ ...panel, display: tab === "chat" ? "flex" : "none", overflow: "hidden", height: "calc(100vh - 200px)", minHeight: 480 }}>
       <aside className="chat-list" style={{ width: 260, flex: "none", display: "flex", flexDirection: "column", borderRight: `1px solid ${C.hairline}`, background: C.zebra }}>
@@ -387,7 +399,7 @@ export default function Assistant({ threadId, hrefFor, groupName }: Props) {
           page="assistant"
           onThread={(id) => navigate(hrefFor(id), { replace: true })}
           autoFocus
-          welcome={`Hi ${groupName} team — I'm the BenSync AI Assistant, backed by your Kennion team. I have your current plans, the carriers' quotes and this month's billing in front of me. Ask me anything, or tell me what you need drafted.`}
+          welcome="How can I help you?"
         />
       </div>
     </div>
