@@ -173,8 +173,9 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
                   {t.label} <span style={{ color: C.faint }}>({t.count})</span>
                 </td>
                 <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(t.rate)}</td>
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null ? "—" : money(t.er)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null ? "—" : money(t.ee)}</td>}
+                {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(t.er)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(t.ee)}</td>}
               </tr>
             ))}
           </tbody>
