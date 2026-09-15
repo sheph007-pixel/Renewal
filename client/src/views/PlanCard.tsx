@@ -127,7 +127,7 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
       </div>
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
         <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.monthly == null ? "—" : money(m.monthly)}</div>
-        <div style={{ fontSize: 12.5, color: C.muted }}>Total Monthly Cost</div>
+        <div style={{ fontSize: 12.5, color: C.muted }}>Total Monthly Bill</div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
@@ -185,7 +185,7 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         <tbody>
           {(
             [
-              ["Employer Cost", m.er, true],
+              ["Your Company Pays", m.er, true],
               ["Employee Cost", m.ee, true],
               ["Monthly Premium", m.premium, false],
             ] as [string, number | null, boolean][]

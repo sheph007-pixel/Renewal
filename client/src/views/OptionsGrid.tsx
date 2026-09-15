@@ -50,7 +50,7 @@ const TABS: [Tab, string][] = [
   ["funding", "Funding"],
   ["ded", "Deductible"],
   ["oop", "OOP Max"],
-  ["cost", "Total Monthly Cost"],
+  ["cost", "Total Monthly Bill"],
 ];
 const DED_BANDS: [string, (v: number) => boolean][] = [
   ["$0", (v) => v === 0],
@@ -72,7 +72,7 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Option", "Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Option", "Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Your Company Pays", "Employee Cost", "Total Monthly Bill", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
@@ -92,7 +92,7 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
 }
 
 /** A small ⓘ that opens a short explanation on hover, focus or tap. */
-function InfoTip({ title, children }: { title: string; children: ReactNode }) {
+function InfoTip({ title, children, align = "left", onDark = false }: { title: string; children: ReactNode; align?: "left" | "right"; onDark?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <span
@@ -112,14 +112,14 @@ function InfoTip({ title, children }: { title: string; children: ReactNode }) {
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-        style={{ display: "grid", placeItems: "center", width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${C.blue}`, color: C.blue, fontSize: 11.5, fontWeight: 700, lineHeight: 1, cursor: "help", fontFamily: "Georgia, serif", fontStyle: "italic" }}
+        style={{ display: "grid", placeItems: "center", width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${onDark ? "rgba(255,255,255,0.7)" : C.blue}`, color: onDark ? "#fff" : C.blue, fontSize: 11.5, fontWeight: 700, lineHeight: 1, cursor: "help", fontFamily: "Georgia, serif", fontStyle: "italic" }}
       >
         i
       </span>
       {open && (
         <span
           role="tooltip"
-          style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 30, width: 320, padding: "12px 14px", borderRadius: 10, background: C.card, color: C.ink, border: `1px solid ${C.border}`, boxShadow: "0 10px 30px rgba(11,33,56,0.18)", fontSize: 13, fontWeight: 400, lineHeight: 1.55, textAlign: "left", textTransform: "none" }}
+          style={{ position: "absolute", top: "calc(100% + 8px)", ...(align === "right" ? { right: 0 } : { left: 0 }), zIndex: 30, width: 320, padding: "12px 14px", borderRadius: 10, background: C.card, color: C.ink, border: `1px solid ${C.border}`, boxShadow: "0 10px 30px rgba(11,33,56,0.18)", fontSize: 13, fontWeight: 400, lineHeight: 1.55, textAlign: "left", textTransform: "none" }}
         >
           <span style={{ display: "block", fontWeight: 700, marginBottom: 4 }}>{title}</span>
           {children}
@@ -435,7 +435,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
-              Employer cost <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
+              Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
               {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
             </span>
             <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
@@ -714,6 +714,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       )}
 
+      {/* Every dollar figure below is a month at the group's own enrollment. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 7, margin: "0 2px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: C.blue }}>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        Monthly Amounts For {totals.enrolled} Enrolled Employee{totals.enrolled === 1 ? "" : "s"}
+      </div>
+
       {/* The grid: a short row per plan; the row opens the card. */}
       <div className="panel" style={{ ...panel, padding: "0 0 10px", overflow: "auto" }}>
         <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
@@ -727,8 +737,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   ["plan", "Plan"],
                   ["ded", "Deductible"],
                   ["oop", "OOP Max"],
-                  ["er", "Employer Cost"],
-                  ["total", "Total Monthly Cost"],
+                  ["er", "Your Company Pays"],
+                  ["total", "Total Monthly Bill"],
                   [null, ""],
                   [null, ""],
                 ] as [SortKey | null, string][]
@@ -750,7 +760,19 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     userSelect: "none",
                   }}
                 >
-                  {h}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {h}
+                    {k === "er" && (
+                      <InfoTip title="Your Company Pays" align="right" onDark>
+                        Your company's share after employee contributions.
+                      </InfoTip>
+                    )}
+                    {k === "total" && (
+                      <InfoTip title="Total Monthly Bill" align="right" onDark>
+                        The full amount billed, including company and employee contributions.
+                      </InfoTip>
+                    )}
+                  </span>
                   {k && sortBy === k ? (costDir > 0 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
