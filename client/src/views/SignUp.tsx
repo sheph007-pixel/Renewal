@@ -9,6 +9,7 @@ import {
 } from "@/lib/model";
 import { C, h2, num, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
+import { carrierOf, fundingOf } from "@/views/PlanCard";
 
 interface Props {
   data: KennionData;
@@ -55,6 +56,10 @@ export default function SignUp({
   const [confirmClear, setConfirmClear] = useState(false);
   const plans = marketPlans(data, g);
   const short = plans.filter((p) => selected[p.plan]);
+  // One carrier, one funding type: a group's 2027 plans all come from one
+  // carrier, and with UnitedHealthcare all fully insured or all level funded.
+  const bases = Array.from(new Set(short.map((p) => `${carrierOf(p)} ${fundingOf(p)}`)));
+  const mixed = bases.length > 1;
   const managerFirst = manager?.name ? manager.name.split(" ")[0] : "your account manager";
 
   return (
@@ -137,9 +142,14 @@ export default function SignUp({
         ) : (
           <>
             <p style={{ margin: "0 0 4px", fontSize: 13, color: C.muted }}>
-              {short.length} plan{short.length > 1 ? "s" : ""} shortlisted. Add a note if you like, then send it
+              {short.length} plan{short.length > 1 ? "s" : ""} shortlisted{bases.length === 1 ? `, all ${bases[0]}` : ""}. Add a note if you like, then send it
               — {managerFirst} will come back with firm rates and a contribution model.
             </p>
+            {mixed && (
+              <div role="alert" style={{ margin: "6px 0 8px", padding: "9px 12px", borderRadius: 4, background: C.redTint, color: C.red, fontSize: 13, lineHeight: 1.5 }}>
+                One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes {bases.join(" and ")} — remove plans until one remains.
+              </div>
+            )}
             {short.map((s) => (
               <div
                 key={s.plan}
@@ -195,8 +205,9 @@ export default function SignUp({
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
               <button
                 onClick={onSubmit}
-                disabled={submitting}
+                disabled={submitting || mixed}
                 className="noprint"
+                title={mixed ? "Keep one carrier and one funding type first" : undefined}
                 style={{
                   padding: "9px 18px",
                   fontSize: 13.5,
@@ -205,8 +216,8 @@ export default function SignUp({
                   background: C.blue,
                   border: `1px solid ${C.blue}`,
                   borderRadius: 4,
-                  cursor: submitting ? "default" : "pointer",
-                  opacity: submitting ? 0.6 : 1,
+                  cursor: submitting || mixed ? "default" : "pointer",
+                  opacity: submitting || mixed ? 0.6 : 1,
                 }}
               >
                 {submitting ? "Sending…" : "Send to " + managerFirst}

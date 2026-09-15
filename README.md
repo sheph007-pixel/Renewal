@@ -258,6 +258,20 @@ Cobalt is not offered as a 2027 option: its slot is not shown on any group,
 its proposals are not served to clients, and the assistant does not name it.
 Anything already uploaded stays stored.
 
+### One carrier, one funding type
+
+A group's 2027 plans all come from one carrier, and with UnitedHealthcare
+all fully insured or all level funded — never Gravie beside UnitedHealthcare,
+never UHC fully insured beside UHC level funded. The grid's ♡ shortlist
+(what Sign Up sends) holds to it: the first favorite sets the carrier and
+funding, and a plan that does not fit cannot be added until the shortlist
+is cleared; Sign Up refuses a mixed shortlist and so does the server
+(`signupMix` in `server/index.js`, 400); the assistant's system prompt
+carries the rule for its recommendations. Comparing across carriers (the
+grid's + column, the assistant's side-by-sides) stays open — choosing is
+what the rule is about. The Funding filter (Level Funded / Fully Insured)
+sits after Network Type.
+
 ### Option IDs
 
 Every quoted 2027 plan carries a short, stable handle — **UH3**, **GR1** —
