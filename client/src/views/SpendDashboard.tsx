@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { money, money0, type TierContribution } from "@/lib/model";
+import InfoTip from "@/views/InfoTip";
 import { C, num, panel } from "@/lib/ui";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 
@@ -55,22 +56,6 @@ function GroupIcon({ color }: { color: string }) {
       <circle cx="17" cy="9" r="2.5" />
       <path d="M17 14.5c2.3 0 4 1.3 4.6 3.5" />
     </svg>
-  );
-}
-
-/**
- * A small ⓘ beside a label; the explanation shows on hover and on keyboard
- * focus (the bubble is `.info-tip` in styles.css), and is read out as the
- * icon's label.
- */
-export function InfoTip({ text, color }: { text: string; color?: string }) {
-  return (
-    <span className="info-tip" tabIndex={0} role="img" aria-label={text} data-tip={text} style={{ color: color || C.faint }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 11v5M12 8h.01" />
-      </svg>
-    </span>
   );
 }
 

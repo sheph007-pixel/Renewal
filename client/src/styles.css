@@ -515,6 +515,20 @@ button,
   pointer-events: none;
   z-index: 30;
 }
+.info-tip[data-place="below"]::after {
+  left: auto;
+  right: -4px;
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: none;
+}
+.info-tip[data-place="below"]::before {
+  left: 50%;
+  bottom: auto;
+  top: calc(100% + 3px);
+  border-top-color: transparent;
+  border-bottom-color: #0F2A47;
+}
 .info-tip:hover::after,
 .info-tip:hover::before,
 .info-tip:focus-visible::after,
