@@ -1005,8 +1005,10 @@ second read only.
 
 - The EBPA and HealthEZ 2026 rate sheets would replace every `calc.` label with
   a published number.
-- Gravie shows "quote requested" rather than invented rates. Surest is priced
-  only where UnitedHealthcare included it.
+- A plan is shown only with the carrier's own rates for the group — read off
+  its proposal, or quoted on UnitedHealthcare's menu. Nothing is scaled
+  from another group's quote and no placeholder stands in for a quote not
+  yet in, so a group with no quote on file sees no 2027 options yet.
 - Staff sessions are held in memory, so a restart signs staff out and a
   multi-instance deployment would need a shared session store.
 

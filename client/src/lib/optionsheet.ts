@@ -31,7 +31,7 @@ function optionRow(p: MarketPlan, contribution: Record<TierKey, number>, counts:
     "Employer Cost": sp ? sp.er : "",
     "Employees Pay": sp ? sp.ee : "",
     "Monthly Premium": p.monthly ?? "",
-    Basis: p.quoted ? `Quoted ${p.quoted.date || ""}`.trim() : p.indicative ? "Illustrative" : p.pending ? "Quote requested" : "Menu rate",
+    Basis: p.quoted ? `Quoted ${p.quoted.date || ""}`.trim() : "Carrier quote",
   };
 }
 

@@ -640,10 +640,8 @@ export interface MarketPlan {
   specialist?: string | null;
   rates: Record<TierKey, number | null>;
   monthly: number | null;
-  /** Rate scaled from comparable groups rather than quoted for this one. */
+  /** Always false now: every plan shown carries the carrier's own rates for this group. */
   indicative: boolean;
-  /** Carrier has not returned rates at all. */
-  pending?: boolean;
   /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
   optionId?: string | null;
   /** Read off a proposal the carrier sent for this group. */
@@ -820,67 +818,6 @@ export function hasDirectQuote(data: KennionData, g: Group): boolean {
   return uhcRows(data, g).some((r) => r.uhcRate);
 }
 
-/**
- * Ratio between this group's rate level and the menu's reference rates, used to
- * scale un-quoted plans. Falls back to a benchmark against the first quoted
- * group when UHC has not underwritten this group at all.
- */
-function groupFactor(data: KennionData, g: Group): number | null {
-  const rows = uhcRows(data, g);
-  const menu = (data.uhc || {}).menu || [];
-  const eeRows = rows.filter((r) => r.tier === "EE" && r.uhcRate);
-  if (eeRows.length) {
-    let num = 0;
-    let den = 0;
-    eeRows.forEach((r) => {
-      const m = menu.find((x) => x.plan === r.uhcPlan);
-      if (m && m.refRate) {
-        num += r.uhcRate!;
-        den += m.refRate;
-      }
-    });
-    if (den) return num / den;
-  }
-  return benchmarkFactor(data, g);
-}
-
-function benchmarkFactor(data: KennionData, g: Group): number | null {
-  // The server sends this as a single number, so a group's payload carries no
-  // other company's rows. An admin session still has the detail to work from.
-  const det = (data.uhc || {}).detail || {};
-  const refName = Object.keys(det).find((n) => n !== g.name);
-  let refAvg = data.uhc?.refEE ?? null;
-  if (refAvg == null && refName) {
-    const refEE = det[refName].filter((r) => r.tier === "EE" && r.currentRate);
-    if (refEE.length) refAvg = refEE.reduce((a, r) => a + r.currentRate!, 0) / refEE.length;
-  }
-  if (refAvg == null) return null;
-  const own = Object.values(g.rates || {})
-    .map((r) => r["Employee"])
-    .filter((v) => v != null);
-  if (!own.length || !refAvg) return null;
-  return own.reduce((a, b) => a + b, 0) / own.length / refAvg;
-}
-
-function tierFactors(data: KennionData, g: Group): Record<TierKey, number> {
-  const rows = uhcRows(data, g);
-  const f = {} as Record<TierKey, number>;
-  (["ES", "EC", "FAM"] as TierKey[]).forEach((k) => {
-    const pairs = rows.filter((r) => r.tier === k && r.uhcRate);
-    const bases = rows.filter((r) => r.tier === "EE" && r.uhcRate);
-    if (pairs.length && bases.length) {
-      f[k] =
-        pairs.reduce((a, r) => a + r.uhcRate!, 0) /
-        pairs.length /
-        (bases.reduce((a, r) => a + r.uhcRate!, 0) / bases.length);
-    } else {
-      f[k] = FACTORS[k];
-    }
-  });
-  f.EE = 1;
-  return f;
-}
-
 /** "$40 / $100" → doctor visit and specialist copays. */
 export function splitCopays(copays: string | null | undefined): [string | null, string | null] {
   const parts = (copays || "").split("/").map((x) => x.trim()).filter(Boolean);
@@ -888,12 +825,16 @@ export function splitCopays(copays: string | null | undefined): [string | null, 
   return [parts[0], parts[1] ?? null];
 }
 
-/** The full 2027 menu priced at this group's own census. */
+/**
+ * The 2027 options a group can be shown: only plans with the carrier's own
+ * rates for this group — the ones on its proposals, and the menu plans
+ * UnitedHealthcare quoted it directly. Nothing is scaled from another
+ * group's quote, and no placeholder stands in for a quote not yet in; a
+ * tier the carrier did not price stays blank rather than estimated.
+ */
 export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
   const u = data.uhc || {};
   const menu = u.menu || [];
-  const gf = groupFactor(data, g);
-  const tf = tierFactors(data, g);
   const counts = censusCounts(g);
 
   const quoted: Record<string, Partial<Record<TierKey, number>>> = {};
@@ -903,20 +844,22 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
     quoted[r.uhcPlan][r.tier] = r.uhcRate;
   });
 
-  const out: MarketPlan[] = menu.map((m) => {
-    const q = quoted[m.plan] || {};
-    const baseEE = q.EE != null ? q.EE : gf && m.refRate ? +(m.refRate * gf).toFixed(2) : null;
+  const out: MarketPlan[] = [];
+  for (const m of menu) {
+    const q = quoted[m.plan];
+    if (!q) continue;
     const rates = {} as Record<TierKey, number | null>;
     TIERS.forEach((t) => {
-      rates[t.key] =
-        q[t.key] != null ? q[t.key]! : baseEE != null ? +(baseEE * tf[t.key]).toFixed(2) : null;
+      rates[t.key] = q[t.key] != null ? q[t.key]! : null;
     });
-    let monthly = 0;
+    let monthly: number | null = 0;
     TIERS.forEach((t) => {
+      if (!counts[t.key]) return;
       const v = rates[t.key];
-      if (v != null) monthly += v * counts[t.key];
+      if (v == null) monthly = null;
+      else if (monthly != null) monthly += v * counts[t.key];
     });
-    return {
+    out.push({
       optionId: u.optionIds?.[m.plan] ?? null,
       carrier: "UnitedHealthcare",
       label: "Level Funded",
@@ -933,65 +876,40 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       er: m.er ?? null,
       network: "United Choice Plus",
       rates,
-      monthly: baseEE != null ? monthly : null,
-      indicative: q.EE == null,
-    };
-  });
-
-  // Surest was quoted only where UHC included it; Gravie has not returned rates.
-  const surestQuoted = /Ecological/i.test(g.name);
-  const sRates: Record<TierKey, number | null> = surestQuoted
-    ? { EE: 476.32, ES: 1152.69, EC: 862.14, FAM: 1586.15 }
-    : { EE: null, ES: null, EC: null, FAM: null };
-  let sMonthly: number | null = null;
-  if (surestQuoted) {
-    sMonthly = 0;
-    TIERS.forEach((t) => {
-      sMonthly! += sRates[t.key]! * counts[t.key];
+      monthly,
+      indicative: false,
     });
   }
-  out.unshift({
-    carrier: "UnitedHealthcare",
-    label: "Copay-only",
-    plan: "Surest Copay Plan",
-    type: "Copay",
-    ded: 0,
-    oop: 8000,
-    copays: "Priced per service",
-    rx: "Copay by drug",
-    network: "United Choice Plus",
-    rates: sRates,
-    monthly: sMonthly,
-    indicative: false,
-    pending: !surestQuoted,
-  });
-  out.unshift({
-    carrier: "Gravie",
-    label: "Comfort",
-    plan: "Gravie Comfort",
-    type: "Level Funded",
-    ded: 0,
-    oop: null,
-    copays: "$0 on most services",
-    rx: "Included on preventive+",
-    network: "Cigna OAP",
-    rates: { EE: null, ES: null, EC: null, FAM: null },
-    monthly: null,
-    indicative: false,
-    pending: true,
-  });
+
+  // Surest was quoted for one group only, in UnitedHealthcare's own quote.
+  if (/Ecological/i.test(g.name)) {
+    const sRates: Record<TierKey, number | null> = { EE: 476.32, ES: 1152.69, EC: 862.14, FAM: 1586.15 };
+    let sMonthly = 0;
+    TIERS.forEach((t) => {
+      sMonthly += sRates[t.key]! * counts[t.key];
+    });
+    out.unshift({
+      carrier: "UnitedHealthcare",
+      label: "Copay-only",
+      plan: "Surest Copay Plan",
+      type: "Copay",
+      ded: 0,
+      oop: 8000,
+      copays: "Priced per service",
+      rx: "Copay by drug",
+      network: "United Choice Plus",
+      rates: sRates,
+      monthly: sMonthly,
+      indicative: false,
+    });
+  }
 
   // Proposals the carriers actually sent for this group come first and win:
-  // a placeholder for a carrier that has now quoted goes, and a menu plan the
-  // proposal also prices is shown at the proposal's rates.
+  // a menu plan the proposal also prices is shown at the proposal's rates.
   const fromProposals = proposalPlans(data, g);
   if (fromProposals.length) {
-    const quotedCarriers = new Set(fromProposals.map((p) => p.carrier));
     const quotedPlans = new Set(fromProposals.map((p) => planKey(p.plan)));
-    // Once a carrier has quoted the group, its menu estimates are beside the
-    // point: the client sees what the carrier priced, nothing scaled.
-    const rest = out.filter((p) => !(p.pending && quotedCarriers.has(p.carrier)) && !quotedPlans.has(planKey(p.plan)) && !(p.indicative && quotedCarriers.has(p.carrier)));
-    return [...fromProposals, ...rest];
+    return [...fromProposals, ...out.filter((p) => !quotedPlans.has(planKey(p.plan)))];
   }
   return out;
 }

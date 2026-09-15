@@ -72,7 +72,7 @@ function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number
   };
   const rows = list.map((p) => {
     const s = costSplit(p, applied, counts);
-    return [p.optionId ?? "", carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    return [p.optionId ?? "", carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : "Carrier Quote", ...TIERS.map((t) => p.rates[t.key] ?? "")];
   });
   const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -733,7 +733,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={right}>{fmtDed(p.ded)}</td>
                   <td style={right}>{p.oop == null ? "—" : money0(p.oop)}</td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
-                    {sp ? money0(sp.er) : p.pending ? "quote requested" : "—"}
+                    {sp ? money0(sp.er) : "—"}
                   </td>
                   <td style={{ ...right, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "—" : money0(p.monthly)}
@@ -802,7 +802,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             ))}
           </div>
           <div style={{ fontSize: 10.5, color: C.faint, marginTop: 12, lineHeight: 1.5 }}>
-            Rates shown are monthly composite rates by tier. Illustrative rates are scaled from comparable quotes and confirm at underwriting. All rates and benefits are for general information and discussion only and are not final until the group is enrolled with the carrier.
+            Rates shown are monthly composite rates by tier, as quoted by the carrier for this group. All rates and benefits are for general information and discussion only and are not final until the group is enrolled with the carrier.
           </div>
           {(manager?.name || manager?.phone || manager?.email) && (
             <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.hairline}`, textAlign: "center", fontSize: 11, color: C.muted }}>
