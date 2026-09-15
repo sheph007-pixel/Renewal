@@ -3317,6 +3317,42 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
  * the numbers its older readings held are released with it.
  */
 const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN" };
+
+/**
+ * One proposal per slot per group: when a newer proposal replaces an older
+ * one, the older one is deleted rather than kept as "superseded". The
+ * numbers its plans held are remembered here — {group: {prefix: [n…]}} —
+ * so a retired number is never handed out again after the row is gone.
+ */
+const RETIRED_KEY = "optionIds.retired";
+let retiredOptionIds = null;
+async function loadRetired() {
+  if (retiredOptionIds) return retiredOptionIds;
+  retiredOptionIds = (db && (await db.getSetting(RETIRED_KEY).catch(() => null))) || {};
+  return retiredOptionIds;
+}
+async function retireOptionIds(group, plans) {
+  const all = await loadRetired();
+  const mine = (all[group] = all[group] || {});
+  let changed = false;
+  for (const pl of plans || []) {
+    const m = OPTION_ID.exec(String(pl.option_id || ""));
+    if (!m) continue;
+    const list = (mine[m[1]] = mine[m[1]] || []);
+    if (!list.includes(Number(m[2]))) {
+      list.push(Number(m[2]));
+      changed = true;
+    }
+  }
+  if (changed && db) await db.setSetting(RETIRED_KEY, all, "system");
+}
+async function releaseRetired(group, prefix) {
+  const all = await loadRetired();
+  if (all[group] && all[group][prefix]) {
+    delete all[group][prefix];
+    if (db) await db.setSetting(RETIRED_KEY, all, "system");
+  }
+}
 const OPTION_ID = /^(UH|GR|NW|AN)(\d+)$/;
 const optKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 const optName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -3337,6 +3373,17 @@ async function assignOptionIds(rows, bySlot) {
       taken.set(m[1], set);
     }
     takenByGroup.set(r.group_name, taken);
+  }
+  // Numbers held by proposals since deleted stay taken.
+  const retired = await loadRetired();
+  for (const [group, byPrefix] of Object.entries(retired)) {
+    const taken = takenByGroup.get(group) || new Map();
+    for (const [prefix, nums] of Object.entries(byPrefix || {})) {
+      const set = taken.get(prefix) || new Set();
+      for (const n of nums) set.add(Number(n));
+      taken.set(prefix, set);
+    }
+    takenByGroup.set(group, taken);
   }
   const groups = new Set([...bySlot.keys()].map((k) => k.split("||")[0]));
   for (const group of groups) {
@@ -3384,6 +3431,7 @@ async function assignOptionIds(rows, bySlot) {
       if (legacy) {
         for (const pl of plans) pl.option_id = null;
         taken.delete(prefix);
+        await releaseRetired(group, prefix);
       }
       if (!plans.length) {
         if (stripped) {
@@ -3518,6 +3566,17 @@ async function proposalsChanged() {
       if ((r.superseded_by || null) !== should) await proposalStore.updateProposal(r.id, { superseded_by: should });
     }
     await assignOptionIds(rows, bySlot);
+    // One proposal per slot: the ones a newer upload replaced have handed
+    // down their numbers above; now they go, numbers remembered as retired.
+    for (const list of bySlot.values()) {
+      for (const old of list.slice(1)) {
+        await retireOptionIds(old.group_name, old.extracted && old.extracted.plans);
+        await proposalStore.deleteProposal(old.id);
+        counts[old.group_name] = Math.max(0, (counts[old.group_name] || 1) - 1);
+        console.log(`proposal ${old.id} (${old.filename}) replaced by ${list[0].id} in ${old.group_name} / ${old.slot}; deleted`);
+      }
+      list.length = 1;
+    }
     const current = {};
     for (const list of bySlot.values()) {
       const r = list[0];

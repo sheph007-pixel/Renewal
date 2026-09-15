@@ -385,8 +385,11 @@ quotes no medical rates (an ancillary proposal for dental, vision or life) or
 comes from a carrier outside those six fills no slot: it is kept on file,
 marked "not one of the tracked carriers", and stays out of the group's 2027
 options. When a newer proposal lands in a slot a group already has, the older
-one is marked **superseded** and kept, so the current set is always the latest
-from each carrier. That current set, stored in the database, is what the 2027
+one is **deleted** — one proposal per slot per group, always the latest from
+each carrier — after handing its option numbers down to the plans that
+survive; the numbers it held are remembered (`kennion.settings`,
+`optionIds.retired`) so none is ever handed out again. That current set,
+stored in the database, is what the 2027
 options for each group will be built from. The extraction is shown under
 "Details" for review and is not pushed into the rate tables. The tab has two
 layouts: a list, and **By group**, which walks the roster with each group's
