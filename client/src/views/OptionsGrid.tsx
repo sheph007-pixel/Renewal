@@ -35,7 +35,7 @@ export interface GridProps {
   assistantOn?: boolean;
 }
 
-type Tab = "carrier" | "network" | "ded" | "oop" | "cost";
+type Tab = "carrier" | "network" | "funding" | "ded" | "oop" | "cost";
 
 /** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
@@ -47,6 +47,7 @@ const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
 const TABS: [Tab, string][] = [
   ["carrier", "Carrier"],
   ["network", "Network Type"],
+  ["funding", "Funding"],
   ["ded", "Deductible"],
   ["oop", "OOP Max"],
   ["cost", "Total Monthly Cost"],
@@ -174,6 +175,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const [tab, setTab] = useState<Tab | null>(null);
   const [carriers, setCarriers] = useState<Set<string>>(new Set());
   const [networks, setNetworks] = useState<Set<string>>(new Set());
+  const [fundings, setFundings] = useState<Set<string>>(new Set());
   const [deds, setDeds] = useState<Set<string>>(new Set());
   const [oops, setOops] = useState<Set<string>>(new Set());
   const [costs, setCosts] = useState<Set<string>>(new Set());
@@ -247,6 +249,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
   const networkList = useMemo(() => NETWORK_TYPES.filter((t) => plans.some((p) => networkTypeOf(p) === t)), [plans]);
+  const fundingList = useMemo(() => Array.from(new Set(plans.map(fundingOf))), [plans]);
   // Quartile cutoffs off this group's own priced plans, so "Show" reads as
   // real dollar ranges for this group rather than a generic $ / $$$$ scale.
   const costCuts = useMemo(() => {
@@ -282,6 +285,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         (p) =>
           (!carriers.size || carriers.has(carrierOf(p))) &&
           (!networks.size || networks.has(netType(p))) &&
+          (!fundings.size || fundings.has(fundingOf(p))) &&
           dedOk(p) &&
           oopOk(p) &&
           (!favoritesOnly || !!selected[p.plan]) &&
@@ -310,13 +314,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         return (va > vb ? 1 : -1) * costDir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, carriers, networks, deds, oops, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
+  }, [plans, carriers, networks, fundings, deds, oops, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
-  const filtering = carriers.size + networks.size + deds.size + oops.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
+  const filtering = carriers.size + networks.size + fundings.size + deds.size + oops.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
   const clearAll = () => {
     setCarriers(new Set());
     setNetworks(new Set());
+    setFundings(new Set());
     setDeds(new Set());
     setOops(new Set());
     setCosts(new Set());
@@ -331,18 +336,31 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       setCostDir(1);
     }
   };
-  const count = (t: Tab) => ({ carrier: carriers.size, network: networks.size, ded: deds.size, oop: oops.size, cost: costs.size })[t];
+  const count = (t: Tab) => ({ carrier: carriers.size, network: networks.size, funding: fundings.size, ded: deds.size, oop: oops.size, cost: costs.size })[t];
   const MAX_FAVORITES = 8;
   const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
   const compareFull = proposal.length >= MAX_COMPARE;
   const favoritesFull = favorites >= MAX_FAVORITES;
+  // One carrier, one funding type: a group's 2027 plans all come from one
+  // carrier, and with UnitedHealthcare all fully insured or all level
+  // funded — the shortlist is what Sign Up sends, so it holds to that. The
+  // first plan shortlisted sets the carrier and funding; a plan that does
+  // not fit cannot be added until the shortlist is cleared. Comparing
+  // across carriers (the + column) is still open.
+  const shortlist = plans.filter((p) => selected[p.plan]);
+  const lock = shortlist.length ? { carrier: carrierOf(shortlist[0]), funding: fundingOf(shortlist[0]) } : null;
+  const fits = (p: MarketPlan) => !lock || (carrierOf(p) === lock.carrier && fundingOf(p) === lock.funding);
+  const heartBlocked = (p: MarketPlan) => !selected[p.plan] && (favoritesFull || !fits(p));
+  const heartTitle = (p: MarketPlan) =>
+    selected[p.plan] ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : !fits(p) ? `One carrier, one funding type: your shortlist is ${lock!.carrier} ${lock!.funding}` : "Add To Favorites";
   /** Up to four plans side by side; a fifth is refused until one is removed. */
   const toggleProposal = (name: string) =>
     setProposal((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : prev.length >= MAX_COMPARE ? prev : [...prev, name]));
   /** Up to eight favorites; a ninth is refused until one is removed. */
   const toggleHeart = (name: string) => {
-    if (!selected[name] && favoritesFull) return;
+    const p = plans.find((x) => x.plan === name);
+    if (p && heartBlocked(p)) return;
     onToggleSelected(name);
   };
   const viewComparison = () => {
@@ -384,7 +402,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     ));
   const actionsFor = (p: MarketPlan) => (
     <>
-      <button onClick={() => toggleHeart(p.plan)} disabled={!selected[p.plan] && favoritesFull} title={!selected[p.plan] && favoritesFull ? `Up to ${MAX_FAVORITES} favorites` : undefined} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
+      <button onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} title={heartTitle(p)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
         {selected[p.plan] ? "♥ On Your Shortlist" : "♡ Add To Shortlist"}
       </button>
       <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(inProposal(p.plan)), padding: "7px 12px", fontSize: 13 }}>
@@ -624,6 +642,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.hairline}` }}>
             {tab === "carrier" && chips(carrierList, carriers, setCarriers)}
             {tab === "network" && chips(networkList, networks, setNetworks)}
+            {tab === "funding" && chips(fundingList, fundings, setFundings)}
             {tab === "ded" && chips(DED_BANDS.map(([l]) => l), deds, setDeds)}
             {tab === "oop" && chips(OOP_BANDS.map(([l]) => l), oops, setOops)}
             {tab === "cost" && (
@@ -674,7 +693,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 compact
                 actions={
                   <>
-                    <button onClick={() => toggleHeart(p.plan)} disabled={!selected[p.plan] && favoritesFull} style={chip(!!selected[p.plan])}>
+                    <button onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} title={heartTitle(p)} style={chip(!!selected[p.plan])}>
                       {selected[p.plan] ? "♥ Favorite" : "♡ Favorite"}
                     </button>
                     <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(false), color: C.blue }}>
@@ -764,7 +783,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} disabled={!heart && favoritesFull} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heart ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : "Add To Favorites"} style={{ ...iconBtn, color: heart ? C.red : favoritesFull ? C.hairline : C.ghost }}>
+                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, color: heart ? C.red : heartBlocked(p) ? C.hairline : C.ghost }}>
                       <svg width="22" height="22" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
                         <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
                       </svg>
@@ -796,7 +815,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends); + picks up to {MAX_COMPARE} to compare side by side and download.
+          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends) — one carrier and one funding type per group, so the first favorite sets both{lock ? ` (now ${lock.carrier} ${lock.funding})` : ""}; + picks up to {MAX_COMPARE} from any carrier to compare side by side and download.
         </div>
       </div>
 

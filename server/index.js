@@ -1197,6 +1197,39 @@ app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res)
   res.json({ ok: true, id: record.id, ref: ticketRef(record.id), emailed });
 });
 
+/**
+ * One carrier, one funding type: a group's 2027 plans all come from one
+ * carrier, and with UnitedHealthcare all fully insured or all level funded
+ * (never Gravie and UHC together, never UHC fully insured beside UHC level
+ * funded). Each shortlisted plan ("UH3 · P4000i8021B", or a bare name) is
+ * placed by the proposal it is on or the menu; the distinct carrier +
+ * funding pairs are returned when there is more than one, else null. A
+ * plan that cannot be placed does not count against the shortlist.
+ */
+const SLOT_BASIS = { "UHC Fully Insured": ["UnitedHealthcare", "Fully Insured"], "UHC Level Funded": ["UnitedHealthcare", "Level Funded"], Gravie: ["Gravie", "Level Funded"], Nationwide: ["Nationwide", "Level Funded"], Angle: ["Angle Health", "Level Funded"] };
+function signupMix(g, plans) {
+  const key = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const byName = new Map();
+  for (const pr of currentProposals[g.name] || []) {
+    const basis = SLOT_BASIS[pr.slot];
+    if (!basis) continue;
+    for (const pl of pr.plans || []) {
+      const funding = /fully/i.test(pl.planType || "") ? "Fully Insured" : /self/i.test(pl.planType || "") ? "Self Funded" : basis[1];
+      byName.set(key(pl.name), `${basis[0]} ${funding}`);
+      if (pl.optionId) byName.set(key(pl.optionId), `${basis[0]} ${funding}`);
+    }
+  }
+  for (const m of (data.uhc || {}).menu || []) if (!byName.has(key(m.plan))) byName.set(key(m.plan), "UnitedHealthcare Level Funded");
+  byName.set(key("Surest Copay Plan"), "UnitedHealthcare Level Funded");
+  const bases = new Set();
+  for (const raw of plans) {
+    const m = /^([A-Z]{2}\d+)\s*·\s*(.+)$/.exec(raw);
+    const basis = (m && (byName.get(key(m[1])) || byName.get(key(m[2])))) || byName.get(key(raw));
+    if (basis) bases.add(basis);
+  }
+  return bases.size > 1 ? [...bases] : null;
+}
+
 app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) => {
   const body = req.body || {};
   const caller = signinKey(req);
@@ -1215,6 +1248,8 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
     ? [...new Set(body.plans.map((p) => String(p || "").trim()).filter(Boolean))].slice(0, 50).map((p) => p.slice(0, 200))
     : [];
   if (!plans.length) return res.status(400).json({ error: "Select at least one plan." });
+  const mixed = signupMix(g, plans);
+  if (mixed) return res.status(400).json({ error: `One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes ${mixed.join(" and ")}.` });
   const note = String(body.note || "").trim().slice(0, 4000) || null;
 
   let record;

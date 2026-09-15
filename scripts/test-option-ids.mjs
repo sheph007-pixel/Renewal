@@ -170,6 +170,17 @@ assert.deepEqual(await menuOf(await cookieFor(groupC)), menuC, "the repair leave
 // 6. The sign-up carries the ID with the name, and the comparison finds a plan by ID.
 const signup = await fetch(`${base}/api/group/signup`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ code: mine.code, plans: [`${id("P3500i100ES21B")} · P3500i100ES21B`], note: "" }) });
 assert.equal(signup.status, 200, await signup.text());
+// One carrier, one funding type: a shortlist that mixes carriers, or UHC
+// fully insured with UHC level funded, is refused; one that holds to it goes.
+const post = (plans) => fetch(`${base}/api/group/signup`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ code: mine.code, plans, note: "" }) });
+const mixCarrier = await post([`${id("P3500i100ES21B")} · P3500i100ES21B`, "GR1 · Gravie Copay 1500 PPO"]);
+assert.equal(mixCarrier.status, 400);
+assert.match((await mixCarrier.json()).error, /one carrier, one funding type.*UnitedHealthcare Level Funded and Gravie Level Funded/i);
+const mixFunding = await post([`${id("P3500i100ES21B")} · P3500i100ES21B`, `UH${N + 1} · EZ2B Open Access HSA`]);
+assert.equal(mixFunding.status, 400);
+assert.match((await mixFunding.json()).error, /Level Funded and UnitedHealthcare Fully Insured/);
+assert.equal((await post([`${id("P3500i100ES21B")} · P3500i100ES21B`, `UH${N + 4} · Custom 7000`])).status, 200, "two level-funded UHC plans go through");
+assert.equal((await post(["GR1 · Gravie Copay 1500 PPO", "GR2 · Gravie Copay 2500 PPO"])).status, 200, "two Gravie plans go through");
 const { comparisonTable } = await import("../server/documents.js");
 const page = await (await fetch(`${base}/api/signin`, { method: "POST", headers: { ...json, cookie }, body: "{}" })).json();
 const table = comparisonTable({ group: page.group, proposals: page.proposals, plans: [`UH${N + 4}`, "GR1"], includeCurrent: false });
