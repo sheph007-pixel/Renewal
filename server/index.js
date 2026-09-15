@@ -3295,12 +3295,18 @@ const proposalStore = db
 const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt"];
 
 /**
- * Option IDs: every quoted plan gets a short, stable handle — UH3, GR1 — a
- * carrier prefix and a number, numbered per group in the order the carrier
- * lists its plans. UnitedHealthcare's two proposals share one sequence. A
- * number is never reused: a re-read or a newer proposal in the same slot
- * hands each surviving plan its old number (matched by plan code, else by
- * exact name) and gives new plans the next free ones.
+ * Option IDs: every plan a client can be offered gets a short, stable handle
+ * — UH3, GR1 — a carrier prefix and a number, numbered per group in the
+ * order the carrier lists its plans. UnitedHealthcare's two proposals share
+ * one sequence. A number is never reused: a re-read or a newer proposal in
+ * the same slot hands each surviving plan its old number (matched by plan
+ * code, else by exact name) and gives new plans the next free ones.
+ *
+ * Only offered plans are numbered. Kennion offers PPO plans only, so an EPO
+ * twin carries no number at all: Gravie's 67 designs read GR1–GR67, not
+ * GR1–GR134 with every other number missing. A slot numbered before this
+ * rule (an EPO twin holding a number) is renumbered once, compactly, and
+ * the numbers its older readings held are released with it.
  */
 const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN" };
 const OPTION_ID = /^(UH|GR|NW|AN)(\d+)$/;
@@ -3315,6 +3321,7 @@ async function assignOptionIds(rows, bySlot) {
     if (!r.group_name || !r.extracted || !Array.isArray(r.extracted.plans)) continue;
     const taken = takenByGroup.get(r.group_name) || new Map();
     for (const pl of r.extracted.plans) {
+      if (isEpoPlan(pl)) continue;
       const m = OPTION_ID.exec(String(pl.option_id || ""));
       if (!m) continue;
       const set = taken.get(m[1]) || new Set();
@@ -3340,30 +3347,66 @@ async function assignOptionIds(rows, bySlot) {
       if (!prefix || !list) continue;
       const cur = list[0];
       const x = cur.extracted || {};
-      const plans = Array.isArray(x.plans) ? x.plans : [];
+      let plans = Array.isArray(x.plans) ? x.plans : [];
       if (!plans.length) continue;
       const before = JSON.stringify(plans.map((pl) => pl.option_id || null));
+      // Kennion offers PPO plans only, so nothing but offered plans is kept:
+      // an EPO twin still on a stored reading (read before this rule) goes,
+      // here and on the readings this one replaced. A slot whose EPO twins
+      // held numbers was numbered under the old rule: it is renumbered once
+      // from 1, and the numbers its older readings held are released, so the
+      // sequence is the offered plans and nothing else.
+      const legacy = x.renumber === true || plans.some((pl) => isEpoPlan(pl) && pl.option_id);
+      let stripped = false;
+      if (plans.some((pl) => isEpoPlan(pl))) {
+        plans = plans.filter((pl) => !isEpoPlan(pl));
+        x.plans = plans;
+        stripped = true;
+      }
+      for (const old of list.slice(1)) {
+        const op = old.extracted && Array.isArray(old.extracted.plans) ? old.extracted.plans : [];
+        const hasEpo = op.some((pl) => isEpoPlan(pl));
+        const numbered = legacy && op.some((pl) => String(pl.option_id || "").startsWith(prefix));
+        if (!hasEpo && !numbered) continue;
+        const kept = op.filter((pl) => !isEpoPlan(pl)).map((pl) => (numbered ? { ...pl, option_id: null } : pl));
+        const cleared = { ...old.extracted, plans: kept };
+        old.extracted = cleared;
+        await proposalStore.updateProposal(old.id, { extracted: cleared });
+      }
+      if (legacy) {
+        for (const pl of plans) pl.option_id = null;
+        taken.delete(prefix);
+      }
+      if (!plans.length) {
+        if (stripped) {
+          cur.extracted = { ...x, plans };
+          await proposalStore.updateProposal(cur.id, { extracted: cur.extracted });
+        }
+        continue;
+      }
       // Who can hand a number down: the row's own reading before a re-read,
       // then the proposals this one replaced, newest first.
-      const donors = [...(Array.isArray(x.previous_plan_ids) ? x.previous_plan_ids : []), ...list.slice(1).flatMap((r) => (r.extracted && Array.isArray(r.extracted.plans) ? r.extracted.plans : []))].filter((d) => OPTION_ID.test(String(d.option_id || "")) && String(d.option_id).startsWith(prefix));
+      const donors = legacy ? [] : [...(Array.isArray(x.previous_plan_ids) ? x.previous_plan_ids : []), ...list.slice(1).flatMap((r) => (r.extracted && Array.isArray(r.extracted.plans) ? r.extracted.plans : []))].filter((d) => OPTION_ID.test(String(d.option_id || "")) && String(d.option_id).startsWith(prefix));
       const used = new Set();
+      const offered = plans;
       // An id under another carrier's prefix (the proposal was moved to a
       // different slot by staff) is renumbered.
-      for (const pl of plans) if (pl.option_id && !String(pl.option_id).startsWith(prefix)) pl.option_id = null;
-      for (const pl of plans) if (pl.option_id) used.add(pl.option_id);
+      for (const pl of offered) if (pl.option_id && !String(pl.option_id).startsWith(prefix)) pl.option_id = null;
+      for (const pl of offered) if (pl.option_id) used.add(pl.option_id);
       const claim = (pl, match) => {
-        const d = donors.find((c) => !used.has(c.option_id) && match(c));
+        const d = donors.find((c) => !used.has(c.option_id) && !isEpoPlan(c) && match(c));
         if (!d) return;
         pl.option_id = d.option_id;
         used.add(d.option_id);
       };
-      for (const pl of plans) if (!pl.option_id && optKey(pl.plan_code)) claim(pl, (c) => optKey(c.plan_code) === optKey(pl.plan_code));
-      for (const pl of plans) if (!pl.option_id) claim(pl, (c) => optName(c.name) === optName(pl.name));
-      for (const pl of plans) if (!pl.option_id) pl.option_id = `${prefix}${nextFree(prefix)}`;
-      const after = JSON.stringify(plans.map((pl) => pl.option_id));
-      if (after !== before || x.previous_plan_ids) {
+      for (const pl of offered) if (!pl.option_id && optKey(pl.plan_code)) claim(pl, (c) => optKey(c.plan_code) === optKey(pl.plan_code));
+      for (const pl of offered) if (!pl.option_id) claim(pl, (c) => optName(c.name) === optName(pl.name));
+      for (const pl of offered) if (!pl.option_id) pl.option_id = `${prefix}${nextFree(prefix)}`;
+      const after = JSON.stringify(plans.map((pl) => pl.option_id || null));
+      if (after !== before || stripped || x.previous_plan_ids || x.renumber) {
         const next = { ...x, plans };
         delete next.previous_plan_ids;
+        delete next.renumber;
         cur.extracted = next;
         await proposalStore.updateProposal(cur.id, { extracted: next });
       }
@@ -3663,6 +3706,15 @@ async function runAnalysis(id, file, keepAssignment) {
       }
     }
 
+    // Kennion offers PPO plans only: an EPO twin the carrier lists is read
+    // (the reading matches the document) and then left out, so nothing but
+    // offered plans is ever stored, numbered or shown.
+    const priorPlans = (current && current.extracted && current.extracted.plans) || [];
+    // Numbers handed out while EPO twins were still stored (an EPO plan
+    // holding one, before or in this reading) belong to the old sequence:
+    // none is carried over, and the numbering step starts this slot again.
+    const oldRule = priorPlans.some((pl) => isEpoPlan(pl) && pl.option_id) || (Array.isArray(out.plans) && out.plans.some((pl) => isEpoPlan(pl) && pl.option_id));
+    if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isEpoPlan(pl)).map((pl) => (oldRule ? { ...pl, option_id: null } : pl));
     const fields = {
       carrier: out.carrier || null,
       // The option IDs the plans carried before this reading ride along, so
@@ -3670,7 +3722,8 @@ async function runAnalysis(id, file, keepAssignment) {
       extracted: {
         ...out,
         audit_flags: flags,
-        previous_plan_ids: ((current && current.extracted && current.extracted.plans) || []).filter((p) => p.option_id).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })),
+        previous_plan_ids: oldRule ? [] : priorPlans.filter((p) => p.option_id && !isEpoPlan(p)).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })),
+        ...(oldRule ? { renumber: true } : {}),
       },
       summary: out.summary || null,
       confidence: conf,
@@ -3957,7 +4010,7 @@ async function settleGravieQuotes() {
   for (const r of rows) {
     try {
       const plans = (r.extracted && r.extracted.plans) || [];
-      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || !plans.length;
+      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || plans.some((pl) => isEpoPlan(pl)) || !plans.length;
       const quote = have.get(r.group_name);
       const wanted = quote && quote.proposalId === r.id && quote.planCount === plans.length && !stale;
       if (!stale && wanted) continue;

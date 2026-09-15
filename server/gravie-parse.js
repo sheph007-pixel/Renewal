@@ -103,13 +103,18 @@ function readPlans(rows, sheetName, network) {
   return out;
 }
 
-/** The sheets that make up the quote: Open Access Plus EPO and PPO, nothing else. */
-const RATE_SHEETS = /^(EPO|PPO)$/i;
+/**
+ * The sheet that makes up the quote: Open Access Plus PPO. Kennion offers PPO
+ * plans only, so the EPO sheet — the same designs priced without
+ * out-of-network cover — is never read: nothing from it is stored, numbered
+ * or shown, for any group.
+ */
+const RATE_SHEETS = /^PPO$/i;
 
 /**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
- * tier, and every priced plan on the EPO and PPO sheets — one row per plan
- * per sheet, since an EPO and a PPO of the same design are two prices.
+ * tier, and every priced plan on the PPO sheet — the 67 designs Kennion
+ * offers, in the carrier's order.
  */
 export function parseGravieWorkbook(buf) {
   const wb = XLSX.read(buf, { type: "buffer" });
@@ -123,7 +128,7 @@ export function parseGravieWorkbook(buf) {
     plans.push(...readPlans(rows, sheetName.trim().toUpperCase(), "Cigna Open Access Plus"));
   }
   if (!header || !header.group) throw new Error("Not a Gravie rate workbook: no group name in a sheet header");
-  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on an EPO or PPO sheet");
+  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on a PPO sheet");
   return { ...header, plans };
 }
 

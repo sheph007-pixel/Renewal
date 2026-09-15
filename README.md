@@ -238,17 +238,20 @@ want the whole book rather than the block the portal serves.
 
 ### PPO only
 
-A fixed rule: **a client is never shown an EPO plan.** Kennion offers PPO
-plans only. UnitedHealthcare's menu carries an
+A fixed rule: **an EPO plan is never stored, numbered or shown.** Kennion
+offers PPO plans only. UnitedHealthcare's menu carries an
 E-coded EPO twin of most P-coded PPO plans, and Gravie prices every design
 twice, EPO and PPO; the EPO sits a few dollars under the PPO and adds a choice
-without adding a decision. So the server keeps EPO plans out of every client
-payload — off the UHC menu, out of each carrier proposal's plan list — and a
-current plan the UHC mapping had pointed at an EPO is mapped to its PPO twin
-(same deductible, out-of-pocket max and coinsurance) so the like-for-like
-comparison still holds. Nothing is deleted: the stored quotes and proposals
-keep every plan, and staff pages still see them. The switch that once turned
-the rule off is gone (`POST /api/admin/market-rules` accepts `ppo-only` and
+without adding a decision. So an EPO plan never makes it into the portal:
+the Gravie parser reads the PPO sheet only, a Claude reading of a carrier
+PDF is stripped of its EPO plans before it is stored, a stored reading from
+before this rule is cleaned at boot (and its Gravie workbook re-read), the
+UHC menu drops its E-coded plans, and a current plan the UHC mapping had
+pointed at an EPO is mapped to its PPO twin (same deductible, out-of-pocket
+max and coinsurance) so the like-for-like comparison still holds. The same
+for every group; what is stored is what the carrier quoted for the plans
+Kennion offers, name and rates as printed. The switch that once turned the
+rule off is gone (`POST /api/admin/market-rules` accepts `ppo-only` and
 nothing else), and the client itself drops any EPO row that reaches it.
 
 Cobalt is not offered as a 2027 option: its slot is not shown on any group,
@@ -266,8 +269,11 @@ carrier lists its plans. `assignOptionIds` in `server/index.js`, run from
 `proposalsChanged`, writes `option_id` into each stored plan; a number is
 never reused. A re-read of a proposal, or a newer proposal in the same
 slot, hands each surviving plan its old number (matched by plan code, then
-by exact name) and gives new plans the next free ones; an EPO twin is
-numbered but never shown. The ID is the first column of the grid (sortable,
+by exact name) and gives new plans the next free ones. Only offered plans
+are numbered: Kennion offers PPO plans only, and an EPO twin is never
+stored, so Gravie's 67 designs read GR1–GR67 for every group, not GR1–GR134
+with every other number missing. A reading stored before that rule is
+cleaned of its EPO twins and renumbered once, compactly, at boot. The ID is the first column of the grid (sortable,
 searchable, first column of the CSV), a badge on the plan card and the
 printed proposal, part of the Sign Up shortlist ("UH3 · P4000i8021B"), the
 first thing the assistant says about a plan, and what `create_comparison`
