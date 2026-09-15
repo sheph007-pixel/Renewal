@@ -240,6 +240,12 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
     }
   }
   console.log("ppo only: no EPO plan in the client payload — ok");
+
+  // 8d. Every menu plan carries this group's option number — UH1 … in menu
+  //     order, one number per plan — so no UHC row on the grid reads blank.
+  const ids = payload.uhc.optionIds || {};
+  assert.deepEqual(menu.map((m) => ids[m.plan]), menu.map((_, i) => `UH${i + 1}`), "the menu is numbered UH1 … in menu order");
+  console.log("menu option ids: every UHC menu plan numbered — ok", { plans: menu.length });
 }
 
 // 9. Every response carries the headers that keep a token out of a referrer.

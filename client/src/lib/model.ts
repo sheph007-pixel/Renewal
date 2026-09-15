@@ -268,6 +268,8 @@ export interface KennionData {
     mapping: MappingRow[];
     /** Average EE current rate of a reference group, for scaling an un-quoted group. */
     refEE?: number | null;
+    /** The menu's option numbers for this group, by plan code: {P4000i8021B: "UH12"}. */
+    optionIds?: Record<string, string>;
   };
   splits: Record<string, GroupSplit>;
   /** The signed-in group's proposals on file (group sessions only). */
@@ -915,6 +917,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       if (v != null) monthly += v * counts[t.key];
     });
     return {
+      optionId: u.optionIds?.[m.plan] ?? null,
       carrier: "UnitedHealthcare",
       label: "Level Funded",
       plan: m.plan,
