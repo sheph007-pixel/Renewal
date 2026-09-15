@@ -38,10 +38,14 @@ const r0 = await fetch(`${base}/api/signin`, { method: "POST", headers: json, bo
 const cookie = (r0.headers.get("set-cookie") || "").split(";")[0];
 
 const plan = (name, code, ee, extra = {}) => ({ name, plan_code: code, network: "Choice Plus", plan_type: "PPO", deductible: "$4,000", oop_max: "$8,150", benefits: {}, rates: { EE: ee, ES: ee * 2, EC: ee * 1.8, FAM: ee * 3 }, monthly_total: null, ...extra });
-const reading = (carrier, funding, plans) => ({ carrier, funding, quotes_medical: true, matched_group: mine.name, confidence: 0.95, effective_date: "2027-01-01", proposal_type: "renewal", enrolled_on_document: mine.enrolled, plans, total_monthly: null, summary: "Canned." });
-const upload = async (filename, slot, body) => {
-  const r = await fetch(`${base}/api/admin/proposals?filename=${encodeURIComponent(filename)}&group=${encodeURIComponent(mine.name)}&slot=${encodeURIComponent(slot)}`, { method: "POST", headers: { ...staffAuth, "Content-Type": "text/plain" }, body: JSON.stringify(body) });
+const reading = (carrier, funding, plans, g = mine) => ({ carrier, funding, quotes_medical: true, matched_group: g.name, confidence: 0.95, effective_date: "2027-01-01", proposal_type: "renewal", enrolled_on_document: g.enrolled, plans, total_monthly: null, summary: "Canned." });
+const upload = async (filename, slot, body, g = mine) => {
+  const r = await fetch(`${base}/api/admin/proposals?filename=${encodeURIComponent(filename)}&group=${encodeURIComponent(g.name)}&slot=${encodeURIComponent(slot)}`, { method: "POST", headers: { ...staffAuth, "Content-Type": "text/plain" }, body: JSON.stringify(body) });
   assert.equal(r.status, 200, await r.text());
+};
+const storedFor = async (g) => {
+  const rows = (await (await fetch(`${base}/api/admin/proposals`, { headers: staffAuth })).json()).proposals || [];
+  return Object.fromEntries(rows.filter((r) => r.group_name === g.name).map((r) => [r.slot, (r.extracted.plans || []).map((p) => `${p.option_id}:${p.name}`)]));
 };
 const settled = async (filename) => {
   for (let i = 0; i < 80; i++) {
@@ -110,6 +114,34 @@ await upload("gravie-legacy.json", "Gravie", reading("Gravie", "level funded", [
 const grl = await settled("gravie-legacy.json");
 assert.deepEqual(storedIds(grl), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "the old GR1–GR4 becomes GR1–GR2, EPO twins gone");
 assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"]);
+
+// 5c. UnitedHealthcare's two slots numbered under the old rule, one after
+//     the other: one UH sequence, no number handed out twice.
+const [, groupB, groupC] = staff.groups.filter((g) => !g.archived && g.eligible !== false);
+await upload("b-lf-legacy.json", "UHC Level Funded", reading("UnitedHealthcare", "level funded", [plan("P4000i8021B", "P4000i8021B", 620, { option_id: "UH1" }), plan("P4000i8021B EPO", "P4000i8021BE", 600, { network: "Choice EPO", plan_type: "EPO", option_id: "UH2" }), plan("P5000i10021B", "P5000i10021B", 600, { option_id: "UH3" })], groupB), groupB);
+await settled("b-lf-legacy.json");
+assert.deepEqual((await storedFor(groupB))["UHC Level Funded"], ["UH1:P4000i8021B", "UH2:P5000i10021B"]);
+await upload("b-fi-legacy.json", "UHC Fully Insured", reading("UnitedHealthcare", "fully insured", [plan("EZ2B Open Access HSA", "EZ2B", 700, { option_id: "UH5" }), plan("EZ2B Open Access EPO", "EZ2BE", 690, { network: "Choice EPO", plan_type: "EPO", option_id: "UH6" })], groupB), groupB);
+await settled("b-fi-legacy.json");
+assert.deepEqual(await storedFor(groupB), { "UHC Level Funded": ["UH1:P4000i8021B", "UH2:P5000i10021B"], "UHC Fully Insured": ["UH3:EZ2B Open Access HSA"] }, "the second slot continues the sequence the first settled on");
+
+// 5d. Two slots already holding the same numbers (the sequence was once
+//     reset per slot) are repaired: the prefix is renumbered once, in
+//     carrier order, and every plan keeps a number of its own.
+await upload("c-lf.json", "UHC Level Funded", reading("UnitedHealthcare", "level funded", [plan("P4000i8021B", "P4000i8021B", 620), plan("P5000i10021B", "P5000i10021B", 600)], groupC), groupC);
+await settled("c-lf.json");
+assert.deepEqual((await storedFor(groupC))["UHC Level Funded"], ["UH1:P4000i8021B", "UH2:P5000i10021B"]);
+await upload("c-fi-dup.json", "UHC Fully Insured", reading("UnitedHealthcare", "fully insured", [plan("EZ2B Open Access HSA", "EZ2B", 700, { option_id: "UH1" }), plan("EZ2D Open Access HSA", "EZ2D", 710, { option_id: "UH2" })], groupC), groupC);
+await settled("c-fi-dup.json");
+assert.deepEqual(await storedFor(groupC), { "UHC Fully Insured": ["UH1:EZ2B Open Access HSA", "UH2:EZ2D Open Access HSA"], "UHC Level Funded": ["UH3:P4000i8021B", "UH4:P5000i10021B"] }, "duplicate numbers across the two UHC slots are renumbered into one sequence");
+const rC = await fetch(`${base}/api/signin`, { method: "POST", headers: json, body: JSON.stringify({ code: groupC.code }) });
+const cookieC = (rC.headers.get("set-cookie") || "").split(";")[0];
+const pageC = await (await fetch(`${base}/api/signin`, { method: "POST", headers: { ...json, cookie: cookieC }, body: "{}" })).json();
+assert.deepEqual(
+  (pageC.proposals || []).filter((p) => /UHC/.test(p.slot)).flatMap((p) => p.plans.map((pl) => pl.optionId)).sort(),
+  ["UH1", "UH2", "UH3", "UH4"],
+  "the client sees every UHC plan with its own number",
+);
 
 // 6. The sign-up carries the ID with the name, and the comparison finds a plan by ID.
 const signup = await fetch(`${base}/api/group/signup`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ code: mine.code, plans: ["UH1 · P4000i8021B Choice Plus"], note: "" }) });

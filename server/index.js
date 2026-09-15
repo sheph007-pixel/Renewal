@@ -3314,7 +3314,9 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
  * twin carries no number at all: Gravie's 67 designs read GR1–GR67, not
  * GR1–GR134 with every other number missing. A slot numbered before this
  * rule (an EPO twin holding a number) is renumbered once, compactly, and
- * the numbers its older readings held are released with it.
+ * the numbers its older readings held are released with it. A number held
+ * twice in a group (the two UnitedHealthcare slots once restarted at UH1
+ * separately) is repaired the same way: the whole prefix, renumbered once.
  */
 const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN" };
 
@@ -3388,6 +3390,48 @@ async function assignOptionIds(rows, bySlot) {
   const groups = new Set([...bySlot.keys()].map((k) => k.split("||")[0]));
   for (const group of groups) {
     const taken = takenByGroup.get(group) || new Map();
+    // Which slots are renumbered from scratch: one numbered under the old
+    // rule (an EPO twin holding a number, or flagged by a re-read), and
+    // every slot of a prefix that holds a number twice — the sequence was
+    // once reset per slot, so UnitedHealthcare's two proposals could both
+    // start at UH1. Their numbers are released together, before any slot
+    // is numbered, while the numbers of the prefix's untouched slots stay
+    // taken; releasing per slot would start each at 1 and collide.
+    const legacySlots = new Set();
+    const heldBy = new Map(); // option id -> slots holding it
+    for (const slot of SLOTS) {
+      const prefix = OPTION_PREFIX[slot];
+      const list = bySlot.get(`${group}||${slot}`);
+      if (!prefix || !list) continue;
+      const x = list[0].extracted || {};
+      const plans = Array.isArray(x.plans) ? x.plans : [];
+      if (x.renumber === true || plans.some((pl) => isEpoPlan(pl) && pl.option_id)) legacySlots.add(slot);
+      for (const pl of plans) {
+        if (isEpoPlan(pl) || !OPTION_ID.test(String(pl.option_id || ""))) continue;
+        const held = heldBy.get(pl.option_id) || [];
+        held.push(slot);
+        heldBy.set(pl.option_id, held);
+      }
+    }
+    for (const [id, held] of heldBy) {
+      if (held.length < 2) continue;
+      const prefix = OPTION_ID.exec(id)[1];
+      for (const slot of SLOTS) if (OPTION_PREFIX[slot] === prefix && bySlot.has(`${group}||${slot}`)) legacySlots.add(slot);
+    }
+    for (const prefix of new Set([...legacySlots].map((s) => OPTION_PREFIX[s]))) {
+      const keep = new Set();
+      for (const slot of SLOTS) {
+        if (OPTION_PREFIX[slot] !== prefix || legacySlots.has(slot)) continue;
+        const list = bySlot.get(`${group}||${slot}`);
+        const plans = list && list[0].extracted && Array.isArray(list[0].extracted.plans) ? list[0].extracted.plans : [];
+        for (const pl of plans) {
+          const m = OPTION_ID.exec(String(pl.option_id || ""));
+          if (m && m[1] === prefix && !isEpoPlan(pl)) keep.add(Number(m[2]));
+        }
+      }
+      taken.set(prefix, keep);
+      await releaseRetired(group, prefix);
+    }
     const nextFree = (prefix) => {
       const set = taken.get(prefix) || new Set();
       let n = 1;
@@ -3411,7 +3455,7 @@ async function assignOptionIds(rows, bySlot) {
       // held numbers was numbered under the old rule: it is renumbered once
       // from 1, and the numbers its older readings held are released, so the
       // sequence is the offered plans and nothing else.
-      const legacy = x.renumber === true || plans.some((pl) => isEpoPlan(pl) && pl.option_id);
+      const legacy = legacySlots.has(slot);
       let stripped = false;
       if (plans.some((pl) => isEpoPlan(pl))) {
         plans = plans.filter((pl) => !isEpoPlan(pl));
@@ -3428,11 +3472,7 @@ async function assignOptionIds(rows, bySlot) {
         old.extracted = cleared;
         await proposalStore.updateProposal(old.id, { extracted: cleared });
       }
-      if (legacy) {
-        for (const pl of plans) pl.option_id = null;
-        taken.delete(prefix);
-        await releaseRetired(group, prefix);
-      }
+      if (legacy) for (const pl of plans) pl.option_id = null;
       if (!plans.length) {
         if (stripped) {
           cur.extracted = { ...x, plans };
