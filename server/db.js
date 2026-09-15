@@ -81,6 +81,20 @@ CREATE TABLE IF NOT EXISTS kennion.settings (
   updated_at timestamptz NOT NULL DEFAULT now(),
   updated_by text
 );
+-- The plan designs in force today — the 15 EBPA / HealthEZ medical plans
+-- (Deluxe Platinum … Freedom Bronze) — one row per plan name with every
+-- benefit line as printed on Kennion's comparison sheet. Seeded from
+-- server/data/kennion.json at boot; the assistant reads them to compare a
+-- group's current plans with the 2027 options.
+CREATE TABLE IF NOT EXISTS kennion.plan_designs (
+  plan_name   text PRIMARY KEY,
+  plan_year   integer NOT NULL DEFAULT 2026,
+  tpa         text,
+  benefits    jsonb NOT NULL,
+  source      text,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  text
+);
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -541,6 +555,25 @@ export function createDb(url) {
            value = EXCLUDED.value, updated_at = now(), updated_by = EXCLUDED.updated_by`,
         [key, JSON.stringify(value), by || null],
       );
+    },
+
+    async listPlanDesigns() {
+      const { rows } = await pool.query("SELECT plan_name, plan_year, tpa, benefits, source, updated_at, updated_by FROM kennion.plan_designs ORDER BY plan_name");
+      return rows.map((r) => ({ planName: r.plan_name, planYear: r.plan_year, tpa: r.tpa, benefits: r.benefits, source: r.source, updatedAt: r.updated_at, updatedBy: r.updated_by }));
+    },
+    /** Write the designs in, replacing a plan's benefits when the name is already there. */
+    async upsertPlanDesigns(list, by) {
+      for (const d of list) {
+        await pool.query(
+          `INSERT INTO kennion.plan_designs (plan_name, plan_year, tpa, benefits, source, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4::jsonb, $5, now(), $6)
+           ON CONFLICT (plan_name) DO UPDATE SET
+             plan_year = EXCLUDED.plan_year, tpa = COALESCE(EXCLUDED.tpa, kennion.plan_designs.tpa), benefits = EXCLUDED.benefits,
+             source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+          [d.planName, d.planYear || 2026, d.tpa || null, JSON.stringify(d.benefits || {}), d.source || null, by || null],
+        );
+      }
+      return list.length;
     },
 
     /** The stored sign-in code hash for one staff member, or null. */

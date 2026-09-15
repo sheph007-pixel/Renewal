@@ -239,7 +239,17 @@ const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + C
  * view its own pages get (see clientGroupView), so what the assistant knows
  * is exactly what the client can already see.
  */
-export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal }) {
+/** The design a current plan's name points at: "HealthEZ Saver HSA" → the Saver HSA design. */
+function designFor(planDesigns, planName) {
+  const keys = Object.keys(planDesigns || {});
+  const key = keys.find((k) => planName && planName.indexOf(k) !== -1);
+  return key ? { key, design: planDesigns[key] } : null;
+}
+
+const DESIGN_LINES = ["Deductible", "Out-of-Pocket Max", "Primary Care Office Visits", "Specialist Office Visits", "Virtual Primary Care Visits", "Emergency Room Facility Fee", "Inpatient Facility Fee", "Outpatient Facility Fee", "RX | Generics", "RX | Brand: Preferred", "RX | Brand: Non-preferred"];
+const designText = (d) => DESIGN_LINES.filter((k) => d[k]).map((k) => `${k.replace("RX | ", "Rx ")}: ${d[k]}`).join("; ");
+
+export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal, planDesigns }) {
   const g = group;
   const out = [];
   out.push(`# ${g.name}`);
@@ -271,6 +281,8 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         return `${k}: ${r != null ? money(r) : "not billed"} × ${counts[k] ?? 0}`;
       }).join("; ");
       out.push(`- ${p.plan} (${p.tpa || g.tpa || "TPA ?"}): ${p.enrolled} enrolled, ${money(p.monthly)}/month. Tier rates × enrolled — ${tierLine}`);
+      const dz = designFor(planDesigns, p.plan);
+      if (dz) out.push(`  Plan design (${dz.key}): ${designText(dz.design)}. All current plans include $0 preventive care, 24/7 virtual care on the app, concierge support and a Visa card for expenses.`);
       const sp = splits && splits[g.name] && splits[g.name].plans && splits[g.name].plans[p.plan];
       if (sp) {
         const parts = TIER_KEYS.map((k) => {
@@ -280,6 +292,14 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         }).filter(Boolean);
         if (parts.length) out.push(`  Employer/employee split today (from Employee Navigator): ${parts.join("; ")}`);
       }
+    }
+  }
+  const designKeys = Object.keys(planDesigns || {});
+  if (designKeys.length) {
+    out.push(`\n## The ${designKeys.length} current plan designs Kennion offers today (2026, EBPA and HealthEZ) — for comparing what the group has against what it could have had, and against 2027`);
+    for (const k of designKeys) {
+      const d = planDesigns[k];
+      out.push(`- ${k}: deductible ${d.Deductible || "—"}, out-of-pocket max ${d["Out-of-Pocket Max"] || "—"}, PCP ${d["Primary Care Office Visits"] || "—"}, specialist ${d["Specialist Office Visits"] || "—"}, generic Rx ${d["RX | Generics"] || "—"}`);
     }
   }
   if (Array.isArray(g.lines) && g.lines.length) {
