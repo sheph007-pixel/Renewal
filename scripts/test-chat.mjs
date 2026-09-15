@@ -257,7 +257,18 @@ mem = (await (await fetch(`${base}/api/chat/memory/${mem[0].id}`, { method: "DEL
 assert.equal(mem.length, 1, "the client can forget a line");
 mem = (await (await fetch(`${base}/api/admin/chat/memory`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ group: mine.name, removeIds: [mem[0].id] }) })).json()).memory;
 assert.equal(mem.length, 0, "and so can staff");
-console.log("assistant memory: preferences are kept per group, shown, and removable by client or staff — ok");
+// The client can add a line of its own from the Memory panel.
+const added = await fetch(`${base}/api/chat/memory`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ text: "  Wants dental kept with   Guardian. " }) });
+assert.equal(added.status, 200);
+mem = (await added.json()).memory;
+assert.equal(mem.length, 1);
+assert.equal(mem[0].text, "Wants dental kept with Guardian.");
+assert.equal(mem[0].source, "client");
+assert.equal((await fetch(`${base}/api/chat/memory`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ text: "   " }) })).status, 400, "an empty line is refused");
+assert.equal((await fetch(`${base}/api/chat/memory`, { method: "POST", headers: json, body: JSON.stringify({ text: "x" }) })).status, 401, "and nobody adds without a session");
+mem = (await (await fetch(`${base}/api/chat/memory/${mem[0].id}`, { method: "DELETE", headers: { cookie } })).json()).memory;
+assert.equal(mem.length, 0);
+console.log("assistant memory: preferences are kept per group, shown, addable and removable by client or staff — ok");
 
 // Two groups open in one browser: the cookie is the other group's (it signed
 // in last), but the page names its own group in a header, and that wins.

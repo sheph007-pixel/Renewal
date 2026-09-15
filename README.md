@@ -651,9 +651,12 @@ client cares about. What the client tells it (a budget, a contribution
 philosophy, a network must-have, a plan they ruled out) it records with the
 `update_client_memory` tool, one plain sentence per line in
 `kennion.client_memory`; every later conversation for that group starts from
-those lines. The client sees them on the Assistant page ("What it remembers
-about you") and can remove any; staff see and edit them in the conversation
-drawer on `/admin/assistant` (`/api/chat/memory`, `/api/admin/chat/memory`).
+those lines. The client sees them behind the **Memory** button on the
+Assistant page — a count on the button, a panel with every line, a way to
+remove any, and a box to add one of their own (`POST /api/chat/memory`) —
+the way an assistant's memory usually works; staff see and edit them in the
+conversation drawer on `/admin/assistant` (`/api/chat/memory`,
+`/api/admin/chat/memory`).
 The model is Claude Fable 5.1 (`KENNION_MODEL` overrides), falling back to
 Claude Opus 5 for the life of the process if the account cannot use it.
 

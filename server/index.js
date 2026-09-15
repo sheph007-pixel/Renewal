@@ -1521,6 +1521,14 @@ app.get("/api/chat/memory", async (req, res) => {
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ memory: await chatStore.listMemory(g.name) });
 });
+/** The client adds a line of its own: one plain sentence, kept like the ones the assistant records. */
+app.post("/api/chat/memory", express.json({ limit: "4kb" }), async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const text = String((req.body || {}).text || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (!text) return res.status(400).json({ error: "Write what to remember." });
+  res.json({ memory: await chatStore.updateMemory(g.name, { add: [text], source: "client" }) });
+});
 app.delete("/api/chat/memory/:id", async (req, res) => {
   const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
