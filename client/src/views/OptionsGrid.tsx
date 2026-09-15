@@ -728,10 +728,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {h}
                     {k === "er" && (
-                      <InfoTip text="Your company's share after employee contributions." color="rgba(255,255,255,0.85)" place="below" />
+                      <InfoTip text="The monthly contribution your company sets, applied to each plan. Your company decides this first; employees pay the rest." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                     {k === "total" && (
-                      <InfoTip text="The full amount billed, including company and employee contributions." color="rgba(255,255,255,0.85)" place="below" />
+                      <InfoTip text="The full monthly premium: what your company pays plus what employees pay." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                   </span>
                   {k && sortBy === k ? (costDir > 0 ? " ▲" : " ▼") : ""}

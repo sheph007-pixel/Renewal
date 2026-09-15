@@ -142,7 +142,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <SpendTile
           icon={<BuildingIcon color="#fff" />}
           label="Your Company Pays"
-          tip="Your company’s monthly share after employee contributions."
+          tip="The monthly contribution your company sets. Your company decides this first; employees pay the rest."
           amount={totals.er}
           pct={erPct}
           bg={C.blueTint}
@@ -152,7 +152,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <SpendTile
           icon={<PersonIcon color="#fff" />}
           label="Your Employees Pay"
-          tip="The combined monthly contribution from all enrolled employees."
+          tip="What employees pay each month: the premium left after your company’s contribution."
           amount={totals.ee}
           pct={eePct}
           bg={C.amberTint}
@@ -162,7 +162,7 @@ export default function SpendDashboard({ totals, contribution, enrolled }: Props
         <SpendTile
           icon={<StackIcon color="#fff" />}
           label="Total Monthly Bill"
-          tip="The total of company and employee contributions."
+          tip="The full monthly premium: what your company pays plus what employees pay."
           amount={totals.total}
           bg={C.greenTint}
           edge={C.greenEdge}
