@@ -5,8 +5,8 @@ import InfoTip from "@/views/InfoTip";
 
 /**
  * One plan, the way a broker's comparison card reads: the carrier and plan,
- * one big Average Monthly Cost per Enrolled Employee with the Total Monthly
- * Bill under it, the benefits, the composite rates with how many are
+ * one big Average Employee Monthly Contribution (what employees pay, over
+ * everyone enrolled) with Your Company Pays under it, the benefits, the composite rates with how many are
  * enrolled in each tier and what employer and employee each pay at the
  * applied contribution, then the three totals. The same card is the popup,
  * the proposal on screen, the printed proposal and the Excel block.
@@ -27,7 +27,7 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
-  /** Everyone enrolled, across the tiers — what the bill is averaged over. */
+  /** Everyone enrolled, across the tiers — what the employee share is averaged over. */
   enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
   source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
@@ -130,17 +130,19 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         </div>
         <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
       </div>
-      {/* The headline is the bill averaged over everyone enrolled — the figure
-          a client can hold against a paycheck — with the whole bill under it. */}
+      {/* The headline is what an employee pays on average once the company's
+          contribution is in — the figure a client can hold against a paycheck —
+          with what the company pays under it. Both follow the applied contribution. */}
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
-        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.premium == null || !m.enrolled ? "—" : money(m.premium / m.enrolled)}</div>
+        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "—" : money(m.ee / m.enrolled)}</div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: C.muted }}>
-          Average Monthly Cost per Enrolled Employee
-          <InfoTip text="Total monthly bill divided by enrolled employees. Includes company and employee contributions; actual rates vary by coverage tier." />
+          Average Employee Monthly Contribution
+          <InfoTip text="Average employee contribution after your company’s contribution. Actual amounts vary by coverage tier." />
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginTop: 3, ...num }}>
-          <span style={{ fontWeight: 500, color: C.muted }}>Total Monthly Bill: </span>
-          {m.premium == null ? "—" : money(m.premium)}
+          <span style={{ fontWeight: 500, color: C.muted }}>Your Company Pays: </span>
+          {m.er == null ? "—" : money(m.er)}
+          <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
       </div>
