@@ -661,8 +661,6 @@ export function moneyNum(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const planKey = (s: string) => s.toLowerCase().replace(/\b(plan|option|uhc|unitedhealthcare|surest|gravie|nationwide)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
-
 /** How a proposal slot is shown: the carrier column and the funding label. */
 function slotPresentation(slot: string, carrier: string | null, planType: string | null): { carrier: string; label: string; network: string } {
   if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "United Choice Plus" };
@@ -836,96 +834,15 @@ export function splitCopays(copays: string | null | undefined): [string | null, 
 }
 
 /**
- * The 2027 options a group can be shown: only plans with the carrier's own
- * rates for this group — the ones on its proposals, and the menu plans
- * UnitedHealthcare quoted it directly. Nothing is scaled from another
- * group's quote, and no placeholder stands in for a quote not yet in; a
- * tier the carrier did not price stays blank rather than estimated.
+ * The 2027 options a group can be shown: the plans on its proposals, and
+ * nothing else — every name and rate read off a carrier's own document by
+ * the reader and checked by the audit, stored in the database. The menu
+ * data in the seed file (UnitedHealthcare's August full-menu quotes, with
+ * rates for some tiers only) is not a proposal and is not shown; nothing is
+ * scaled, estimated or stood in for.
  */
 export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
-  const u = data.uhc || {};
-  const menu = u.menu || [];
-  const counts = censusCounts(g);
-
-  const quoted: Record<string, Partial<Record<TierKey, number>>> = {};
-  uhcRows(data, g).forEach((r) => {
-    if (!r.uhcRate) return;
-    quoted[r.uhcPlan] = quoted[r.uhcPlan] || {};
-    quoted[r.uhcPlan][r.tier] = r.uhcRate;
-  });
-
-  const out: MarketPlan[] = [];
-  for (const m of menu) {
-    const q = quoted[m.plan];
-    if (!q) continue;
-    const rates = {} as Record<TierKey, number | null>;
-    TIERS.forEach((t) => {
-      rates[t.key] = q[t.key] != null ? q[t.key]! : null;
-    });
-    let monthly: number | null = 0;
-    TIERS.forEach((t) => {
-      if (!counts[t.key]) return;
-      const v = rates[t.key];
-      if (v == null) monthly = null;
-      else if (monthly != null) monthly += v * counts[t.key];
-    });
-    // UnitedHealthcare often quotes a menu plan for some tiers only; one
-    // that misses a tier this group has people in cannot be priced for the
-    // group and is not shown.
-    if (monthly == null) continue;
-    out.push({
-      optionId: u.optionIds?.[m.plan] ?? null,
-      carrier: "UnitedHealthcare",
-      label: "Level Funded",
-      plan: m.plan,
-      type: m.type,
-      ded: m.ded,
-      oop: m.oop,
-      copays: m.copays,
-      pcp: splitCopays(m.copays)[0],
-      specialist: splitCopays(m.copays)[1],
-      rx: (m.rx || "").replace(/,.*$/, ""),
-      coins: m.coins ?? null,
-      uc: m.uc ?? null,
-      er: m.er ?? null,
-      network: "United Choice Plus",
-      rates,
-      monthly,
-      indicative: false,
-    });
-  }
-
-  // Surest was quoted for one group only, in UnitedHealthcare's own quote.
-  if (/Ecological/i.test(g.name)) {
-    const sRates: Record<TierKey, number | null> = { EE: 476.32, ES: 1152.69, EC: 862.14, FAM: 1586.15 };
-    let sMonthly = 0;
-    TIERS.forEach((t) => {
-      sMonthly += sRates[t.key]! * counts[t.key];
-    });
-    out.unshift({
-      carrier: "UnitedHealthcare",
-      label: "Copay-only",
-      plan: "Surest Copay Plan",
-      type: "Copay",
-      ded: 0,
-      oop: 8000,
-      copays: "Priced per service",
-      rx: "Copay by drug",
-      network: "United Choice Plus",
-      rates: sRates,
-      monthly: sMonthly,
-      indicative: false,
-    });
-  }
-
-  // Proposals the carriers actually sent for this group come first and win:
-  // a menu plan the proposal also prices is shown at the proposal's rates.
-  const fromProposals = proposalPlans(data, g);
-  if (fromProposals.length) {
-    const quotedPlans = new Set(fromProposals.map((p) => planKey(p.plan)));
-    return [...fromProposals, ...out.filter((p) => !quotedPlans.has(planKey(p.plan)))];
-  }
-  return out;
+  return proposalPlans(data, g);
 }
 
 /** The headline comparison — today's total against 2027, plans mapped 1-for-1 — reused wherever the site needs it in one line rather than the full grid. */
