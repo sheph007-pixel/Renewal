@@ -1433,6 +1433,7 @@ async function assistantData(g) {
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
     renewal: g.renewal,
+    planDesigns: data.planDesigns,
   };
 }
 
@@ -3033,6 +3034,24 @@ app.delete("/api/admin/carriers/:slug/logo", requireStaff, async (req, res) => {
   res.json({ ok: true });
 });
 
+/** The 15 current plan designs, as stored: every benefit line per plan name. */
+app.get("/api/admin/plan-designs", requireStaff, async (_req, res) => {
+  const stored = db ? await db.listPlanDesigns().catch(() => []) : [];
+  if (stored.length) return res.json({ designs: stored, from: "database" });
+  res.json({ designs: Object.entries(data.planDesigns || {}).map(([planName, benefits]) => ({ planName, planYear: 2026, tpa: null, benefits, source: "server/data/kennion.json" })), from: "file" });
+});
+
+/** Correct one plan's benefits by hand; the assistant and the pages read the new values on the next boot. */
+app.post("/api/admin/plan-designs/:name", requireStaff, express.json({ limit: "32kb" }), async (req, res) => {
+  const planName = String(req.params.name || "").trim();
+  const benefits = req.body && typeof req.body.benefits === "object" && req.body.benefits ? req.body.benefits : null;
+  if (!planName || !benefits) return res.status(400).json({ error: "A plan name and its benefits are required." });
+  const clean = Object.fromEntries(Object.entries(benefits).map(([k, v]) => [String(k).slice(0, 80), String(v ?? "").slice(0, 200)]));
+  data.planDesigns = { ...(data.planDesigns || {}), [planName]: clean };
+  if (db) await db.upsertPlanDesigns([{ planName, planYear: 2026, tpa: req.body.tpa || null, benefits: clean, source: "edited by staff" }], req.staffEmail || "staff");
+  res.json({ planName, benefits: clean });
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });
@@ -4272,6 +4291,22 @@ async function boot() {
   await loadPlaybook();
   await loadXmlVerify();
   chatStore.sweepPendingFiles().catch((e) => console.error("chat attachments sweep:", e.message));
+  // The 15 current plan designs live in the database too, one row per plan
+  // name, so they can be read and kept there; the JSON is the seed and the
+  // fallback. Rows already in the database win over the JSON.
+  if (db) {
+    (async () => {
+      const stored = await db.listPlanDesigns();
+      if (!stored.length) {
+        const seed = Object.entries(data.planDesigns || {}).map(([planName, benefits]) => ({ planName, planYear: 2026, tpa: null, benefits, source: "KennionHealthPlansComparison.xlsx" }));
+        await db.upsertPlanDesigns(seed, "system");
+        console.log(`plan designs: seeded ${seed.length} current plans into the database`);
+      } else {
+        data.planDesigns = Object.fromEntries(stored.map((d) => [d.planName, d.benefits]));
+        console.log(`plan designs: ${stored.length} current plans loaded from the database`);
+      }
+    })().catch((e) => console.error("plan designs:", e.message));
+  }
   // Proposals read before the audit existed get checked now, one at a time,
   // so every plan a client can open carries a verdict.
   if (aiEnabled() && process.env.KENNION_FAKE_AI !== "1") {

@@ -660,6 +660,18 @@ group's own credential (`X-Kennion-Group-Token`, the permanent-link token,
 or `X-Kennion-Group-Code`), and the server answers for that group
 (`groupForPage`). A header naming no real group is refused, never ignored.
 
+**Current plan designs.** The 15 medical plans in force today across EBPA
+and HealthEZ — Deluxe Platinum through Freedom Bronze — are on file with
+every benefit line from Kennion's comparison sheet
+(`server/data/plan-docs/KennionHealthPlansComparison.{pdf,xlsx}`, the same
+values as `planDesigns` in `server/data/kennion.json`). At boot the server
+seeds them into `kennion.plan_designs`, one row per plan name, and from then
+on reads them from there; `GET /api/admin/plan-designs` lists them and
+`POST /api/admin/plan-designs/:name` corrects one. The assistant's figures
+carry each current plan's design beside its rates and the whole catalogue
+in one line each, so it can compare what a group has today with the 2027
+options. Test: `node scripts/test-plan-designs.mjs`.
+
 **Research.** The assistant can search the web (Anthropic's server-side
 `web_search` tool, up to five searches a turn) for what the group's figures
 do not cover — an ACA affordability percentage, an IRS limit, a carrier's
@@ -989,6 +1001,7 @@ node scripts/test-group-payload.mjs   # boots the server on 5077 and checks grou
 node scripts/test-chat.mjs            # boots the server on 5078 and walks the assistant end to end
 node scripts/test-proposal-audit.mjs  # boots the server on 5086: read, two-model audit, client view, document
 node scripts/test-option-ids.mjs      # boots the server on 5089: UH1/GR1 numbering, re-reads, newer quotes, sign-up
+node scripts/test-plan-designs.mjs    # the 15 current plan designs in the assistant's figures and the staff routes (5091)
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```
