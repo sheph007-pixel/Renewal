@@ -11,9 +11,7 @@ const g = { ...g0, code: "AESTO" } as Group;
 const base = { ...seed, groups: [g], proposals: [], funding: null } as KennionData;
 
 const before = marketPlans(base, g);
-assert.ok(!before.some((p) => p.carrier === "Gravie"), "no Gravie placeholder: nothing shows until Gravie quotes");
-assert.ok(before.length > 0 && before.every((p) => p.carrier === "UnitedHealthcare" && p.monthly != null), "only the menu plans UnitedHealthcare quoted for this group, each priced at its whole census");
-const menuCount = before.length;
+assert.equal(before.length, 0, "no proposals, no options: the seed's menu quotes are not proposals and are not shown");
 
 const proposals: GroupProposal[] = [
   {
@@ -42,7 +40,7 @@ const proposals: GroupProposal[] = [
     effectiveDate: null,
     proposalType: "renewal",
     enrolledOnDocument: 39,
-    plans: [{ name: before.find((p) => p.carrier === "UnitedHealthcare")!.plan, planType: "PPO", deductible: "1000", oopMax: "5000", rates: { EE: 700, ES: 1400, EC: 1295, FAM: 1995 }, monthlyTotal: null }],
+    plans: [{ name: "P4000i8021B", planType: "PPO", deductible: "1000", oopMax: "5000", rates: { EE: 700, ES: 1400, EC: 1295, FAM: 1995 }, monthlyTotal: null }],
     totalMonthly: null,
     summary: null,
     filename: "uhc.pdf",
@@ -73,19 +71,15 @@ const uhc = pp.find((p) => p.carrier === "UnitedHealthcare")!;
 assert.equal(uhc.quoted!.date, "2026-09-02", "no effective date on the paper: the upload date");
 
 const after = marketPlans(data, g);
-assert.deepEqual(after.slice(0, pp.length).map((p) => p.plan), pp.map((p) => p.plan), "proposal plans come first");
-assert.ok(after.every((p) => p.monthly != null), "every row on the grid is priced at the group's whole census");
-assert.equal(after.filter((p) => p.plan === uhc.plan).length, 1, "the menu copy of a plan the proposal prices is replaced");
+assert.deepEqual(after.map((p) => p.plan), pp.map((p) => p.plan), "the grid is the proposals' plans and nothing else");
+assert.ok(after.every((p) => p.monthly != null && p.quoted), "every row is priced at the group's whole census and read off a proposal");
 assert.equal(after.find((p) => p.plan === uhc.plan)!.rates.EE, 700);
-assert.equal(after.length, menuCount + pp.length - 1, "the quoted rows in, one menu duplicate out");
 
-// Benefits: a Gravie plan carries its family's benefits; a UHC menu plan its coinsurance, urgent care and ER.
+// Benefits: a Gravie plan carries its family's benefits.
 assert.match(comfort.copays, /No cost \/ No cost/, "a Gravie Comfort plan gets the Comfort family's PCP / specialist");
 assert.equal(comfort.er, "$500 copay");
 assert.equal(comfort.hospital, "No cost after OOPM");
 assert.match(comfort.rx, /generic/);
-const menuPlan = before.find((p) => p.carrier === "UnitedHealthcare" && !p.quoted)!;
-assert.ok(menuPlan.coins && menuPlan.uc && menuPlan.er, "UHC menu plans carry coinsurance, urgent care and ER");
 
 // Flat-dollar defined contribution: the employer pays the same per tier on every plan; the employee pays the rest.
 const contrib = { EE: 500, ES: 2000, EC: 0, FAM: 1000 };
@@ -107,7 +101,7 @@ assert.equal(moneyNum("$1,500 individual / $3,000 family"), 1500);
 assert.equal(moneyNum("n/a"), null);
 assert.equal(moneyNum(250), 250);
 
-console.log("market-plans: all assertions passed", { menu: menuCount, withProposals: after.length, census: counts });
+console.log("market-plans: all assertions passed", { withProposals: after.length, census: counts });
 
 // Doctor visit / specialist split out of a menu copay string, for the card's fixed rows.
 assert.deepEqual(splitCopays("$40 / $100"), ["$40", "$100"]);
