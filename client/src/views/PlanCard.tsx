@@ -1,4 +1,5 @@
-import { TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { useState } from "react";
+import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
@@ -118,6 +119,13 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
 
 export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
+  // The pay cycle the rates and totals are shown per: monthly as quoted, or
+  // divided down to what comes out of a paycheck. Local to the card; the
+  // headline above stays monthly.
+  const [freqKey, setFreqKey] = useState<(typeof FREQS)[number]["key"]>("M");
+  const freq = FREQS.find((f) => f.key === freqKey) || FREQS[0];
+  const per = (v: number | null | undefined) => (v == null ? null : v / freq.div);
+  const ratesTitle = freq.key === "M" ? "Monthly Composite Rates" : `${freq.label} Paycheck Deductions`;
   const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network", "Pharmacy (PBM)"].includes(label)) : m.benefits;
   return (
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -171,7 +179,28 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         </tbody>
       </table>
       <div>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 4 }}>Monthly Composite Rates</div>
+        {!compact && (
+          <div className="noprint" role="tablist" aria-label="Pay cycle" style={{ display: "flex", gap: 4, marginBottom: 8, padding: 3, borderRadius: 8, background: C.zebra, border: `1px solid ${C.hairline}` }}>
+            {FREQS.map((f) => {
+              const on = f.key === freq.key;
+              return (
+                <button
+                  key={f.key}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFreqKey(f.key);
+                  }}
+                  style={{ flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 4 }}>{ratesTitle}</div>
         <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5, marginTop: 2 }}>
           {!compact && (
             <thead>
@@ -188,10 +217,10 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
                 <td style={{ padding: "3px 8px 3px 0", color: C.muted, whiteSpace: "nowrap" }}>
                   {t.label} <span style={{ color: C.faint }}>({t.count})</span>
                 </td>
-                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(t.rate)}</td>
+                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(per(t.rate)!)}</td>
                 {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(t.er)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(t.ee)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(per(t.ee)!)}</td>}
               </tr>
             ))}
           </tbody>
@@ -201,12 +230,13 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         <tbody>
           {(
             [
-              ["Your Company Pays", m.er, true],
-              ["Your Employees Pay", m.ee, true],
-              ["Total Monthly Bill", m.premium, false],
+              ["Your Company Pays", per(m.er), true],
+              ["Your Employees Pay", per(m.ee), true],
+              [`Total ${freq.label} Bill`, per(m.premium), false],
             ] as [string, number | null, boolean][]
           ).map(([label, v, strong]) => {
-            const pct = strong && v != null && m.premium ? Math.round((v / m.premium) * 100) : null;
+            const total = per(m.premium);
+            const pct = strong && v != null && total ? Math.round((v / total) * 100) : null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
