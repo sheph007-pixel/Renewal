@@ -1833,6 +1833,8 @@ function clientUhc(g) {
     detail: mine ? { [g.name]: mine } : {},
     summary: {},
     refEE,
+    // The menu's option numbers for this group: {code: "UHn"}.
+    optionIds: (menuOptionIds || {})[g.name] || {},
   };
 }
 
@@ -3356,6 +3358,23 @@ async function releaseRetired(group, prefix) {
   }
 }
 const OPTION_ID = /^(UH|GR|NW|AN)(\d+)$/;
+
+/**
+ * UnitedHealthcare's menu — the PPO designs every group is shown, priced
+ * from the menu or quoted directly — is numbered too, per group, in menu
+ * order, so a plan has the same UH number whether it sits on the menu, is
+ * quoted directly or is read off a proposal: a proposal plan that is a
+ * menu plan (same code) takes the menu's number. Kept as
+ * {group: {code: "UHn"}}, next to the proposals' numbers.
+ */
+const MENU_KEY = "optionIds.menu";
+let menuOptionIds = null;
+async function loadMenuIds() {
+  if (menuOptionIds) return menuOptionIds;
+  menuOptionIds = (db && (await db.getSetting(MENU_KEY).catch(() => null))) || {};
+  return menuOptionIds;
+}
+const menuPlanCodes = () => ((data.uhc || {}).menu || []).filter((m) => !isEpoMenu(m)).map((m) => String(m.plan));
 const optKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 const optName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -3387,9 +3406,25 @@ async function assignOptionIds(rows, bySlot) {
     }
     takenByGroup.set(group, taken);
   }
-  const groups = new Set([...bySlot.keys()].map((k) => k.split("||")[0]));
+  // Numbers the menu holds stay taken too.
+  const menu = await loadMenuIds();
+  for (const [group, byCode] of Object.entries(menu)) {
+    const taken = takenByGroup.get(group) || new Map();
+    for (const id of Object.values(byCode || {})) {
+      const m = OPTION_ID.exec(String(id || ""));
+      if (!m) continue;
+      const set = taken.get(m[1]) || new Set();
+      set.add(Number(m[2]));
+      taken.set(m[1], set);
+    }
+    takenByGroup.set(group, taken);
+  }
+  let menuChanged = false;
+  const groups = new Set([...bySlot.keys()].map((k) => k.split("||")[0]).concat(data.groups.map((g) => g.name)));
   for (const group of groups) {
     const taken = takenByGroup.get(group) || new Map();
+    const menuIds = menu[group] || {};
+    const menuDonors = Object.entries(menuIds).map(([code, id]) => ({ option_id: id, plan_code: code, name: code }));
     // Which slots are renumbered from scratch: one numbered under the old
     // rule (an EPO twin holding a number, or flagged by a re-read), and
     // every slot of a prefix that holds a number twice — the sequence was
@@ -3413,6 +3448,17 @@ async function assignOptionIds(rows, bySlot) {
         heldBy.set(pl.option_id, held);
       }
     }
+    // A proposal plan holding a number the menu gave a different plan is a
+    // duplicate too.
+    for (const [code, id] of Object.entries(menuIds)) {
+      const held = heldBy.get(id);
+      if (!held) continue;
+      const other = held.some((slot) => {
+        const plans = ((bySlot.get(`${group}||${slot}`) || [])[0] || {}).extracted?.plans || [];
+        return !plans.some((pl) => pl.option_id === id && (optKey(pl.plan_code) === optKey(code) || optName(pl.name) === optName(code)));
+      });
+      if (other) held.push("menu");
+    }
     for (const [id, held] of heldBy) {
       if (held.length < 2) continue;
       const prefix = OPTION_ID.exec(id)[1];
@@ -3420,6 +3466,11 @@ async function assignOptionIds(rows, bySlot) {
     }
     for (const prefix of new Set([...legacySlots].map((s) => OPTION_PREFIX[s]))) {
       const keep = new Set();
+      // The menu's numbers are never released.
+      for (const id of Object.values(menuIds)) {
+        const m = OPTION_ID.exec(String(id || ""));
+        if (m && m[1] === prefix) keep.add(Number(m[2]));
+      }
       for (const slot of SLOTS) {
         if (OPTION_PREFIX[slot] !== prefix || legacySlots.has(slot)) continue;
         const list = bySlot.get(`${group}||${slot}`);
@@ -3440,6 +3491,14 @@ async function assignOptionIds(rows, bySlot) {
       taken.set(prefix, set);
       return n;
     };
+    // Every number on a plan in this group, as the slots are numbered, so a
+    // donor's number is claimed once across the slots that share a prefix.
+    const held = new Set();
+    for (const slot of SLOTS) {
+      if (legacySlots.has(slot)) continue;
+      const list = bySlot.get(`${group}||${slot}`);
+      for (const pl of (list && list[0].extracted && Array.isArray(list[0].extracted.plans) ? list[0].extracted.plans : [])) if (pl.option_id) held.add(pl.option_id);
+    }
     for (const slot of SLOTS) {
       const prefix = OPTION_PREFIX[slot];
       const list = bySlot.get(`${group}||${slot}`);
@@ -3482,7 +3541,9 @@ async function assignOptionIds(rows, bySlot) {
       }
       // Who can hand a number down: the row's own reading before a re-read,
       // then the proposals this one replaced, newest first.
-      const donors = legacy ? [] : [...(Array.isArray(x.previous_plan_ids) ? x.previous_plan_ids : []), ...list.slice(1).flatMap((r) => (r.extracted && Array.isArray(r.extracted.plans) ? r.extracted.plans : []))].filter((d) => OPTION_ID.test(String(d.option_id || "")) && String(d.option_id).startsWith(prefix));
+      // A UnitedHealthcare plan that is on the menu takes the menu's number,
+      // whether or not the slot is renumbered.
+      const donors = [...(legacy ? [] : [...(Array.isArray(x.previous_plan_ids) ? x.previous_plan_ids : []), ...list.slice(1).flatMap((r) => (r.extracted && Array.isArray(r.extracted.plans) ? r.extracted.plans : []))]), ...(prefix === "UH" ? menuDonors : [])].filter((d) => OPTION_ID.test(String(d.option_id || "")) && String(d.option_id).startsWith(prefix));
       const used = new Set();
       const offered = plans;
       // An id under another carrier's prefix (the proposal was moved to a
@@ -3490,14 +3551,19 @@ async function assignOptionIds(rows, bySlot) {
       for (const pl of offered) if (pl.option_id && !String(pl.option_id).startsWith(prefix)) pl.option_id = null;
       for (const pl of offered) if (pl.option_id) used.add(pl.option_id);
       const claim = (pl, match) => {
-        const d = donors.find((c) => !used.has(c.option_id) && !isEpoPlan(c) && match(c));
+        const d = donors.find((c) => !used.has(c.option_id) && !held.has(c.option_id) && !isEpoPlan(c) && match(c));
         if (!d) return;
         pl.option_id = d.option_id;
         used.add(d.option_id);
+        held.add(d.option_id);
       };
       for (const pl of offered) if (!pl.option_id && optKey(pl.plan_code)) claim(pl, (c) => optKey(c.plan_code) === optKey(pl.plan_code));
       for (const pl of offered) if (!pl.option_id) claim(pl, (c) => optName(c.name) === optName(pl.name));
-      for (const pl of offered) if (!pl.option_id) pl.option_id = `${prefix}${nextFree(prefix)}`;
+      for (const pl of offered) {
+        if (pl.option_id) continue;
+        pl.option_id = `${prefix}${nextFree(prefix)}`;
+        held.add(pl.option_id);
+      }
       const after = JSON.stringify(plans.map((pl) => pl.option_id || null));
       if (after !== before || stripped || x.previous_plan_ids || x.renumber) {
         const next = { ...x, plans };
@@ -3507,7 +3573,25 @@ async function assignOptionIds(rows, bySlot) {
         await proposalStore.updateProposal(cur.id, { extracted: next });
       }
     }
+    // The menu, numbered after the proposals: a menu plan a proposal quotes
+    // shows under the proposal's number; every other menu plan keeps its
+    // number or gets the next free one, in menu order.
+    const uhPlans = ["UHC Fully Insured", "UHC Level Funded"].flatMap((slot) => {
+      const list = bySlot.get(`${group}||${slot}`);
+      return list && list[0].extracted && Array.isArray(list[0].extracted.plans) ? list[0].extracted.plans : [];
+    });
+    const mine = menu[group] || {};
+    for (const code of menuPlanCodes()) {
+      const hit = uhPlans.find((pl) => OPTION_ID.test(String(pl.option_id || "")) && (optKey(pl.plan_code) === optKey(code) || optName(pl.name) === optName(code)));
+      const want = hit ? hit.option_id : mine[code] || `UH${nextFree("UH")}`;
+      if (mine[code] === want) continue;
+      if (mine[code]) await retireOptionIds(group, [{ option_id: mine[code] }]);
+      mine[code] = want;
+      menuChanged = true;
+    }
+    if (Object.keys(mine).length) menu[group] = mine;
   }
+  if (menuChanged && db) await db.setSetting(MENU_KEY, menu, "system");
 }
 function slotFor(carrier, funding, quotesMedical) {
   if (quotesMedical === false) return null;

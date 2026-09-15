@@ -273,7 +273,15 @@ by exact name) and gives new plans the next free ones. Only offered plans
 are numbered: Kennion offers PPO plans only, and an EPO twin is never
 stored, so Gravie's 67 designs read GR1–GR67 for every group, not GR1–GR134
 with every other number missing. A reading stored before that rule is
-cleaned of its EPO twins and renumbered once, compactly, at boot. The ID is the first column of the grid (sortable,
+cleaned of its EPO twins and renumbered once, compactly, at boot; a group
+holding a number twice (the two UnitedHealthcare slots once restarted at
+UH1 separately) is repaired the same way. UnitedHealthcare's menu — the
+PPO designs every group is shown, priced from the menu or quoted directly
+— is numbered too, per group, UH1 … in menu order (`optionIds.menu` in
+settings, sent as `uhc.optionIds`), so a plan has the same number whether
+it is on the menu or read off a proposal: a proposal plan that is a menu
+plan takes the menu's number, and plans off the menu continue the
+sequence. The ID is the first column of the grid (sortable,
 searchable, first column of the CSV), a badge on the plan card and the
 printed proposal, part of the Sign Up shortlist ("UH3 · P4000i8021B"), the
 first thing the assistant says about a plan, and what `create_comparison`
