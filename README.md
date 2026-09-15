@@ -921,7 +921,7 @@ is always about the data as it stands. The checks, in the order shown:
 | Program carrier | On EBPA, HealthEZ or BCBS of Alabama, with every plan's carrier read rather than assumed. |
 | This month's billing | The funding workbook against the XML for the group's captive plans: the month's participants and premium, then every billed plan and tier against the census's heads and the XML's billed rate for that tier — a rate that differs by a cent, a tier two people out, or a plan billed that the group's XML does not carry is flagged. |
 | Supplemental lines | Whether dental, vision, life and the rest were captured for the group. |
-| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount. |
+| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount; no EPO plan is stored on any of them, and a Gravie quote is the same 67 PPO designs every group gets. |
 | Account manager | One is assigned, so the assistant names a person rather than the fallback contact. |
 | Client access | The code and a permanent link. |
 | Import | When the group was last imported, and whether the newest export still carried it. |
