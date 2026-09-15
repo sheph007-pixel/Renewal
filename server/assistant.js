@@ -136,6 +136,7 @@ You are talking with the HR lead or owner of one employer group — an existing 
 
 How to work:
 - Answer from the group's figures below. Every rate is a monthly composite per tier (EE = employee only, ES = employee + spouse, EC = employee + child(ren), FAM = family). A plan's monthly cost at the group's census is the tier rate times the headcount in that tier, summed; annual is monthly times 12. Show the arithmetic briefly when you compute a figure.
+- Every quoted 2027 plan has an option ID — UH3, GR1 — shown as the first column of the grid and on its card. Refer to a plan by its ID first, then its name ("UH3, the P4000i8021B"), and expect the client to ask by ID alone. The IDs are in the figures below.
 - Kennion offers PPO options only. The carriers' quotes also price EPO versions (Gravie prices every design both ways; UnitedHealthcare's menu has EPO rows), but those are not offered: never present, price or recommend an EPO plan, and do not list EPO as one of the group's choices. The figures below already leave them out.
 - Never invent a number. If the figures do not cover a question — a plan's benefits, a carrier that has not quoted, a rate that is missing — say what is missing and that the account manager can get it, rather than estimating.
 - Be brief. Answer the question that was asked and stop: usually two to five sentences, or a short list — under 120 words unless the client asked for a comparison, a walkthrough, or a document. Lead with the answer; give the reasoning in one line. Round to whole dollars unless cents matter.
@@ -191,7 +192,7 @@ const TOOLS = [
           type: "array",
           maxItems: 12,
           items: { type: "string" },
-          description: "The quoted 2027 plans to include, by name (or plan code) exactly as they appear in the figures. Empty means every quoted plan.",
+          description: "The quoted 2027 plans to include, by option ID (UH3, GR1) as they appear in the figures — a name or plan code also works. Empty means every quoted plan.",
         },
         include_current: { type: "boolean", description: "Put the plans in force today at the top for reference. Default true." },
         contribution: {
@@ -314,7 +315,7 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.rx ? `Rx ${b.rx}` : null,
       ].filter(Boolean).join("; ");
       out.push(
-        `- ${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "—"}, out-of-pocket max ${pl.oopMax || "—"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits — ${bens}` : ""}`,
+        `- ${pl.optionId ? `${pl.optionId} — ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "—"}, out-of-pocket max ${pl.oopMax || "—"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits — ${bens}` : ""}`,
       );
     }
     if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);
@@ -383,7 +384,7 @@ async function runTool(name, input, { data, keep, onStatus, saveMemory }) {
   if (name === "create_comparison") {
     onStatus("Building the comparison…");
     let plans = Array.isArray(input.plans) ? input.plans : [];
-    if (!plans.length) plans = (data.proposals || []).flatMap((pr) => (pr.plans || []).map((pl) => pl.name)).slice(0, 12);
+    if (!plans.length) plans = (data.proposals || []).flatMap((pr) => (pr.plans || []).map((pl) => pl.optionId || pl.name)).slice(0, 12);
     const table = comparisonTable({ group: g, proposals: data.proposals, plans, includeCurrent: input.include_current !== false, contribution: input.contribution || null });
     const format = input.format === "xlsx" ? "xlsx" : "pdf";
     const doc = await renderComparison({ format, title: input.title || null, group: g, table });

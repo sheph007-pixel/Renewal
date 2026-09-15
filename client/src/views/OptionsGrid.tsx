@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
@@ -33,7 +33,7 @@ export interface GridProps {
 }
 
 type Tab = "carrier" | "network" | "ded" | "oop" | "cost";
-type SortKey = "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
+type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
 /** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 /** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
@@ -65,14 +65,14 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Option", "Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Employer Cost", "Employee Cost", "Total Monthly Cost", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
   };
   const rows = list.map((p) => {
     const s = costSplit(p, applied, counts);
-    return [carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    return [p.optionId ?? "", carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : p.pending ? "Pending" : "Illustrative", ...TIERS.map((t) => p.rates[t.key] ?? "")];
   });
   const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
@@ -281,11 +281,15 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
           (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
-          (!q || `${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${netType(p)}`.toLowerCase().includes(q)),
+          (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${netType(p)}`.toLowerCase().includes(q)),
       )
       .slice()
       .sort((a, b) => {
         const val = (p: MarketPlan): number | string => {
+          if (sortBy === "option") {
+            const [pfx, n] = optionSortKey(p.optionId);
+            return `${pfx} ${String(n === Infinity ? 999999 : n).padStart(6, "0")}`;
+          }
           if (sortBy === "carrier") return carrierOf(p).toLowerCase();
           if (sortBy === "network") return `${netType(p)} ${networkOf(p)}`.toLowerCase();
           if (sortBy === "plan") return p.plan.toLowerCase();
@@ -666,6 +670,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             <tr>
               {(
                 [
+                  ["option", "Option"],
                   ["carrier", "Carrier"],
                   ["network", "Network Type"],
                   ["plan", "Plan"],
@@ -688,8 +693,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     background: C.headerBg,
                     fontWeight: 700,
                     whiteSpace: "nowrap",
-                    textAlign: i >= 3 && i <= 6 ? "right" : "left",
-                    width: i >= 7 ? 52 : undefined,
+                    textAlign: i >= 4 && i <= 7 ? "right" : "left",
+                    width: i >= 8 ? 52 : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -709,6 +714,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const right = { ...cell, textAlign: "right" as const, ...num };
               return (
                 <tr key={p.plan} className="rowlink" onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
+                  <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "—"}</td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>

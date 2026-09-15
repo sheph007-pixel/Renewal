@@ -197,6 +197,8 @@ export interface GroupSplit {
 
 /** One plan option read off a carrier proposal, with monthly composite rates by tier. */
 export interface ProposalPlan {
+  /** The short handle everyone uses for the plan — UH3, GR1 — given once and kept. */
+  optionId?: string | null;
   name: string;
   /** The carrier's code for the plan, where one is printed. */
   planCode?: string | null;
@@ -640,6 +642,8 @@ export interface MarketPlan {
   indicative: boolean;
   /** Carrier has not returned rates at all. */
   pending?: boolean;
+  /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
+  optionId?: string | null;
   /** Read off a proposal the carrier sent for this group. */
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
 }
@@ -726,6 +730,12 @@ export function networkDirectory(network: string | null | undefined): { name: st
   return null;
 }
 
+/** An option ID split for sorting: UH12 → ["UH", 12]; a plan without one sorts last. */
+export function optionSortKey(id?: string | null): [string, number] {
+  const m = /^([A-Z]+)(\d+)$/.exec(id || "");
+  return m ? [m[1], Number(m[2])] : ["~", Infinity];
+}
+
 /**
  * The plans on a group's proposals, priced at its census. A plan with no rate
  * on any tier is left out; one missing a tier that has people in it has no
@@ -772,6 +782,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       if (seen.has(dupKey)) continue;
       seen.add(dupKey);
       out.push({
+        optionId: pl.optionId ?? null,
         carrier: show.carrier,
         label: show.label,
         plan: planName,
