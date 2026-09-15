@@ -11,7 +11,8 @@ const g = { ...g0, code: "AESTO" } as Group;
 const base = { ...seed, groups: [g], proposals: [], funding: null } as KennionData;
 
 const before = marketPlans(base, g);
-assert.ok(before.some((p) => p.carrier === "Gravie" && p.pending), "Gravie is a placeholder until it quotes");
+assert.ok(!before.some((p) => p.carrier === "Gravie"), "no Gravie placeholder: nothing shows until Gravie quotes");
+assert.ok(before.length > 0 && before.every((p) => p.carrier === "UnitedHealthcare" && p.monthly != null), "only the menu plans UnitedHealthcare quoted for this group, each priced at its whole census");
 const menuCount = before.length;
 
 const proposals: GroupProposal[] = [
@@ -50,31 +51,33 @@ const proposals: GroupProposal[] = [
 ];
 const data = { ...base, proposals } as KennionData;
 
-const pp = proposalPlans(data, g);
-assert.equal(pp.length, 3, "a plan with no rate on any tier is left out");
-const comfort = pp.find((p) => p.plan === "Gravie Comfort 1500")!;
-assert.equal(comfort.carrier, "Gravie");
-assert.equal(comfort.label, "Level Funded");
-assert.equal(comfort.ded, 1500);
-assert.equal(comfort.oop, 4000);
-assert.deepEqual(comfort.quoted, { slot: "Gravie", date: "2027-01-01", proposalId: 7 });
 const counts = { EE: 0, ES: 0, EC: 0, FAM: 0 } as Record<string, number>;
 for (const m of g.members || []) {
   const t = m.tier.startsWith("Employee + Spouse") ? "ES" : m.tier.startsWith("Employee + Child") ? "EC" : m.tier.startsWith("Employee + Family") ? "FAM" : m.tier === "Employee" ? "EE" : "";
   if (t) counts[t]++;
 }
+const pp = proposalPlans(data, g);
+// Comfort 3000 is priced for Employee Only alone: with people in any other
+// tier it cannot be priced for the group, so it is not shown.
+const partial = counts.ES + counts.EC + counts.FAM > 0;
+assert.equal(pp.length, partial ? 2 : 3, "a plan with no rate on any tier is left out; so is one missing a tier people are in");
+const comfort = pp.find((p) => p.plan === "Gravie Comfort 1500")!;
+assert.equal(comfort.carrier, "Gravie");
+assert.equal(comfort.label, "Level Funded");
+assert.equal(comfort.ded, 1500);
+assert.equal(comfort.oop, 4000);
+assert.deepEqual(comfort.quoted, { slot: "Gravie", date: "2027-01-01", proposalId: 7, audit: null });
 assert.equal(comfort.monthly, 600 * counts.EE + 1200 * counts.ES + 1110 * counts.EC + 1710 * counts.FAM, "priced at the census");
-const c3000 = pp.find((p) => p.plan === "Gravie Comfort 3000")!;
-assert.equal(c3000.monthly, counts.ES + counts.EC + counts.FAM > 0 ? null : 520 * counts.EE, "a tier with people but no rate leaves no monthly figure");
+assert.equal(!!pp.find((p) => p.plan === "Gravie Comfort 3000"), !partial, "a tier with people but no rate: the plan is not shown at all");
 const uhc = pp.find((p) => p.carrier === "UnitedHealthcare")!;
 assert.equal(uhc.quoted!.date, "2026-09-02", "no effective date on the paper: the upload date");
 
 const after = marketPlans(data, g);
-assert.deepEqual(after.slice(0, 3).map((p) => p.plan), pp.map((p) => p.plan), "proposal plans come first");
-assert.ok(!after.some((p) => p.carrier === "Gravie" && p.pending), "the Gravie placeholder is gone");
+assert.deepEqual(after.slice(0, pp.length).map((p) => p.plan), pp.map((p) => p.plan), "proposal plans come first");
+assert.ok(after.every((p) => p.monthly != null), "every row on the grid is priced at the group's whole census");
 assert.equal(after.filter((p) => p.plan === uhc.plan).length, 1, "the menu copy of a plan the proposal prices is replaced");
 assert.equal(after.find((p) => p.plan === uhc.plan)!.rates.EE, 700);
-assert.equal(after.length, menuCount + 3 - 2, "three quoted rows in, the Gravie placeholder and one menu duplicate out");
+assert.equal(after.length, menuCount + pp.length - 1, "the quoted rows in, one menu duplicate out");
 
 // Benefits: a Gravie plan carries its family's benefits; a UHC menu plan its coinsurance, urgent care and ER.
 assert.match(comfort.copays, /No cost \/ No cost/, "a Gravie Comfort plan gets the Comfort family's PCP / specialist");
@@ -94,9 +97,11 @@ assert.equal(cs.total, comfort.monthly);
 assert.equal(cs.er, +(500 * counts.EE + 1200 * counts.ES + 0 * counts.EC + 1000 * counts.FAM).toFixed(2), "contribution × enrolled, whatever the plan");
 assert.equal(cs.ee, +(100 * counts.EE + 0 * counts.ES + 1110 * counts.EC + Math.max(0, 1710 - 1000) * counts.FAM).toFixed(2));
 const flat = { EE: 100, ES: 100, EC: 100, FAM: 100 };
-const c3 = costSplit(pp.find((p) => p.plan === "Gravie Comfort 3000")!, flat, { EE: 5, ES: 0, EC: 0, FAM: 0 })!;
+const c3000 = { ...comfort, plan: "Gravie Comfort 3000", rates: { EE: 520, ES: null, EC: null, FAM: null }, monthly: null };
+const c3 = costSplit(c3000, flat, { EE: 5, ES: 0, EC: 0, FAM: 0 })!;
 assert.equal(c3.er, 500, "the same employer figure on a different plan");
-assert.equal(costSplit(pp.find((p) => p.plan === "Gravie Comfort 3000")!, contrib, { EE: 0, ES: 0, EC: 0, FAM: 0 }), null, "nobody enrolled: no split");
+assert.equal(costSplit(c3000, contrib, { EE: 0, ES: 0, EC: 0, FAM: 0 }), null, "nobody enrolled: no split");
+assert.equal(costSplit(c3000, flat, { EE: 5, ES: 1, EC: 0, FAM: 0 }), null, "a tier with people but no rate: no split at all, never a partial one");
 
 assert.equal(moneyNum("$1,500 individual / $3,000 family"), 1500);
 assert.equal(moneyNum("n/a"), null);

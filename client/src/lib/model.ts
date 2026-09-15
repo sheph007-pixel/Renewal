@@ -771,6 +771,10 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         if (v == null) monthly = null;
         else if (monthly != null) monthly += v * counts[t.key];
       });
+      // A plan the carrier did not price for every tier this group has
+      // people in cannot be priced for the group: it is not shown, rather
+      // than shown with a partial figure beside a blank one.
+      if (monthly == null) continue;
       const show = slotPresentation(pr.slot, pr.carrier, pl.planType);
       // Gravie's benefits are by plan family and the same for every group.
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
@@ -865,6 +869,10 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
       if (v == null) monthly = null;
       else if (monthly != null) monthly += v * counts[t.key];
     });
+    // UnitedHealthcare often quotes a menu plan for some tiers only; one
+    // that misses a tier this group has people in cannot be priced for the
+    // group and is not shown.
+    if (monthly == null) continue;
     out.push({
       optionId: u.optionIds?.[m.plan] ?? null,
       carrier: "UnitedHealthcare",
@@ -1002,8 +1010,11 @@ export function costSplit(
   let any = false;
   for (const t of TIERS) {
     const n = counts[t.key] || 0;
+    if (!n) continue;
     const s = tierSplit(p, contribution, t.key);
-    if (!n || !s) continue;
+    // A tier with people in it but no rate: there is no split for the plan
+    // at all, never a partial one that leaves those people out.
+    if (!s) return null;
     any = true;
     er += s.er * n;
     ee += s.ee * n;
