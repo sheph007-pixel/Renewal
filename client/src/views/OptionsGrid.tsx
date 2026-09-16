@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
@@ -32,7 +32,7 @@ export interface GridProps {
   onToggleSelected: (plan: string) => void;
   /** Shown on the printed proposal's footer. */
   manager: AccountManager | null;
-  /** Today's employer contribution by tier: the starting point, and "Reset to today". */
+  /** Today's employer contribution by tier, for "Use today's contribution". The starting point is the carriers' minimum. */
   contribution: TierContribution[];
   /** The applied contribution per tier — what Employer Cost is computed from. */
   applied: Record<TierKey, number>;
@@ -138,7 +138,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const recommended = chat.loaded && !!threadTitled(RECOMMENDATIONS_TITLE);
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-  const [contribOpen, setContribOpen] = useState(true);
+  // Closed until asked for: one line says what the company pays; Edit opens the fields.
+  const [contribOpen, setContribOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [compareOnly, setCompareOnly] = useState(false);
@@ -156,10 +157,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // The carriers' floor: the employer pays at least half the employee-only
   // rate of the least expensive plan. Off this group's own quotes, so it is a
   // different figure for every group; whole dollars, rounded up.
-  const floorEE = useMemo(() => {
-    const rates = plans.map((p) => p.rates.EE).filter((r): r is number => r != null && r > 0);
-    return rates.length ? Math.ceil(Math.min(...rates) * 0.5) : 0;
-  }, [plans]);
+  const floorEE = useMemo(() => contributionFloor(plans), [plans]);
+  // Today's contribution, where Employee Navigator has one: a click brings it into the fields.
+  const today = useMemo(() => {
+    if (!contribution.some((t) => t.er != null)) return null;
+    return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: Math.round(contribution.find((c) => c.key === t.key)?.er ?? 0) }), {} as Record<TierKey, number>);
+  }, [contribution]);
   const belowFloor = floorEE > 0 && parsed.EE < floorEE;
   // A default under the floor is not a contribution a carrier would accept:
   // lift it, so the first Employer Cost the page shows is a lawful one.
@@ -400,7 +403,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
             Employer Contribution
-            <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. Carriers require at least half the lowest employee-only rate." color={C.blue} />
+            <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at the minimum carriers require — half the lowest employee-only rate, for every employee — and you can raise any tier from there. A larger employer subject to the ACA may need to put in more to keep employee-only coverage affordable." color={C.blue} />
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
@@ -503,9 +506,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 >
                   Apply
                 </button>
+                {today && (
+                  <button onClick={() => setDraft(toDraft(today))} title="Bring in what your company puts toward each tier today" style={{ ...chip(false), color: C.blue }}>
+                    Use today's
+                  </button>
+                )}
                 {appliedChanged && (
-                  <button onClick={onReset} style={{ ...chip(false), color: C.blue }}>
-                    Reset to today
+                  <button onClick={onReset} title="Back to the minimum the carriers require" style={{ ...chip(false), color: C.blue }}>
+                    Reset to minimum
                   </button>
                 )}
               </div>
