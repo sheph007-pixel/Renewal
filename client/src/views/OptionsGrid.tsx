@@ -463,6 +463,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       )}
 
+      {/* While the assistant is picking: one quiet line, no chat. */}
+      {asking && (
+        <div role="status" aria-live="polite" style={{ position: "fixed", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 60, display: "inline-flex", alignItems: "center", gap: 9, padding: "9px 16px", borderRadius: 999, background: C.headerBg, color: "rgba(255,255,255,0.88)", fontSize: 13, boxShadow: "0 4px 14px rgba(16,24,40,0.18)", opacity: 0.94, whiteSpace: "nowrap" }}>
+          <svg className="ai-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 1-6.4 2.6" />
+          </svg>
+          Working on your picks…
+        </div>
+      )}
+
       {/* The grid: its toolbar on top, then a short row per plan; the row opens
           the card. Every dollar figure is a month at the group's own enrollment —
           the column tooltips say so. */}
@@ -605,17 +615,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
             {assistantOn && (
-              <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "The assistant is picking…" : picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...viewToggle(false, picksOnly || picks.size > 0, C.blue, C.blueTint), cursor: asking ? "progress" : "pointer" }}>
-                {asking ? (
-                  <svg className="ai-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <path d="M12 3a9 9 0 1 1-6.4 2.6" />
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                  </svg>
-                )}
-                {asking ? "Picking…" : `AI Picks (${picks.size})`}
+              <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...viewToggle(false, picksOnly || picks.size > 0, C.blue, C.blueTint), opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                </svg>
+                AI Picks ({picks.size})
               </button>
             )}
             <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
@@ -667,7 +671,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 Refine In Chat
               </button>
               <button type="button" onClick={askForPicks} disabled={asking} style={{ ...chip(false), fontWeight: 600 }} title="Ask the assistant for a fresh set of picks">
-                {asking ? "Picking…" : "Ask Again"}
+                Ask Again
               </button>
             </div>
           </div>
