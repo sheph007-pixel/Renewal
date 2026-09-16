@@ -1,21 +1,13 @@
 import type { ReactNode } from "react";
-import { money, money0, type TierContribution } from "@/lib/model";
+import { money, money0 } from "@/lib/model";
 import InfoTip from "@/views/InfoTip";
 import { C, num, panel } from "@/lib/ui";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 
 interface Props {
   totals: { er: number; ee: number; total: number };
-  contribution: TierContribution[];
   enrolled: number;
 }
-
-const TIER_LABEL: Record<string, string> = {
-  EE: "Employee Only",
-  ES: "Employee + Spouse",
-  EC: "Employee + Children",
-  FAM: "Employee + Family",
-};
 
 function BuildingIcon({ color }: { color: string }) {
   return (
@@ -59,210 +51,77 @@ function GroupIcon({ color }: { color: string }) {
   );
 }
 
-/** One big colorful number: what it is, the figure, and the year alongside the month. */
-function SpendTile({
-  icon,
-  label,
-  tip,
-  amount,
-  pct,
-  bg,
-  edge,
-  fg,
-}: {
-  icon: ReactNode;
-  label: string;
-  /** What the figure means, on the ⓘ beside the label. */
-  tip: string;
-  amount: number;
-  pct?: number;
-  bg: string;
-  edge: string;
-  fg: string;
-}) {
+/** One figure: what it is, the month, the year, and its share of the bill. */
+function SpendTile({ icon, label, tip, amount, pct, bg, edge, fg }: { icon: ReactNode; label: string; tip: string; amount: number; pct?: number; bg: string; edge: string; fg: string }) {
   return (
-    <div style={{ flex: "1 1 220px", padding: "16px 18px", borderRadius: 8, background: bg, border: `1px solid ${edge}` }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span
-          aria-hidden
-          style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 7, background: fg, flex: "none" }}
-        >
-          {icon}
-        </span>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: fg, display: "inline-flex", alignItems: "center", gap: 5 }}>
+    <div style={{ flex: "1 1 200px", minWidth: 0, padding: "10px 14px", borderRadius: 8, background: bg, border: `1px solid ${edge}`, display: "flex", alignItems: "center", gap: 10 }}>
+      <span aria-hidden style={{ display: "grid", placeItems: "center", width: 28, height: 28, borderRadius: 7, background: fg, flex: "none" }}>
+        {icon}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: fg, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
           {label}
           <InfoTip text={tip} color={fg} />
         </div>
-        {pct != null && (
-          <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: fg }}>{pct}%</span>
-        )}
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.ink, letterSpacing: "-0.4px", lineHeight: 1.15, ...num }}>
+          {money0(amount)}
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.faint }}> /mo</span>
+          <span style={{ fontSize: 11.5, fontWeight: 500, color: C.faint, marginLeft: 8 }}>{money0(amount * 12)} / yr</span>
+        </div>
       </div>
-      <div style={{ marginTop: 10, fontSize: 26, fontWeight: 700, color: C.ink, letterSpacing: "-0.5px", ...num }}>
-        {money0(amount)}
-        <span style={{ fontSize: 13, fontWeight: 500, color: C.faint }}> /mo</span>
-      </div>
-      <div style={{ marginTop: 2, fontSize: 12, color: C.faint, ...num }}>{money0(amount * 12)} / year</div>
+      {pct != null && <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: fg, ...num }}>{pct}%</span>}
     </div>
   );
 }
 
 /**
- * The dashboard a client actually opens this page to see: Your Company
- * Pays, Your Employees Pay and Total Monthly Bill — the grid below's
- * employer cost, employee cost and premium, on a group basis rather than
- * broken out by plan, since two plans under one contribution strategy do
- * not each get their own "the employer's share." Read straight off the
- * grid's own totals, so the two can never disagree.
+ * The strip a client opens this page to see: Your Company Pays, Your
+ * Employees Pay and Total Monthly Bill — the table below's employer cost,
+ * employee cost and premium on a group basis — with the split as one thin
+ * bar. Read straight off the table's own totals, so the two never disagree.
+ * The per-tier estimate that used to sit under it is gone: the rate table
+ * carries the figures, and an estimate dressed as four inputs read as
+ * something to type over.
  */
-export default function SpendDashboard({ totals, contribution, enrolled }: Props) {
+export default function SpendDashboard({ totals, enrolled }: Props) {
   const erPct = totals.total ? Math.round((totals.er / totals.total) * 1000) / 10 : 0;
   const eePct = totals.total ? Math.round((100 - erPct) * 10) / 10 : 0;
 
   return (
-    <div style={{ ...panel, padding: "20px 22px", marginBottom: 16 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          Current Group Plan
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 700, color: C.ink }}>
-            <GroupIcon color={C.ink} />
-            Monthly Amounts for {enrolled} Enrolled Employee{enrolled === 1 ? "" : "s"}
-          </span>
-          <div style={{ marginTop: 2, fontSize: 11, color: C.ghost }}>
-            Data pulled from Employee Navigator, for illustrative purposes only.{" "}
-            <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
-              View Details
-            </a>
-          </div>
+    <div style={{ ...panel, padding: "12px 16px 14px", marginBottom: 14 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.5px" }}>Current Group Plan</div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.muted }}>
+          <GroupIcon color={C.muted} />
+          Monthly amounts for {enrolled} enrolled employee{enrolled === 1 ? "" : "s"} · from Employee Navigator, for illustration ·{" "}
+          <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
+            View Details
+          </a>
         </div>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 14 }}>
-        <SpendTile
-          icon={<BuildingIcon color="#fff" />}
-          label="Your Company Pays"
-          tip="The monthly contribution your company sets. Your company decides this first; employees pay the rest."
-          amount={totals.er}
-          pct={erPct}
-          bg={C.blueTint}
-          edge={C.blueEdge}
-          fg={C.blue}
-        />
-        <SpendTile
-          icon={<PersonIcon color="#fff" />}
-          label="Your Employees Pay"
-          tip="What employees pay each month: the premium left after your company’s contribution."
-          amount={totals.ee}
-          pct={eePct}
-          bg={C.amberTint}
-          edge={C.amberEdge}
-          fg={C.orange}
-        />
-        <SpendTile
-          icon={<StackIcon color="#fff" />}
-          label="Total Monthly Bill"
-          tip="The full monthly premium: what your company pays plus what employees pay."
-          amount={totals.total}
-          bg={C.greenTint}
-          edge={C.greenEdge}
-          fg={C.green}
-        />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        <SpendTile icon={<BuildingIcon color="#fff" />} label="Your Company Pays" tip="The monthly contribution your company sets. Your company decides this first; employees pay the rest." amount={totals.er} pct={erPct} bg={C.blueTint} edge={C.blueEdge} fg={C.blue} />
+        <SpendTile icon={<PersonIcon color="#fff" />} label="Your Employees Pay" tip="What employees pay each month: the premium left after your company’s contribution." amount={totals.ee} pct={eePct} bg={C.amberTint} edge={C.amberEdge} fg={C.orange} />
+        <SpendTile icon={<StackIcon color="#fff" />} label="Total Monthly Bill" tip="The full monthly premium: what your company pays plus what employees pay." amount={totals.total} bg={C.greenTint} edge={C.greenEdge} fg={C.green} />
       </div>
 
-      {/* Employer vs. employee, as one bar rather than two numbers to compare by eye. */}
-      <div style={{ marginTop: 16 }}>
-        <div style={{ display: "flex", height: 26, borderRadius: 6, overflow: "hidden", border: `1px solid ${C.border}` }}>
-          <div
-            style={{
-              width: `${Math.max(erPct, totals.er > 0 ? 6 : 0)}%`,
-              background: C.blue,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 11.5,
-              fontWeight: 600,
-              color: "#fff",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-            }}
-          >
-            {erPct >= 12 && `${erPct}%`}
-          </div>
-          <div
-            style={{
-              width: `${Math.max(eePct, totals.ee > 0 ? 6 : 0)}%`,
-              background: C.orange,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 11.5,
-              fontWeight: 600,
-              color: "#fff",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-            }}
-          >
-            {eePct >= 12 && `${eePct}%`}
-          </div>
+      {/* Employer vs. employee as one thin bar, the legend beside it. */}
+      <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+        <div role="img" aria-label={`Your company pays ${erPct}% of the bill; employees pay ${eePct}%`} style={{ flex: "1 1 240px", display: "flex", height: 10, borderRadius: 5, overflow: "hidden", border: `1px solid ${C.border}` }}>
+          <div style={{ width: `${Math.max(erPct, totals.er > 0 ? 3 : 0)}%`, background: C.blue }} />
+          <div style={{ width: `${Math.max(eePct, totals.ee > 0 ? 3 : 0)}%`, background: C.orange }} />
         </div>
-        <div style={{ marginTop: 6, display: "flex", gap: 16, fontSize: 11.5, color: C.faint }}>
+        <div style={{ display: "flex", gap: 14, fontSize: 11.5, color: C.faint, whiteSpace: "nowrap" }}>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.blue, marginRight: 5 }} />
-            Your Company Pays {money(totals.er)}
+            Company {money(totals.er)} · {erPct}%
           </span>
           <span>
             <span aria-hidden style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: C.orange, marginRight: 5 }} />
-            Your Employees Pay {money(totals.ee)}
+            Employees {money(totals.ee)} · {eePct}%
           </span>
         </div>
-      </div>
-
-      {/* Same split, one figure per tier — styled like the editable fields on New
-          2027 Medical Options, but muted and disabled: this is what today's
-          plan already fixed, not something to type over. */}
-      <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.hairline}` }}>
-        <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 700, color: C.ink, display: "inline-flex", alignItems: "center", gap: 6 }}>
-          Estimated Employer Contribution
-          <InfoTip text="Estimated amount your company pays per enrolled employee each month, by coverage tier." />
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20 }}>
-          {contribution.map((t) => (
-            <div key={t.key} style={{ flex: "1 1 130px", minWidth: 130 }}>
-              {/* paddingLeft matches the input's own left padding, so the label
-                  sits over the digits rather than the $ sign beside them. */}
-              <div style={{ fontSize: 12, color: C.faint, marginBottom: 6, paddingLeft: 9 }}>{TIER_LABEL[t.key]}</div>
-              <div style={{ position: "relative" }}>
-                <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: C.ghost }}>
-                  $
-                </span>
-                <input
-                  value={t.er == null ? "" : Math.round(t.er).toLocaleString("en-US")}
-                  disabled
-                  readOnly
-                  aria-label={`${TIER_LABEL[t.key]}, current employer contribution`}
-                  style={{
-                    width: "100%",
-                    padding: "8px 9px 8px 22px",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    color: t.count ? C.body : C.faint,
-                    background: C.hairline,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 4,
-                    ...num,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-        {!contribution.some((t) => t.actual) && contribution.some((t) => t.count) && (
-          <div style={{ marginTop: 12, fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
-            Estimated from a standard employer/employee split until your Employee Navigator contribution
-            configuration is loaded — ask your account manager to confirm the real numbers.
-          </div>
-        )}
       </div>
     </div>
   );
