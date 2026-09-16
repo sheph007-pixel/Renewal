@@ -51,8 +51,30 @@ export interface MemoryLine {
   createdAt: string;
 }
 
+/** One of the assistant's plan picks: a quoted 2027 option, and why. */
+export interface RecommendedPick {
+  carrier: string;
+  tier: "lower_cost" | "best_fit" | "richer_benefits";
+  optionId: string;
+  plan: string;
+  reason: string;
+}
+
+/** The assistant's plan recommendations for the group, as the Medical Plans page shows them. */
+export interface Recommendations {
+  summary: string;
+  startWith: string | null;
+  startWithReason: string;
+  picks: RecommendedPick[];
+  /** The conversation they were given in, to carry on from. */
+  threadId: number | null;
+  createdAt: string;
+}
+
 export interface ChatState {
   threads: ChatThread[];
+  /** The assistant's plan picks: undefined until fetched, null when it has given none. */
+  recommendations: Recommendations | null | undefined;
   /** The group's standing preferences, as the assistant has them. */
   memory: MemoryLine[];
   /** True once the list has been fetched, so an empty list means "none" rather than "not yet". */
@@ -63,7 +85,7 @@ export interface ChatState {
   /** Whether the corner chat box is open. */
   open: boolean;
   /** A question a page asked on the client's behalf: the box opens a new conversation and sends it. */
-  pendingAsk: { question: string; title: string | null } | null;
+  pendingAsk: { question: string; title: string | null; threadId?: number | null } | null;
   /** A conversation a page asked the box to open, by id. */
   pendingThread: number | null;
 }
@@ -78,7 +100,7 @@ const rememberedOpen = () => {
   }
 };
 
-let state: ChatState = { threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: rememberedOpen(), pendingAsk: null, pendingThread: null };
+let state: ChatState = { threads: [], recommendations: undefined, memory: [], loaded: false, messages: {}, streaming: null, error: null, open: rememberedOpen(), pendingAsk: null, pendingThread: null };
 const listeners = new Set<() => void>();
 
 function set(patch: Partial<ChatState>) {
@@ -98,7 +120,7 @@ export function useChat(): ChatState {
 
 /** Sign-out: forget everything, so the next group in this tab starts clean. */
 export function resetChat() {
-  set({ threads: [], memory: [], loaded: false, messages: {}, streaming: null, error: null, open: false, pendingAsk: null, pendingThread: null });
+  set({ threads: [], recommendations: undefined, memory: [], loaded: false, messages: {}, streaming: null, error: null, open: false, pendingAsk: null, pendingThread: null });
 }
 
 /** Open or close the corner chat box; remembered for this tab. */
@@ -124,14 +146,17 @@ export function threadTitled(title: string): ChatThread | undefined {
  * Plan Recommendations" button. With a title, the conversation is made
  * once: the first press starts it under that name and sends the question;
  * a later press opens the same conversation again, recommendations and
- * all, rather than asking anew. Without a title, a fresh conversation.
+ * all, rather than asking anew — unless `resend` is set, which asks the
+ * question again in that same conversation. Without a title, a fresh
+ * conversation.
  */
-export async function askAssistant(question: string, title: string | null = null) {
+export async function askAssistant(question: string, title: string | null = null, resend = false) {
   if (title) {
     if (!state.loaded) await loadThreads().catch(() => undefined);
     const existing = threadTitled(title);
     if (existing) {
-      set({ pendingThread: existing.id, pendingAsk: null });
+      if (resend) set({ pendingAsk: { question, title, threadId: existing.id }, pendingThread: null });
+      else set({ pendingThread: existing.id, pendingAsk: null });
       setChatOpen(true);
       return;
     }
@@ -140,8 +165,14 @@ export async function askAssistant(question: string, title: string | null = null
   setChatOpen(true);
 }
 
+/** The assistant's plan picks for the group; null once fetched when it has given none. */
+export async function loadRecommendations() {
+  const r = await fetch("/api/chat/recommendations", { headers: groupHeaders() });
+  if (r.ok) set({ recommendations: ((await r.json()) as { recommendations: Recommendations | null }).recommendations });
+}
+
 /** The box takes the pending question once it has sent it. */
-export function takePendingAsk(): { question: string; title: string | null } | null {
+export function takePendingAsk(): { question: string; title: string | null; threadId?: number | null } | null {
   const q = state.pendingAsk;
   if (q != null) set({ pendingAsk: null });
   return q;
@@ -356,6 +387,8 @@ export async function sendMessage(threadId: number | null, content: string, page
       progress();
     } else if (event === "memory") {
       set({ memory: (data as { memory: MemoryLine[] }).memory });
+    } else if (event === "recommendations") {
+      set({ recommendations: (data as { recommendations: Recommendations }).recommendations });
     } else if (event === "done") {
       const m = (data as { message: ChatMessage }).message;
       const tid = id!;
