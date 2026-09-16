@@ -377,6 +377,22 @@ to the group; between 50% and 85% it is **suggested** and waits for a click to
 confirm; below that the proposal sits in the **to assign** queue with a group
 dropdown. Any assignment can be changed.
 
+The reader is asked to copy the matched roster name exactly, and the name
+it gives is checked against the roster by `server/proposal-match.js` in
+order of trust: the roster name verbatim; the same name once punctuation
+and legal-form words are dropped (the reader mirrored the carrier's
+spelling — "tpi Global Solutions, Inc." on an Angle Health quote for "TPI
+Global Solutions, Inc."); failing that, the employer name it read off the
+paper, by the invoice rule (every word of it in one roster name, or a
+distinctive first word), and last the file name or the email it came in
+(`tpiGlobalSolutions,Inc.` in a file name is read as words). Only the first
+two carry the reader's own confidence and can assign outright; a group found
+from the paper or the file name is always a **suggestion** to confirm. Two
+groups that could both fit leave the proposal unmatched. Every read logs
+one line — carrier, the name on the document, what the reader matched and
+at what confidence, and the roster outcome — so a proposal that lands in the
+wrong place can be explained from the log. Test: `node scripts/test-proposal-match.mjs`.
+
 The tab opens on a **grid of group health quotes**: one row per group, one column per slot, so the
 whole book reads at a glance — a filled slot shows the plan count and the
 effective date and opens the file; an empty one takes a drop or a click and

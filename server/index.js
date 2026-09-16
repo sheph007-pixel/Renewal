@@ -27,6 +27,7 @@ import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
 import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
+import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -3837,14 +3838,10 @@ const liveRoster = () =>
 
 /** Cheap fallback when there is no AI: does the filename, or the email it came in, name a roster group? */
 function matchByFilename(filename, context) {
-  const hay = normalizeName(
-    [filename.replace(/\.[a-z0-9]+$/i, ""), context?.subject || "", context?.body || ""].join(" "),
+  return groupNamedIn(
+    [filename.replace(/\.[a-z0-9]+$/i, ""), context?.subject || "", context?.body || ""].join(" \n "),
+    liveRoster(),
   );
-  const hits = liveRoster().filter((g) => {
-    const n = normalizeName(g.name);
-    return n.length >= 4 && hay.includes(n);
-  });
-  return hits.length === 1 ? hits[0].name : null;
 }
 
 /**
@@ -3965,8 +3962,21 @@ async function runAnalysis(id, file, keepAssignment) {
     const prepared = await prepareForModel(file);
     const out = await analyzeProposal({ filename: file.filename, prepared, context: file.context || null }, roster);
     const flags = Array.isArray(out.audit_flags) ? [...out.audit_flags] : [];
-    const matched = roster.find((g) => g.name === out.matched_group) || null;
-    const conf = Math.max(0, Math.min(1, Number(out.confidence) || 0));
+    // The reader copies the roster name when it can; when it mirrors the
+    // paper's spelling instead, or names no roster group at all, the employer
+    // name it read and the file name still have to point at one group.
+    const found = matchRosterGroup(out, roster, file.filename, file.context || null);
+    const matched = found ? roster.find((g) => g.name === found.name) || null : null;
+    let conf = Math.max(0, Math.min(1, Number(out.confidence) || 0));
+    // A group the reader did not name itself is a suggestion for staff to
+    // confirm, never an assignment, however sure the reader was of a name
+    // that is not on the roster.
+    if (found && found.how !== "exact" && found.how !== "normalized") conf = Math.min(Math.max(conf, 0.5), 0.84);
+    console.log(
+      `proposal ${id} read: ${out.carrier || "carrier ?"}; on the document "${out.group_name_on_document || "?"}"; ` +
+        `reader matched ${out.matched_group ? `"${out.matched_group}"` : "nothing"} at ${Number(out.confidence) || 0}; ` +
+        `roster: ${found ? `${found.name} (${found.how})` : "no match"}`,
+    );
 
     const current = (await proposalStore.listProposals()).find((r) => r.id === id);
     // Audit against what we know: enrollment on the paper vs the roster.
