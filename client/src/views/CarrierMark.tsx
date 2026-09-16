@@ -1,4 +1,6 @@
 import { brandOf } from "@/lib/carrier-logos";
+import { websiteOf } from "@/lib/carrier-sites";
+import { C } from "@/lib/ui";
 
 interface Props {
   name: string;
@@ -9,15 +11,20 @@ interface Props {
   /** Text size for the name. */
   fontSize?: number;
   color?: string;
+  /** Link the name to the carrier's or TPA's main website, where one is on file (the default). */
+  link?: boolean;
 }
 
 /**
  * A carrier's icon: a rounded tile in the carrier's brand colour with a short
  * mark, drawn by the system so every carrier reads the same way at any size.
  * Sits inline beside the carrier's name in a grid row, a plan card, or a heading.
+ * The name links to the carrier's or TPA's main website, with a small
+ * website icon after it, wherever the site is on file.
  */
-export default function CarrierMark({ name, size = 22, withName = true, fontSize = 13, color }: Props) {
+export default function CarrierMark({ name, size = 22, withName = true, fontSize = 13, color, link = true }: Props) {
   const brand = brandOf(name);
+  const site = link ? websiteOf(name) : null;
   const mark = (
     <span
       aria-hidden={withName}
@@ -44,10 +51,30 @@ export default function CarrierMark({ name, size = 22, withName = true, fontSize
     </span>
   );
   if (!withName) return mark;
+  const label = <span style={{ fontSize, color, whiteSpace: "nowrap" }}>{name}</span>;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: Math.round(size * 0.36), minWidth: 0 }}>
       {mark}
-      <span style={{ fontSize, color, whiteSpace: "nowrap" }}>{name}</span>
+      {site ? (
+        <a
+          href={site}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Visit ${name}'s website`}
+          aria-label={`${name} website (opens in a new tab)`}
+          // A grid row opens the plan card on click; the link must not.
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none", color: "inherit", minWidth: 0 }}
+        >
+          {label}
+          <svg width={Math.max(11, Math.round(fontSize * 0.85))} height={Math.max(11, Math.round(fontSize * 0.85))} viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flex: "none" }}>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+          </svg>
+        </a>
+      ) : (
+        label
+      )}
     </span>
   );
 }
