@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, pill, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askAssistant, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
@@ -660,22 +660,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           {appliedChips.length > 0 && <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} showCount={false} />}
         </div>
 
-        {picksOnly && rec && picks.size > 0 && (
-          <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.rule}`, background: "#f3f6fa" }}>
-            <div style={{ flex: "1 1 360px", minWidth: 0, fontSize: 13, color: C.body, lineHeight: 1.55 }}>
-              <strong style={{ color: C.navy }}>The assistant's picks.</strong> {rec.summary}
-              {rec.startWith && <span> <strong style={{ color: C.blueInk }}>Start with {rec.startWith.toUpperCase()}</strong>{rec.startWithReason ? ` — ${rec.startWithReason}` : ""}</span>}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <button type="button" onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...chip(false), fontWeight: 600, color: C.blue }} title="Open the conversation these came from and tell the assistant what matters to you">
-                Refine In Chat
-              </button>
-              <button type="button" onClick={askForPicks} disabled={asking} style={{ ...chip(false), fontWeight: 600 }} title="Ask the assistant for a fresh set of picks">
-                Ask Again
-              </button>
-            </div>
-          </div>
-        )}
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
         <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
