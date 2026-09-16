@@ -726,7 +726,7 @@ export default function App() {
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
-    tab === "options" || tab === "signup" || tab === "supplemental"
+    tab === "signup" || tab === "supplemental"
       ? "Effective January 1, 2027"
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
@@ -845,9 +845,12 @@ export default function App() {
                   )}
                   {tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
                 </h1>
-                <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-                  {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
-                </div>
+                {/* Medical Plans carries no line under its title: its two tabs name their own years. */}
+                {tab !== "options" && tab !== "current" && (
+                  <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
+                    {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
+                  </div>
+                )}
               </div>
               {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 <div
