@@ -1266,75 +1266,11 @@ export function contributionFloor(plans: MarketPlan[]): number {
 }
 
 /**
- * The minimum a group has to put in to start: the floor on every tier — the
- * same dollars toward each employee's coverage, dependents on top of that
- * being the employee's. New 2027 Medical Options starts here, so Your
- * Company Pays begins at the least a carrier would accept; the employer can
- * raise any tier from there.
+ * Where a group's contribution starts: the floor on every tier — the same
+ * dollars toward each employee's coverage, dependents on top of that being
+ * the employee's. The employer can raise any tier from there.
  */
 export function minimumContribution(plans: MarketPlan[]): Record<TierKey, number> {
   const floor = contributionFloor(plans);
   return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: floor }), {} as Record<TierKey, number>);
-}
-
-/**
- * ACA affordability for an applicable large employer (the 51+ bucket), by
- * the federal poverty line safe harbor — the one that needs no employee
- * wage data, which is why it is the one this system can apply: at least one
- * minimum-value plan's employee-only share must be no more than the
- * affordability percentage of the single-person federal poverty line, per
- * month. A plan year starting 1/1/2027 uses the 2027 percentage (10.22%,
- * Rev. Proc. 2026-26) and the 2026 poverty guideline ($15,960 for one person
- * in the 48 states and D.C.): $15,960 × 10.22% ÷ 12 = $135.92. Update these
- * two figures when the IRS and HHS publish the next ones.
- *
- * Every quoted plan is a PPO or HDHP that provides minimum value, so the
- * plan that matters is the one with the lowest employee-only rate. Other
- * safe harbors (W-2 wages, rate of pay) can make a higher share affordable
- * for a particular workforce; the page does not have wages, so it shows
- * this one and says which it is.
- */
-export const ACA_2027 = { planYear: 2027, affordability: 0.1022, fplSingle: 15960, source: "Rev. Proc. 2026-26; 2026 HHS poverty guidelines" };
-
-/** The most an employee may pay per month for employee-only coverage under the FPL safe harbor, to the cent, rounded down. */
-export function acaAffordableEmployeeCost(): number {
-  return Math.floor(((ACA_2027.fplSingle * ACA_2027.affordability) / 12) * 100) / 100;
-}
-
-/** Whether ACA affordability applies: the group is in the 51+ (ALE) bucket. */
-export const acaApplies = (g: Pick<Group, "sizeCategory">) => g.sizeCategory === "51+";
-
-/**
- * The lowest employee-only share any quoted plan leaves an employee at a
- * given contribution, and whether it clears the safe harbor. Null with no
- * priced plan.
- */
-export function acaCheck(plans: MarketPlan[], applied: Record<TierKey, number>): { lowestShare: number; limit: number; affordable: boolean; plan: string } | null {
-  const priced = plans.filter((p) => p.rates.EE != null && p.rates.EE > 0);
-  if (!priced.length) return null;
-  const cheapest = priced.reduce((a, b) => ((a.rates.EE as number) <= (b.rates.EE as number) ? a : b));
-  const lowestShare = Math.max(0, (cheapest.rates.EE as number) - (applied.EE || 0));
-  const limit = acaAffordableEmployeeCost();
-  return { lowestShare, limit, affordable: lowestShare <= limit + 1e-9, plan: cheapest.plan };
-}
-
-/**
- * The least an ALE has to put toward employee-only coverage to clear the FPL
- * safe harbor on its lowest-cost plan — never below the carriers' floor —
- * on every tier, in whole dollars rounded up.
- */
-export function acaMinimumContribution(plans: MarketPlan[]): Record<TierKey, number> {
-  const floor = contributionFloor(plans);
-  const rates = plans.map((p) => p.rates.EE).filter((r): r is number => r != null && r > 0);
-  const need = rates.length ? Math.max(floor, Math.ceil(Math.min(...rates) - acaAffordableEmployeeCost())) : floor;
-  return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: need }), {} as Record<TierKey, number>);
-}
-
-/**
- * Where a group's 2027 contribution starts: the carriers' minimum, or for a
- * 51+ group the ACA minimum where that is higher — the least it has to
- * commit to and still be able to offer every plan on the page.
- */
-export function startingContribution(plans: MarketPlan[], g: Pick<Group, "sizeCategory">): Record<TierKey, number> {
-  return acaApplies(g) ? acaMinimumContribution(plans) : minimumContribution(plans);
 }
