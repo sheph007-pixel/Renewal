@@ -512,47 +512,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         )}
       </div>
 
-      {/* Filters and sort: a button per category with its panel beneath (one Filters
-          drawer on a phone), Sort by apart from them, then the chips for what is applied. */}
-      <div className="noprint" style={{ ...panel, padding: "10px 14px 12px", marginBottom: 12 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-          {narrow ? (
-            <FiltersButton count={filterCount(filters)} open={drawerOpen} onClick={() => setDrawerOpen(true)} buttonRef={filtersBtn} />
-          ) : (
-            <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
-          )}
-          <SortSelect sort={sort} onChange={setSort} />
-          {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />}
-          <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill={favoritesOnly || favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
-            </svg>
-            Favorites ({favorites})
-          </button>
-          <button onClick={() => setCompareOnly((v) => !v)} aria-pressed={compareOnly} title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`} style={viewToggle(compareOnly, proposal.length > 0, C.blue, C.blueTint)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Compare ({proposal.length})
-          </button>
-          {proposal.length > 0 && (
-            <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
-              {compareOpen ? "Hide Comparison" : "View Comparison"}
-            </button>
-          )}
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search plans"
-            aria-label="Search 2027 plan options"
-            style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 150, marginLeft: "auto" }}
-          />
-          <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
-            Export
-          </button>
-        </div>
-        <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} />
-      </div>
       {narrow && <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} applied={filters} onApply={setFilters} optionsFor={optionsFor} resultCountFor={resultCountFor} bounds={bounds} returnTo={filtersBtn} />}
 
       {/* The proposal being built: one card per plan. */}
@@ -596,19 +555,55 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       )}
 
-      {/* Every dollar figure below is a month at the group's own enrollment.
-          Right, above the table, on the same 10px margin as the cells. */}
-      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 7, margin: "0 10px 8px", fontSize: 13.5, fontWeight: 700, color: C.ink }}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: C.blue }}>
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-        Monthly Amounts For {totals.enrolled} Enrolled Employee{totals.enrolled === 1 ? "" : "s"}
-      </div>
+      {/* The grid: its toolbar on top, then a short row per plan; the row opens
+          the card. Every dollar figure is a month at the group's own enrollment —
+          the column tooltips say so. */}
+      <div className="panel" style={{ ...panel, padding: 0 }}>
+        {/* The grid's toolbar, attached to the table it drives: a button per
+              category with its panel beneath (one Filters drawer on a phone), Sort by,
+              favorites and compare, search and export, then the count and the chips
+              for what is applied. */}
+        <div className="noprint" style={{ padding: "10px 14px 12px", borderBottom: `1px solid ${C.rule}`, background: C.zebra, borderRadius: "10px 10px 0 0" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+            {narrow ? (
+              <FiltersButton count={filterCount(filters)} open={drawerOpen} onClick={() => setDrawerOpen(true)} buttonRef={filtersBtn} />
+            ) : (
+              <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
+            )}
+            <SortSelect sort={sort} onChange={setSort} />
+            {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />}
+            <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={favoritesOnly || favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
+              </svg>
+              Favorites ({favorites})
+            </button>
+            <button onClick={() => setCompareOnly((v) => !v)} aria-pressed={compareOnly} title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`} style={viewToggle(compareOnly, proposal.length > 0, C.blue, C.blueTint)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Compare ({proposal.length})
+            </button>
+            {proposal.length > 0 && (
+              <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
+                {compareOpen ? "Hide Comparison" : "View Comparison"}
+              </button>
+            )}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search plans"
+              aria-label="Search 2027 plan options"
+              style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 150, marginLeft: "auto" }}
+            />
+            <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
+              Export
+            </button>
+          </div>
+          <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} />
+        </div>
 
-      {/* The grid: a short row per plan; the row opens the card. */}
-      <div className="panel" style={{ ...panel, padding: "0 0 10px", overflow: "auto" }}>
+        <div style={{ overflow: "auto", paddingBottom: 10 }}>
         <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
@@ -650,10 +645,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {h}
                     {k === "er" && (
-                      <InfoTip text="The monthly contribution your company sets, applied to each plan. Your company decides this first; employees pay the rest." color="rgba(255,255,255,0.85)" place="below" />
+                      <InfoTip text={`What your company pays per month across your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: the monthly contribution you set, applied to each plan. Your company decides this first; employees pay the rest.`} color="rgba(255,255,255,0.85)" place="below" />
                     )}
                     {k === "total" && (
-                      <InfoTip text="The full monthly premium: what your company pays plus what employees pay." color="rgba(255,255,255,0.85)" place="below" />
+                      <InfoTip text={`The full monthly premium for your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: what your company pays plus what employees pay.`} color="rgba(255,255,255,0.85)" place="below" />
                     )}
                   </span>
                   {k && sort.key === k ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
@@ -736,6 +731,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
           Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends) — one carrier and one funding type per group, so the first favorite sets both{lock ? ` (now ${lock.carrier} ${lock.funding})` : ""}; + picks up to {MAX_COMPARE} from any carrier to compare side by side and download.
+        </div>
         </div>
       </div>
 
