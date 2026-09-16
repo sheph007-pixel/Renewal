@@ -4,7 +4,7 @@ import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
-import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists } from "@/views/PlanFilters";
+import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
@@ -121,6 +121,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const narrow = useNarrow();
   const [openPanel, setOpenPanel] = useState<FilterKey | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The desktop filter row is closed until asked for: one quiet toolbar row, the six dropdowns beneath it on Filters.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersBtn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     // The toolbar and the drawer swap over at the breakpoint; neither carries an open panel across.
@@ -559,17 +561,21 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           the card. Every dollar figure is a month at the group's own enrollment —
           the column tooltips say so. */}
       <div className="panel" style={{ ...panel, padding: 0 }}>
-        {/* The grid's toolbar, attached to the table it drives: a button per
-              category with its panel beneath (one Filters drawer on a phone), Sort by,
-              favorites and compare, search and export, then the count and the chips
-              for what is applied. */}
+        {/* The grid's toolbar, attached to the table it drives. One quiet row:
+            Filters (a count badge, the six dropdowns open beneath on click; a
+            drawer on a phone), how many plans are showing, Sort by, favorites and
+            compare, then search and export at the right. Chips for what is
+            applied appear only once something is. */}
         <div className="noprint" style={{ padding: "10px 14px 12px", borderBottom: `1px solid ${C.rule}`, background: C.zebra, borderRadius: "10px 10px 0 0" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             {narrow ? (
               <FiltersButton count={filterCount(filters)} open={drawerOpen} onClick={() => setDrawerOpen(true)} buttonRef={filtersBtn} />
             ) : (
-              <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
+              <FiltersButton count={filterCount(filters)} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} buttonRef={filtersBtn} />
             )}
+            <span aria-live="polite" style={{ fontSize: 13, color: C.muted, margin: "0 6px 0 2px", ...num }}>
+              {showingText(list.length, plans.length)}
+            </span>
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />}
             <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
@@ -600,7 +606,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               Export
             </button>
           </div>
-          <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} />
+          {!narrow && filtersOpen && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10 }}>
+              <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
+            </div>
+          )}
+          {appliedChips.length > 0 && <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} showCount={false} />}
         </div>
 
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
