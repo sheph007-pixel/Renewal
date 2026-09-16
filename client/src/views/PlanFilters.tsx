@@ -313,12 +313,17 @@ export interface AppliedChip {
  * Under the toolbar: how many plans are showing, a removable chip for every
  * applied selection, and Clear all. The count is announced as it changes.
  */
-export function AppliedFilters({ showing, total, chips, onClearAll }: { showing: number; total: number; chips: AppliedChip[]; onClearAll: () => void }) {
+/** "Showing all 152 plans" / "Showing 12 of 152 plans". */
+export const showingText = (showing: number, total: number) => (showing === total ? `Showing all ${total} plan${total === 1 ? "" : "s"}` : `Showing ${showing} of ${total} plans`);
+
+export function AppliedFilters({ showing, total, chips, onClearAll, showCount = true }: { showing: number; total: number; chips: AppliedChip[]; onClearAll: () => void; showCount?: boolean }) {
   return (
     <div role="region" aria-label="Applied filters" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 10 }}>
-      <span aria-live="polite" style={{ fontSize: 13, color: C.body, marginRight: 4, ...num }}>
-        {showing === total ? `Showing all ${total} plan${total === 1 ? "" : "s"}` : `Showing ${showing} of ${total} plans`}
-      </span>
+      {showCount && (
+        <span aria-live="polite" style={{ fontSize: 13, color: C.body, marginRight: 4, ...num }}>
+          {showingText(showing, total)}
+        </span>
+      )}
       {chips.map((c) => (
         <button key={c.key} type="button" onClick={c.onRemove} aria-label={`Remove filter: ${c.label}`} style={{ ...pill(C.blueInk, C.blueTint, C.blueEdge), display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, padding: "4px 8px 4px 10px", cursor: "pointer", textTransform: "none" }}>
           {c.label}
