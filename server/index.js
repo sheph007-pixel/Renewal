@@ -26,7 +26,7 @@ import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
-import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
+import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
@@ -3803,7 +3803,7 @@ async function proposalsChanged() {
               optionId: pl.option_id || null,
               name: pl.name,
               planCode: pl.plan_code || null,
-              network: pl.network || null,
+              network: networkLabel(pl.network),
               planType: pl.plan_type || null,
               deductible: pl.deductible || null,
               oopMax: pl.oop_max || null,

@@ -3,7 +3,7 @@
 // plan they also price. Runs with `node --experimental-strip-types`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, splitCopays, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
+import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, splitCopays, networkTypeOf, networkDirectory, networkLabel, CIGNA_DIRECTORY, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 const seed = JSON.parse(readFileSync(new URL("../server/data/kennion.json", import.meta.url), "utf8"));
 const g0 = seed.groups.find((x: Group) => x.name === "Aesto Health") as Group;
@@ -46,6 +46,21 @@ const proposals: GroupProposal[] = [
     filename: "uhc.pdf",
     uploadedAt: "2026-09-02T12:00:00Z",
   },
+  {
+    id: 9,
+    slot: "Angle",
+    carrier: "Angle Health",
+    funding: "level funded",
+    effectiveDate: "2027-01-01",
+    proposalType: "new business",
+    enrolledOnDocument: 39,
+    // Angle's quote names its design family as the plan type and the network as bare "Cigna".
+    plans: [{ name: "Angle Traditional 2000", planType: "Traditional", network: "Cigna", deductible: "$2,000", oopMax: "$5,000", rates: { EE: 610, ES: 1220, EC: 1130, FAM: 1740 }, monthlyTotal: null }],
+    totalMonthly: null,
+    summary: null,
+    filename: "angle.pdf",
+    uploadedAt: "2026-09-16T12:00:00Z",
+  },
 ];
 const data = { ...base, proposals } as KennionData;
 
@@ -58,7 +73,7 @@ const pp = proposalPlans(data, g);
 // Comfort 3000 is priced for Employee Only alone: with people in any other
 // tier it cannot be priced for the group, so it is not shown.
 const partial = counts.ES + counts.EC + counts.FAM > 0;
-assert.equal(pp.length, partial ? 2 : 3, "a plan with no rate on any tier is left out; so is one missing a tier people are in");
+assert.equal(pp.length, partial ? 3 : 4, "a plan with no rate on any tier is left out; so is one missing a tier people are in");
 const comfort = pp.find((p) => p.plan === "Gravie Comfort 1500")!;
 assert.equal(comfort.carrier, "Gravie");
 assert.equal(comfort.label, "Level Funded");
@@ -69,6 +84,21 @@ assert.equal(comfort.monthly, 600 * counts.EE + 1200 * counts.ES + 1110 * counts
 assert.equal(!!pp.find((p) => p.plan === "Gravie Comfort 3000"), !partial, "a tier with people but no rate: the plan is not shown at all");
 const uhc = pp.find((p) => p.carrier === "UnitedHealthcare")!;
 assert.equal(uhc.quoted!.date, "2026-09-02", "no effective date on the paper: the upload date");
+
+// Funding is Fully Insured or Level Funded, nothing else; the design family is the type.
+const angle = pp.find((p) => p.carrier === "Angle Health")!;
+assert.equal(angle.label, "Level Funded", "Angle Health is level funded; 'Traditional' is not a funding");
+assert.equal(angle.type, "Traditional");
+// Gravie and Angle Health are the same Cigna network, with the same lookup.
+assert.equal(angle.network, "Cigna");
+assert.equal(comfort.network, "Cigna");
+assert.equal(networkTypeOf(angle), "PPO", "a bare 'Cigna' network is a PPO");
+assert.equal(networkTypeOf(comfort), "PPO");
+assert.equal(networkDirectory(angle.network)!.url, CIGNA_DIRECTORY);
+assert.equal(networkDirectory(comfort.network)!.url, CIGNA_DIRECTORY);
+assert.equal(networkLabel("Cigna Open Access Plus (PPO)"), "Cigna");
+assert.equal(networkLabel("Angle / Cigna PPO"), "Cigna");
+assert.equal(networkLabel("United Choice Plus"), "United Choice Plus");
 
 const after = marketPlans(data, g);
 assert.deepEqual(after.map((p) => p.plan), pp.map((p) => p.plan), "the grid is the proposals' plans and nothing else");

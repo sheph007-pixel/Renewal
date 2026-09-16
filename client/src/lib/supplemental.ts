@@ -187,7 +187,7 @@ function sheetFor(XLSX: typeof import("xlsx"), f: Frequency) {
       moneyRows.push(rows.length);
       rows.push([row.plan, ...SUPPLEMENTAL_TIERS.map((t) => (row[t.key] == null ? "—" : convertRate(row[t.key]!, f)))]);
     }
-    rows.push([`Carrier: ${s.carrier}`]);
+    rows.push([`Carrier/TPA: ${s.carrier}`]);
     rows.push([SUPPLEMENTAL_FOOTNOTE]);
     rows.push([]);
   }

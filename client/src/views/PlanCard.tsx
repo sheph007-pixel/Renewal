@@ -38,13 +38,14 @@ export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "E
 
 export const carrierOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", "");
 
-/** How the plan is funded, from what the carrier said or the carrier itself. */
-export function fundingOf(p: MarketPlan): string {
-  const t = `${p.label} ${p.type}`;
-  if (/fully/i.test(t)) return "Fully Insured";
-  if (/self/i.test(t)) return "Self Funded";
-  if (/level/i.test(t) || /Gravie|UnitedHealthcare|Surest/i.test(p.carrier)) return "Level Funded";
-  return p.label || "Quoted";
+/**
+ * How the plan is funded: one of two things. UnitedHealthcare quotes fully
+ * insured and level funded; every other carrier and partner is level funded.
+ * A plan's design family (Traditional, HDHP, Value) is its type, not its
+ * funding, so it never shows up here.
+ */
+export function fundingOf(p: MarketPlan): "Fully Insured" | "Level Funded" {
+  return /fully/i.test(p.label) ? "Fully Insured" : "Level Funded";
 }
 
 /** Where the figures come from: always the carrier's own quote for this group — read off its proposal, or quoted on the menu. */

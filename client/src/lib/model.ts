@@ -661,25 +661,45 @@ export function moneyNum(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** How a proposal slot is shown: the carrier column and the funding label. */
-function slotPresentation(slot: string, carrier: string | null, planType: string | null): { carrier: string; label: string; network: string } {
+/**
+ * How a proposal slot is shown: the carrier column, the funding label and
+ * the network. Funding is one of two things: UnitedHealthcare quotes both
+ * fully insured and level funded, in separate slots; every other carrier
+ * and partner is level funded. A plan's design family (Traditional, HDHP,
+ * Value) is its type, never its funding.
+ */
+function slotPresentation(slot: string, carrier: string | null): { carrier: string; label: string; network: string } {
   if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "United Choice Plus" };
   if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
-  if (slot === "Surest") return { carrier: "UnitedHealthcare", label: "Copay-only", network: "United Choice Plus" };
-  if (slot === "Gravie") return { carrier: "Gravie", label: planType || "Level Funded", network: "Cigna OAP" };
-  if (slot === "Nationwide") return { carrier: "Nationwide", label: planType || "Level Funded", network: "Nationwide" };
-  if (slot === "Angle") return { carrier: "Angle Health", label: planType || "Level Funded", network: "Angle / Cigna PPO" };
-  if (slot === "Cobalt") return { carrier: "Cobalt", label: planType || "Self Funded", network: "On the proposal" };
-  return { carrier: carrier || "Other", label: planType || "Quoted", network: "On the proposal" };
+  if (slot === "Surest") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
+  if (slot === "Gravie") return { carrier: "Gravie", label: "Level Funded", network: CIGNA_NETWORK };
+  if (slot === "Nationwide") return { carrier: "Nationwide", label: "Level Funded", network: "Nationwide" };
+  if (slot === "Angle") return { carrier: "Angle Health", label: "Level Funded", network: CIGNA_NETWORK };
+  if (slot === "Cobalt") return { carrier: "Cobalt", label: "Self Funded", network: "On the proposal" };
+  return { carrier: carrier || "Other", label: "Level Funded", network: "On the proposal" };
 }
 
 /**
- * Every Gravie plan is on the Cigna OAP network and every UnitedHealthcare
- * plan (Fully Insured, Level Funded, or Surest) is on the United Choice Plus
- * network — a fixed rule, not something a carrier's own proposal document
- * gets to override with a differently-worded network name.
+ * Gravie and Angle Health both run on Cigna's network, and every
+ * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
+ * United Choice Plus network — a fixed rule, not something a carrier's own
+ * proposal document gets to override with a differently-worded network name
+ * ("Cigna OAP", "Cigna Open Access Plus", "Angle / Cigna PPO" are all Cigna).
  */
-const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie"]);
+const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie", "Angle"]);
+
+/** The one name every Cigna network reads as, site-wide. */
+export const CIGNA_NETWORK = "Cigna";
+/** Cigna's public provider search: the lookup for every plan on a Cigna network, Gravie's and Angle Health's alike. */
+export const CIGNA_DIRECTORY = "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001";
+
+/** A network name as shown: any Cigna network — OAP, Open Access Plus, "Angle / Cigna PPO" — is "Cigna". */
+export function networkLabel(network: string | null | undefined): string | null {
+  const s = String(network || "").trim();
+  if (!s) return null;
+  if (/cigna/i.test(s)) return CIGNA_NETWORK;
+  return s;
+}
 
 /**
  * Where a client looks up a doctor on a plan's network. Gravie's plans run on
@@ -703,7 +723,9 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
   const text = [p.plan, p.type, p.planType, p.network].filter(Boolean).join(" ");
   if (/\bRBP\b|reference[\s-]?based/i.test(text) || /cobalt/i.test(p.carrier || "")) return "RBP";
   if (/\bEPO\b/i.test(text)) return "EPO";
-  if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b/i.test(text)) return "PPO";
+  // Cigna's network is a PPO wherever it appears — Gravie's Cigna OAP, Angle
+  // Health's Cigna — so a quote that names only "Cigna" still reads PPO.
+  if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b|cigna/i.test(text)) return "PPO";
   return null;
 }
 
@@ -722,9 +744,8 @@ export function pbmOf(carrier: string | null | undefined): { name: string; url: 
 
 export function networkDirectory(network: string | null | undefined): { name: string; url: string } | null {
   const s = String(network || "");
-  if (/cigna/i.test(s) && /\boap\b|open\s*access/i.test(s)) {
-    return { name: "Cigna Open Access Plus directory", url: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001" };
-  }
+  // One Cigna lookup for every Cigna network, whichever carrier is on it.
+  if (/cigna/i.test(s)) return { name: "Cigna provider directory", url: CIGNA_DIRECTORY };
   if (/choice\s*plus|united|uhc/i.test(s)) {
     return { name: "UnitedHealthcare Choice Plus directory", url: UHC_DIRECTORY };
   }
@@ -773,7 +794,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       // people in cannot be priced for the group: it is not shown, rather
       // than shown with a partial figure beside a blank one.
       if (monthly == null) continue;
-      const show = slotPresentation(pr.slot, pr.carrier, pl.planType);
+      const show = slotPresentation(pr.slot, pr.carrier);
       // Gravie's benefits are by plan family and the same for every group.
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
       const gb = fam ? GRAVIE_BENEFITS[fam] : null;
@@ -806,7 +827,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         er: gb ? gb.er : null,
         imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
         hospital: gb ? gb.hospital : pb?.hospital ?? null,
-        network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : pl.network || show.network,
+        network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : networkLabel(pl.network) || show.network,
         rates,
         monthly,
         indicative: false,

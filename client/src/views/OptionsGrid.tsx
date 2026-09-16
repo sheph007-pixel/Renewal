@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
@@ -41,12 +41,12 @@ type Tab = "carrier" | "network" | "funding" | "ded" | "oop" | "cost";
 /** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
-/** The network as a column: "Cigna Open Access Plus (PPO)" reads as "Cigna Open Access Plus" beside a PPO-only grid. */
-const networkOf = (p: MarketPlan) => (p.network || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
+/** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
+const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 /** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
 const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
 const TABS: [Tab, string][] = [
-  ["carrier", "Carrier"],
+  ["carrier", "Carrier/TPA"],
   ["network", "Network Type"],
   ["funding", "Funding"],
   ["ded", "Deductible"],
@@ -73,7 +73,7 @@ const fmtDraft = (v: number) => String(Math.round(v));
 
 /** CSV of whatever rows are showing (all, or the current filter). */
 function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Option", "Carrier", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Your Company Pays", "Employee Cost", "Total Monthly Bill", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
+  const head = ["Option", "Carrier/TPA", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Your Company Pays", "Employee Cost", "Total Monthly Bill", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
   const cell = (v: unknown) => {
     const t = v == null ? "" : String(v);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
@@ -694,7 +694,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               {(
                 [
                   ["option", "Option"],
-                  ["carrier", "Carrier"],
+                  ["carrier", "Carrier/TPA"],
                   ["network", "Network Type"],
                   ["plan", "Plan"],
                   ["ded", "Deductible"],

@@ -33,3 +33,15 @@ export function isAncillaryRow(row) {
   return medicalFromDocument(row) === false;
 }
 
+
+/**
+ * A network name as shown to clients: every Cigna network — Gravie's "Cigna
+ * OAP" or "Cigna Open Access Plus", Angle Health's "Cigna" — is one network
+ * with one provider lookup, so it reads "Cigna" everywhere. Other names pass
+ * through untouched.
+ */
+export function networkLabel(network) {
+  const s = String(network || "").trim();
+  if (!s) return null;
+  return /cigna/i.test(s) ? "Cigna" : s;
+}

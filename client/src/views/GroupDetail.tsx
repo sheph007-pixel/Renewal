@@ -526,7 +526,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
               <thead>
                 <tr>
-                  {["Benefit", "Carrier", "Plan", "Enrolled", "Monthly premium"].map((h, i) => (
+                  {["Benefit", "Carrier/TPA", "Plan", "Enrolled", "Monthly premium"].map((h, i) => (
                     <th
                       key={h}
                       style={{
