@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { MARKET_RESULTS_NOTE, marketResults, marketResultsSentences, type MarketPlan } from "@/lib/model";
+import { MARKET_RESULTS_TIP, marketResults, marketResultsSentences, type MarketPlan } from "@/lib/model";
 import { C, panel } from "@/lib/ui";
 import InfoTip from "@/views/InfoTip";
 
@@ -11,9 +11,10 @@ import InfoTip from "@/views/InfoTip";
  * reference-based pricing — then what to do next, with the assistant's
  * recommendations button beside it. A fixed template over every quoted plan
  * (never the filtered grid), recomputed whenever the plans change, and
- * unmoved by the Employer Contribution controls above it. Each value
+ * unmoved by the Employer Contribution controls beneath it. Each value
  * populated from the data is bold and underlined, so what is dynamic reads
- * as dynamic.
+ * as dynamic. The 50% assumption is stated once, in the sentence that uses
+ * it; the ⓘ says what Kennion did for the client.
  */
 export default function MarketResults({ plans, action }: { plans: MarketPlan[]; action?: ReactNode }) {
   const sentences = useMemo(() => marketResultsSentences(marketResults(plans)), [plans]);
@@ -22,7 +23,7 @@ export default function MarketResults({ plans, action }: { plans: MarketPlan[]; 
     <section className="panel noprint" aria-label="Your Market Results" style={{ ...panel, padding: "18px 20px 16px", marginBottom: 18, borderLeft: `4px solid ${C.blue}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Your Market Results</div>
-        <InfoTip text={MARKET_RESULTS_NOTE} place="below" />
+        <InfoTip text={MARKET_RESULTS_TIP} place="below" />
       </div>
       <p style={{ margin: 0, fontSize: 15, color: C.ink, lineHeight: 1.75, overflowWrap: "anywhere" }}>
         {sentences.map((sent, i) => (
@@ -40,8 +41,6 @@ export default function MarketResults({ plans, action }: { plans: MarketPlan[]; 
           </span>
         ))}
       </p>
-      <div style={{ marginTop: 6, fontSize: 12, color: C.faint, lineHeight: 1.5 }}>{MARKET_RESULTS_NOTE}</div>
-
       {/* What to do on this page. */}
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${C.hairline}` }}>
         <div style={{ flex: "1 1 360px", minWidth: 0 }}>

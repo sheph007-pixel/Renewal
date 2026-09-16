@@ -1094,8 +1094,9 @@ export function gravieFamily(planType: string | null | undefined, name: string):
  * employer's own contribution, which the controls above the grid set.
  */
 export const MARKET_RESULTS_EMPLOYER_SHARE = 0.5;
-export const MARKET_RESULTS_NOTE =
-  "Average costs reflect the employee-only premiums of quoted plans, with each plan weighted equally and a 50% employer contribution assumed. Benefits vary by plan.";
+/** The ⓘ beside the title: what Kennion did for the client, and what the page is for. */
+export const MARKET_RESULTS_TIP =
+  "Kennion went to work for you. We took your group to the best carriers and partners in the market, gathered their strongest offers, and priced every plan for your people. The hard work is done. Now use our technology and our team to decide what is right for your group.";
 
 export interface MarketPartner {
   name: string;
