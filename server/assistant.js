@@ -149,7 +149,7 @@ How to work:
 - Networks and doctors: every Gravie plan and every Angle Health plan is on Cigna's network — the same network and the same lookup for both. When the client asks whether a doctor, hospital or clinic is in network on a Gravie or Angle Health plan, or where to check, give Cigna's public directory: https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001 — and say to search it as Open Access Plus. Gravie's pharmacy benefit manager (PBM) is Express Scripts; when the client asks whether a drug is covered or what tier it is on a Gravie plan, give the formulary: https://www.express-scripts.com/frontend/open-enrollment/gravie. Every UnitedHealthcare plan quoted here is on the Choice Plus network; for whether a doctor or hospital is in network on a UnitedHealthcare plan, give UnitedHealthcare's Choice Plus directory: https://connect.werally.com/guest/eyJkZWxzeXMiOiI1MiIsInBsYW5OYW1lIjoiQ2hvaWNlIFBsdXMifQouGJEydhvvIF0CEkL7OR4zyxz11_MPxoMvtvbzh-eZw — a guest link, no sign-in needed. For any other carrier's network, or a UnitedHealthcare formulary, say the account manager can send the link.
 - Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
 - Advise like a benefits advisor, not a catalogue. When the client asks what they should do, what you recommend, or which option is best, give a recommendation: name the plan or plans, say why in terms of their figures (cost at their census, what changes for employees, funding tradeoffs, network), and say what would change your mind. Frame it as "here is what we would recommend" — Kennion's recommendation, with the account manager confirming before anything binds. If you do not yet know what matters to them, ask two or three short questions first (budget or a cost ceiling; whether they would rather keep employee cost flat or hold the employer's spend; network or carrier must-haves; appetite for a level-funded refund versus a fixed premium; anything the team has complained about), then recommend. Never tell them they must pick a carrier before you can advise — comparing across carriers is the advice. When they push back or say what they prefer, revise the recommendation and say what changed.
-- Plan recommendations. When the client asks for plan recommendations (the Medical Plans page has a "Get Plan Recommendations" button that sends that request), do not ask questions first: recommend straight from their figures and census profile, then invite them to tell you what matters so you can refine. Give three picks — Lower Cost, Best Fit, Richer Benefits — and when more than one carrier has quoted, give the three for each carrier. Each pick is an option ID and plan name with its monthly cost at their census (and, for Best Fit, one line on why). Ground the advice in the census: a young, narrowly spread workforce with few dependants can do well on a higher-deductible design with a lower premium; a wide age range or an older workforce needs the Best Fit pick to protect the people most likely to use care (lower deductible and out-of-pocket max), and it is worth saying that plainly; many families or spouses covered means the family tier rate matters more than the employee-only rate. Say which pick you would start with and why. Use their standing preferences if any are on file. Keep the whole answer in the chat box under about 220 words: for each carrier, one short line per pick. Close with one line inviting their budget or must-haves so you can sharpen the picks — this is the one place a closing question is right.
+- Plan recommendations. When the client asks for plan recommendations (the Medical Plans page has a "Get Plan Recommendations" button that sends that request), do not ask questions first: recommend straight from their figures and census profile, then invite them to tell you what matters so you can refine. Give three picks — Lower Cost, Best Fit, Richer Benefits — and when more than one carrier has quoted, give the three for each carrier. Publish the picks with the recommend_plans tool: it puts them on the Medical Plans page as cards, each with the plan's own figures, so the client reads them there, not in the chat. Ground the advice in the census: a young, narrowly spread workforce with few dependants can do well on a higher-deductible design with a lower premium; a wide age range or an older workforce needs the Best Fit pick to protect the people most likely to use care (lower deductible and out-of-pocket max), and it is worth saying that plainly; many families or spouses covered means the family tier rate matters more than the employee-only rate. Use their standing preferences if any are on file. After the tool returns, the chat answer is short — under about 90 words: say the picks are on the page, which one you would start with and why in a sentence or two, and close with one line inviting their budget or must-haves so you can sharpen the picks — this is the one place a closing question is right. Do not list every pick's figures in the chat; the cards carry them. When the client later asks you to revise the picks (a budget, a carrier, a must-have), call recommend_plans again with the whole new set — it replaces the old one on the page — and say what changed.
 - Remember what the client tells you. When they state a preference, a constraint, or a decision — a budget, a contribution philosophy, a carrier or network they need, a plan they liked or ruled out, who decides — record it with update_client_memory in one plain sentence so the next conversation starts from it. Do not record figures that are already in their data, guesses, or anything they did not say. When they change their mind, remove the old line and add the new one. What you have on file for this client is listed below; treat it as their standing preferences and say when a recommendation follows from it.
 - You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
 - The portal's pages, which you may point to by name: Welcome (the letter, with What's Changing For 2027 — today against 2027, the headline — below it); Assistant (this); Medical Plans, which has two tabs — New 2027 Medical Options (every quoted plan side by side, with a contribution modeler; the tab the page opens on) and Current 2026 Medical Plans (what is in force today, with rates and the employer/employee split); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
@@ -159,7 +159,7 @@ Attachments: the client may attach a file to a question — another broker's quo
 
 Research: you can search the web with web_search. Use it when the client asks you to research or look something up, or when the answer depends on something outside their figures — an ACA affordability percentage or an IRS limit for a plan year, a carrier's network or product, a regulation, a definition, or how employers of their size typically compare (premiums, employer share, deductibles — the KFF Employer Health Benefits Survey and MEPS-IC state tables are the places to look, and say which survey and year). Prefer authoritative sources (IRS, DOL, CMS, HealthCare.gov, the carrier's own site, SHRM, KFF). Say what you found in a sentence or two and name the source in words ("per the IRS"); do not paste URLs unless asked. Never search for the client's own figures — those are below. Searching is for facts, not for advice: the guidance on legal, tax and actuarial questions above still applies.
 
-Documents: you have two tools. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
+Tools: recommend_plans publishes plan picks to the Medical Plans page (see the plan recommendations rule). Documents: you have two more. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options — pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees — write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
 
 Kennion's guidance follows. It is written by the people who run the program and overrides anything above where they differ.`;
 
@@ -167,7 +167,41 @@ Kennion's guidance follows. It is written by the people who run the program and 
 const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 5 };
 const webSearchOn = () => !/^(0|false|off|no)$/i.test(String(process.env.KENNION_WEB_SEARCH || ""));
 
+/** The three picks per carrier, in the order the page shows them. */
+export const PICK_TIERS = ["lower_cost", "best_fit", "richer_benefits"];
+
 const TOOLS = [
+  {
+    name: "recommend_plans",
+    description:
+      "Publish plan recommendations to this group's Medical Plans page, where they appear as cards above the grid with each plan's own figures (deductible, out-of-pocket max, monthly bill at the group's enrollment) and buttons to shortlist or compare. Call it once per answer with every pick — Lower Cost, Best Fit and Richer Benefits for each carrier that quoted — and again with the whole set whenever you revise them; each call replaces the last. Picks are quoted 2027 options by their option ID (UH3, GR1) as they appear in the figures. Returns which picks were placed.",
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "start_with", "start_with_reason", "picks"],
+      properties: {
+        summary: { type: "string", description: "One or two sentences on what shaped the picks: the census profile and what it means for deductibles, dependants and budget. Plain words, no figures the cards already show." },
+        start_with: { type: "string", description: "The option ID of the pick you would start with." },
+        start_with_reason: { type: "string", description: "One sentence on why that one, in terms of this group." },
+        picks: {
+          type: "array",
+          minItems: 1,
+          maxItems: 12,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["carrier", "tier", "option_id", "reason"],
+            properties: {
+              carrier: { type: "string", description: "The carrier or partner the pick is from, as named in the figures (UnitedHealthcare, Gravie, Angle Health)." },
+              tier: { type: "string", enum: PICK_TIERS, description: "Which of the three picks this is for that carrier." },
+              option_id: { type: "string", description: "The option ID (UH3, GR1)." },
+              reason: { type: "string", description: "One short line on why this pick for this group — under about 25 words." },
+            },
+          },
+        },
+      },
+    },
+  },
   {
     name: "update_client_memory",
     description:
@@ -395,13 +429,74 @@ export function titleFor(text) {
   return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)).replace(/[,;:.!?-]+$/, "") + "…";
 }
 
+const TIER_LABELS = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
+export const tierLabel = (t) => TIER_LABELS[t] || t;
+
+/** Every quoted plan on file with an option ID, flattened: what a pick can point at. */
+function quotedPlans(proposals) {
+  return (proposals || []).flatMap((pr) => (pr.plans || []).filter((pl) => pl.optionId).map((pl) => ({ ...pl, slot: pr.slot, proposalCarrier: pr.carrier || pr.slot })));
+}
+const quotedOptionIds = (proposals) => quotedPlans(proposals).map((pl) => pl.optionId);
+
+const clean = (v, max) => String(v == null ? "" : v).replace(/\s+/g, " ").trim().slice(0, max);
+
+/**
+ * The tool's input as the record the page reads: each pick resolved to a
+ * quoted plan by option ID (a plan name or code also works), one pick per
+ * carrier and tier, in carrier-then-tier order. Picks that resolve to
+ * nothing are returned separately so the model can be told.
+ */
+export function buildRecommendations(input, proposals) {
+  const plans = quotedPlans(proposals);
+  const byId = new Map(plans.map((pl) => [String(pl.optionId).toUpperCase(), pl]));
+  const find = (ref) => {
+    const key = clean(ref, 40).toUpperCase();
+    if (!key) return null;
+    if (byId.has(key)) return byId.get(key);
+    return plans.find((pl) => String(pl.planCode || "").toUpperCase() === key || String(pl.name || "").toUpperCase() === key) || null;
+  };
+  const unknown = [];
+  const seen = new Set();
+  const picks = [];
+  for (const raw of Array.isArray(input.picks) ? input.picks.slice(0, 12) : []) {
+    const pl = find(raw && raw.option_id);
+    const tier = PICK_TIERS.includes(raw && raw.tier) ? raw.tier : null;
+    if (!pl || !tier) {
+      unknown.push(clean(raw && raw.option_id, 40) || "(blank)");
+      continue;
+    }
+    const carrier = clean(raw.carrier, 60) || pl.proposalCarrier || pl.slot;
+    const key = `${carrier.toLowerCase()}|${tier}`;
+    if (seen.has(key) || picks.some((p) => p.optionId === pl.optionId)) continue;
+    seen.add(key);
+    picks.push({ carrier, tier, optionId: pl.optionId, plan: pl.name, reason: clean(raw.reason, 200) });
+  }
+  picks.sort((a, b) => a.carrier.localeCompare(b.carrier) || PICK_TIERS.indexOf(a.tier) - PICK_TIERS.indexOf(b.tier));
+  const start = find(input.start_with);
+  const startWith = start && picks.some((p) => p.optionId === start.optionId) ? start.optionId : picks.length ? picks[0].optionId : null;
+  return {
+    record: { summary: clean(input.summary, 400), startWith, startWithReason: clean(input.start_with_reason, 300), picks },
+    unknown,
+  };
+}
+
 /**
  * Run one tool call. `data` is what the documents need (the group view and
- * its proposals); `keep` stores the bytes and returns the file record.
- * Returns what the model is told.
+ * its proposals); `keep` stores the bytes and returns the file record;
+ * `savePicks` stores plan recommendations for the page (absent on a staff
+ * trial, which publishes nothing). Returns what the model is told.
  */
-async function runTool(name, input, { data, keep, onStatus, saveMemory }) {
+async function runTool(name, input, { data, keep, onStatus, saveMemory, savePicks }) {
   const g = data.group;
+  if (name === "recommend_plans") {
+    if (!savePicks) return "This is a staff trial: recommendations are not published to the client's page. Give them in the chat instead.";
+    onStatus("Placing the picks on the Medical Plans page…");
+    const { record, unknown } = buildRecommendations(input, data.proposals);
+    if (!record.picks.length) return `None of those option IDs is on the quotes on file (${unknown.join(", ") || "no picks given"}). The options are: ${quotedOptionIds(data.proposals).join(", ")}. Call recommend_plans again with option IDs from that list.`;
+    await savePicks(record);
+    const placed = record.picks.map((p) => `${p.optionId} (${p.carrier}, ${tierLabel(p.tier)})`).join(", ");
+    return `Placed ${record.picks.length} pick(s) on the Medical Plans page: ${placed}.${unknown.length ? ` Not placed — not on the quotes on file: ${unknown.join(", ")}.` : ""} Now answer in a few lines: the picks are on the page; which you would start with and why; one closing line inviting their budget or must-haves.`;
+  }
   if (name === "update_client_memory") {
     const add = (Array.isArray(input.add) ? input.add : []).map((t) => String(t).replace(/\s+/g, " ").trim().slice(0, 300)).filter(Boolean);
     const removeIds = (Array.isArray(input.remove_ids) ? input.remove_ids : []).map(Number).filter(Number.isInteger);
@@ -437,6 +532,32 @@ const memoryText = (list) => (list || []).map((m) => `${m.id}. ${m.text}`).join(
 async function fakeReply(question, ctx) {
   const q = String(question || "");
   const pieces = [];
+  if (/recommend/i.test(q) && ctx.savePicks) {
+    // Per carrier: the least expensive quoted plan, the middle one, and the
+    // richest, by monthly total — the shape the real answer has.
+    const byCarrier = new Map();
+    for (const pl of quotedPlans(ctx.data.proposals)) {
+      const k = pl.proposalCarrier;
+      if (!byCarrier.has(k)) byCarrier.set(k, []);
+      byCarrier.get(k).push(pl);
+    }
+    const picks = [];
+    for (const [carrier, list] of byCarrier) {
+      const sorted = list.filter((pl) => pl.monthlyTotal != null).sort((a, b) => a.monthlyTotal - b.monthlyTotal);
+      if (!sorted.length) continue;
+      const idx = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1];
+      idx.forEach((i, n) => {
+        const pl = sorted[i];
+        if (picks.some((p) => p.option_id === pl.optionId)) return;
+        picks.push({ carrier, tier: PICK_TIERS[n], option_id: pl.optionId, reason: `Canned ${tierLabel(PICK_TIERS[n])} pick (KENNION_FAKE_AI).` });
+      });
+    }
+    if (picks.length) {
+      const { record } = buildRecommendations({ summary: "Canned recommendations (KENNION_FAKE_AI): the least expensive, the middle and the richest quoted plan from each carrier.", start_with: picks.find((p) => p.tier === "best_fit")?.option_id || picks[0].option_id, start_with_reason: "A mid-range design protects the people most likely to use care without the premium jump.", picks }, ctx.data.proposals);
+      await ctx.savePicks(record);
+      pieces.push(`Your picks are on the Medical Plans page — I'd start with ${record.startWith}. `);
+    }
+  }
   if (/\b(remember|prefer|we want|our budget)\b/i.test(q) && ctx.saveMemory) {
     await ctx.saveMemory({ add: [q.replace(/^please\s+remember\s+(that\s+)?/i, "").trim().slice(0, 300)], removeIds: [] });
     pieces.push("Noted, I'll keep that in mind. ");
@@ -474,7 +595,7 @@ async function attachmentBlocks(f) {
   return [{ type: "document", source: { type: "text", media_type: "text/plain", data: p.text || "(empty)" }, title: f.filename }];
 }
 
-export async function replyTo({ data, history, page, compact = false, playbook, memory = [], saveMemory, onText, onStatus = () => undefined, keep, readFile }) {
+export async function replyTo({ data, history, page, compact = false, playbook, memory = [], saveMemory, savePicks = null, onText, onStatus = () => undefined, keep, readFile }) {
   const turns = history.slice(-HISTORY_TURNS);
   while (turns.length && turns[0].role !== "user") turns.shift();
   const last = turns[turns.length - 1];
@@ -486,7 +607,7 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
   };
 
   if (fakeAi()) {
-    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile, attachments: last && last.files, saveMemory });
+    const text = await fakeReply(last ? last.content : "", { data, keep: keepFile, attachments: last && last.files, saveMemory, savePicks });
     let full = "";
     for (const word of text.split(" ")) {
       full += word + " ";
@@ -625,10 +746,10 @@ export async function replyTo({ data, history, page, compact = false, playbook, 
       if (block.type !== "tool_use") continue;
       let text;
       try {
-        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus, saveMemory });
+        text = await runTool(block.name, block.input || {}, { data, keep: keepFile, onStatus, saveMemory, savePicks });
       } catch (e) {
         console.error(`assistant tool ${block.name}:`, e.message);
-        text = `The document could not be made: ${e.message}. Tell the client, briefly, and offer to try again.`;
+        text = block.name === "recommend_plans" ? `The picks could not be placed on the page: ${e.message}. Give them in the chat instead, briefly.` : `The document could not be made: ${e.message}. Tell the client, briefly, and offer to try again.`;
       }
       results.push({ type: "tool_result", tool_use_id: block.id, content: text });
     }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askAssistant, loadRecommendations, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists } from "@/views/PlanFilters";
@@ -9,6 +9,7 @@ import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/P
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
 import MarketResults from "@/views/MarketResults";
+import Recommendations from "@/views/Recommendations";
 
 /**
  * Every 2027 plan from every carrier, one grid, lowest cost first.
@@ -134,6 +135,20 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     if (assistantOn && !chat.loaded) loadThreads().catch(() => undefined);
   }, [assistantOn, chat.loaded]);
   const recommended = chat.loaded && !!threadTitled(RECOMMENDATIONS_TITLE);
+  // The assistant's picks, shown above the grid; fetched once, then kept
+  // current by the chat stream as the assistant places new ones.
+  useEffect(() => {
+    if (assistantOn && chat.recommendations === undefined) loadRecommendations().catch(() => undefined);
+  }, [assistantOn, chat.recommendations]);
+  const rec = assistantOn ? (chat.recommendations ?? null) : null;
+  /** The Get / View Plan Recommendations button: the panel when there is one; otherwise ask — again, in the old conversation, when one exists without picks. */
+  const recommendationsAction = () => {
+    if (rec) {
+      document.getElementById("recommendations")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, recommended);
+  };
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [contribOpen, setContribOpen] = useState(true);
@@ -293,6 +308,21 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     ...(favoritesOnly ? [{ key: "favorites", label: "Favorites only", onRemove: () => setFavoritesOnly(false) }] : []),
     ...(compareOnly ? [{ key: "compare", label: "Comparing only", onRemove: () => setCompareOnly(false) }] : []),
   ];
+  // "Show in grid" from a recommended plan: its row is scrolled to and lit
+  // for a moment — after the filters are cleared, when they were hiding it.
+  const [flash, setFlash] = useState<string | null>(null);
+  const showInGrid = (name: string) => {
+    if (!list.some((p) => p.plan === name)) clearAll();
+    setFlash(name);
+  };
+  useEffect(() => {
+    if (!flash) return;
+    const row = document.querySelector<HTMLElement>(`tr[data-plan="${CSS.escape(flash)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setFlash(null), 2600);
+    return () => clearTimeout(t);
+  }, [flash, list]);
   /** A column heading: first click sorts it ascending, the next flips it. The Sort by control shows the same. */
   const sortOn = (k: SortKey) => setSort((s) => (s.key === k ? { key: k, dir: s.dir > 0 ? -1 : 1 } : { key: k, dir: 1 }));
   const MAX_FAVORITES = 8;
@@ -370,16 +400,38 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         plans={plans}
         action={
           assistantOn ? (
-            <button onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={recommended ? "Open the recommendations the assistant already gave you" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
+            <button onClick={recommendationsAction} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={rec ? "The assistant's picks are just below" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
                 <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
               </svg>
-              {recommended ? "View Plan Recommendations" : "Get Plan Recommendations"}
+              {rec ? "View Plan Recommendations" : "Get Plan Recommendations"}
             </button>
           ) : null
         }
       />
+
+      {/* The assistant's picks, as cards: three per carrier, priced at the applied contribution, with the grid's own heart and plus. */}
+      {rec && (
+        <Recommendations
+          rec={rec}
+          plans={plans}
+          applied={applied}
+          counts={counts}
+          enrolled={TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0)}
+          selected={selected}
+          heartBlocked={heartBlocked}
+          heartTitle={heartTitle}
+          onToggleHeart={toggleHeart}
+          inProposal={inProposal}
+          compareFull={compareFull}
+          onToggleCompare={toggleProposal}
+          onOpen={setOpen}
+          onShowInGrid={showInGrid}
+          onRefine={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)}
+          onAskAgain={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, true)}
+        />
+      )}
 
       {/* Browse the grid. The assistant's recommendations button sits in the market results above. */}
       <div className="noprint" style={{ margin: "6px 0 10px" }}>
@@ -669,7 +721,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
               const numCell = { ...cell, textAlign: "left" as const, ...num };
               return (
-                <tr key={p.plan} className="rowlink" onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
+                <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "—"}</td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { C } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { loadThreads, sendMessage, setChatOpen, takePendingAsk, takePendingThread, useChat } from "@/lib/chat";
+import { loadThread, loadThreads, sendMessage, setChatOpen, takePendingAsk, takePendingThread, useChat } from "@/lib/chat";
 import ChatPanel from "@/views/ChatPanel";
 
 interface Props {
@@ -35,8 +35,11 @@ export default function ChatWidget({ page, assistantHref }: Props) {
     if (!open || chat.pendingAsk == null || chat.streaming) return;
     const q = takePendingAsk();
     if (q == null) return;
-    setThreadId("new");
-    void sendMessage(null, q.question, page, (id) => setThreadId(id), true, [], q.title).catch(() => undefined);
+    const into = q.threadId ?? null;
+    setThreadId(into ?? "new");
+    // Into an existing conversation, its history comes first, so the new turn lands under the old ones.
+    const ready = into != null ? loadThread(into).catch(() => undefined) : Promise.resolve();
+    void ready.then(() => sendMessage(into, q.question, page, (id) => setThreadId(id), true, [], q.title)).catch(() => undefined);
   }, [open, chat.pendingAsk, chat.streaming, page]);
   // A conversation a page asked the box to open again — the recommendations already given.
   useEffect(() => {

@@ -1296,6 +1296,8 @@ function memoryChatStore() {
   const messages = new Map();
   const files = new Map();
   const memory = new Map();
+  /** The assistant's plan picks per group, as the Medical Plans page shows them. */
+  const recommendations = new Map();
   let nextThread = 1;
   let nextMessage = 1;
   let nextFile = 1;
@@ -1412,6 +1414,14 @@ function memoryChatStore() {
       list = list.slice(-40);
       memory.set(groupName, list);
       return list.map((m) => ({ ...m }));
+    },
+    async getRecommendations(groupName) {
+      const r = recommendations.get(groupName);
+      return r ? { ...r } : null;
+    },
+    async setRecommendations(groupName, threadId, body) {
+      recommendations.set(groupName, { ...body, threadId: threadId == null ? null : Number(threadId), createdAt: new Date().toISOString() });
+      return this.getRecommendations(groupName);
     },
     async getFile(id) {
       const f = files.get(Number(id));
@@ -1579,6 +1589,15 @@ async function streamTurn({ g, thread, content, page, compact = false, attachmen
         send("memory", { memory: list });
         return list;
       },
+      // Plan picks go to the client's Medical Plans page — from the client's
+      // own conversations only; a staff trial publishes nothing.
+      savePicks: thread.staff
+        ? null
+        : async (record) => {
+            const rec = await chatStore.setRecommendations(g.name, thread.id, record);
+            send("recommendations", { recommendations: rec });
+            return rec;
+          },
       readFile: async (id) => {
         const f = await chatStore.getFile(id);
         return f && f.threadId === thread.id ? f : null;
@@ -1614,6 +1633,13 @@ app.get("/api/chat/threads", async (req, res) => {
   const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ threads: await chatStore.listThreads(g.name) });
+});
+
+/** The assistant's plan picks for the group, as the Medical Plans page shows them; null before it has given any. */
+app.get("/api/chat/recommendations", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  res.json({ recommendations: await chatStore.getRecommendations(g.name) });
 });
 
 /** What the assistant remembers about the group; the client can drop any line. */
@@ -3370,6 +3396,19 @@ app.post("/api/admin/override", requireStaff, express.json({ limit: "16kb" }), a
  */
 const memProposals = [];
 let memNextId = 1;
+// Local end-to-end runs only: with no database, KENNION_SEED_PROPOSALS names
+// a JSON file of proposal rows (group_name, slot, carrier, extracted) to
+// start from, so a test can put quoted plans in front of the assistant.
+if (!db && process.env.KENNION_SEED_PROPOSALS) {
+  try {
+    for (const r of JSON.parse(fs.readFileSync(process.env.KENNION_SEED_PROPOSALS, "utf8"))) {
+      memProposals.push({ mime: "application/pdf", size: 0, data: null, summary: null, confidence: null, error: null, uploaded_by: null, parent_id: null, context: null, superseded_by: null, kind: "file", status: "assigned", filename: `${r.slot}.pdf`, uploaded_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...r, id: memNextId++ });
+    }
+    console.log(`proposals: ${memProposals.length} seeded from ${process.env.KENNION_SEED_PROPOSALS}`);
+  } catch (e) {
+    console.error("could not seed proposals:", e.message);
+  }
+}
 function stripBytes(row) {
   const { data, ...rest } = row;
   return rest;

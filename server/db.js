@@ -341,6 +341,14 @@ CREATE TABLE IF NOT EXISTS kennion.client_memory (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS client_memory_group ON kennion.client_memory (group_name, created_at);
+-- The assistant's plan picks for a group, as the Medical Plans page shows
+-- them: one record per group, replaced whenever the assistant recommends again.
+CREATE TABLE IF NOT EXISTS kennion.plan_recommendations (
+  group_name    text PRIMARY KEY,
+  thread_id     bigint,
+  body          jsonb NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
 -- A benchmarks table shipped briefly and was taken out; the assistant answers
 -- "how do we compare" from the web instead.
 DROP TABLE IF EXISTS kennion.benchmarks;
@@ -1093,6 +1101,20 @@ export function createDb(url) {
       }
       await pool.query("DELETE FROM kennion.client_memory WHERE group_name = $1 AND id NOT IN (SELECT id FROM kennion.client_memory WHERE group_name = $1 ORDER BY created_at DESC, id DESC LIMIT 40)", [groupName]);
       return this.listMemory(groupName);
+    },
+
+    /** The assistant's plan picks for the group, or null before it has given any. */
+    async getRecommendations(groupName) {
+      const { rows } = await pool.query("SELECT thread_id, body, created_at FROM kennion.plan_recommendations WHERE group_name = $1", [groupName]);
+      return rows.length ? { ...rows[0].body, threadId: rows[0].thread_id == null ? null : Number(rows[0].thread_id), createdAt: rows[0].created_at } : null;
+    },
+    async setRecommendations(groupName, threadId, body) {
+      await pool.query(
+        `INSERT INTO kennion.plan_recommendations (group_name, thread_id, body, created_at) VALUES ($1, $2, $3, now())
+         ON CONFLICT (group_name) DO UPDATE SET thread_id = EXCLUDED.thread_id, body = EXCLUDED.body, created_at = now()`,
+        [groupName, threadId, body],
+      );
+      return this.getRecommendations(groupName);
     },
 
     async getFile(id) {
