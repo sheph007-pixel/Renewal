@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo } from "react";
 import { MARKET_RESULTS_TIP, marketResults, marketResultsSentences, type MarketPlan } from "@/lib/model";
 import { C, panel } from "@/lib/ui";
 import InfoTip from "@/views/InfoTip";
@@ -16,7 +16,7 @@ import InfoTip from "@/views/InfoTip";
  * as dynamic. The 50% assumption is stated once, in the sentence that uses
  * it; the ⓘ says what Kennion did for the client.
  */
-export default function MarketResults({ plans, action }: { plans: MarketPlan[]; action?: ReactNode }) {
+export default function MarketResults({ plans }: { plans: MarketPlan[] }) {
   const sentences = useMemo(() => marketResultsSentences(marketResults(plans)), [plans]);
   if (!sentences.length) return null;
   return (
@@ -41,13 +41,6 @@ export default function MarketResults({ plans, action }: { plans: MarketPlan[]; 
           </span>
         ))}
       </p>
-      {/* One line on what to do, and the one action. */}
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.hairline}` }}>
-        <p style={{ margin: 0, flex: "1 1 320px", minWidth: 0, fontSize: 13.5, color: C.muted, lineHeight: 1.6 }}>
-          Every plan below is priced for your group. Set your contribution, browse, and heart the ones you want Kennion to price{action ? " — or let the assistant narrow it down first." : "."}
-        </p>
-        {action && <div style={{ flex: "none" }}>{action}</div>}
-      </div>
     </section>
   );
 }

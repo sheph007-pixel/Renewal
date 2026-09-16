@@ -174,7 +174,7 @@ const TOOLS = [
   {
     name: "recommend_plans",
     description:
-      "Publish plan recommendations to this group's Medical Plans page, where they appear as cards above the grid with each plan's own figures (deductible, out-of-pocket max, monthly bill at the group's enrollment) and buttons to shortlist or compare. Call it once per answer with every pick — Lower Cost, Best Fit and Richer Benefits for each carrier that quoted — and again with the whole set whenever you revise them; each call replaces the last. Picks are quoted 2027 options by their option ID (UH3, GR1) as they appear in the figures. Returns which picks were placed.",
+      "Publish plan recommendations to this group's Medical Plans page, where the grid's AI Picks view shows just those plans, each tagged Lower Cost, Best Fit or Richer Benefits with your one-line reason on its card, priced at the group's enrollment, with the same shortlist and compare buttons as every row. Call it once per answer with every pick — Lower Cost, Best Fit and Richer Benefits for each carrier that quoted — and again with the whole set whenever you revise them; each call replaces the last. Picks are quoted 2027 options by their option ID (UH3, GR1) as they appear in the figures. Returns which picks were placed.",
     input_schema: {
       type: "object",
       additionalProperties: false,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askAssistant, loadRecommendations, loadThreads, threadTitled, useChat } from "@/lib/chat";
+import { C, chip, num, panel, pill, textInput } from "@/lib/ui";
+import { RECOMMENDATIONS_TITLE, askAssistant, loadRecommendations, loadThreads, threadTitled, useChat, type RecommendedPick } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
@@ -9,7 +9,6 @@ import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/P
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
 import MarketResults from "@/views/MarketResults";
-import Recommendations from "@/views/Recommendations";
 
 /**
  * Every 2027 plan from every carrier, one grid, lowest cost first.
@@ -45,6 +44,8 @@ export interface GridProps {
 }
 
 /** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
+/** The assistant's three picks per carrier, as tagged on the grid. */
+const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 /** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
@@ -143,13 +144,27 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     if (assistantOn && chat.recommendations === undefined) loadRecommendations().catch(() => undefined);
   }, [assistantOn, chat.recommendations]);
   const rec = assistantOn ? (chat.recommendations ?? null) : null;
-  /** The Get / View Plan Recommendations button: the panel when there is one; otherwise ask — again, in the old conversation, when one exists without picks. */
-  const recommendationsAction = () => {
-    if (rec) {
-      document.getElementById("recommendations")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
+  /** The assistant's picks resolved to rows on the grid: plan → tier, why, and whether it is the one to start with. A pick whose option is no longer quoted is left out. */
+  const picks = useMemo(() => {
+    const m = new Map<string, { tier: RecommendedPick["tier"]; reason: string; start: boolean }>();
+    if (!rec) return m;
+    for (const pick of rec.picks) {
+      const p = plans.find((x) => (x.optionId || "").toUpperCase() === pick.optionId.toUpperCase());
+      if (p && !m.has(p.plan)) m.set(p.plan, { tier: pick.tier, reason: pick.reason, start: !!rec.startWith && rec.startWith.toUpperCase() === pick.optionId.toUpperCase() });
     }
-    void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, recommended);
+    return m;
+  }, [rec, plans]);
+  // AI Picks: a view of the grid, like Favorites and Compare. A fresh set of picks switches it on.
+  const [picksOnly, setPicksOnly] = useState(false);
+  const picksStamp = rec?.createdAt ?? null;
+  useEffect(() => {
+    if (picksStamp && picks.size) setPicksOnly(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picksStamp]);
+  /** The AI Picks button: with picks, toggle the view; without, ask the assistant — again, in the old conversation, when one exists without picks. */
+  const aiPicksAction = () => {
+    if (picks.size) setPicksOnly((v) => !v);
+    else void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, recommended);
   };
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
@@ -244,6 +259,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     () =>
       faceted.filter(
         ({ p, x }) =>
+          (!picksOnly || picks.has(p.plan)) &&
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
           (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${x.network}`.toLowerCase().includes(q)),
@@ -292,7 +308,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   }, [base, filters, sort, applied, counts]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
-  const filtering = !filtersEmpty(filters) || !!q || favoritesOnly || compareOnly;
+  const filtering = !filtersEmpty(filters) || !!q || picksOnly || favoritesOnly || compareOnly;
   /** Every filter off. The sort, the favorites and the comparison stay as they are. */
   const clearAll = () => {
     setFilters(EMPTY_FILTERS);
@@ -311,10 +327,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // "Show in grid" from a recommended plan: its row is scrolled to and lit
   // for a moment — after the filters are cleared, when they were hiding it.
   const [flash, setFlash] = useState<string | null>(null);
-  const showInGrid = (name: string) => {
-    if (!list.some((p) => p.plan === name)) clearAll();
-    setFlash(name);
-  };
   useEffect(() => {
     if (!flash) return;
     const row = document.querySelector<HTMLElement>(`tr[data-plan="${CSS.escape(flash)}"]`);
@@ -396,42 +408,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   return (
     <div>
       {/* What came back from market, from every quoted plan — fixed 50% employer share, untouched by the controls above — and what to do next, with the assistant's recommendations beside it. */}
-      <MarketResults
-        plans={plans}
-        action={
-          assistantOn ? (
-            <button onClick={recommendationsAction} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={rec ? "The assistant's picks are just below" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
-              </svg>
-              {rec ? "View Plan Recommendations" : "Get Plan Recommendations"}
-            </button>
-          ) : null
-        }
-      />
+      <MarketResults plans={plans} />
 
-      {/* The assistant's picks, as cards: three per carrier, priced at the applied contribution, with the grid's own heart and plus. */}
-      {rec && (
-        <Recommendations
-          rec={rec}
-          plans={plans}
-          applied={applied}
-          counts={counts}
-          enrolled={TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0)}
-          selected={selected}
-          heartBlocked={heartBlocked}
-          heartTitle={heartTitle}
-          onToggleHeart={toggleHeart}
-          inProposal={inProposal}
-          compareFull={compareFull}
-          onToggleCompare={toggleProposal}
-          onOpen={setOpen}
-          onShowInGrid={showInGrid}
-          onRefine={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)}
-          onAskAgain={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, true)}
-        />
-      )}
 
       {narrow && <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} applied={filters} onApply={setFilters} optionsFor={optionsFor} resultCountFor={resultCountFor} bounds={bounds} returnTo={filtersBtn} />}
 
@@ -616,7 +594,15 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               {showingText(list.length, plans.length)}
             </span>
             <SortSelect sort={sort} onChange={setSort} />
-            {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />}
+            {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
+            {assistantOn && (
+              <button onClick={aiPicksAction} aria-pressed={picksOnly} title={picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "Ask the assistant for a Lower Cost, Best Fit and Richer Benefits pick from each carrier, from your census"} style={viewToggle(picksOnly, picks.size > 0, C.navy, "#e8eef5")}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly || picks.size ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                </svg>
+                AI Picks ({picks.size})
+              </button>
+            )}
             <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill={favoritesOnly || favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
@@ -634,16 +620,18 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 {compareOpen ? "Hide Comparison" : "View Comparison"}
               </button>
             )}
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search plans"
-              aria-label="Search 2027 plan options"
-              style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 150, marginLeft: "auto" }}
-            />
-            <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
-              Export
-            </button>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search"
+                aria-label="Search 2027 plan options"
+                style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 104 }}
+              />
+              <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
+                Export
+              </button>
+            </span>
           </div>
           {!narrow && filtersOpen && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10 }}>
@@ -653,6 +641,22 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           {appliedChips.length > 0 && <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} showCount={false} />}
         </div>
 
+        {picksOnly && rec && picks.size > 0 && (
+          <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderBottom: `1px solid ${C.rule}`, background: "#f3f6fa" }}>
+            <div style={{ flex: "1 1 360px", minWidth: 0, fontSize: 13, color: C.body, lineHeight: 1.55 }}>
+              <strong style={{ color: C.navy }}>The assistant's picks.</strong> {rec.summary}
+              {rec.startWith && <span> <strong style={{ color: C.blueInk }}>Start with {rec.startWith.toUpperCase()}</strong>{rec.startWithReason ? ` — ${rec.startWithReason}` : ""}</span>}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...chip(false), fontWeight: 600, color: C.blue }} title="Open the conversation these came from and tell the assistant what matters to you">
+                Refine In Chat
+              </button>
+              <button type="button" onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, true)} style={{ ...chip(false), fontWeight: 600 }} title="Ask the assistant for a fresh set of picks">
+                Ask Again
+              </button>
+            </div>
+          </div>
+        )}
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
         <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
@@ -724,7 +728,15 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <div style={{ fontSize: 11.5, color: C.faint }}>{networkOf(p) || ""}</div>
                   </td>
                   <td style={cell}>
-                    <div>{p.plan}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span>{p.plan}</span>
+                      {picks.get(p.plan) && (
+                        <span title={picks.get(p.plan)!.reason} style={{ ...pill(C.navy, "#e8eef5", "#c9d6e6"), fontSize: 10.5, padding: "1px 7px", textTransform: "none", whiteSpace: "nowrap" }}>
+                          {picks.get(p.plan)!.start ? "★ " : "✦ "}
+                          {TIER_LABEL[picks.get(p.plan)!.tier]}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
                       {fundingOf(p)}
                       {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
@@ -788,6 +800,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             <button onClick={() => setOpen(null)} aria-label="Close" style={{ ...iconBtn, position: "absolute", top: 8, right: 10, fontSize: 22, color: C.muted, zIndex: 1 }}>
               ×
             </button>
+            {picks.get(opened.plan) && (
+              <div style={{ background: "#e8eef5", border: "1px solid #c9d6e6", borderRadius: 4, padding: "8px 12px", marginBottom: 8, fontSize: 13, color: C.navy, lineHeight: 1.5 }}>
+                <strong>{picks.get(opened.plan)!.start ? "★ Start here · " : "✦ "}{TIER_LABEL[picks.get(opened.plan)!.tier]}</strong> — {picks.get(opened.plan)!.reason}
+              </div>
+            )}
             <PlanCard m={card(opened)} actions={actionsFor(opened)} />
           </div>
         </div>
