@@ -159,7 +159,7 @@ export default function AuditPanel({ token, version, ai }: Props) {
               <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 640 }}>
                 <thead>
                   <tr>
-                    {["Carrier", "EN / mo", "Portal / mo", "Diff", "EN people", "Portal people", ""].map((h, i) => (
+                    {["Carrier/TPA", "EN / mo", "Portal / mo", "Diff", "EN people", "Portal people", ""].map((h, i) => (
                       <th key={h + i} style={{ padding: "6px 8px", textAlign: i === 0 ? "left" : "right", fontSize: 11.5, color: C.muted, textTransform: "uppercase", letterSpacing: ".3px", borderBottom: `1px solid ${C.hairline}` }}>{h}</th>
                     ))}
                   </tr>

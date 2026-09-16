@@ -211,7 +211,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
           <thead>
             <tr>
               <Head label="Plan" k="plan" left sort={sort} by={by} pad="11px 10px 11px 14px" />
-              <Head label="Carrier" k="carrier" left sort={sort} by={by} />
+              <Head label="Carrier/TPA" k="carrier" left sort={sort} by={by} />
               <Head label="Enrolled" k="enrolled" sort={sort} by={by} />
               {TIERS.map((t) => (
                 <Head key={t.key} label={t.label} k={t.key} sort={sort} by={by} />

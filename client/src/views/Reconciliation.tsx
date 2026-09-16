@@ -340,7 +340,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 1040 }}>
               <thead>
                 <tr>
-                  <th style={th()}>Carrier</th>
+                  <th style={th()}>Carrier/TPA</th>
                   <th style={th(true)}>EN enrolled</th>
                   <th style={th(true)}>Portal</th>
                   <th style={th(true)}>In archived</th>

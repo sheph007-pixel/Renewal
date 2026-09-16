@@ -12,7 +12,7 @@ const carrierOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", " 
 function optionRow(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>) {
   const sp = costSplit(p, contribution, counts);
   return {
-    Carrier: carrierOf(p),
+    "Carrier/TPA": carrierOf(p),
     Plan: p.plan,
     Funding: p.label,
     Type: p.type,

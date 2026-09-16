@@ -4,6 +4,7 @@
 // are computed here from the same figures the pages use, never by the model;
 // the model only chooses which plans to put next to each other.
 import PDFDocument from "pdfkit";
+import { networkLabel } from "./proposal-kind.js";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 
@@ -22,12 +23,10 @@ const slotCarrier = (slot, carrier) => {
   if (/^UHC|Surest/.test(slot || "")) return "UnitedHealthcare";
   return carrier || slot || "—";
 };
-const slotFunding = (slot, funding) => {
-  if (slot === "UHC Fully Insured") return "Fully insured";
-  if (slot === "UHC Level Funded") return "Level funded";
-  if (slot === "Cobalt") return funding || "Self funded";
-  return funding ? funding.replace(/^\w/, (c) => c.toUpperCase()) : "Level funded";
-};
+// Funding is one of two things: UnitedHealthcare quotes fully insured and
+// level funded in separate slots; every other carrier and partner is level
+// funded, whatever wording its quote uses.
+const slotFunding = (slot) => (slot === "UHC Fully Insured" ? "Fully insured" : "Level funded");
 
 /**
  * The rows of a comparison: what is in force today, then the chosen 2027
@@ -132,8 +131,8 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
       section: "2027 options",
       name: pl.optionId ? `${pl.optionId} · ${pl.name}` : pl.name,
       carrier: slotCarrier(pr.slot, pr.carrier),
-      funding: slotFunding(pr.slot, pr.funding),
-      network: pl.network || "—",
+      funding: slotFunding(pr.slot),
+      network: networkLabel(pl.network) || "—",
       deductible: pl.deductible || "—",
       oopMax: pl.oopMax || "—",
       rates,
@@ -165,7 +164,7 @@ const SHORT_TIER = { EE: "EE", ES: "EE+SP", EC: "EE+CH", FAM: "Family" };
 const columnsFor = (table) => {
   const cols = [
     { key: "name", label: "Plan", width: 118, align: "left" },
-    { key: "carrier", label: "Carrier / funding", width: 80, align: "left" },
+    { key: "carrier", label: "Carrier/TPA / funding", width: 80, align: "left" },
     { key: "deductible", label: "Deductible", width: 52, align: "left" },
     { key: "oopMax", label: "OOP max", width: 52, align: "left" },
     ...TIER_KEYS.map((k) => ({ key: `rate_${k}`, label: `${SHORT_TIER[k]} (${table.counts[k] || 0})`, width: 50, align: "right" })),

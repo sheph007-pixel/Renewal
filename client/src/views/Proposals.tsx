@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { C, money0, panel } from "@/lib/importui";
 import { pill } from "@/lib/ui";
+import { networkLabel } from "@/lib/model";
 import Link from "@/lib/Link";
 import { PATHS, groupPath } from "@/lib/router";
 import type { AdminGroup } from "@/views/GroupsTable";
@@ -362,7 +363,7 @@ function Extracted({ x }: { x: Extraction }) {
                     {p.plan_type && <span style={{ color: C.ghost }}> · {p.plan_type}</span>}
                     {p.plan_code && <div style={{ fontSize: 11.5, color: C.ghost }}>{p.plan_code}</div>}
                   </td>
-                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.network || "—"}</td>
+                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{networkLabel(p.network) || "—"}</td>
                   <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.deductible || "—"}</td>
                   <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.oop_max || "—"}</td>
                   {(["EE", "ES", "EC", "FAM"] as const).map((t) => (
