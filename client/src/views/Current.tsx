@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   TIERS,
-  contributionByTier,
   money,
   rateFor,
   type Group,
@@ -32,8 +31,9 @@ interface Props {
   g: Group;
   rows: PlanRow[];
   totals: { er: number; ee: number; total: number };
-  eePct: number;
-  depPct: number;
+  /** Kept for the caller; the per-tier estimate they fed is no longer shown. */
+  eePct?: number;
+  depPct?: number;
   /** The group's own invoice, addressed to this group so no other cookie can answer. */
   invoiceHref: string;
 }
@@ -130,7 +130,7 @@ function Head({
   );
 }
 
-export default function Current({ data, overrides, g, rows, totals, eePct, depPct, invoiceHref }: Props) {
+export default function Current({ data, overrides, g, rows, totals, invoiceHref }: Props) {
   const enrolled = rows.reduce((n, r) => n + TIERS.reduce((m, t) => m + (r.counts[t.key] || 0), 0), 0);
 
   // Biggest premium first, which is the order an employer reads it in.
@@ -163,11 +163,6 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
   const cell = { padding: "10px 10px", border: `1px solid ${C.rule}`, fontSize: 14, background: C.card };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
 
-  const contribution = useMemo(
-    () => contributionByTier(data, overrides, g, eePct, depPct),
-    [data, overrides, g, eePct, depPct],
-  );
-
   // Every section header button — View Invoice, Employee Navigator — reads
   // the same way, so the page never looks like it has two button styles.
   const headerBtn = {
@@ -183,7 +178,7 @@ export default function Current({ data, overrides, g, rows, totals, eePct, depPc
 
   return (
     <div>
-      <SpendDashboard totals={totals} contribution={contribution} enrolled={enrolled} />
+      <SpendDashboard totals={totals} enrolled={enrolled} />
 
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Your 2026 Medical Plans</h2>
