@@ -44,6 +44,8 @@ export interface GridProps {
 }
 
 /** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
+type GridView = "all" | "picks" | "favorites" | "compare";
+
 /** The assistant's three picks per carrier, as tagged on the grid. */
 const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
@@ -153,11 +155,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     }
     return m;
   }, [rec, plans]);
-  // AI Picks: a view of the grid, like Favorites and Compare. A fresh set of picks switches it on.
-  const [picksOnly, setPicksOnly] = useState(false);
+  // Which plans the grid shows: all, the assistant's picks, favorites or the
+  // comparison — one at a time, so a view is never "on" behind another. A
+  // fresh set of picks switches to them.
+  const [view, setView] = useState<GridView>("all");
+  const picksOnly = view === "picks";
+  const favoritesOnly = view === "favorites";
+  const compareOnly = view === "compare";
   const picksStamp = rec?.createdAt ?? null;
   useEffect(() => {
-    if (picksStamp && picks.size) setPicksOnly(true);
+    if (picksStamp && picks.size) setView("picks");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picksStamp]);
   // Asking for picks happens in place: the button spins, the chat stays
@@ -170,9 +177,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       .catch(() => undefined)
       .finally(() => setAsking(false));
   };
-  /** The AI Picks button: with picks, toggle the view; without, ask. */
+  /** The AI Picks segment: with picks, show them (or go back to all); without, ask. */
   const aiPicksAction = () => {
-    if (picks.size) setPicksOnly((v) => !v);
+    if (picks.size) setView((v) => (v === "picks" ? "all" : "picks"));
     else askForPicks();
   };
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
@@ -180,8 +187,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // Closed until asked for: one line says what the company pays; Edit opens the fields.
   const [contribOpen, setContribOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [compareOnly, setCompareOnly] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [proposal, setProposal] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -322,16 +327,15 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const clearAll = () => {
     setFilters(EMPTY_FILTERS);
     setQuery("");
-    setFavoritesOnly(false);
-    setCompareOnly(false);
+    setView("all");
   };
   // What is applied, as chips: one per selection in a category, then the
   // search, Favorites and Compare views, each removable on its own.
   const appliedChips: AppliedChip[] = [
     ...filterChips(filters).map((c) => ({ key: c.key, label: c.label, onRemove: () => setFilters((f) => c.remove(f)) })),
     ...(q ? [{ key: "search", label: `Search: “${query.trim()}”`, onRemove: () => setQuery("") }] : []),
-    ...(favoritesOnly ? [{ key: "favorites", label: "Favorites only", onRemove: () => setFavoritesOnly(false) }] : []),
-    ...(compareOnly ? [{ key: "compare", label: "Comparing only", onRemove: () => setCompareOnly(false) }] : []),
+    ...(favoritesOnly ? [{ key: "favorites", label: "Favorites only", onRemove: () => setView("all") }] : []),
+    ...(compareOnly ? [{ key: "compare", label: "Comparing only", onRemove: () => setView("all") }] : []),
   ];
   // "Show in grid" from a recommended plan: its row is scrolled to and lit
   // for a moment — after the filters are cleared, when they were hiding it.
@@ -609,31 +613,39 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             ) : (
               <FiltersButton count={filterCount(filters)} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} buttonRef={filtersBtn} />
             )}
-            <span aria-live="polite" style={{ fontSize: 13, color: C.muted, margin: "0 6px 0 2px", ...num }}>
-              {showingText(list.length, plans.length)}
-            </span>
+            {filtering && (
+              <span aria-live="polite" style={{ fontSize: 13, color: C.muted, margin: "0 6px 0 2px", ...num }}>
+                {showingText(list.length, plans.length)}
+              </span>
+            )}
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
-            {assistantOn && (
-              <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...viewToggle(false, picksOnly || picks.size > 0, C.blue, C.blueTint), opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                </svg>
-                AI Picks ({picks.size})
+            {/* One view at a time: All, AI Picks, Favorites, Compare. The selected segment is tinted; a view with nothing in it is greyed. */}
+            <div role="group" aria-label="Which plans to show" style={{ display: "inline-flex", alignItems: "stretch", border: `1px solid ${C.border}`, borderRadius: 4, overflow: "hidden", background: C.card }}>
+              <button onClick={() => setView("all")} aria-pressed={view === "all"} title="Every quoted plan" style={segment(view === "all", false)}>
+                All ({plans.length})
               </button>
-            )}
-            <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={favoritesOnly || favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
-              </svg>
-              Favorites ({favorites})
-            </button>
-            <button onClick={() => setCompareOnly((v) => !v)} aria-pressed={compareOnly} title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`} style={viewToggle(compareOnly, proposal.length > 0, C.blue, C.blueTint)}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              Compare ({proposal.length})
-            </button>
+              {assistantOn && (
+                <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? "The assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier" : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...segment(picksOnly, false), opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                  </svg>
+                  AI Picks ({picks.size})
+                </button>
+              )}
+              <button onClick={() => setView("favorites")} disabled={!favorites} aria-pressed={favoritesOnly} title={favorites ? "Only your favorites" : "Press ♡ on a plan to add it to your favorites"} style={segment(favoritesOnly, !favorites)}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
+                </svg>
+                Favorites ({favorites})
+              </button>
+              <button onClick={() => setView("compare")} disabled={!proposal.length} aria-pressed={compareOnly} title={proposal.length ? `Only the plans you're comparing (up to ${MAX_COMPARE})` : `Press + on a plan to compare it (up to ${MAX_COMPARE})`} style={segment(compareOnly, !proposal.length)}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                Compare ({proposal.length})
+              </button>
+            </div>
             {proposal.length > 0 && (
               <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
                 {compareOpen ? "Hide Comparison" : "View Comparison"}
@@ -848,19 +860,20 @@ const toDraft = (v: Record<TierKey, number>): Record<TierKey, string> =>
   TIERS.reduce((acc, t) => ({ ...acc, [t.key]: fmtDraft(v[t.key] || 0) }), {} as Record<TierKey, string>);
 
 /** Favorites / Compare in the toolbar: filled in its colour while on, tinted while it has anything, plain otherwise. */
-const viewToggle = (on: boolean, has: boolean, color: string, tint: string): CSSProperties => ({
+/** One segment of the view control: the selected one tinted, an empty one greyed, the rest plain. */
+const segment = (on: boolean, empty: boolean): CSSProperties => ({
   display: "inline-flex",
   alignItems: "center",
   gap: 6,
-  padding: "7px 13px",
+  padding: "7px 12px",
   fontSize: 13,
-  fontWeight: 600,
-  borderRadius: 4,
-  cursor: "pointer",
+  fontWeight: on ? 700 : 500,
   whiteSpace: "nowrap",
-  color: on ? "#fff" : has ? color : C.ink,
-  background: on ? color : has ? tint : C.card,
-  border: `1px solid ${on || has ? color : C.border}`,
+  color: on ? C.blueInk : empty ? C.ghost : C.ink,
+  background: on ? C.blueTint : "transparent",
+  border: "none",
+  borderRight: `1px solid ${C.border}`,
+  cursor: empty ? "default" : "pointer",
 });
 
 const iconBtn = {
