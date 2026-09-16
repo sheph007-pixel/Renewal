@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, acaAffordableEmployeeCost, acaApplies, acaCheck, acaMinimumContribution, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, num, panel, pill, primaryBtn, textInput } from "@/lib/ui";
+import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
@@ -50,9 +50,6 @@ const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s
 /** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
 const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
-/** A figure to the cent, for the ACA ceiling. */
-const money2 = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
@@ -161,10 +158,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // rate of the least expensive plan. Off this group's own quotes, so it is a
   // different figure for every group; whole dollars, rounded up.
   const floorEE = useMemo(() => contributionFloor(plans), [plans]);
-  // ACA affordability, for a 51+ group: the FPL safe harbor on the lowest-cost plan, at the applied contribution and at the draft.
-  const aca = acaApplies(g);
-  const acaApplied = useMemo(() => (aca ? acaCheck(plans, applied) : null), [aca, plans, applied]);
-  const acaMin = useMemo(() => (aca ? acaMinimumContribution(plans) : null), [aca, plans]);
   const belowFloor = floorEE > 0 && parsed.EE < floorEE;
   // A default under the floor is not a contribution a carrier would accept:
   // lift it, so the first Employer Cost the page shows is a lawful one.
@@ -405,18 +398,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         >
           <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
             Employer Contribution
-            <InfoTip text={`You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at the least your group has to put in: half the lowest employee-only rate, for every employee, which the carriers require${aca ? ", or the ACA affordability minimum for a 51+ group where that is higher" : ""} — and you can raise any tier from there.`} color={C.blue} />
+            <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier; raise any tier from there." color={C.blue} />
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
             <span style={{ ...num }}>
               Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
               {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
             </span>
-            {acaApplied && (
-              <span title={`Federal poverty line safe harbor for a 2027 plan year: an employee's share of your lowest-cost plan may be at most ${money2(acaApplied.limit)}/month; at this contribution it is ${money2(acaApplied.lowestShare)} on ${acaApplied.plan}.`} style={acaApplied.affordable ? pill(C.green, C.greenTint, C.greenEdge) : pill(C.orangeInk, "#fdf1e6", "#f3cfa8")}>
-                {acaApplied.affordable ? "ACA affordable ✓" : "Below ACA affordability"}
-              </span>
-            )}
             <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
           </span>
         </button>
@@ -466,12 +454,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                     {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
-                    {t.key === "EE" && floorEE > 0 && (
-                      <span
-                        style={{ fontWeight: 400, color: belowFloor ? C.red : C.faint, marginLeft: 8 }}
-                        title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan"
-                      >
-                        Minimum {money0(floorEE)}
+                    {t.key === "EE" && belowFloor && (
+                      <span style={{ fontWeight: 400, color: C.red, marginLeft: 8 }} title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan">
+                        At least {money0(floorEE)}
                       </span>
                     )}
                   </div>
@@ -513,24 +498,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 >
                   Apply
                 </button>
-                {acaMin && (
-                  <button onClick={() => setDraft(toDraft(acaMin))} title={`The least that keeps employee-only coverage on your lowest-cost plan at or under ${money2(acaAffordableEmployeeCost())}/month: the ACA federal poverty line safe harbor for a 2027 plan year`} style={{ ...chip(false), color: C.blue }}>
-                    Use ACA minimum
-                  </button>
-                )}
                 {appliedChanged && (
-                  <button onClick={onReset} title={aca ? "Back to the least a 51+ group has to put in: the carriers' minimum or the ACA minimum, whichever is higher" : "Back to the minimum the carriers require"} style={{ ...chip(false), color: C.blue }}>
-                    Reset to minimum
+                  <button onClick={onReset} title="Back to where it started: half the lowest employee-only rate on every tier" style={{ ...chip(false), color: C.blue }}>
+                    Reset
                   </button>
                 )}
               </div>
             </div>
-            {aca && acaApplied && (
-              <div style={{ margin: "10px 0 0", fontSize: 12.5, color: acaApplied.affordable ? C.body : C.orangeInk, lineHeight: 1.6 }}>
-                <strong style={{ color: C.ink }}>ACA affordability (51+):</strong> under the federal poverty line safe harbor, an employee's share of your lowest-cost plan may be at most <strong>{money2(acaApplied.limit)}/month</strong> for a 2027 plan year (10.22% of the $15,960 single-person poverty line). At this contribution it is <strong>{money2(acaApplied.lowestShare)}</strong> on {acaApplied.plan}
-                {acaApplied.affordable ? " — affordable." : ` — not affordable; the ACA minimum here is ${money0(acaMin?.EE ?? 0)} per employee.`} Other safe harbors (W-2 wages, rate of pay) use pay data this page does not have.
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
 // plan they also price. Runs with `node --experimental-strip-types`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, splitCopays, networkTypeOf, networkDirectory, networkLabel, CIGNA_DIRECTORY, contributionFloor, minimumContribution, acaAffordableEmployeeCost, acaCheck, acaMinimumContribution, startingContribution, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
+import { marketPlans, proposalPlans, moneyNum, costSplit, tierSplit, splitCopays, networkTypeOf, networkDirectory, networkLabel, CIGNA_DIRECTORY, contributionFloor, minimumContribution, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 const seed = JSON.parse(readFileSync(new URL("../server/data/kennion.json", import.meta.url), "utf8"));
 const g0 = seed.groups.find((x: Group) => x.name === "Aesto Health") as Group;
@@ -138,22 +138,7 @@ assert.deepEqual(splitCopays("$40 / $100"), ["$40", "$100"]);
 assert.deepEqual(splitCopays("On the proposal"), [null, null]);
 assert.equal(comfort.pcp, "No cost", "a Gravie Comfort plan carries its doctor-visit cost");
 
-// Where the contribution starts: the carriers' floor — half the lowest employee-only rate — on every tier.
+// Where the contribution starts: half the lowest employee-only rate, on every tier.
 const cheapestEE = Math.min(...pp.map((p) => p.rates.EE as number));
 assert.equal(contributionFloor(pp), Math.ceil(cheapestEE * 0.5));
 assert.deepEqual(minimumContribution(pp), { EE: contributionFloor(pp), ES: contributionFloor(pp), EC: contributionFloor(pp), FAM: contributionFloor(pp) });
-assert.deepEqual(startingContribution(pp, { sizeCategory: "2-50" }), minimumContribution(pp), "a small group starts at the carriers' floor");
-
-// ACA affordability, FPL safe harbor, 2027 plan year: $15,960 × 10.22% ÷ 12.
-assert.equal(acaAffordableEmployeeCost(), 135.92);
-const acaMin = acaMinimumContribution(pp);
-assert.equal(acaMin.EE, Math.max(contributionFloor(pp), Math.ceil(cheapestEE - 135.92)), "the least that leaves the cheapest plan's employee share at or under the ceiling, never below the floor");
-assert.deepEqual(startingContribution(pp, { sizeCategory: "51+" }), acaMin, "a 51+ group starts at the ACA minimum");
-const atFloor = acaCheck(pp, minimumContribution(pp))!;
-assert.equal(atFloor.limit, 135.92);
-assert.equal(atFloor.lowestShare, cheapestEE - contributionFloor(pp));
-assert.equal(atFloor.affordable, atFloor.lowestShare <= 135.92);
-const atAca = acaCheck(pp, acaMin)!;
-assert.ok(atAca.affordable, "at the ACA minimum the cheapest plan is affordable");
-assert.ok(atAca.lowestShare <= 135.92 && atAca.lowestShare > 135.92 - 1, "and only just: whole dollars, rounded up");
-assert.equal(acaCheck([], acaMin), null);
