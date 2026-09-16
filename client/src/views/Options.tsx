@@ -65,13 +65,15 @@ export default function Options({
         onReset={onContributionReset}
       />
 
-      <div className="panel noprint" style={{ ...panel, marginTop: 24, padding: "18px 20px" }}>
-        <h2 style={{ ...h2, margin: "0 0 4px" }}>Ready to move forward?</h2>
-        <p style={{ margin: "0 0 14px", fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-          {short.length
-            ? `${short.length} plan${short.length > 1 ? "s" : ""} on your shortlist. Review it, add a note, and send it in on Sign Up.`
-            : "Heart any plan above to add it to your shortlist. Nothing is binding — it just tells us what to price for you."}
-        </p>
+      <div className="panel noprint" style={{ ...panel, marginTop: 18, padding: "14px 20px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
+          <h2 style={{ ...h2, margin: "0 0 2px", fontSize: 16 }}>Ready to move forward?</h2>
+          <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
+            {short.length
+              ? `${short.length} plan${short.length > 1 ? "s" : ""} on your shortlist. Review it, add a note, and send it in on Sign Up.`
+              : "Heart any plan above to add it to your shortlist. Nothing is binding — it just tells us what to price for you."}
+          </p>
+        </div>
         <Link
           href={signUpHref}
           style={{
