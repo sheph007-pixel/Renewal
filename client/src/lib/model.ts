@@ -1079,3 +1079,166 @@ export function gravieFamily(planType: string | null | undefined, name: string):
   if (/\bCopay\b/i.test(t)) return "Copay";
   return null;
 }
+
+/**
+ * "Your Market Results": what Kennion got back after taking this group to
+ * market, summed up from the full set of quoted plans — never the filtered
+ * grid. Every figure is computed here, deterministically; the sentences are a
+ * fixed template that only renders the clauses the group's data supports.
+ * It recomputes from the plans it is given, so a new proposal or a change to
+ * the group shows up the moment the page's data does.
+ *
+ * The cost figure is the average of the employee-only tier's monthly premium
+ * across a partner's distinct plans, each plan weighted equally, then halved
+ * for a fixed 50% employer contribution. It is a market read, not the
+ * employer's own contribution, which the controls above the grid set.
+ */
+export const MARKET_RESULTS_EMPLOYER_SHARE = 0.5;
+export const MARKET_RESULTS_NOTE =
+  "Average costs reflect the employee-only premiums of quoted plans, with each plan weighted equally and a 50% employer contribution assumed. Benefits vary by plan.";
+
+export interface MarketPartner {
+  name: string;
+  /** Distinct plans this partner quoted, RBP included. */
+  plans: number;
+  /** Average employee-only monthly premium across its plans; null when any plan is missing the rate. */
+  avgEmployeeOnlyPremium: number | null;
+  /** That average at a 50% employer contribution; null when the premium is. */
+  avgEmployeeOnlyCost: number | null;
+  /** Reference-based pricing plans among its plans. */
+  rbpPlans: number;
+}
+
+export interface MarketResults {
+  totalPlans: number;
+  partners: MarketPartner[];
+  /** Partner(s) with the lowest average employee-only cost: several on a tie; empty when any partner's rates are incomplete. */
+  lowestCost: MarketPartner[];
+  /** Partner(s) with the most distinct plans: several on a tie; empty when every partner has the same count. */
+  widest: MarketPartner[];
+  /** Whether every partner quoted the same number of plans. */
+  allSameCount: boolean;
+  /** Provider networks on the network-based plans, in alphabetical order; RBP is a pricing approach, never a network. */
+  networks: string[];
+  /** Partners offering reference-based pricing, with their RBP plan counts. */
+  rbp: { name: string; plans: number }[];
+}
+
+/** The partner a plan comes from, as shown: Surest rows read as UnitedHealthcare. */
+const marketPartnerOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", "");
+
+/** A network name that names a network: the placeholder for "not on the quote" does not. */
+const isNamedNetwork = (s: string | null) => !!s && !/^on the proposal$/i.test(s) && s !== "—";
+
+export function marketResults(plans: MarketPlan[]): MarketResults | null {
+  if (!plans.length) return null;
+  const byPartner = new Map<string, MarketPlan[]>();
+  for (const p of plans) {
+    const k = marketPartnerOf(p);
+    (byPartner.get(k) || byPartner.set(k, []).get(k)!).push(p);
+  }
+  const partners: MarketPartner[] = [...byPartner.entries()].map(([name, list]) => {
+    const ee = list.map((p) => p.rates.EE);
+    const complete = ee.every((v) => v != null && Number.isFinite(v));
+    const avg = complete ? (ee as number[]).reduce((a, b) => a + b, 0) / ee.length : null;
+    return {
+      name,
+      plans: list.length,
+      avgEmployeeOnlyPremium: avg,
+      avgEmployeeOnlyCost: avg == null ? null : avg * MARKET_RESULTS_EMPLOYER_SHARE,
+      rbpPlans: list.filter((p) => networkTypeOf(p) === "RBP").length,
+    };
+  });
+  // Rankings on the unrounded figures.
+  const priced = partners.every((x) => x.avgEmployeeOnlyCost != null);
+  const minCost = priced ? Math.min(...partners.map((x) => x.avgEmployeeOnlyCost as number)) : null;
+  const lowestCost = minCost == null ? [] : partners.filter((x) => Math.abs((x.avgEmployeeOnlyCost as number) - minCost) < 1e-9);
+  const maxPlans = Math.max(...partners.map((x) => x.plans));
+  const allSameCount = partners.every((x) => x.plans === maxPlans);
+  const widest = allSameCount ? [] : partners.filter((x) => x.plans === maxPlans);
+  const networks = [...new Set(plans.filter((p) => networkTypeOf(p) !== "RBP").map((p) => networkLabel(p.network)).filter(isNamedNetwork) as string[])].sort((a, b) => a.localeCompare(b));
+  const rbp = partners.filter((x) => x.rbpPlans > 0).map((x) => ({ name: x.name, plans: x.rbpPlans }));
+  return { totalPlans: plans.length, partners, lowestCost, widest, allSameCount, networks, rbp };
+}
+
+/**
+ * A sentence as segments: fixed wording, and the values populated from the
+ * group's data marked so the page can set them apart (bold, underlined).
+ */
+export type MarketSegment = { text: string; value?: boolean };
+export type MarketSentence = MarketSegment[];
+
+const T = (text: string): MarketSegment => ({ text });
+const V = (text: string): MarketSegment => ({ text, value: true });
+/** "A", "A and B", "A, B and C" — each name a value, the joins fixed. */
+function listValues(names: string[]): MarketSegment[] {
+  const out: MarketSegment[] = [];
+  names.forEach((n, i) => {
+    if (i > 0) out.push(T(i === names.length - 1 ? " and " : ", "));
+    out.push(V(n));
+  });
+  return out;
+}
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/**
+ * The summary as sentences. Only clauses the data supports are written: no
+ * price claim when any partner's rates are incomplete, no sole winner on a
+ * tie, no superlatives for a single partner, no network clause without a
+ * named network, and no RBP sentence without an RBP plan.
+ */
+export function marketResultsSentences(s: MarketResults | null): MarketSentence[] {
+  if (!s || !s.totalPlans) return [];
+  const out: MarketSentence[] = [];
+  const names = s.partners.map((x) => x.name);
+  out.push([T("Kennion took your group to market and received "), V(plural(s.totalPlans, "plan option")), T(" from "), ...listValues(names), T(".")]);
+
+  const networkClause: MarketSegment[] = s.networks.length ? [T(", with available network options including "), ...listValues(s.networks)] : [];
+  const assumption = "assuming a 50% employer contribution";
+  const costOf = (x: MarketPartner) => V(`${money0(x.avgEmployeeOnlyCost)}/month`);
+
+  if (s.partners.length === 1) {
+    const only = s.partners[0];
+    // One partner: its figures, no comparison.
+    if (only.avgEmployeeOnlyCost != null) {
+      out.push([V(only.name), T(`'s `), V(plural(only.plans, "plan")), T(" average "), costOf(only), T(` for employee-only coverage, ${assumption}`), ...networkClause, T(".")]);
+    } else if (networkClause.length) {
+      out.push([V(only.name), T(" quoted "), V(plural(only.plans, "plan")), ...networkClause, T(".")]);
+    }
+  } else {
+    const soleLow = s.lowestCost.length === 1 ? s.lowestCost[0] : null;
+    const soleWide = s.widest.length === 1 ? s.widest[0] : null;
+    if (soleLow && soleWide && soleLow.name === soleWide.name) {
+      // One partner wins both: one sentence.
+      out.push([V(soleLow.name), T(" offered both the lowest average employee-only cost at "), costOf(soleLow), T(`, ${assumption}, and the widest selection with `), V(plural(soleLow.plans, "plan")), ...networkClause, T(".")]);
+    } else {
+      if (soleLow) {
+        out.push([V(soleLow.name), T(" offered the lowest average employee-only cost at "), costOf(soleLow), T(`, ${assumption}.`)]);
+      } else if (s.lowestCost.length > 1) {
+        out.push([...listValues(s.lowestCost.map((x) => x.name)), T(" tied for the lowest average employee-only cost at "), costOf(s.lowestCost[0]), T(`, ${assumption}.`)]);
+      }
+      if (soleWide) {
+        out.push([V(soleWide.name), T(" offered the widest selection with "), V(plural(soleWide.plans, "plan")), ...networkClause, T(".")]);
+      } else if (s.widest.length > 1) {
+        out.push([...listValues(s.widest.map((x) => x.name)), T(" each offered the widest selection with "), V(plural(s.widest[0].plans, "plan")), ...networkClause, T(".")]);
+      } else if (s.allSameCount) {
+        out.push([T("Each partner offered "), V(plural(s.partners[0].plans, "plan")), ...networkClause, T(".")]);
+      } else if (networkClause.length) {
+        out.push([T("Available network options include "), ...listValues(s.networks), T(".")]);
+      }
+    }
+  }
+
+  if (s.rbp.length) {
+    const parts: MarketSegment[] = [];
+    s.rbp.forEach((r, i) => {
+      if (i > 0) parts.push(T(i === s.rbp.length - 1 ? " and " : ", "));
+      parts.push(V(r.name), T(", offering "), V(plural(r.plans, "reference-based pricing plan")));
+    });
+    out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
+  }
+  return out;
+}
+
+/** The sentences as plain text, for exports and tests. */
+export const marketResultsText = (s: MarketResults | null): string[] => marketResultsSentences(s).map((sent) => sent.map((x) => x.text).join(""));

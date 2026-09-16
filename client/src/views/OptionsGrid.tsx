@@ -5,6 +5,7 @@ import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
+import MarketResults from "@/views/MarketResults";
 
 /**
  * Every 2027 plan from every carrier, one grid, lowest cost first.
@@ -505,6 +506,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </div>
         )}
       </div>
+
+      {/* What came back from market, from every quoted plan — fixed 50% employer share, untouched by the controls above. */}
+      <MarketResults plans={plans} />
 
       {/* Browse the grid, or ask the assistant for a short list first. */}
       <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "6px 0 10px" }}>
