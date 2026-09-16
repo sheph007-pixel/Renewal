@@ -1107,6 +1107,8 @@ export interface MarketPartner {
   avgEmployeeOnlyCost: number | null;
   /** Reference-based pricing plans among its plans. */
   rbpPlans: number;
+  /** The fundings this partner quoted, as shown (UnitedHealthcare: Fully Insured and Level Funded). */
+  fundings: string[];
 }
 
 export interface MarketResults {
@@ -1147,6 +1149,7 @@ export function marketResults(plans: MarketPlan[]): MarketResults | null {
       avgEmployeeOnlyPremium: avg,
       avgEmployeeOnlyCost: avg == null ? null : avg * MARKET_RESULTS_EMPLOYER_SHARE,
       rbpPlans: list.filter((p) => networkTypeOf(p) === "RBP").length,
+      fundings: [...new Set(list.map((p) => (/fully/i.test(p.label) ? "Fully Insured" : "Level Funded")))].sort(),
     };
   });
   // Rankings on the unrounded figures.
@@ -1190,8 +1193,15 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function marketResultsSentences(s: MarketResults | null): MarketSentence[] {
   if (!s || !s.totalPlans) return [];
   const out: MarketSentence[] = [];
-  const names = s.partners.map((x) => x.name);
-  out.push([T("Kennion took your group to market and received "), V(plural(s.totalPlans, "plan option")), T(" from "), ...listValues(names), T(".")]);
+  // Each partner with its own count, so the total is accounted for — and
+  // UnitedHealthcare's two fundings are named, since both count as its plans.
+  const partnerList: MarketSegment[] = [];
+  s.partners.forEach((x, i) => {
+    if (i > 0) partnerList.push(T(i === s.partners.length - 1 ? " and " : ", "));
+    const fundings = x.fundings.length > 1 ? `, ${x.fundings.map((f) => f.toLowerCase()).join(" and ")}` : "";
+    partnerList.push(V(x.name), T(" ("), V(plural(x.plans, "plan")), T(`${fundings})`));
+  });
+  out.push([T("Kennion took your group to market and received "), V(plural(s.totalPlans, "plan option")), T(" from "), ...partnerList, T(".")]);
 
   const networkClause: MarketSegment[] = s.networks.length ? [T(", with available network options including "), ...listValues(s.networks)] : [];
   const assumption = "assuming a 50% employer contribution";
