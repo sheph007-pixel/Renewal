@@ -47,7 +47,7 @@ export default function MarketResults({ plans, action }: { plans: MarketPlan[]; 
         <div style={{ flex: "1 1 360px", minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: C.navy, marginBottom: 4 }}>What to do next</div>
           <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.65 }}>
-            Every plan is priced for your group below. Set your monthly contribution above to see what your company and your employees would pay on each one, then browse all plans: filter by Carrier/TPA, network, funding, deductible or cost, click a row for the full details, tap the heart to shortlist a plan you want Kennion to price, or the plus to compare plans side by side.
+            Every plan is priced for your group below. Under Browse All Plans, set your monthly Employer Contribution to see what your company and your employees would pay on each one, and filter by Carrier/TPA, network, funding, deductible or cost. Click a row for the full details, tap the heart to shortlist a plan you want Kennion to price, or the plus to compare plans side by side.
             {action ? " Or let the assistant narrow it down for you first." : ""}
           </p>
         </div>
