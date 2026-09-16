@@ -32,7 +32,7 @@ export interface GridProps {
   onToggleSelected: (plan: string) => void;
   /** Shown on the printed proposal's footer. */
   manager: AccountManager | null;
-  /** Today's employer contribution by tier, for "Use today's contribution". The starting point is the carriers' minimum. */
+  /** Today's employer contribution by tier, for the printed proposal's footer. The starting point on the page is the minimum, not this. */
   contribution: TierContribution[];
   /** The applied contribution per tier — what Employer Cost is computed from. */
   applied: Record<TierKey, number>;
@@ -165,11 +165,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const aca = acaApplies(g);
   const acaApplied = useMemo(() => (aca ? acaCheck(plans, applied) : null), [aca, plans, applied]);
   const acaMin = useMemo(() => (aca ? acaMinimumContribution(plans) : null), [aca, plans]);
-  // Today's contribution, where Employee Navigator has one: a click brings it into the fields.
-  const today = useMemo(() => {
-    if (!contribution.some((t) => t.er != null)) return null;
-    return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: Math.round(contribution.find((c) => c.key === t.key)?.er ?? 0) }), {} as Record<TierKey, number>);
-  }, [contribution]);
   const belowFloor = floorEE > 0 && parsed.EE < floorEE;
   // A default under the floor is not a contribution a carrier would accept:
   // lift it, so the first Employer Cost the page shows is a lawful one.
@@ -521,11 +516,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 {acaMin && (
                   <button onClick={() => setDraft(toDraft(acaMin))} title={`The least that keeps employee-only coverage on your lowest-cost plan at or under ${money2(acaAffordableEmployeeCost())}/month: the ACA federal poverty line safe harbor for a 2027 plan year`} style={{ ...chip(false), color: C.blue }}>
                     Use ACA minimum
-                  </button>
-                )}
-                {today && (
-                  <button onClick={() => setDraft(toDraft(today))} title="Bring in what your company puts toward each tier today" style={{ ...chip(false), color: C.blue }}>
-                    Use today's
                   </button>
                 )}
                 {appliedChanged && (
