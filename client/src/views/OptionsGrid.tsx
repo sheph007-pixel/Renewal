@@ -433,134 +433,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         />
       )}
 
-      {/* Browse the grid. The assistant's recommendations button sits in the market results above. */}
-      <div className="noprint" style={{ margin: "6px 0 10px" }}>
-        <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Browse All Plans</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
-          {plans.length} quoted plan{plans.length === 1 ? "" : "s"} — filter, compare, heart to shortlist, or click a row for every detail.
-        </div>
-      </div>
-
-      {/* Employer Contribution: four figures, Apply; collapses to one line once set. Sits with the filters, directly above the grid it drives. */}
-      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.border, border: `2px solid ${C.inputEdge}`, marginBottom: 8, padding: 0 }}>
-        <button
-          onClick={() => setContribOpen((v) => !v)}
-          aria-expanded={contribOpen}
-          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
-        >
-          <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
-            Employer Contribution
-            <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier; raise any tier from there." color={C.blue} />
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
-            <span style={{ ...num }}>
-              Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
-              {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
-            </span>
-            <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
-          </span>
-        </button>
-        {contribOpen && (
-          <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.hairline}` }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, marginTop: 14 }}>
-              <div role="radiogroup" aria-label="How to set the contribution" style={{ display: "flex", gap: 6 }}>
-                {(["amount", "percent"] as const).map((m) => (
-                  <button
-                    key={m}
-                    role="radio"
-                    aria-checked={mode === m}
-                    onClick={() => {
-                      setMode(m);
-                      if (m === "percent") setPercent(pctEE, pctDep);
-                    }}
-                    style={{ ...chip(mode === m), fontWeight: 600 }}
-                  >
-                    {m === "amount" ? "Monthly Defined Amount" : "Percentage"}
-                  </button>
-                ))}
-              </div>
-              {mode === "percent" && basePlan && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-end" }}>
-                  {(
-                    [
-                      ["Employees", pctEE, 50, (v: number) => setPercent(v, pctDep), `of the employee-only rate on the least expensive plan (${basePlan.plan}, ${money0(basePlan.rates.EE || 0)})`],
-                      ["Dependents", pctDep, 0, (v: number) => setPercent(pctEE, v), "of what spouse and child coverage adds on that plan"],
-                    ] as [string, number, number, (v: number) => void, string][]
-                  ).map(([label, value, min, set, hint]) => (
-                    <label key={label} style={{ display: "block", width: 260 }} title={`${label}: ${hint}`}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: C.ink }}>
-                        {label}
-                        <PctInput label={label} value={value} min={min} onCommit={set} />
-                        <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
-                        {min > 0 && <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 400, color: value <= min ? C.orange : C.faint, whiteSpace: "nowrap" }}>Minimum {min}%</span>}
-                      </div>
-                      {/* The bar always runs 0 to 100 so half way looks like half; a drag below the floor snaps back up to it. */}
-                      <input type="range" min={0} max={100} step={1} value={value} onChange={(e) => set(Math.max(min, Number(e.target.value)))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
-              {TIERS.map((t) => (
-                <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
-                    {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
-                    {t.key === "EE" && belowFloor && (
-                      <span style={{ fontWeight: 400, color: C.red, marginLeft: 8 }} title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan">
-                        At least {money0(floorEE)}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ position: "relative", marginTop: 4 }}>
-                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: C.faint, pointerEvents: "none" }}>$</span>
-                    <input
-                      value={draft[t.key]}
-                      inputMode="numeric"
-                      readOnly={mode === "percent"}
-                      title={mode === "percent" ? "Set by the percentages above" : undefined}
-                      aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
-                      onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d]/g, "") }))}
-                      onBlur={() => {
-                        if (draft[t.key].trim() === "") setDraft((d) => ({ ...d, [t.key]: "0" }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") apply();
-                      }}
-                      style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, background: mode === "percent" ? C.hairline : C.card, ...num }}
-                    />
-                  </div>
-                </label>
-              ))}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <button
-                  onClick={apply}
-                  disabled={!canApply}
-                  title={belowFloor ? `Employee Only must be at least ${money0(floorEE)}: half the employee-only rate of the least expensive plan` : undefined}
-                  style={{
-                    padding: "11px 30px",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    borderRadius: 4,
-                    color: "#fff",
-                    background: canApply ? C.blue : C.ghost,
-                    border: `1px solid ${canApply ? C.blue : C.ghost}`,
-                    cursor: canApply ? "pointer" : "default",
-                  }}
-                >
-                  Apply
-                </button>
-                {appliedChanged && (
-                  <button onClick={onReset} title="Back to where it started: half the lowest employee-only rate on every tier" style={{ ...chip(false), color: C.blue }}>
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       {narrow && <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} applied={filters} onApply={setFilters} optionsFor={optionsFor} resultCountFor={resultCountFor} bounds={bounds} returnTo={filtersBtn} />}
 
       {/* The proposal being built: one card per plan. */}
@@ -608,12 +480,132 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           the card. Every dollar figure is a month at the group's own enrollment —
           the column tooltips say so. */}
       <div className="panel" style={{ ...panel, padding: 0 }}>
+        {/* Employer Contribution: the grid card's top band — one line, Edit opens the four fields. */}
+        <div id="contribution" className="anchor noprint" style={{ borderBottom: `1px solid ${C.rule}`, borderRadius: "10px 10px 0 0" }}>
+          <button
+            onClick={() => setContribOpen((v) => !v)}
+            aria-expanded={contribOpen}
+            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
+              Employer Contribution
+              <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier; raise any tier from there." color={C.blue} />
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
+              <span style={{ ...num }}>
+                Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
+                {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
+              </span>
+              <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
+            </span>
+          </button>
+          {contribOpen && (
+            <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.hairline}` }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 18, marginTop: 14 }}>
+                <div role="radiogroup" aria-label="How to set the contribution" style={{ display: "flex", gap: 6 }}>
+                  {(["amount", "percent"] as const).map((m) => (
+                    <button
+                      key={m}
+                      role="radio"
+                      aria-checked={mode === m}
+                      onClick={() => {
+                        setMode(m);
+                        if (m === "percent") setPercent(pctEE, pctDep);
+                      }}
+                      style={{ ...chip(mode === m), fontWeight: 600 }}
+                    >
+                      {m === "amount" ? "Monthly Defined Amount" : "Percentage"}
+                    </button>
+                  ))}
+                </div>
+                {mode === "percent" && basePlan && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 22, alignItems: "flex-end" }}>
+                    {(
+                      [
+                        ["Employees", pctEE, 50, (v: number) => setPercent(v, pctDep), `of the employee-only rate on the least expensive plan (${basePlan.plan}, ${money0(basePlan.rates.EE || 0)})`],
+                        ["Dependents", pctDep, 0, (v: number) => setPercent(pctEE, v), "of what spouse and child coverage adds on that plan"],
+                      ] as [string, number, number, (v: number) => void, string][]
+                    ).map(([label, value, min, set, hint]) => (
+                      <label key={label} style={{ display: "block", width: 260 }} title={`${label}: ${hint}`}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                          {label}
+                          <PctInput label={label} value={value} min={min} onCommit={set} />
+                          <span style={{ color: C.faint, fontWeight: 400 }}>%</span>
+                          {min > 0 && <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 400, color: value <= min ? C.orange : C.faint, whiteSpace: "nowrap" }}>Minimum {min}%</span>}
+                        </div>
+                        {/* The bar always runs 0 to 100 so half way looks like half; a drag below the floor snaps back up to it. */}
+                        <input type="range" min={0} max={100} step={1} value={value} onChange={(e) => set(Math.max(min, Number(e.target.value)))} aria-label={`${label} percentage slider`} style={{ width: "100%", marginTop: 6, accentColor: C.blue }} />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 12, marginTop: 14 }}>
+                {TIERS.map((t) => (
+                  <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
+                      {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
+                      {t.key === "EE" && belowFloor && (
+                        <span style={{ fontWeight: 400, color: C.red, marginLeft: 8 }} title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan">
+                          At least {money0(floorEE)}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ position: "relative", marginTop: 4 }}>
+                      <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: C.faint, pointerEvents: "none" }}>$</span>
+                      <input
+                        value={draft[t.key]}
+                        inputMode="numeric"
+                        readOnly={mode === "percent"}
+                        title={mode === "percent" ? "Set by the percentages above" : undefined}
+                        aria-label={`Monthly employer contribution, ${TIER_NAMES[t.key]}`}
+                        onChange={(e) => setDraft((d) => ({ ...d, [t.key]: e.target.value.replace(/[^\d]/g, "") }))}
+                        onBlur={() => {
+                          if (draft[t.key].trim() === "") setDraft((d) => ({ ...d, [t.key]: "0" }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") apply();
+                        }}
+                        style={{ ...textInput, width: "100%", padding: "8px 10px 8px 22px", fontSize: 17, fontWeight: 600, color: C.ink, background: mode === "percent" ? C.hairline : C.card, ...num }}
+                      />
+                    </div>
+                  </label>
+                ))}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button
+                    onClick={apply}
+                    disabled={!canApply}
+                    title={belowFloor ? `Employee Only must be at least ${money0(floorEE)}: half the employee-only rate of the least expensive plan` : undefined}
+                    style={{
+                      padding: "11px 30px",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      borderRadius: 4,
+                      color: "#fff",
+                      background: canApply ? C.blue : C.ghost,
+                      border: `1px solid ${canApply ? C.blue : C.ghost}`,
+                      cursor: canApply ? "pointer" : "default",
+                    }}
+                  >
+                    Apply
+                  </button>
+                  {appliedChanged && (
+                    <button onClick={onReset} title="Back to where it started: half the lowest employee-only rate on every tier" style={{ ...chip(false), color: C.blue }}>
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* The grid's toolbar, attached to the table it drives. One quiet row:
             Filters (a count badge, the six dropdowns open beneath on click; a
             drawer on a phone), how many plans are showing, Sort by, favorites and
             compare, then search and export at the right. Chips for what is
             applied appear only once something is. */}
-        <div className="noprint" style={{ padding: "10px 14px 12px", borderBottom: `1px solid ${C.rule}`, background: C.zebra, borderRadius: "10px 10px 0 0" }}>
+        <div className="noprint" style={{ padding: "10px 14px 12px", borderBottom: `1px solid ${C.rule}`, background: C.zebra }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
             {narrow ? (
               <FiltersButton count={filterCount(filters)} open={drawerOpen} onClick={() => setDrawerOpen(true)} buttonRef={filtersBtn} />
@@ -787,9 +779,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             )}
           </tbody>
         </table>
-        <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends) — one carrier and one funding type per group, so the first favorite sets both{lock ? ` (now ${lock.carrier} ${lock.funding})` : ""}; + picks up to {MAX_COMPARE} from any carrier to compare side by side and download.
-        </div>
         </div>
       </div>
 
