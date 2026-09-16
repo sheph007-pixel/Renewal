@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, pill, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askAssistant, loadRecommendations, loadThreads, threadTitled, useChat, type RecommendedPick } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askAssistant, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
@@ -137,7 +137,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   useEffect(() => {
     if (assistantOn && !chat.loaded) loadThreads().catch(() => undefined);
   }, [assistantOn, chat.loaded]);
-  const recommended = chat.loaded && !!threadTitled(RECOMMENDATIONS_TITLE);
   // The assistant's picks, shown above the grid; fetched once, then kept
   // current by the chat stream as the assistant places new ones.
   useEffect(() => {
@@ -161,10 +160,20 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     if (picksStamp && picks.size) setPicksOnly(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picksStamp]);
-  /** The AI Picks button: with picks, toggle the view; without, ask the assistant — again, in the old conversation, when one exists without picks. */
+  // Asking for picks happens in place: the button spins, the chat stays
+  // closed, and the picks land in the grid when the answer is in.
+  const [asking, setAsking] = useState(false);
+  const askForPicks = () => {
+    if (asking) return;
+    setAsking(true);
+    askQuietly(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, "options")
+      .catch(() => undefined)
+      .finally(() => setAsking(false));
+  };
+  /** The AI Picks button: with picks, toggle the view; without, ask. */
   const aiPicksAction = () => {
     if (picks.size) setPicksOnly((v) => !v);
-    else void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, recommended);
+    else askForPicks();
   };
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
@@ -264,7 +273,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           (!compareOnly || proposal.includes(p.plan)) &&
           (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${x.network}`.toLowerCase().includes(q)),
       ),
-    [faceted, q, favoritesOnly, selected, compareOnly, proposal],
+    [faceted, q, picksOnly, picks, favoritesOnly, selected, compareOnly, proposal],
   );
   const optionsFor = useCallback(
     (f: PlanFilters): FilterOptionLists => {
@@ -596,11 +605,17 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
             {assistantOn && (
-              <button onClick={aiPicksAction} aria-pressed={picksOnly} title={picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "Ask the assistant for a Lower Cost, Best Fit and Richer Benefits pick from each carrier, from your census"} style={viewToggle(picksOnly, picks.size > 0, C.navy, "#e8eef5")}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly || picks.size ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                </svg>
-                AI Picks ({picks.size})
+              <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "The assistant is picking…" : picks.size ? (picksOnly ? "Show all plans" : "Show only the assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier") : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...viewToggle(false, picksOnly || picks.size > 0, C.blue, C.blueTint), cursor: asking ? "progress" : "pointer" }}>
+                {asking ? (
+                  <svg className="ai-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                    <path d="M12 3a9 9 0 1 1-6.4 2.6" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                  </svg>
+                )}
+                {asking ? "Picking…" : `AI Picks (${picks.size})`}
               </button>
             )}
             <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
@@ -651,8 +666,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               <button type="button" onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...chip(false), fontWeight: 600, color: C.blue }} title="Open the conversation these came from and tell the assistant what matters to you">
                 Refine In Chat
               </button>
-              <button type="button" onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, true)} style={{ ...chip(false), fontWeight: 600 }} title="Ask the assistant for a fresh set of picks">
-                Ask Again
+              <button type="button" onClick={askForPicks} disabled={asking} style={{ ...chip(false), fontWeight: 600 }} title="Ask the assistant for a fresh set of picks">
+                {asking ? "Picking…" : "Ask Again"}
               </button>
             </div>
           </div>

@@ -555,3 +555,11 @@ button,
     display: none;
   }
 }
+
+/* The AI Picks button while the assistant is picking. */
+@keyframes ai-spin {
+  to { transform: rotate(360deg); }
+}
+.ai-spin {
+  animation: ai-spin 0.9s linear infinite;
+}

@@ -165,6 +165,18 @@ export async function askAssistant(question: string, title: string | null = null
   setChatOpen(true);
 }
 
+/**
+ * Ask without opening the box — for the grid's AI Picks, which shows the
+ * answer itself. Goes into the conversation of that name when there is one,
+ * so the thread stays one; resolves when the answer is in (the picks arrive
+ * on the stream as it runs).
+ */
+export async function askQuietly(question: string, title: string, page: string): Promise<void> {
+  if (!state.loaded) await loadThreads().catch(() => undefined);
+  const existing = threadTitled(title);
+  await sendMessage(existing ? existing.id : null, question, page, undefined, false, [], existing ? null : title);
+}
+
 /** The assistant's plan picks for the group; null once fetched when it has given none. */
 export async function loadRecommendations() {
   const r = await fetch("/api/chat/recommendations", { headers: groupHeaders() });
