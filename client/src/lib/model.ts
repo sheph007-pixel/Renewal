@@ -1253,3 +1253,26 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
 
 /** The sentences as plain text, for exports and tests. */
 export const marketResultsText = (s: MarketResults | null): string[] => marketResultsSentences(s).map((sent) => sent.map((x) => x.text).join(""));
+
+/**
+ * The carriers' floor for an employer contribution: at least half the
+ * employee-only rate of the least expensive quoted plan, for every enrolled
+ * employee whatever tier they are in. Whole dollars, rounded up; 0 with no
+ * priced plan.
+ */
+export function contributionFloor(plans: MarketPlan[]): number {
+  const rates = plans.map((p) => p.rates.EE).filter((r): r is number => r != null && r > 0);
+  return rates.length ? Math.ceil(Math.min(...rates) * 0.5) : 0;
+}
+
+/**
+ * The minimum a group has to put in to start: the floor on every tier — the
+ * same dollars toward each employee's coverage, dependents on top of that
+ * being the employee's. New 2027 Medical Options starts here, so Your
+ * Company Pays begins at the least a carrier would accept; the employer can
+ * raise any tier from there.
+ */
+export function minimumContribution(plans: MarketPlan[]): Record<TierKey, number> {
+  const floor = contributionFloor(plans);
+  return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: floor }), {} as Record<TierKey, number>);
+}
