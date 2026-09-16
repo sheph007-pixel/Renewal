@@ -3,7 +3,7 @@ import {
   contributionByTier,
   groupSizeLabel,
   marketPlans,
-  startingContribution,
+  minimumContribution,
   ovKey,
   planRows,
   type KennionData,
@@ -434,16 +434,12 @@ export default function App() {
 
   /**
    * The employer's own choice for 2027, per tier. Null until they touch a
-   * field. It starts at the minimum the carriers require — half the
-   * employee-only rate of the least expensive quote, on every tier — or, for
-   * a 51+ group, the ACA affordability minimum where that is higher, so the
-   * first Your Company Pays is the least a group has to commit to; today's
-   * numbers are a click away in the panel, and raising a tier is a
-   * deliberate edit.
+   * field. It starts at half the employee-only rate of the least expensive
+   * quote, on every tier; raising a tier is a deliberate edit.
    */
   const [contributionOverride, setContributionOverride] = useState<Partial<Record<TierKey, number>> | null>(null);
   const contributionValues: Record<TierKey, number> = useMemo(() => {
-    const base = data && g ? startingContribution(marketPlans(data, g), g) : ({ EE: 0, ES: 0, EC: 0, FAM: 0 } as Record<TierKey, number>);
+    const base = data && g ? minimumContribution(marketPlans(data, g)) : ({ EE: 0, ES: 0, EC: 0, FAM: 0 } as Record<TierKey, number>);
     return { ...base, ...(contributionOverride || {}) };
   }, [data, g, contributionOverride]);
 
