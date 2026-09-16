@@ -384,8 +384,32 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   return (
     <div>
-      {/* Employer Contribution: four figures, Apply; collapses to one line once set. */}
-      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.border, border: `2px solid ${C.inputEdge}`, marginBottom: 12, padding: 0 }}>
+      {/* What came back from market, from every quoted plan — fixed 50% employer share, untouched by the controls above — and what to do next, with the assistant's recommendations beside it. */}
+      <MarketResults
+        plans={plans}
+        action={
+          assistantOn ? (
+            <button onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={recommended ? "Open the recommendations the assistant already gave you" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
+              </svg>
+              {recommended ? "View Plan Recommendations" : "Get Plan Recommendations"}
+            </button>
+          ) : null
+        }
+      />
+
+      {/* Browse the grid. The assistant's recommendations button sits in the market results above. */}
+      <div className="noprint" style={{ margin: "6px 0 10px" }}>
+        <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Browse All Plans</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+          {plans.length} quoted plan{plans.length === 1 ? "" : "s"} — filter, compare, heart to shortlist, or click a row for every detail.
+        </div>
+      </div>
+
+      {/* Employer Contribution: four figures, Apply; collapses to one line once set. Sits with the filters, directly above the grid it drives. */}
+      <div id="contribution" className="panel anchor noprint" style={{ ...panel, background: C.border, border: `2px solid ${C.inputEdge}`, marginBottom: 8, padding: 0 }}>
         <button
           onClick={() => setContribOpen((v) => !v)}
           aria-expanded={contribOpen}
@@ -505,30 +529,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             </div>
           </div>
         )}
-      </div>
-
-      {/* What came back from market, from every quoted plan — fixed 50% employer share, untouched by the controls above — and what to do next, with the assistant's recommendations beside it. */}
-      <MarketResults
-        plans={plans}
-        action={
-          assistantOn ? (
-            <button onClick={() => void askAssistant(RECOMMEND_ASK, RECOMMENDATIONS_TITLE)} style={{ ...primaryBtn, padding: "11px 22px", fontSize: 15, fontWeight: 600, borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 8 }} title={recommended ? "Open the recommendations the assistant already gave you" : "The assistant recommends a Lower Cost, Best Fit and Richer Benefits option from your census"}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                <path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
-              </svg>
-              {recommended ? "View Plan Recommendations" : "Get Plan Recommendations"}
-            </button>
-          ) : null
-        }
-      />
-
-      {/* Browse the grid. The assistant's recommendations button sits in the market results above. */}
-      <div className="noprint" style={{ margin: "6px 0 10px" }}>
-        <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Browse All Plans</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
-          {plans.length} quoted plan{plans.length === 1 ? "" : "s"} — filter, compare, heart to shortlist, or click a row for every detail.
-        </div>
       </div>
 
       {/* Filter tabs: one open at a time, each with its chips beneath. */}
