@@ -21,6 +21,7 @@ import {
 } from "@/lib/router";
 import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/session";
 import Link from "@/lib/Link";
+import { useNarrow } from "@/lib/narrow";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -73,23 +74,6 @@ function PeopleIcon() {
 
 /** Where the collapsed/expanded rail is remembered. */
 const NAV_KEY = "kennion.nav.collapsed";
-
-/** Below this the rail stops being a column, so collapsing it means nothing. */
-const RAIL_WIDTH = "(max-width: 860px)";
-
-/** True while the viewport is too narrow for a side rail. */
-function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(RAIL_WIDTH).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(RAIL_WIDTH);
-    const on = () => setNarrow(mq.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return narrow;
-}
 
 /**
  * The access code carried in the address, if any: `/?code=ABCD2027` signs that

@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, primaryBtn, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askAssistant, loadThreads, threadTitled, useChat } from "@/lib/chat";
+import { useNarrow } from "@/lib/narrow";
+import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
+import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists } from "@/views/PlanFilters";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
@@ -12,10 +15,13 @@ import MarketResults from "@/views/MarketResults";
  *
  * Above it, Employer Contribution: four figures and Apply. Employer Cost on
  * every row is that contribution × enrolled in each tier (never more than
- * the premium). Filter tabs along the top; a short row per plan; a card
- * with everything when a row is clicked. ♡ shortlists a plan — the list
- * Sign Up sends — and + adds it to a proposal that downloads as Excel or
- * prints to PDF, one card per plan.
+ * the premium). A toolbar of filter dropdowns along the top (a Filters
+ * drawer on a phone), Sort by beside them, chips for what is applied; a
+ * short row per plan; a card with everything when a row is clicked. ♡
+ * shortlists a plan — the list Sign Up sends — and + adds it to a proposal
+ * that downloads as Excel or prints to PDF, one card per plan. Filtering
+ * and sorting touch only the grid: Your Market Results reads every quoted
+ * plan regardless.
  */
 
 export interface GridProps {
@@ -37,37 +43,12 @@ export interface GridProps {
   assistantOn?: boolean;
 }
 
-type Tab = "carrier" | "network" | "funding" | "ded" | "oop" | "cost";
-
 /** What the Get Plan Recommendations button asks the assistant, in the client's voice. */
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
-type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
 /** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 /** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
 const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
-const TABS: [Tab, string][] = [
-  ["carrier", "Carrier/TPA"],
-  ["network", "Network Type"],
-  ["funding", "Funding"],
-  ["ded", "Deductible"],
-  ["oop", "OOP Max"],
-  ["cost", "Total Monthly Bill"],
-];
-const DED_BANDS: [string, (v: number) => boolean][] = [
-  ["$0", (v) => v === 0],
-  ["$1 – $1,000", (v) => v > 0 && v <= 1000],
-  ["$1,001 – $2,500", (v) => v > 1000 && v <= 2500],
-  ["$2,501 – $5,000", (v) => v > 2500 && v <= 5000],
-  ["$5,001+", (v) => v > 5000],
-];
-const OOP_BANDS: [string, (v: number) => boolean][] = [
-  ["Up to $3,000", (v) => v <= 3000],
-  ["$3,001 – $6,000", (v) => v > 3000 && v <= 6000],
-  ["$6,001 – $8,000", (v) => v > 6000 && v <= 8000],
-  ["$8,001+", (v) => v > 8000],
-];
-const COST_TIERS = ["$", "$$", "$$$", "$$$$"];
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
@@ -136,7 +117,16 @@ function PctInput({ label, value, min, onCommit }: { label: string; value: numbe
 }
 
 export default function OptionsGrid({ g, plans, totals, selected, onToggleSelected, manager, contribution, applied, appliedChanged, onApply, onReset, assistantOn = false }: GridProps) {
-  const [tab, setTab] = useState<Tab | null>(null);
+  // Which filter panel is open (one at a time), and the phone's drawer.
+  const narrow = useNarrow();
+  const [openPanel, setOpenPanel] = useState<FilterKey | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const filtersBtn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // The toolbar and the drawer swap over at the breakpoint; neither carries an open panel across.
+    setOpenPanel(null);
+    setDrawerOpen(false);
+  }, [narrow]);
   // Whether the group already has its recommendations conversation: the
   // button then reopens it rather than asking again.
   const chat = useChat();
@@ -144,14 +134,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     if (assistantOn && !chat.loaded) loadThreads().catch(() => undefined);
   }, [assistantOn, chat.loaded]);
   const recommended = chat.loaded && !!threadTitled(RECOMMENDATIONS_TITLE);
-  const [carriers, setCarriers] = useState<Set<string>>(new Set());
-  const [networks, setNetworks] = useState<Set<string>>(new Set());
-  const [fundings, setFundings] = useState<Set<string>>(new Set());
-  const [deds, setDeds] = useState<Set<string>>(new Set());
-  const [oops, setOops] = useState<Set<string>>(new Set());
-  const [costs, setCosts] = useState<Set<string>>(new Set());
-  const [costDir, setCostDir] = useState<1 | -1>(1);
-  const [sortBy, setSortBy] = useState<SortKey>("total");
+  const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [contribOpen, setContribOpen] = useState(true);
   const [query, setQuery] = useState("");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -218,96 +202,99 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const split = (p: MarketPlan) => costSplit(p, applied, counts);
   const card = (p: MarketPlan) => cardModel(p, applied, counts);
 
-  const carrierList = useMemo(() => Array.from(new Set(plans.map(carrierOf))), [plans]);
-  const networkList = useMemo(() => NETWORK_TYPES.filter((t) => plans.some((p) => networkTypeOf(p) === t)), [plans]);
-  const fundingList = useMemo(() => Array.from(new Set(plans.map(fundingOf))), [plans]);
-  // Quartile cutoffs off this group's own priced plans, so "Show" reads as
-  // real dollar ranges for this group rather than a generic $ / $$$$ scale.
-  const costCuts = useMemo(() => {
-    const priced = plans.map((p) => p.monthly).filter((m): m is number => m != null).sort((a, b) => a - b);
-    const cut = (q: number) => priced[Math.min(priced.length - 1, Math.floor(priced.length * q))] ?? Infinity;
-    return priced.length ? [cut(0.25), cut(0.5), cut(0.75)] : [];
+  // What each plan is filtered on, read once. The dropdowns' choices come
+  // off every quoted plan and never change shape as filters are applied; the
+  // count beside each is what choosing it would show given the rest.
+  const faceted = useMemo(() => plans.map((p) => ({ p, x: { carrier: carrierOf(p), network: netType(p), funding: fundingOf(p), ded: dedOf(p), oop: p.oop ?? null, bill: p.monthly ?? null } as PlanFacets })), [plans]);
+  const choices = useMemo(() => {
+    const xs = faceted.map((f) => f.x);
+    const distinct = (k: "carrier" | "funding") => Array.from(new Set(xs.map((x) => x[k]))).map((v) => ({ value: v, label: v }));
+    return {
+      carriers: distinct("carrier"),
+      networks: NETWORK_TYPES.filter((t) => xs.some((x) => x.network === t)).map((v) => ({ value: v, label: v })),
+      fundings: distinct("funding"),
+      deds: bandsWithData(DED_BANDS, xs.map((x) => x.ded)).map((b) => ({ value: b.id, label: b.label })),
+      oops: bandsWithData(OOP_BANDS, xs.map((x) => x.oop)).map((b) => ({ value: b.id, label: b.label })),
+    } satisfies Record<ListKey, { value: string; label: string }[]>;
+  }, [faceted]);
+  const bounds = useMemo<BillBounds>(() => {
+    const ms = plans.map((p) => p.monthly).filter((m): m is number => m != null);
+    return ms.length ? { min: Math.min(...ms), max: Math.max(...ms) } : null;
   }, [plans]);
-  const costTier = useMemo(() => {
-    return (p: MarketPlan) => {
-      if (p.monthly == null || !costCuts.length) return null;
-      const i = costCuts.findIndex((c) => p.monthly! < c);
-      return COST_TIERS[i === -1 ? 3 : i];
-    };
-  }, [costCuts]);
-  const costLabels = useMemo(() => {
-    if (!costCuts.length) return COST_TIERS;
-    const [a, b, c] = costCuts;
-    return [`Under ${money0(a)}`, `${money0(a)} – ${money0(b)}`, `${money0(b)} – ${money0(c)}`, `${money0(c)}+`];
-  }, [costCuts]);
 
-  const toggle = (set: Set<string>, setter: (s: Set<string>) => void, v: string) => {
-    const next = new Set(set);
-    if (next.has(v)) next.delete(v);
-    else next.add(v);
-    setter(next);
-  };
+  // Search, Favorites and Compare narrow the list before the filter
+  // categories do, so the counts in every dropdown are true to what is showing.
   const q = query.trim().toLowerCase();
-  const list = useMemo(() => {
-    const dedOk = (p: MarketPlan) => !deds.size || (dedOf(p) != null && DED_BANDS.some(([l, f]) => deds.has(l) && f(dedOf(p)!)));
-    const oopOk = (p: MarketPlan) => !oops.size || (p.oop != null && OOP_BANDS.some(([l, f]) => oops.has(l) && f(p.oop!)));
-    return plans
-      .filter(
-        (p) =>
-          (!carriers.size || carriers.has(carrierOf(p))) &&
-          (!networks.size || networks.has(netType(p))) &&
-          (!fundings.size || fundings.has(fundingOf(p))) &&
-          dedOk(p) &&
-          oopOk(p) &&
+  const base = useMemo(
+    () =>
+      faceted.filter(
+        ({ p, x }) =>
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
-          (!costs.size || (costTier(p) != null && costs.has(costTier(p)!))) &&
-          (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${netType(p)}`.toLowerCase().includes(q)),
-      )
-      .slice()
+          (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${x.network}`.toLowerCase().includes(q)),
+      ),
+    [faceted, q, favoritesOnly, selected, compareOnly, proposal],
+  );
+  const optionsFor = useCallback(
+    (f: PlanFilters): FilterOptionLists => {
+      const xs = base.map((b) => b.x);
+      const lists = {} as FilterOptionLists;
+      (Object.keys(choices) as ListKey[]).forEach((k) => {
+        const counts = optionCounts(xs, f, k, choices[k].map((c) => c.value));
+        lists[k] = choices[k].map((c) => ({ ...c, count: counts[c.value] ?? 0 }));
+      });
+      return lists;
+    },
+    [base, choices],
+  );
+  const resultCountFor = useCallback((f: PlanFilters) => base.filter((b) => matches(b.x, f)).length, [base]);
+  const options = useMemo(() => optionsFor(filters), [optionsFor, filters]);
+
+  const list = useMemo(() => {
+    return base
+      .filter((b) => matches(b.x, filters))
+      .map((b) => b.p)
       .sort((a, b) => {
         const val = (p: MarketPlan): number | string => {
-          if (sortBy === "option") {
+          if (sort.key === "option") {
             const [pfx, n] = optionSortKey(p.optionId);
             return `${pfx} ${String(n === Infinity ? 999999 : n).padStart(6, "0")}`;
           }
-          if (sortBy === "carrier") return carrierOf(p).toLowerCase();
-          if (sortBy === "network") return `${netType(p)} ${networkOf(p)}`.toLowerCase();
-          if (sortBy === "plan") return p.plan.toLowerCase();
-          if (sortBy === "ded") return dedOf(p) ?? Infinity;
-          if (sortBy === "oop") return p.oop ?? Infinity;
-          if (sortBy === "er") return split(p)?.er ?? Infinity;
+          if (sort.key === "carrier") return carrierOf(p).toLowerCase();
+          if (sort.key === "network") return `${netType(p)} ${networkOf(p)}`.toLowerCase();
+          if (sort.key === "plan") return p.plan.toLowerCase();
+          if (sort.key === "ded") return dedOf(p) ?? Infinity;
+          if (sort.key === "oop") return p.oop ?? Infinity;
+          if (sort.key === "er") return split(p)?.er ?? Infinity;
           return p.monthly ?? Infinity;
         };
         const va = val(a);
         const vb = val(b);
         if (va === vb) return a.plan.localeCompare(b.plan);
-        return (va > vb ? 1 : -1) * costDir;
+        return (va > vb ? 1 : -1) * sort.dir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plans, carriers, networks, fundings, deds, oops, costs, costTier, q, costDir, sortBy, applied, counts, favoritesOnly, selected, compareOnly, proposal]);
+  }, [base, filters, sort, applied, counts]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
-  const filtering = carriers.size + networks.size + fundings.size + deds.size + oops.size + costs.size > 0 || !!q || favoritesOnly || compareOnly;
+  const filtering = !filtersEmpty(filters) || !!q || favoritesOnly || compareOnly;
+  /** Every filter off. The sort, the favorites and the comparison stay as they are. */
   const clearAll = () => {
-    setCarriers(new Set());
-    setNetworks(new Set());
-    setFundings(new Set());
-    setDeds(new Set());
-    setOops(new Set());
-    setCosts(new Set());
+    setFilters(EMPTY_FILTERS);
     setQuery("");
     setFavoritesOnly(false);
     setCompareOnly(false);
   };
-  const sortOn = (k: SortKey) => {
-    if (sortBy === k) setCostDir((d) => (d > 0 ? -1 : 1));
-    else {
-      setSortBy(k);
-      setCostDir(1);
-    }
-  };
-  const count = (t: Tab) => ({ carrier: carriers.size, network: networks.size, funding: fundings.size, ded: deds.size, oop: oops.size, cost: costs.size })[t];
+  // What is applied, as chips: one per selection in a category, then the
+  // search, Favorites and Compare views, each removable on its own.
+  const appliedChips: AppliedChip[] = [
+    ...filterChips(filters).map((c) => ({ key: c.key, label: c.label, onRemove: () => setFilters((f) => c.remove(f)) })),
+    ...(q ? [{ key: "search", label: `Search: “${query.trim()}”`, onRemove: () => setQuery("") }] : []),
+    ...(favoritesOnly ? [{ key: "favorites", label: "Favorites only", onRemove: () => setFavoritesOnly(false) }] : []),
+    ...(compareOnly ? [{ key: "compare", label: "Comparing only", onRemove: () => setCompareOnly(false) }] : []),
+  ];
+  /** A column heading: first click sorts it ascending, the next flips it. The Sort by control shows the same. */
+  const sortOn = (k: SortKey) => setSort((s) => (s.key === k ? { key: k, dir: s.dir > 0 ? -1 : 1 } : { key: k, dir: 1 }));
   const MAX_FAVORITES = 8;
   const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
@@ -365,12 +352,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     window.print();
     setTimeout(done, 2000);
   };
-  const chips = (values: string[], set: Set<string>, setter: (s: Set<string>) => void) =>
-    values.map((v) => (
-      <button key={v} onClick={() => toggle(set, setter, v)} style={chip(set.has(v))}>
-        {v}
-      </button>
-    ));
   const actionsFor = (p: MarketPlan) => (
     <>
       <button onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} title={heartTitle(p)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
@@ -529,65 +510,28 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         )}
       </div>
 
-      {/* Filter tabs: one open at a time, each with its chips beneath. */}
+      {/* Filters and sort: a button per category with its panel beneath (one Filters
+          drawer on a phone), Sort by apart from them, then the chips for what is applied. */}
       <div className="noprint" style={{ ...panel, padding: "10px 14px 12px", marginBottom: 12 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-          {TABS.map(([t, label]) => {
-            const on = tab === t;
-            const n = count(t);
-            return (
-              <button
-                key={t}
-                onClick={() => setTab(on ? null : t)}
-                style={{
-                  padding: "7px 13px",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  color: on ? "#fff" : n ? C.blue : C.ink,
-                  background: on ? C.blue : n ? C.blueTint : C.card,
-                  border: `1px solid ${on || n ? C.blue : C.border}`,
-                }}
-              >
-                {label}
-                {n ? ` · ${n}` : ""}
-              </button>
-            );
-          })}
-          <button
-            onClick={() => setFavoritesOnly((v) => !v)}
-            aria-pressed={favoritesOnly}
-            title={favoritesOnly ? "Show all plans" : "Show only your favorites"}
-            style={{
-              padding: "7px 13px",
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 4,
-              cursor: "pointer",
-              color: favoritesOnly ? "#fff" : favorites ? C.red : C.ink,
-              background: favoritesOnly ? C.red : favorites ? C.redTint : C.card,
-              border: `1px solid ${favoritesOnly || favorites ? C.red : C.border}`,
-            }}
-          >
-            {favoritesOnly || favorites ? "♥" : "♡"} {favorites}
+          {narrow ? (
+            <FiltersButton count={filterCount(filters)} open={drawerOpen} onClick={() => setDrawerOpen(true)} buttonRef={filtersBtn} />
+          ) : (
+            <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
+          )}
+          <SortSelect sort={sort} onChange={setSort} />
+          {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 4px" }} />}
+          <button onClick={() => setFavoritesOnly((v) => !v)} aria-pressed={favoritesOnly} title={favoritesOnly ? "Show all plans" : "Show only your favorites"} style={viewToggle(favoritesOnly, favorites > 0, C.red, C.redTint)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={favoritesOnly || favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
+            </svg>
+            Favorites ({favorites})
           </button>
-          <button
-            onClick={() => setCompareOnly((v) => !v)}
-            aria-pressed={compareOnly}
-            title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`}
-            style={{
-              padding: "7px 13px",
-              fontSize: 13,
-              fontWeight: 600,
-              borderRadius: 4,
-              cursor: "pointer",
-              color: compareOnly ? "#fff" : proposal.length ? C.blue : C.ink,
-              background: compareOnly ? C.blue : proposal.length ? C.blueTint : C.card,
-              border: `1px solid ${compareOnly || proposal.length ? C.blue : C.border}`,
-            }}
-          >
-            + {proposal.length}
+          <button onClick={() => setCompareOnly((v) => !v)} aria-pressed={compareOnly} title={compareOnly ? "Show all plans" : `Show only the plans you're comparing (up to ${MAX_COMPARE})`} style={viewToggle(compareOnly, proposal.length > 0, C.blue, C.blueTint)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Compare ({proposal.length})
           </button>
           {proposal.length > 0 && (
             <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
@@ -604,39 +548,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
             Export
           </button>
-          {filtering && (
-            <button onClick={clearAll} style={{ ...chip(false), color: C.blue }}>
-              Clear All
-            </button>
-          )}
         </div>
-        {tab && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.hairline}` }}>
-            {tab === "carrier" && chips(carrierList, carriers, setCarriers)}
-            {tab === "network" && chips(networkList, networks, setNetworks)}
-            {tab === "funding" && chips(fundingList, fundings, setFundings)}
-            {tab === "ded" && chips(DED_BANDS.map(([l]) => l), deds, setDeds)}
-            {tab === "oop" && chips(OOP_BANDS.map(([l]) => l), oops, setOops)}
-            {tab === "cost" && (
-              <>
-                <span style={{ fontSize: 12.5, color: C.muted }}>Sort</span>
-                <button onClick={() => { setSortBy("total"); setCostDir(1); }} style={chip(sortBy === "total" && costDir > 0)}>
-                  $ → $$$$
-                </button>
-                <button onClick={() => { setSortBy("total"); setCostDir(-1); }} style={chip(sortBy === "total" && costDir < 0)}>
-                  $$$$ → $
-                </button>
-                <span style={{ fontSize: 12.5, color: C.muted, marginLeft: 10 }}>Show</span>
-                {COST_TIERS.map((tier, i) => (
-                  <button key={tier} onClick={() => toggle(costs, setCosts, tier)} style={chip(costs.has(tier))}>
-                    {costLabels[i]}
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
-        )}
+        <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} />
       </div>
+      {narrow && <FilterDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} applied={filters} onApply={setFilters} optionsFor={optionsFor} resultCountFor={resultCountFor} bounds={bounds} returnTo={filtersBtn} />}
 
       {/* The proposal being built: one card per plan. */}
       {proposed.length > 0 && compareOpen && (
@@ -713,6 +628,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   key={i}
                   onClick={k ? () => sortOn(k) : undefined}
                   title={k ? "Sort by this column" : undefined}
+                  aria-sort={k && sort.key === k ? (sort.dir > 0 ? "ascending" : "descending") : undefined}
                   style={{
                     padding: "12px 10px 11px",
                     fontSize: 13,
@@ -738,7 +654,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       <InfoTip text="The full monthly premium: what your company pays plus what employees pay." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                   </span>
-                  {k && sortBy === k ? (costDir > 0 ? " ▲" : " ▼") : ""}
+                  {k && sort.key === k ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
             </tr>
@@ -801,15 +717,23 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             })}
             {!list.length && (
               <tr>
-                <td colSpan={9} style={{ padding: "26px 10px", textAlign: "center", color: C.faint }}>
-                  {favoritesOnly && !favorites ? "No favorites yet — press ♡ on a plan to add one." : "No plan matches those filters."}
+                <td colSpan={10} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No favorites yet" : plans.length ? "No plans match these filters" : "No quoted plans yet"}</div>
+                  <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                    {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
+                  </div>
+                  {filtering && (
+                    <button onClick={clearAll} style={{ ...chip(false), color: C.blue, fontWeight: 600, marginTop: 14 }}>
+                      Clear filters
+                    </button>
+                  )}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
         <div style={{ padding: "12px 14px 0", fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-          {list.length === plans.length ? `${list.length} plans` : `${list.length} of ${plans.length} plans`}. Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends) — one carrier and one funding type per group, so the first favorite sets both{lock ? ` (now ${lock.carrier} ${lock.funding})` : ""}; + picks up to {MAX_COMPARE} from any carrier to compare side by side and download.
+          Click a column heading to sort, a plan for every detail. ♡ adds it to your favorites (up to {MAX_FAVORITES}; the list Sign Up sends) — one carrier and one funding type per group, so the first favorite sets both{lock ? ` (now ${lock.carrier} ${lock.funding})` : ""}; + picks up to {MAX_COMPARE} from any carrier to compare side by side and download.
         </div>
       </div>
 
@@ -857,6 +781,22 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
 const toDraft = (v: Record<TierKey, number>): Record<TierKey, string> =>
   TIERS.reduce((acc, t) => ({ ...acc, [t.key]: fmtDraft(v[t.key] || 0) }), {} as Record<TierKey, string>);
+
+/** Favorites / Compare in the toolbar: filled in its colour while on, tinted while it has anything, plain otherwise. */
+const viewToggle = (on: boolean, has: boolean, color: string, tint: string): CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "7px 13px",
+  fontSize: 13,
+  fontWeight: 600,
+  borderRadius: 4,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+  color: on ? "#fff" : has ? color : C.ink,
+  background: on ? color : has ? tint : C.card,
+  border: `1px solid ${on || has ? color : C.border}`,
+});
 
 const iconBtn = {
   display: "inline-grid",
