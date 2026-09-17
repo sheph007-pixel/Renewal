@@ -2420,7 +2420,9 @@ async function readStoredExport() {
  * name (`enName`). Runs in the background at boot; the payload is updated
  * in place, keeping when and by whom the group was imported.
  */
-const membersWantCensus = (g) => (g.members || []).some((m) => m.dob === undefined || m.deps === undefined);
+// A member is filled once the export has been asked for its census fields (censusFilled), not merely once the keys exist:
+// an earlier fill that found nothing must not stop a later one.
+const membersWantCensus = (g) => (g.members || []).some((m) => !m.censusFilled);
 async function backfillFromStoredExport() {
   if (!db) return;
   const wanting = groups.filter((g) => (g.plans || []).some((p) => !p.enName) || membersWantCensus(g));
@@ -2428,6 +2430,8 @@ async function backfillFromStoredExport() {
   const { companies } = await readStoredExport();
   let filled = 0;
   let census = 0;
+  let matched = 0;
+  let unmatched = 0;
   for (const c of companies) {
     const g = matchExisting(c.group.name);
     if (!g) continue;
@@ -2448,16 +2452,17 @@ async function backfillFromStoredExport() {
       const key = (m) => `${String(m.last || "").trim().toLowerCase()}|${String(m.first || "").trim().toLowerCase()}|${m.age ?? ""}`;
       const fresh = new Map((c.group.members || []).map((m) => [key(m), m]));
       for (const m of g.members || []) {
+        if (m.censusFilled) continue;
         const f = fresh.get(key(m));
-        if (!f) continue;
-        if (m.dob === undefined) m.dob = f.dob ?? null;
-        if (m.deps === undefined) m.deps = Array.isArray(f.deps) ? f.deps : [];
+        if (!f || f.dob === undefined) {
+          unmatched++;
+          continue;
+        }
+        m.dob = f.dob ?? null;
+        m.deps = Array.isArray(f.deps) ? f.deps : [];
+        m.censusFilled = true;
+        matched++;
         changed = true;
-      }
-      // Members the export no longer names still get the fields, so the page does not keep asking.
-      for (const m of g.members || []) {
-        if (m.dob === undefined) m.dob = null;
-        if (m.deps === undefined) m.deps = [];
       }
       census++;
     }
@@ -2465,10 +2470,8 @@ async function backfillFromStoredExport() {
     await db.updateGroupPayload(g.name, g);
     filled++;
   }
-  if (filled) {
-    rebuild();
-    console.log(`stored export: filled in ${filled} group(s)${census ? `, census fields for ${census}` : ""}`);
-  }
+  if (filled) rebuild();
+  console.log(`stored export: ${filled} group(s) updated; census fields: ${matched} member(s) filled, ${unmatched} not found in the export, across ${census} group(s)`);
 }
 
 async function verifyStoredXml(by) {

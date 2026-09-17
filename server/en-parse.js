@@ -589,6 +589,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     first: m.first,
     last: m.last,
     gender: m.gender,
+    dob: m.dob ?? null,
     age: m.age,
     zip: m.zip,
     tier: m.tier,
@@ -598,6 +599,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     employerCost: m.employerCost,
     employeeCost: m.employeeCost,
     spAges: m.spAges,
+    deps: Array.isArray(m.deps) ? m.deps : [],
     chAges: m.chAges,
   }));
 
