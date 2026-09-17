@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { C, kicker, panel, primaryBtn } from "@/lib/ui";
-import Link from "@/lib/Link";
-
-/** The program deck as a PDF, for a client who wants to share the story. A new
-    deck gets a new file name: /assets is cached for a year. */
-export const PROGRAM_DECK = "/assets/docs/the-2027-kennion-program.pdf";
+import { C, kicker, panel } from "@/lib/ui";
 
 /** How long each frame holds before the next one, when the story is playing. */
 const HOLD_MS = 7000;
@@ -64,21 +59,16 @@ const FRAMES: Frame[] = [
   },
 ];
 
-interface Props {
-  /** Where the last frame's button goes: the Medical Plans page. */
-  optionsHref: string;
-}
-
 /**
  * The 2027 Kennion Program, told in six frames that advance on their own
  * about every seven seconds: the story the program deck tells, on the page
  * instead of behind a download. It pauses while the pointer or keyboard is
  * on it and while the tab is hidden, never auto-plays for someone who asked
  * for reduced motion, and can be stepped by hand with the dots and arrows.
- * The last frame carries the page's call to action, and the deck itself is
- * one click away as a PDF.
+ * Every tile is the same size on every frame, so the panel holds still as
+ * the story moves.
  */
-export default function ProgramStory({ optionsHref }: Props) {
+export default function ProgramStory() {
   const [i, setI] = useState(0);
   const [held, setHeld] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -98,7 +88,6 @@ export default function ProgramStory({ optionsHref }: Props) {
   }, [playing, i]);
 
   const f = FRAMES[i];
-  const last = i === FRAMES.length - 1;
   const step = (d: number) => setI((n) => (n + d + FRAMES.length) % FRAMES.length);
   const arrow = {
     display: "grid",
@@ -129,22 +118,15 @@ export default function ProgramStory({ optionsHref }: Props) {
         <div key={i} className="story-frame" aria-live="polite" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ ...kicker, color: C.teal }}>{f.kicker}</div>
           <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.25, fontWeight: 600, color: C.onColor, letterSpacing: "-0.2px", textWrap: "balance" as const }}>{f.title}</h2>
-          <p style={{ margin: 0, maxWidth: 640, fontSize: 14.5, lineHeight: 1.65, color: C.railInk, textWrap: "pretty" as const }}>{f.lead}</p>
+          <p style={{ margin: 0, maxWidth: 640, minHeight: 48, fontSize: 14.5, lineHeight: 1.65, color: C.railInk, textWrap: "pretty" as const }}>{f.lead}</p>
           <div className="story-tiles" style={{ display: "grid", gridTemplateColumns: `repeat(${f.tiles.length}, minmax(0, 1fr))`, gap: 10, marginTop: 6 }}>
             {f.tiles.map((t, k) => (
-              <div key={t.title} className="story-tile" style={{ animationDelay: `${120 + k * 90}ms`, padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.07)", border: `1px solid ${C.railLine}`, borderLeft: `3px solid ${C.teal}` }}>
+              <div key={t.title} className="story-tile" style={{ animationDelay: `${120 + k * 90}ms`, minHeight: 86, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "center", padding: "12px 14px", borderRadius: 8, background: "rgba(255,255,255,0.07)", border: `1px solid ${C.railLine}`, borderLeft: `3px solid ${C.teal}` }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: C.onColor, lineHeight: 1.35 }}>{t.title}</div>
                 {t.sub && <div style={{ marginTop: 3, fontSize: 12.5, lineHeight: 1.5, color: C.railMuted }}>{t.sub}</div>}
               </div>
             ))}
           </div>
-          {last && (
-            <div style={{ marginTop: 8 }}>
-              <Link className="cta" href={optionsHref} style={{ ...primaryBtn, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", fontWeight: 600, textDecoration: "none" }}>
-                Review Medical Options &rarr;
-              </Link>
-            </div>
-          )}
         </div>
       </div>
 
@@ -169,9 +151,6 @@ export default function ProgramStory({ optionsHref }: Props) {
           {i + 1} of {FRAMES.length}
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <a href={PROGRAM_DECK} target="_blank" rel="noopener" className="cta" style={{ marginRight: 6, fontSize: 13, fontWeight: 600, color: C.blue, textDecoration: "none" }}>
-            View As PDF &#8599;
-          </a>
           <button type="button" aria-label="Previous frame" onClick={() => step(-1)} style={arrow}>
             &lsaquo;
           </button>

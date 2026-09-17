@@ -730,8 +730,6 @@ export default function App() {
    * as a different plan year to anyone comparing two groups.
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
-  // The renewal year on Welcome: the year after the plan year in force.
-  const renewalYear = String(Number(planYear) + 1);
   const subline =
     tab === "signup" || tab === "supplemental"
       ? "Effective January 1, 2027"
@@ -741,7 +739,7 @@ export default function App() {
         ? "Employee Navigator census on file."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
-          : `Calendar Year (January 1 - December 31, ${tab === "home" ? renewalYear : planYear})`;
+          : `Calendar Year (January 1 - December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup"
@@ -854,16 +852,13 @@ export default function App() {
                       <SyncMark size={18} />
                     </span>
                   )}
-                  {tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
+                  {tab === "home" ? g.name : tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
                 </h1>
-                {/* Medical Plans carries no line under its title: its two tabs name their own years. */}
-                {tab !== "options" && tab !== "current" && (
-                  <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-                    {tab === "home" ? `Your ${renewalYear} renewal with Kennion Benefit Advisors · ${subline}` : subline}
-                  </div>
-                )}
+                {/* Welcome is titled with the group's name and carries nothing under it; Medical
+                    Plans carries no line under its title either: its two tabs name their own years. */}
+                {tab !== "home" && tab !== "options" && tab !== "current" && <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subline}</div>}
               </div>
-              {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
+              {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
                 <div
                   style={{

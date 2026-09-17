@@ -84,10 +84,10 @@ refused at sign-in, but nothing is deleted and it can be restored at any time.
 Welcome is written for an existing Kennion client, not a prospect: the
 program is expanding for 2027, BenSync makes the options easier to evaluate,
 the client chooses what to offer, and Kennion handles the implementation
-after that. It has four parts: The 2027 Kennion Program story first (`ProgramStory.tsx`:
-six frames from the program deck that advance on their own, pause on hover
-and under reduced motion, with the deck itself as a PDF under
-`client/public/assets/docs`), a short introduction with the What's Changing
+after that. Its header is the group's name alone. It has four parts: The 2027 Kennion
+Program story first (`ProgramStory.tsx`: six frames from the program deck
+that advance on their own, pause on hover and under reduced motion, every
+tile the same size), a short introduction with the What's Changing
 download under it, a four-step How It Works (Review Medical
 Options, Review Supplemental Benefits, Build Your Strategy, Sign Up) with We
 Handle The Rest under it, and one Your Kennion Team card. The card
