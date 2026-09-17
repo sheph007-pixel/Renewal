@@ -580,7 +580,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           >
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
               Employer Contribution
-              <InfoTip text="Your monthly amount toward each employee's coverage, by tier. Starts at the Carrier/TPA minimum: 50% of the lowest Employee Only rate, on every tier. Raise any tier from there; employees pay the rest. Details under Disclaimers." color={C.blue} />
+              <InfoTip text="Cost control: you define your budget. With a defined contribution, you tell us how much you can spend. Employees use your contribution toward the plan that fits their needs. Most groups offer 2 or 3 options. If someone picks a plan that costs more, they pay the difference, and your budget does not change. See Disclaimers for the details." color={C.blue} />
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
