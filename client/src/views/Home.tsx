@@ -78,7 +78,7 @@ function DownloadChanges({ groupName }: { groupName: string }) {
         {busy ? "Building Your Summary…" : "Download What's Changing (PDF)"}
       </button>
       <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || "Your 2026 plans beside your 2027 options, in a summary you can share."}
+        {error || "A simple two-page summary of what's new for 2027, ready to share with your team."}
       </span>
     </div>
   );

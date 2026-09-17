@@ -223,7 +223,7 @@ function pdfHeader(doc, { title, groupName, subtitle }) {
   doc.moveDown(0.6);
 }
 
-function pdfFooter(doc) {
+function pdfFooter(doc, { caption } = {}) {
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
@@ -234,7 +234,7 @@ function pdfFooter(doc) {
     const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     doc.font("Helvetica").fontSize(6.5).fillColor(MUTED).text(RATE_DISCLAIMER, doc.page.margins.left, doc.page.height - 48, { width: w, align: "center", lineGap: 0 });
     doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(
-      `Monthly composite rates at the group's current enrollment, from the Carrier/TPA quotes on file  ·  Page ${i - range.start + 1} of ${range.count}`,
+      `${caption || "Monthly composite rates at the group's current enrollment, from the Carrier/TPA quotes on file"}  ·  Page ${i - range.start + 1} of ${range.count}`,
       doc.page.margins.left,
       doc.page.height - 16,
       { width: w, align: "center", lineBreak: false },
@@ -981,36 +981,26 @@ function optionRows(g, proposals) {
 
 /**
  * What's Changing For 2027: the one document a client downloads from
- * Welcome and passes around the office. It walks from 2026 to 2027 for this
- * group alone: the plans in force today and what they cost, the options
- * Kennion secured for January 1 and what each would cost at the group's own
- * enrollment, where the market review stands, what does not change, the
- * next steps and the team. Built fresh from what is on file each time, so
- * it says what the pages say. Numbers are stated, never characterised: the
- * expansion of the program is the story, and the figures speak for
- * themselves.
+ * Welcome and passes around the office. Two pages, high level and all good
+ * news: the group's current medical plan runs through December 31 as it
+ * does every year, and for January 1 the Kennion Program has expanded to
+ * major national carriers and program partners, so the group picks its
+ * 2027 medical plans from more options than before. The same Kennion team,
+ * the same supplemental package, the same support; after January 1 two
+ * bills, one from Kennion for the supplemental package and one from the
+ * medical Carrier/TPA for medical. No rates, no plan tables: those live on
+ * BenSync. A few FAQs and the team close it.
  */
 export async function renderChangesReport({ group: g, proposals, slots, manager, broker, signup, assistant }) {
-  const options = optionRows(g, proposals).sort((a, b) => a.carrier.localeCompare(b.carrier) || a.funding.localeCompare(b.funding) || a.monthly - b.monthly);
-  const current = (g.plans || []).map((p) => ({ plan: p.plan, tpa: p.tpa || g.tpa || "-", enrolled: p.enrolled || 0, monthly: p.monthly ?? null }));
-  const counts = g.tiers || { EE: 0, ES: 0, EC: 0, FAM: 0 };
-  const enrolled = TIER_KEYS.reduce((n, k) => n + (counts[k] || 0), 0) || g.enrolled || 0;
-  const todayTotal = g.monthly ?? (current.some((p) => p.monthly != null) ? round2(current.reduce((n, p) => n + (p.monthly || 0), 0)) : null);
+  const options = optionRows(g, proposals);
   const carriers = [...new Set(options.map((o) => o.carrier))];
-  const networks = [...new Set(options.map((o) => o.network))];
-  const fundings = [...new Set(options.map((o) => o.funding))];
-  const expected = (slots && slots.length ? slots : ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle"]).filter((s) => s !== "Cobalt");
-  const quoted = new Set(options.map((o) => o.slot));
-  const slotsQuoted = expected.filter((s) => quoted.has(s)).length;
-  const complete = expected.length > 0 && slotsQuoted === expected.length;
-  const cheapest = options.length ? options.reduce((a, b) => (b.monthly < a.monthly ? b : a)) : null;
-  const richest = options.length ? options.reduce((a, b) => (b.monthly > a.monthly ? b : a)) : null;
-  const lowestEE = options.filter((o) => o.rates.EE != null).reduce((m, o) => (m == null || o.rates.EE < m ? o.rates.EE : m), null);
   const planYear = String(g.pyEnd || "2026-12-31").slice(0, 4);
   const renewalYear = String(Number(planYear) + 1);
   const stamp = new Date().toISOString().slice(0, 10);
   const list = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
   const n = (v, one, many) => `${v} ${v === 1 ? one : many}`;
+  const submittedOn = signup && (signup.submitted_at || signup.submittedAt) ? new Date(signup.submitted_at || signup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
+  const managerName = manager && manager.name ? manager.name : "your Kennion account manager";
 
   const data = await pdfBuffer((doc) => {
     const x0 = doc.page.margins.left;
@@ -1021,7 +1011,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     };
     const heading = (text, need = 60) => {
       room(need);
-      doc.moveDown(0.3);
+      doc.moveDown(0.4);
       doc.font("Helvetica-Bold").fontSize(12.5).fillColor(NAVY).text(text, x0, doc.y, { width });
       doc.moveDown(0.35);
     };
@@ -1029,150 +1019,180 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       doc.font(opts.font || "Helvetica").fontSize(opts.size || 9.5).fillColor(opts.color || INK).text(text, x0, doc.y, { width, lineGap: 1.5 });
       doc.moveDown(opts.after ?? 0.5);
     };
-    const bullets = (items) => {
+    /** Bullets in a column at (x, y) of the given width; returns the y below them. */
+    const bulletsAt = (items, x, y, w, size = 9.5) => {
+      let cy = y;
       for (const t of items) {
-        doc.font("Helvetica").fontSize(9.5);
-        room(doc.heightOfString(t, { width: width - 14 }) + 6);
-        const y = doc.y;
-        doc.fillColor(GREEN).text("•", x0 + 2, y, { lineBreak: false });
-        doc.fillColor(INK).text(t, x0 + 14, y, { width: width - 14, lineGap: 1.5 });
-        doc.moveDown(0.25);
+        doc.font("Helvetica").fontSize(size);
+        const h = doc.heightOfString(t, { width: w - 14, lineGap: 1.5 });
+        doc.fillColor(GREEN).text("•", x + 2, cy, { lineBreak: false });
+        doc.fillColor(INK).text(t, x + 14, cy, { width: w - 14, lineGap: 1.5 });
+        cy += h + 4;
       }
+      return cy;
+    };
+    const bullets = (items) => {
+      doc.font("Helvetica").fontSize(9.5);
+      room(items.reduce((h, t) => h + doc.heightOfString(t, { width: width - 14, lineGap: 1.5 }) + 4, 0) + 6);
+      doc.y = bulletsAt(items, x0, doc.y, width);
       doc.x = x0;
-      doc.moveDown(0.3);
+      doc.moveDown(0.4);
     };
     const callout = (label, text) => {
-      doc.font("Helvetica").fontSize(9.5);
-      const h = doc.heightOfString(text, { width: width - 28 }) + 32;
+      doc.font("Helvetica").fontSize(10);
+      const h = doc.heightOfString(text, { width: width - 28, lineGap: 1.5 }) + 34;
       room(h + 10);
       const y = doc.y;
       doc.rect(x0, y, width, h).fill(TINT);
       doc.rect(x0, y, 4, h).fill(GREEN);
       doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#16714A").text(label.toUpperCase(), x0 + 14, y + 9, { lineBreak: false });
-      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(text, x0 + 14, y + 22, { width: width - 28, lineGap: 1.5 });
+      doc.font("Helvetica").fontSize(10).fillColor(INK).text(text, x0 + 14, y + 23, { width: width - 28, lineGap: 1.5 });
       doc.x = x0;
       doc.y = y + h + 12;
+    };
+    /** Tinted boxes side by side, each a title, an optional line under it and bullets; all the same height. */
+    const boxes = (cols) => {
+      const gap = 12;
+      const colW = (width - gap * (cols.length - 1)) / cols.length;
+      const inner = colW - 24;
+      const heights = cols.map((c) => {
+        let h = 30;
+        if (c.lead) {
+          doc.font("Helvetica").fontSize(9).fillColor(MUTED);
+          h += doc.heightOfString(c.lead, { width: inner, lineGap: 1.5 }) + 6;
+        }
+        doc.font("Helvetica").fontSize(9.5);
+        h += (c.items || []).reduce((s, t) => s + doc.heightOfString(t, { width: inner - 14, lineGap: 1.5 }) + 4, 0);
+        return h + 8;
+      });
+      const h = Math.max(...heights);
+      room(h + 8);
+      const y = doc.y;
+      cols.forEach((c, i) => {
+        const x = x0 + i * (colW + gap);
+        doc.rect(x, y, colW, h).fill(TINT);
+        doc.rect(x, y, colW, 3).fill(c.accent || GREEN);
+        doc.font("Helvetica-Bold").fontSize(10.5).fillColor(NAVY).text(c.title, x + 12, y + 12, { width: inner, lineBreak: false });
+        let cy = y + 30;
+        if (c.lead) {
+          doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(c.lead, x + 12, cy, { width: inner, lineGap: 1.5 });
+          cy += doc.heightOfString(c.lead, { width: inner, lineGap: 1.5 }) + 6;
+        }
+        if (c.items && c.items.length) bulletsAt(c.items, x + 12, cy, inner);
+      });
+      doc.x = x0;
+      doc.y = y + h + 12;
+    };
+    const steps = (rows) => {
+      rows.forEach(([title, body], i) => {
+        doc.font("Helvetica").fontSize(9.5);
+        const h = doc.heightOfString(body, { width: width - 30, lineGap: 1.5 }) + 15;
+        room(h + 4);
+        const y = doc.y;
+        doc.circle(x0 + 8, y + 6, 8).fill("#E8F3ED");
+        doc.font("Helvetica-Bold").fontSize(8).fillColor("#16714A").text(String(i + 1), x0, y + 2, { width: 16, align: "center", lineBreak: false });
+        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text(title, x0 + 24, y, { width: width - 30, lineBreak: false });
+        doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, x0 + 24, y + 13, { width: width - 30, lineGap: 1.5 });
+        doc.x = x0;
+        doc.y = y + h + 3;
+      });
+      doc.moveDown(0.3);
+    };
+    const faqs = (rows) => {
+      rows.forEach(([q, a]) => {
+        doc.font("Helvetica").fontSize(9.5);
+        const h = 14 + doc.heightOfString(a, { width, lineGap: 1.5 });
+        room(h + 8);
+        const y = doc.y;
+        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text(q, x0, y, { width, lineBreak: false });
+        doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(a, x0, y + 14, { width, lineGap: 1.5 });
+        doc.x = x0;
+        doc.y = y + h + 7;
+      });
     };
 
     pdfHeader(doc, { title: `What's Changing For ${renewalYear}`, groupName: g.name, subtitle: `Your ${planYear} To ${renewalYear} Renewal Summary` });
 
-    // The story: the program is expanding, and here is what that means for this group.
-    para(`The Kennion Program is expanding for ${renewalYear}. Kennion has helped employers with employee benefits for more than 50 years and has operated the Kennion Program since 2013. As clients have asked for more choice, the group health offering now includes major national partners, networks and programs, backed by the same Kennion team ${g.name} already knows.`);
+    // Page 1: the good news, in order.
+    para("Good news: the Kennion Program is growing.", { font: "Helvetica-Bold", size: 12, color: NAVY, after: 0.35 });
     para(
-      options.length
-        ? `For ${g.name}, Kennion took the group to market for a January 1, ${renewalYear} effective date and secured ${n(options.length, "medical plan option", "medical plan options")} from ${n(carriers.length, "carrier or program partner", "carriers and program partners")} (${list(carriers)}), on ${n(networks.length, "network", "networks")} (${list(networks)}), priced at your enrollment of ${enrolled}.`
-        : `For ${g.name}, Kennion is taking the group to market for a January 1, ${renewalYear} effective date. Options will appear on BenSync as each carrier's quote comes in; this summary will fill in as they do.`,
-      { after: 0.9 },
+      `Kennion has helped employers with employee benefits for more than 50 years and has operated the Kennion Program since 2013. As the program has grown and clients have asked for more choice, we have expanded our group health offering for ${renewalYear} to include major national carriers, networks and program partners. For ${g.name}, that means more medical plan options, more price points and more flexibility, backed by the same Kennion team you already know.`,
+      { after: 0.8 },
     );
 
-    // Five tiles; every label and note is short enough to stay on one line.
-    pdfStats(doc, [
-      { label: `${planYear} Plans Today`, value: String(current.length), note: g.tpa ? `through ${g.tpa}` : "in force" },
-      { label: `${renewalYear} Options`, value: String(options.length), note: complete ? "review complete" : "review in progress" },
-      { label: "Carriers", value: String(carriers.length), note: "and program partners" },
-      { label: "Networks", value: String(networks.length), note: networks.length ? "to choose from" : "on the way" },
-      { label: "Enrolled", value: String(enrolled), note: "employees today" },
-    ]);
-
-    // Today: the plans in force, and what they cost.
-    heading(`Today: Your ${planYear} Medical Plans`);
-    if (current.length) {
-      para(`Your current Kennion Program coverage runs through December 31, ${planYear}. Nothing changes before then.`, { color: MUTED, size: 9, after: 0.4 });
-      pdfTable(doc, {
-        columns: [
-          { label: "Plan", width: 250, align: "left", text: (r) => r.plan },
-          { label: "Carrier/TPA", width: 110, align: "left", text: (r) => r.tpa },
-          { label: "Enrolled", width: 60, align: "right", text: (r) => String(r.enrolled) },
-          { label: "Monthly Premium", width: 90, align: "right", text: (r) => money(r.monthly) },
-        ],
-        rows: current,
-        fontSize: 8.5,
-      });
-      doc.moveDown(0.3);
-      para(`Total monthly premium today: ${money(todayTotal)}${todayTotal != null ? ` (${money0(todayTotal * 12)} a year)` : ""} for ${enrolled} enrolled.`, { font: "Helvetica-Bold", after: 0.8 });
-    } else {
-      para("No medical plan is on file for today. Your 2027 options below stand on their own.", { color: MUTED, after: 0.8 });
-    }
-
-    // New for 2027: every option, by carrier lineup.
-    heading(`New For ${renewalYear}: Your Medical Plan Options`);
-    if (options.length) {
-      para(`Every option below is quoted by the Carrier/TPA for ${g.name}. Employee Only is that tier's monthly rate; Monthly Total is the whole bill at your current enrollment by tier, before any employer contribution. How it splits between the company and employees is yours to set on BenSync.`, { color: MUTED, size: 9, after: 0.4 });
-      pdfTable(doc, {
-        columns: [
-          { label: "Option", width: 44, align: "left", text: (r) => r.optionId || "-", strong: () => true },
-          { label: "Plan", width: 150, align: "left", text: (r) => r.name },
-          { label: "Network", width: 74, align: "left", text: (r) => r.network },
-          { label: "Deductible", width: 54, align: "left", text: (r) => r.deductible },
-          { label: "OOP Max", width: 54, align: "left", text: (r) => r.oopMax },
-          { label: "Employee Only", width: 56, align: "right", text: (r) => money(r.rates.EE) },
-          { label: "Monthly Total", width: 64, align: "right", text: (r) => money(r.monthly) },
-          ...(todayTotal != null ? [{ label: "Vs Today", width: 56, align: "right", text: (r) => signed(round2(r.monthly - todayTotal)) }] : []),
-        ],
-        rows: options,
-        fontSize: 8,
-        sectionOf: (r) => `${r.carrier} · ${r.funding}`,
-      });
-      doc.moveDown(0.8);
-
-      // What the numbers come to for this group.
-      heading("What This Means For You");
-      const points = [];
-      if (cheapest && richest && cheapest !== richest) points.push(`Your options range from ${money(cheapest.monthly)} to ${money(richest.monthly)} a month at your enrollment, so you choose where to land: ${cheapest.carrier} Option ${cheapest.optionId || cheapest.name} is the lowest total, ${richest.carrier} Option ${richest.optionId || richest.name} the richest.`);
-      else if (cheapest) points.push(`Your one priced option, ${cheapest.carrier} Option ${cheapest.optionId || cheapest.name}, comes to ${money(cheapest.monthly)} a month at your enrollment.`);
-      if (cheapest && todayTotal != null) {
-        const d = round2(cheapest.monthly - todayTotal);
-        points.push(`Against today's ${money(todayTotal)} a month, the lowest-cost ${renewalYear} option is ${d === 0 ? "the same" : `${money(Math.abs(d))} a month ${d < 0 ? "less" : "more"}`}${d !== 0 ? ` (${money0(Math.abs(d) * 12)} a year)` : ""}, before any change to what the company contributes.`);
-      }
-      if (lowestEE != null) points.push(`The lowest Employee Only rate quoted is ${money(lowestEE)} a month. Carriers require the company to put at least 50% of the lowest-cost plan's Employee Only rate toward each employee, so BenSync starts your contribution there and lets you raise it.`);
-      if (networks.length > 1) points.push(`${n(networks.length, "network", "networks")} are on the table (${list(networks)}). Which doctors and hospitals are in network is usually the first thing employees ask, so check yours on each before you decide.`);
-      if (fundings.length > 1) points.push(`Both fully insured and level funded quotes are in. A level funded plan can return part of an unused claims fund at the end of the year; a fully insured plan has a fixed premium and no claims exposure. Your Kennion team can walk through the difference for your group.`);
-      points.push(`You can offer more than one plan. With a defined contribution the company sets one monthly amount per tier, employees put it toward whichever plan fits them and pay any difference pre-tax through payroll, and your budget does not change with their choice.`);
-      bullets(points);
-    } else {
-      para(`No ${renewalYear} option is priced at your enrollment yet. As each carrier's quote arrives it appears on the Medical Plans page, and this summary picks it up the next time it is downloaded.`, { color: MUTED, after: 0.8 });
-    }
-
-    // Where the market review stands.
-    heading("Where The Market Review Stands", 80);
     callout(
-      complete ? "Market Review Complete" : "Market Review In Progress",
-      complete
-        ? `Every carrier and program partner Kennion took ${g.name} to has quoted (${slotsQuoted} of ${expected.length}). Your options are ready to review on BenSync, and nothing further is expected to be added.`
-        : `${slotsQuoted} of ${expected.length} carrier and program partners have quoted so far. Additional options may still be added as the rest come in; BenSync shows each one as it arrives.`,
+      "The Short Version",
+      `Your current group health plan through the Kennion Program runs through December 31, ${planYear}, as it does every year. For January 1, ${renewalYear}, you will choose your medical plans from new national Carriers/TPAs, with more options than ever before. Everything else stays the same: your Kennion team, your supplemental package, your enrollment system and your support. Kennion handles the implementation from start to finish.`,
     );
 
-    // What does not change.
-    heading("What Stays The Same", 90);
-    bullets([
-      `Your plan year: the program runs on the calendar year, January 1 to December 31, ${renewalYear}.`,
-      "Your Kennion team: the same account manager and licensed broker, with the AI Assistant on BenSync beside them.",
-      "Employee Navigator: where employees enroll and where you add a new hire or make a change during the year.",
-      "Who does the work: once you make your selections, Kennion coordinates the Employee Navigator setup, carrier implementation, employee communications, open enrollment support, employee enrollment assistance, final carrier enrollment and first-month payment. You make the decisions; Kennion handles the implementation.",
+    heading("What Stays The Same, And What's New", 150);
+    boxes([
+      {
+        title: "Stays The Same",
+        accent: NAVY,
+        items: [
+          "Kennion as your broker and advocate, with the same account manager and licensed broker.",
+          "Your supplemental package: dental, vision, life and your other lines, through Kennion as today.",
+          "Employee Navigator for enrollment, new hires and changes during the year.",
+          `Your plan year: January 1 to December 31, ${renewalYear}.`,
+          "The support you are used to, before, during and after enrollment.",
+        ],
+      },
+      {
+        title: `New For ${renewalYear}`,
+        accent: GREEN,
+        items: [
+          options.length
+            ? `${n(options.length, "medical plan option", "medical plan options")} from ${n(carriers.length, "national carrier and program partner", "national carriers and program partners")}: ${list(carriers)}.`
+            : "Medical plan options from major national carriers and program partners, priced for your group.",
+          `Your medical plans for ${renewalYear} come from the new Carrier/TPA lineup rather than the single program plan you have today.`,
+          "BenSync, Kennion's new benefits decision platform, to compare options side by side and model your contribution.",
+          "Medical billed directly by your Carrier/TPA; your supplemental package still billed by Kennion.",
+        ],
+      },
     ]);
 
-    // Next steps.
-    heading("Your Next Steps", 110);
-    const submittedOn = signup && (signup.submitted_at || signup.submittedAt) ? new Date(signup.submitted_at || signup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
-    const steps = [
-      ["Review Medical Options", `See the ${renewalYear} medical plans on BenSync, side by side, priced at your enrollment.`],
-      ["Review Supplemental Benefits", "Dental, vision, life and the other supplemental lines, on the Supplemental Package page."],
-      ["Build Your Strategy", `Set the company's contribution, compare plans and use Kennion and the AI Assistant to decide what to offer employees.`],
-      ["Sign Up", submittedOn ? `You submitted your plan choices on ${submittedOn}. You can send an update any time.` : `When you are ready, tell Kennion which plans you want to offer for ${renewalYear}; the Sign Up page takes about a minute.`],
-    ];
-    steps.forEach(([title, body], i) => {
-      doc.font("Helvetica").fontSize(9.5);
-      const h = doc.heightOfString(body, { width: width - 30 }) + 14;
-      room(h + 4);
-      const y = doc.y;
-      doc.circle(x0 + 8, y + 6, 8).fill("#E8F3ED");
-      doc.font("Helvetica-Bold").fontSize(8).fillColor("#16714A").text(String(i + 1), x0, y + 2, { width: 16, align: "center", lineBreak: false });
-      doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text(title, x0 + 24, y, { width: width - 30, lineBreak: false });
-      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, x0 + 24, y + 13, { width: width - 30, lineGap: 1.5 });
-      doc.x = x0;
-      doc.y = y + h + 4;
-    });
-    doc.moveDown(0.4);
+    heading("Billing After January 1: Two Bills, One Team", 120);
+    para(`Today one Kennion Program bill covers everything. From January 1, ${renewalYear}, you will receive two.`, { after: 0.5 });
+    boxes([
+      {
+        title: "From Kennion",
+        accent: NAVY,
+        lead: "Monthly, as today.",
+        items: ["Your supplemental package: dental, vision, life and your other supplemental lines.", "Same Kennion invoice, same team to call with a question."],
+      },
+      {
+        title: "From Your Medical Carrier/TPA",
+        accent: GREEN,
+        lead: "Monthly, direct from the carrier.",
+        items: ["Your medical plan premium, billed and collected by the Carrier/TPA you choose.", "Kennion sets it up with the carrier and coordinates the first month's payment with you."],
+      },
+    ]);
+
+    doc.moveDown(0.2);
+    para(`The bottom line: more options from major national programs, more flexibility for your budget and your employees, and the same Kennion team walking you through every step. We are excited to bring it to you.`, { font: "Helvetica-Bold", size: 10.5, color: NAVY, after: 0 });
+
+    // Page 2: what happens next, the questions we hear most, then the team.
+    doc.addPage();
+    heading("What Happens Next", 0);
+    steps([
+      ["Review Medical Options", `See your ${renewalYear} medical plans on BenSync, side by side, priced for your group.`],
+      ["Review Supplemental Benefits", "Confirm your dental, vision, life and other supplemental lines. Nothing changes here unless you want it to."],
+      ["Build Your Strategy", "Set the company's contribution, compare plans and work with Kennion and the AI Assistant to decide what to offer employees."],
+      ["Sign Up", submittedOn ? `You submitted your plan choices on ${submittedOn}. You can send an update any time.` : `Tell Kennion which plans you want to offer for ${renewalYear}. The Sign Up page on BenSync takes about a minute.`],
+    ]);
+    para("You make the decisions. We handle the rest: Employee Navigator setup, carrier implementation, employee communications, open enrollment support, employee enrollment assistance, final carrier enrollment and first-month payment.", { font: "Helvetica-Bold", after: 0.3 });
+
+    heading("Questions We Hear Most", 100);
+    faqs([
+      ["Why is our medical plan changing?", `It is not so much changing as expanding. The Kennion Program has grown, and for ${renewalYear} we have added major national carriers and program partners so our clients have more choice. Your current plan runs through December 31, ${planYear}, exactly as it does every year; your new plan starts January 1, ${renewalYear}, with no gap.`],
+      ["Does anything change with Kennion?", "No. Kennion is still your broker, your advocate and your first call. The same account manager, the same licensed broker and the same support, with the BenSync AI Assistant added for instant answers any time."],
+      ["What about dental, vision, life and our other supplemental benefits?", "They stay exactly where they are: your supplemental package continues through Kennion, and Kennion continues to bill it monthly as today."],
+      ["Will we receive more than one bill?", "Yes, two. Kennion bills your supplemental package monthly, as it does now. Your medical Carrier/TPA bills and collects your medical premium directly. Kennion sets both up and is there for any question about either."],
+      ["Do our employees need to do anything?", "Employees choose their plan during open enrollment through Employee Navigator, the same system they use today. Kennion prepares the communications, supports open enrollment, helps employees enroll and completes the carrier enrollment for you."],
+      ["Can we offer more than one plan?", "Yes. Many groups offer two or three plans at different price points. With a defined contribution the company sets one monthly amount per tier, employees put it toward the plan that fits them and your budget does not change with their choice."],
+      ["When do we need to decide?", `Coverage begins January 1, ${renewalYear}. The earlier you choose, the more time there is for a smooth open enrollment; ${managerName} will confirm the dates for your group.`],
+    ]);
 
     // The team, three across.
     const team = [];
@@ -1180,7 +1200,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     if (broker && broker.name) team.push({ name: broker.name, title: broker.title || "Licensed Broker", lines: [broker.phone ? `Direct ${broker.phone}` : null, broker.email || null].filter(Boolean) });
     if (assistant) team.push({ name: "BenSync AI Assistant", title: "AI Assistant · Available Any Time", lines: ["Instant answers on your plans,", "your options and contributions.", "Ask from any page on BenSync."] });
     if (team.length) {
-      heading("Your Kennion Team", 96);
+      heading("Your Kennion Team", 110);
       const gap = 12;
       const colW = (width - gap * (team.length - 1)) / team.length;
       const y = doc.y;
@@ -1196,10 +1216,10 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       });
       doc.x = x0;
       doc.y = y + tallest + 10;
-      para("Questions along the way? Your Kennion team is here throughout the process.", { color: MUTED, size: 9, after: 0 });
+      para("Questions along the way? Your Kennion team is here throughout the process. We are glad to have you with us for the next chapter.", { color: MUTED, size: 9, after: 0 });
     }
 
-    pdfFooter(doc);
+    pdfFooter(doc, { caption: "Prepared for your group by Kennion Benefit Advisors. Plan details and rates are on BenSync." });
   });
   return { filename: `${safeName(g.name)} - What's Changing For ${renewalYear} ${stamp}.pdf`, mime: "application/pdf", data };
 }
