@@ -1281,6 +1281,8 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
     });
     out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
   }
+  // What happens next, in one sentence.
+  out.push([T("Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.")]);
   return out;
 }
 
