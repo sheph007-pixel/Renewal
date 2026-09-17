@@ -4,6 +4,7 @@ import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import type { AccountManager, GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
+import ProgramStory from "@/views/ProgramStory";
 
 /** The licensed broker on every client's team, used when the server sends no broker contact. */
 const HUNTER: AccountManager = {
@@ -90,7 +91,8 @@ function DownloadChanges({ groupName }: { groupName: string }) {
  * page says that the program expanded for 2027, that BenSync makes the
  * options easier to evaluate, that the client chooses what to offer, and
  * that Kennion handles everything after that. The What's Changing summary
- * is one click away, and the team card beside it keeps the people and the
+ * is one click away, the 2027 Kennion Program story plays under it
+ * (ProgramStory), and the team card beside it keeps the people and the
  * AI Assistant reachable without making a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
@@ -137,15 +139,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           </div>
         </div>
 
-        <div style={{ ...panel, padding: "24px 34px 22px" }}>
-          <p style={{ ...kicker, marginBottom: 4 }}>Meet BenSync</p>
-          <h2 style={head}>More Options. Smarter, Faster Decisions.</h2>
-          <p style={{ ...p, marginBottom: 0 }}>
-            BenSync is Kennion&rsquo;s new benefits decision platform. Review your medical options, model employer contributions,
-            compare plans side by side and work with Kennion and the {assistant} to evaluate different strategies, without
-            spreadsheets, manual math or unnecessary back-and-forth.
-          </p>
-        </div>
+        <ProgramStory optionsHref={optionsHref} />
 
         <div style={{ ...panel, padding: "24px 34px 22px" }}>
           <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>

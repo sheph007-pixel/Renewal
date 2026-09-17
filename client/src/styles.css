@@ -585,3 +585,73 @@ button,
 .ai-progress {
   animation: ai-progress 1.4s ease-in-out infinite;
 }
+
+/* The 2027 Kennion Program story on Welcome: each frame rises in, its tiles a
+   beat behind; the active dot fills over the hold. Reduced motion gets the
+   frame at once and a filled dot; the component then never auto-advances. */
+.story-frame {
+  animation: story-rise 0.45s ease-out both;
+}
+.story-tile {
+  animation: story-rise 0.4s ease-out both;
+}
+@keyframes story-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.story-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: #cfd5d9;
+  cursor: pointer;
+  overflow: hidden;
+  transition: width 0.25s ease, background 0.25s ease;
+}
+.story-dot.on {
+  width: 30px;
+  background: #d6e9de;
+}
+.story-dot > i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #1f8a5b;
+}
+.story-dot.on > i {
+  animation: story-fill var(--story-ms, 7000ms) linear forwards;
+}
+.story-dot.paused > i {
+  animation-play-state: paused;
+}
+@keyframes story-fill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-frame,
+  .story-tile {
+    animation: none;
+  }
+  .story-dot.on > i {
+    animation: none;
+    width: 100%;
+  }
+}
+@media (max-width: 700px) {
+  .story-tiles {
+    grid-template-columns: 1fr !important;
+  }
+}
