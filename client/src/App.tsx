@@ -961,7 +961,6 @@ export default function App() {
                 assistantOn={assistantOn}
                 totals={totals}
                 selected={selected}
-                signUpHref={hrefFor("signup")}
                 manager={manager}
                 contribution={contribution}
                 contributionValues={contributionValues}
