@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
+  GROUP_SIZE_TIP,
   groupSizeLabel,
   groupSizeNote,
   marketPlans,
@@ -880,7 +881,7 @@ export default function App() {
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
                       {groupSizeLabel(g)}
-                      {groupSizeNote(g) && <InfoTip text={groupSizeNote(g)!} color={g.sizeCategory === "51+" ? C.amber : C.green} place="below" />}
+                      {groupSizeNote(g) && <InfoTip text={GROUP_SIZE_TIP} color={g.sizeCategory === "51+" ? C.amber : C.green} place="below" />}
                     </div>
                   </div>
                 </div>
