@@ -163,7 +163,7 @@ export const RATE_DISCLAIMER =
   "The above rates and benefits are for general information and discussion purposes only and are not valid unless approved by the Carrier/TPA. This rate quote is not an offer or a guarantee of coverage. The rates quoted are applicable to the plan design selected. Actual costs will vary based on factors such as the case characteristics of the group and/or the employees and dependents to be insured, the insurance plan selected and the start date. Rates are determined by the Carrier/TPA and are not final until the group is enrolled with the Carrier/TPA. A quote is final only when coverage is offered by the Carrier/TPA and final rates have been accepted by, and the initial premium paid by, the group.";
 
 /** The one-line notice under rates on screen, with "View Disclaimers" beside it for the full text. */
-export const RATE_NOTICE_SHORT = "Noted rates and benefits are obtained from the Carrier/TPA's available information, not specifically provided for this tool, and are for discussion only. All rates are determined by the Carrier/TPA and are not final until the group is enrolled with the Carrier/TPA.";
+export const RATE_NOTICE_SHORT = "Noted rates and benefits are obtained from carrier's available information not specifically provided for this tool, and are for discussion only. All rates are determined by the carrier and are not final until the group is enrolled with the carrier.";
 
 export function groupSizeNote(g: Group): string | null {
   const from = "Group size is based on the enrollment data on file for your group; tell us if your full-time equivalent count differs.";

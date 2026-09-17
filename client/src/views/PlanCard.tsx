@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE } from "@/lib/model";
+import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
 import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
@@ -380,7 +380,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
       {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}
       {!compact && (
         <div className="noprint" style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.45, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
-          *Plans require an employer contribution of at least 50% of the employee premium; with several plans offered, 50% of the lowest-cost plan's Employee Only rate.
+          {RATE_NOTICE_SHORT}
           {disclaimersHref && (
             <>
               {" "}
