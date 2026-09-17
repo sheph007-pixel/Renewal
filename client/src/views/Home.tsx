@@ -128,11 +128,8 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           <p style={p}>
             Kennion has helped employers with employee benefits for more than 50 years, and we have operated the Kennion Program
             since 2013. As the program has grown, and as clients have asked for more choice, we are expanding our group health
-            offering with major national partners, networks and programs.
-          </p>
-          <p style={p}>
-            That means more medical plan options, more price points and more flexibility for your group, backed by the same
-            Kennion team you already know.
+            offering with major national partners, networks and programs. That means more medical plan options, more price points
+            and more flexibility for your group, backed by the same Kennion team you already know.
           </p>
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
             <p style={{ ...kicker, marginBottom: 8 }}>What's Changing From 2026 To 2027</p>
