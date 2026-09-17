@@ -632,12 +632,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             ) : (
               <FiltersButton count={filterCount(filters)} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} buttonRef={filtersBtn} />
             )}
-            {/* The count reads only when a filter or search narrows the list; a view switch says its count on its own segment. */}
-            {(!filtersEmpty(filters) || !!q) && (
-              <span aria-live="polite" style={{ fontSize: 13, color: C.muted, margin: "0 6px 0 2px", ...num }}>
-                {showingText(list.length, plans.length)}
-              </span>
-            )}
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
             {/* One view at a time: All, AI Picks, Favorites, Compare. The selected segment is tinted; a view with nothing in it is greyed. */}
@@ -682,6 +676,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               </button>
             )}
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+              {/* The count reads only when a filter or search narrows the list, at the right with Search and Export; a view switch says its count on its own segment. */}
+              {(!filtersEmpty(filters) || !!q) && (
+                <span aria-live="polite" style={{ fontSize: 13, color: C.muted, marginRight: 4, whiteSpace: "nowrap", ...num }}>
+                  {showingText(list.length, plans.length)}
+                </span>
+              )}
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -867,7 +867,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
       {opened && (
         <div role="dialog" aria-modal="true" aria-label={`${opened.plan} details`} onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,24,28,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 100%)", maxHeight: "92vh", overflow: "auto", position: "relative" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "94vh", overflow: "auto", position: "relative" }}>
             <button onClick={() => setOpen(null)} aria-label="Close" style={{ ...iconBtn, position: "absolute", top: 8, right: 10, fontSize: 22, color: C.muted, zIndex: 1 }}>
               ×
             </button>
@@ -876,7 +876,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 <strong>{picks.get(opened.plan)!.start ? "★ Start here · " : "✦ "}{TIER_LABEL[picks.get(opened.plan)!.tier]}</strong> — {picks.get(opened.plan)!.reason}
               </div>
             )}
-            <PlanCard m={card(opened)} actions={actionsFor(opened)} />
+            <PlanCard m={card(opened)} actions={actionsFor(opened)} wide />
           </div>
         </div>
       )}

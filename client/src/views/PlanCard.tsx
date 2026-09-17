@@ -118,7 +118,7 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   );
 }
 
-export default function PlanCard({ m, actions, compact }: { m: CardModel; actions?: React.ReactNode; compact?: boolean }) {
+export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; actions?: React.ReactNode; compact?: boolean; wide?: boolean }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
   // The pay cycle the rates and totals are shown per: monthly as quoted, or
   // divided down to what comes out of a paycheck. Local to the card; the
@@ -139,6 +139,129 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
         </div>
         <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
       </div>
+      {/* Wide (the grid's dialog): what it costs and what it covers on the
+          left, the rates and the split on the right — one screen, no
+          scrolling, every card the same shape. Narrow screens stack them. */}
+      {wide ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", columnGap: 28, rowGap: 10, alignItems: "start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+      {/* The headline is what an employee pays on average once the company's
+          contribution is in — the figure a client can hold against a paycheck —
+          with what the company pays under it. Both follow the applied contribution. */}
+      <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
+        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "—" : money(m.ee / m.enrolled)}</div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: C.muted }}>
+          Average Employee Monthly Contribution
+          <InfoTip text="Average employee contribution after your company’s contribution. Actual amounts vary by coverage tier." />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginTop: 3, ...num }}>
+          <span style={{ fontWeight: 500, color: C.muted }}>Your Company Pays: </span>
+          {m.er == null ? "—" : money(m.er)}
+          <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
+        </div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
+        <tbody>
+          {benefits.map(([label, value]) => {
+            // Lookups sit on their row: the directory on Network, the formulary on Pharmacy.
+            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find a doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
+            return (
+              <tr key={label}>
+                <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
+                <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
+                  {value}
+                  {link && value !== "—" && (
+                    <>
+                      {" · "}
+                      <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        {link.text}
+                      </a>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+      <div>
+        {!compact && (
+          <div className="noprint" role="tablist" aria-label="Pay cycle" style={{ display: "flex", gap: 4, marginBottom: 8, padding: 3, borderRadius: 8, background: C.zebra, border: `1px solid ${C.hairline}` }}>
+            {FREQS.map((f) => {
+              const on = f.key === freq.key;
+              return (
+                <button
+                  key={f.key}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFreqKey(f.key);
+                  }}
+                  style={{ flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, borderBottom: `1px solid ${C.hairline}`, paddingBottom: 4 }}>{ratesTitle}</div>
+        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5, marginTop: 2 }}>
+          {!compact && (
+            <thead>
+              <tr>
+                {["", "Rate", "Employer", "Employee"].map((h, i) => (
+                  <th key={h || "tier"} style={{ padding: "3px 0", fontSize: 11, fontWeight: 500, color: C.faint, textAlign: i ? "right" : "left" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+          )}
+          <tbody>
+            {tiers.map((t) => (
+              <tr key={t.key}>
+                <td style={{ padding: "3px 8px 3px 0", color: C.muted, whiteSpace: "nowrap" }}>
+                  {t.label} <span style={{ color: C.faint }}>({t.count})</span>
+                </td>
+                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(per(t.rate)!)}</td>
+                {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(per(t.ee)!)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13, borderTop: `1px solid ${C.hairline}`, paddingTop: 4 }}>
+        <tbody>
+          {(
+            [
+              ["Your Company Pays", per(m.er), true],
+              ["Your Employees Pay", per(m.ee), true],
+              [`Total ${freq.label} Bill`, per(m.premium), false],
+            ] as [string, number | null, boolean][]
+          ).map(([label, v, strong]) => {
+            const total = per(m.premium);
+            const pct = strong && v != null && total ? Math.round((v / total) * 100) : null;
+            return (
+              <tr key={label}>
+                <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
+                <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>
+                  {v == null ? "—" : money(v)}
+                  {pct != null && <span style={{ color: C.faint, fontWeight: 400 }}> ({pct}%)</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+          </div>
+        </div>
+      ) : (
+        <>
       {/* The headline is what an employee pays on average once the company's
           contribution is in — the figure a client can hold against a paycheck —
           with what the company pays under it. Both follow the applied contribution. */}
@@ -250,6 +373,8 @@ export default function PlanCard({ m, actions, compact }: { m: CardModel; action
           })}
         </tbody>
       </table>
+        </>
+      )}
       {m.source && <AuditFoot source={m.source} />}
       {actions && <div className="noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>{actions}</div>}
     </div>
