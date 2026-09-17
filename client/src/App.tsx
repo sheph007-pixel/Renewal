@@ -858,6 +858,7 @@ export default function App() {
                     Plans carries no line under its title either: its two tabs name their own years. */}
                 {tab !== "home" && tab !== "options" && tab !== "current" && <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subline}</div>}
               </div>
+              {/* On the Medical Plans tabs only: Welcome opens without it. */}
               {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
                 <div

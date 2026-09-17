@@ -242,6 +242,8 @@ export interface ProposalPlan {
   oopMax: string | null;
   /** In-network member cost per service, as printed; null until the reader has seen the document. */
   benefits?: PlanBenefits | null;
+  /** The carrier's standard design this plan is, from the plan catalogue; absent when the plan is not a catalogue design. */
+  design?: PlanDesign | null;
   rates: Record<TierKey, number | null>;
   monthlyTotal: number | null;
 }
@@ -253,6 +255,33 @@ export interface PlanBenefits {
   urgentCare: string | null;
   hospital: string | null;
   rx: string | null;
+  /** Emergency room; only the plan catalogue gives it. */
+  er?: string | null;
+}
+
+/** In- and out-of-network figures for one design. */
+export interface DesignLimits {
+  deductibleIndividual: number | null;
+  deductibleFamily: number | null;
+  oopMaxIndividual: number | null;
+  oopMaxFamily: number | null;
+  coinsurance?: number | null;
+}
+
+/**
+ * A carrier's standard plan design, the same for every group it quotes:
+ * the catalogue row the server matched the quoted plan to by its code.
+ */
+export interface PlanDesign {
+  planCode: string;
+  planId: string | null;
+  family: string | null;
+  planYear: number;
+  inNetwork: DesignLimits;
+  outOfNetwork: DesignLimits;
+  deductibleEmbedded: boolean | null;
+  /** Every service line the carrier lists, in its order, with the member cost as the card reads it. */
+  services: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
 }
 
 /** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
@@ -677,6 +706,8 @@ export interface MarketPlan {
   indicative: boolean;
   /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
   optionId?: string | null;
+  /** The carrier's standard design, from the plan catalogue, where the quoted plan is one. */
+  design?: PlanDesign | null;
   /** Read off a proposal the carrier sent for this group. */
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
 }
@@ -857,13 +888,14 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
         specialist: gb ? gb.specialist : pb?.specialist ?? null,
         uc: gb ? gb.uc : pb?.urgentCare ?? null,
-        er: gb ? gb.er : null,
+        er: gb ? gb.er : pb?.er ?? null,
         imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
         hospital: gb ? gb.hospital : pb?.hospital ?? null,
         network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : networkLabel(pl.network) || show.network,
         rates,
         monthly,
         indicative: false,
+        design: pl.design ?? null,
         quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id, audit: pr.audit || null },
       });
     }
@@ -1183,6 +1215,8 @@ export interface MarketResults {
   allSameCount: boolean;
   /** Provider networks on the network-based plans, in alphabetical order; RBP is a pricing approach, never a network. */
   networks: string[];
+  /** Each network with the partners whose plans are on it, so a network is never read as another partner's. */
+  networkPartners: { network: string; partners: string[] }[];
   /** Partners offering reference-based pricing, with their RBP plan counts. */
   rbp: { name: string; plans: number }[];
 }
@@ -1221,8 +1255,13 @@ export function marketResults(plans: MarketPlan[]): MarketResults | null {
   const allSameCount = partners.every((x) => x.plans === maxPlans);
   const widest = allSameCount ? [] : partners.filter((x) => x.plans === maxPlans);
   const networks = [...new Set(plans.filter((p) => networkTypeOf(p) !== "RBP").map((p) => networkLabel(p.network)).filter(isNamedNetwork) as string[])].sort((a, b) => a.localeCompare(b));
+  // Which partners' plans are on each network, partners in the order they were quoted.
+  const networkPartners = networks.map((network) => ({
+    network,
+    partners: partners.map((x) => x.name).filter((name) => plans.some((p) => marketPartnerOf(p) === name && networkTypeOf(p) !== "RBP" && networkLabel(p.network) === network)),
+  }));
   const rbp = partners.filter((x) => x.rbpPlans > 0).map((x) => ({ name: x.name, plans: x.rbpPlans }));
-  return { totalPlans: plans.length, partners, lowestCost, widest, allSameCount, networks, rbp };
+  return { totalPlans: plans.length, partners, lowestCost, widest, allSameCount, networks, networkPartners, rbp };
 }
 
 /**
@@ -1264,7 +1303,6 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
   });
   out.push([T("Kennion took your group to market and received "), V(plural(s.totalPlans, "plan option")), T(" from "), ...partnerList, T(".")]);
 
-  const networkClause: MarketSegment[] = s.networks.length ? [T(", with available network options including "), ...listValues(s.networks)] : [];
   const assumption = "assuming a 50% employer contribution";
   const costOf = (x: MarketPartner) => V(`${money0(x.avgEmployeeOnlyCost)}/month`);
 
@@ -1272,16 +1310,14 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
     const only = s.partners[0];
     // One partner: its figures, no comparison.
     if (only.avgEmployeeOnlyCost != null) {
-      out.push([V(only.name), T(`'s `), V(plural(only.plans, "plan")), T(" average "), costOf(only), T(` for employee-only coverage, ${assumption}`), ...networkClause, T(".")]);
-    } else if (networkClause.length) {
-      out.push([V(only.name), T(" quoted "), V(plural(only.plans, "plan")), ...networkClause, T(".")]);
+      out.push([V(only.name), T(`'s `), V(plural(only.plans, "plan")), T(" average "), costOf(only), T(` for employee-only coverage, ${assumption}.`)]);
     }
   } else {
     const soleLow = s.lowestCost.length === 1 ? s.lowestCost[0] : null;
     const soleWide = s.widest.length === 1 ? s.widest[0] : null;
     if (soleLow && soleWide && soleLow.name === soleWide.name) {
       // One partner wins both: one sentence.
-      out.push([V(soleLow.name), T(" offered both the lowest average employee-only cost at "), costOf(soleLow), T(`, ${assumption}, and the widest selection with `), V(plural(soleLow.plans, "plan")), ...networkClause, T(".")]);
+      out.push([V(soleLow.name), T(" offered both the lowest average employee-only cost at "), costOf(soleLow), T(`, ${assumption}, and the widest selection with `), V(plural(soleLow.plans, "plan")), T(".")]);
     } else {
       if (soleLow) {
         out.push([V(soleLow.name), T(" offered the lowest average employee-only cost at "), costOf(soleLow), T(`, ${assumption}.`)]);
@@ -1289,15 +1325,26 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
         out.push([...listValues(s.lowestCost.map((x) => x.name)), T(" tied for the lowest average employee-only cost at "), costOf(s.lowestCost[0]), T(`, ${assumption}.`)]);
       }
       if (soleWide) {
-        out.push([V(soleWide.name), T(" offered the widest selection with "), V(plural(soleWide.plans, "plan")), ...networkClause, T(".")]);
+        out.push([V(soleWide.name), T(" offered the widest selection with "), V(plural(soleWide.plans, "plan")), T(".")]);
       } else if (s.widest.length > 1) {
-        out.push([...listValues(s.widest.map((x) => x.name)), T(" each offered the widest selection with "), V(plural(s.widest[0].plans, "plan")), ...networkClause, T(".")]);
+        out.push([...listValues(s.widest.map((x) => x.name)), T(" each offered the widest selection with "), V(plural(s.widest[0].plans, "plan")), T(".")]);
       } else if (s.allSameCount) {
-        out.push([T("Each partner offered "), V(plural(s.partners[0].plans, "plan")), ...networkClause, T(".")]);
-      } else if (networkClause.length) {
-        out.push([T("Available network options include "), ...listValues(s.networks), T(".")]);
+        out.push([T("Each partner offered "), V(plural(s.partners[0].plans, "plan")), T(".")]);
       }
     }
+  }
+
+  // Networks on their own sentence, each tied to the Carrier/TPA whose plans
+  // are on it, so a network is never read as another partner's: "Angle Health
+  // and Gravie plans are on the Cigna network, and UnitedHealthcare plans are
+  // on the United Choice Plus network."
+  if (s.networkPartners.length) {
+    const parts: MarketSegment[] = [];
+    s.networkPartners.forEach((n, i) => {
+      if (i > 0) parts.push(T(i === s.networkPartners.length - 1 ? ", and " : ", "));
+      parts.push(...listValues(n.partners), T(" plans are on the "), V(n.network), T(" network"));
+    });
+    out.push([T("Network options: "), ...parts, T(".")]);
   }
 
   if (s.rbp.length) {

@@ -46,8 +46,12 @@ let text = sentences(r);
 assert.deepEqual(text, [
   "Kennion took your group to market and received 6 plan options from UnitedHealthcare (3 plans), Gravie (2 plans) and Angle Health (1 plan).",
   "Gravie offered the lowest average employee-only cost at $290/month, assuming a 50% employer contribution.",
-  "UnitedHealthcare offered the widest selection with 3 plans, with available network options including Cigna and United Choice Plus.",
+  "UnitedHealthcare offered the widest selection with 3 plans.",
+  "Network options: Gravie and Angle Health plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.",
 ]);
+assert.deepEqual(r.networkPartners, [{ network: "Cigna", partners: ["Gravie", "Angle Health"] }, { network: "United Choice Plus", partners: ["UnitedHealthcare"] }], "each network with the partners on it");
+// The network sentence marks partner and network names.
+assert.deepEqual(marketResultsSentences(r)[3].filter((x) => x.value).map((x) => x.text), ["Gravie", "Angle Health", "Cigna", "UnitedHealthcare", "United Choice Plus"]);
 // Values are marked for the page; fixed wording is not.
 const marked = marketResultsSentences(r)[0].filter((x) => x.value).map((x) => x.text);
 assert.deepEqual(marked, ["6 plan options", "UnitedHealthcare", "3 plans", "Gravie", "2 plans", "Angle Health", "1 plan"]);
@@ -66,8 +70,9 @@ assert.deepEqual(r.rbp, [{ name: "Cobalt", plans: 2 }]);
 text = sentences(r);
 assert.equal(text[0], "Kennion took your group to market and received 8 plan options from UnitedHealthcare (3 plans), Gravie (2 plans), Angle Health (1 plan) and Cobalt (2 plans).");
 assert.equal(text[1], "Cobalt offered the lowest average employee-only cost at $238/month, assuming a 50% employer contribution.");
-assert.equal(text[2], "UnitedHealthcare offered the widest selection with 3 plans, with available network options including Cigna and United Choice Plus.");
-assert.equal(text[3], "We also included Cobalt, offering 2 reference-based pricing plans, as an alternative to traditional network-based coverage.");
+assert.equal(text[2], "UnitedHealthcare offered the widest selection with 3 plans.");
+assert.equal(text[3], "Network options: Gravie and Angle Health plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.", "RBP partners are never on a network");
+assert.equal(text[4], "We also included Cobalt, offering 2 reference-based pricing plans, as an alternative to traditional network-based coverage.");
 
 // Two RBP partners: one sentence naming each with its count.
 r = marketResults([...mixed, plan("Nationwide", "NW RBP", "Reference Based Pricing", 480)])!;
@@ -90,7 +95,8 @@ r = marketResults(networkOnly.filter((p) => p.carrier === "UnitedHealthcare"))!;
 text = sentences(r);
 assert.deepEqual(text, [
   "Kennion took your group to market and received 3 plan options from UnitedHealthcare (3 plans).",
-  "UnitedHealthcare's 3 plans average $345/month for employee-only coverage, assuming a 50% employer contribution, with available network options including United Choice Plus.",
+  "UnitedHealthcare's 3 plans average $345/month for employee-only coverage, assuming a 50% employer contribution.",
+  "Network options: UnitedHealthcare plans are on the United Choice Plus network.",
 ]);
 assert.ok(!text.join(" ").match(/lowest|widest/), "one partner: no competition");
 
@@ -101,7 +107,8 @@ assert.deepEqual(r.lowestCost, []);
 text = sentences(r);
 assert.deepEqual(text, [
   "Kennion took your group to market and received 7 plan options from UnitedHealthcare (3 plans), Gravie (2 plans) and Angle Health (2 plans).",
-  "UnitedHealthcare offered the widest selection with 3 plans, with available network options including Cigna and United Choice Plus.",
+  "UnitedHealthcare offered the widest selection with 3 plans.",
+  "Network options: Gravie and Angle Health plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.",
 ]);
 
 // UnitedHealthcare quotes both fundings: both count as its plans, and the sentence says so.
@@ -111,15 +118,22 @@ assert.equal(sentences(r)[0], "Kennion took your group to market and received 4 
 
 // One partner wins both price and selection: one combined sentence.
 r = marketResults([plan("Gravie", "A", "Cigna", 500), plan("Gravie", "B", "Cigna", 520), plan("UnitedHealthcare", "C", "United Choice Plus", 700)])!;
-assert.equal(marketResultsText(r)[1], "Gravie offered both the lowest average employee-only cost at $255/month, assuming a 50% employer contribution, and the widest selection with 2 plans, with available network options including Cigna and United Choice Plus.");
+assert.equal(marketResultsText(r)[1], "Gravie offered both the lowest average employee-only cost at $255/month, assuming a 50% employer contribution, and the widest selection with 2 plans.");
+assert.equal(marketResultsText(r)[2], "Network options: Gravie plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.");
 
 // Ties: no sole winner invented.
 r = marketResults([plan("Gravie", "A", "Cigna", 500), plan("UnitedHealthcare", "C", "United Choice Plus", 500)])!;
 text = sentences(r);
 assert.equal(text[1], "Gravie and UnitedHealthcare tied for the lowest average employee-only cost at $250/month, assuming a 50% employer contribution.");
-assert.equal(text[2], "Each partner offered 1 plan, with available network options including Cigna and United Choice Plus.");
+assert.equal(text[2], "Each partner offered 1 plan.");
+assert.equal(text[3], "Network options: Gravie plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.");
 r = marketResults([plan("Gravie", "A", "Cigna", 500), plan("Gravie", "B", "Cigna", 500), plan("UnitedHealthcare", "C", "United Choice Plus", 600), plan("UnitedHealthcare", "D", "United Choice Plus", 600), plan("Angle Health", "E", "Cigna", 700)])!;
-assert.equal(marketResultsText(r)[2], "Gravie and UnitedHealthcare each offered the widest selection with 2 plans, with available network options including Cigna and United Choice Plus.");
+assert.equal(marketResultsText(r)[2], "Gravie and UnitedHealthcare each offered the widest selection with 2 plans.");
+assert.equal(marketResultsText(r)[3], "Network options: Gravie and Angle Health plans are on the Cigna network, and UnitedHealthcare plans are on the United Choice Plus network.");
+
+// A partner on two networks is named under each; three networks read as a list.
+r = marketResults([plan("UnitedHealthcare", "A", "United Choice", 600), plan("UnitedHealthcare", "B", "United Choice Plus", 620), plan("Gravie", "C", "Cigna", 500)])!;
+assert.equal(marketResultsText(r).find((t) => t.startsWith("Network options")), "Network options: Gravie plans are on the Cigna network, UnitedHealthcare plans are on the United Choice network, and UnitedHealthcare plans are on the United Choice Plus network.");
 
 // Rankings before rounding: $300.4 beats $300.6 though both print as $300.
 r = marketResults([plan("Gravie", "A", "Cigna", 600.8), plan("UnitedHealthcare", "C", "United Choice Plus", 601.2)])!;
@@ -130,6 +144,7 @@ assert.match(marketResultsText(r)[1], /^Gravie offered the lowest average employ
 r = marketResults([plan("UnitedHealthcare", "Surest Copay", "United Choice Plus", 640), plan("Nationwide", "NW 3000", "On the proposal", 590)])!;
 assert.deepEqual(r.partners.map((p) => p.name), ["UnitedHealthcare", "Nationwide"]);
 assert.deepEqual(r.networks, ["United Choice Plus"]);
+assert.deepEqual(r.networkPartners, [{ network: "United Choice Plus", partners: ["UnitedHealthcare"] }]);
 
 // Nothing quoted: nothing to say.
 assert.equal(marketResults([]), null);

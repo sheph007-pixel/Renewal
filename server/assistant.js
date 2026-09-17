@@ -379,10 +379,22 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.urgentCare ? `urgent care ${b.urgentCare}` : null,
         b.imaging ? `imaging ${b.imaging}` : null,
         b.hospital ? `hospital ${b.hospital}` : null,
+        b.er ? `ER ${b.er}` : null,
         b.rx ? `Rx ${b.rx}` : null,
       ].filter(Boolean).join("; ");
+      // A plan that is one of the carrier's standard designs: the catalogue's
+      // family figures and out-of-network cover too.
+      const dz = pl.design || null;
+      const oon = dz && dz.outOfNetwork;
+      const std = dz
+        ? [
+            dz.inNetwork && dz.inNetwork.deductibleFamily != null ? `family deductible ${money0(dz.inNetwork.deductibleFamily)}, family out-of-pocket max ${money0(dz.inNetwork.oopMaxFamily)}` : null,
+            oon && oon.deductibleIndividual != null ? `out-of-network deductible ${money0(oon.deductibleIndividual)}, out-of-network out-of-pocket max ${money0(oon.oopMaxIndividual)}${oon.coinsurance != null ? `, ${Math.round(oon.coinsurance * 100)}% coinsurance` : ""}` : null,
+            dz.deductibleEmbedded === false ? "family deductible not embedded (the whole family deductible must be met before the plan pays for any one person)" : null,
+          ].filter(Boolean).join("; ")
+        : "";
       out.push(
-        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}`,
+        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}${std ? `; standard design - ${std}` : ""}`,
       );
     }
     if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);
