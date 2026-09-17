@@ -19,7 +19,7 @@ import MarketResults from "@/views/MarketResults";
  * the premium). A toolbar of filter dropdowns along the top (a Filters
  * drawer on a phone), Sort by beside them, chips for what is applied; a
  * short row per plan; a card with everything when a row is clicked. ♡
- * shortlists a plan — the list Sign Up sends — and + adds it to a proposal
+ * shortlists a plan - the list Sign Up sends - and + adds it to a proposal
  * that downloads as Excel or prints to PDF, one card per plan. Filtering
  * and sorting touch only the grid: Your Market Results reads every quoted
  * plan regardless.
@@ -35,7 +35,7 @@ export interface GridProps {
   manager: AccountManager | null;
   /** Today's employer contribution by tier, for the printed proposal's footer. The starting point on the page is the minimum, not this. */
   contribution: TierContribution[];
-  /** The applied contribution per tier — what Employer Cost is computed from. */
+  /** The applied contribution per tier - what Employer Cost is computed from. */
   applied: Record<TierKey, number>;
   appliedChanged: boolean;
   onApply: (values: Record<TierKey, number>) => void;
@@ -49,11 +49,11 @@ type GridView = "all" | "picks" | "favorites" | "compare";
 
 /** The assistant's three picks per carrier, as tagged on the grid. */
 const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
-const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us — and for UnitedHealthcare, for each funding it quoted, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
+const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us - and for UnitedHealthcare, for each funding it quoted, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 /** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
-/** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
-const netType = (p: MarketPlan) => networkTypeOf(p) || "—";
+/** PPO / EPO / RBP, from the proposal; "-" where the quote does not say. */
+const netType = (p: MarketPlan) => networkTypeOf(p) || "-";
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
@@ -157,7 +157,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     return m;
   }, [rec, plans]);
   // Which plans the grid shows: all, the assistant's picks, favorites or the
-  // comparison — one at a time, so a view is never "on" behind another. A
+  // comparison - one at a time, so a view is never "on" behind another. A
   // fresh set of picks switches to them.
   const [view, setView] = useState<GridView>("all");
   const picksOnly = view === "picks";
@@ -171,7 +171,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // Asking for picks happens in place: the button spins, the chat stays
   // closed, and the picks land in the grid when the answer is in.
   const [asking, setAsking] = useState(false);
-  // Export: a small menu — the view showing as a PDF, or the rows as CSV.
+  // Export: a small menu - the view showing as a PDF, or the rows as CSV.
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -390,7 +390,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     ...(q ? [{ key: "search", label: `Search: “${query.trim()}”`, onRemove: () => setQuery("") }] : []),
   ];
   // "Show in grid" from a recommended plan: its row is scrolled to and lit
-  // for a moment — after the filters are cleared, when they were hiding it.
+  // for a moment - after the filters are cleared, when they were hiding it.
   const [flash, setFlash] = useState<string | null>(null);
   useEffect(() => {
     if (!flash) return;
@@ -405,7 +405,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
   const compareFull = proposal.length >= MAX_COMPARE;
-  // Any plan can be a favorite, as many as you like — the heart works like
+  // Any plan can be a favorite, as many as you like - the heart works like
   // the +. Sign Up is where the one-carrier, one-funding rule lives.
   const heartTitle = (p: MarketPlan) => (selected[p.plan] ? "Remove From Favorites" : "Add To Favorites");
   /** Up to four plans side by side; a fifth is refused until one is removed. */
@@ -435,7 +435,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       setSaving(false);
     }
   };
-  /** The proposal alone, to the printer — Save as PDF is the browser's own button. */
+  /** The proposal alone, to the printer - Save as PDF is the browser's own button. */
   const printProposal = () => {
     document.body.classList.add("print-proposal");
     const done = () => document.body.classList.remove("print-proposal");
@@ -456,7 +456,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
   return (
     <div>
-      {/* What came back from market, from every quoted plan — fixed 50% employer share, untouched by the controls above — and what to do next, with the assistant's recommendations beside it. */}
+      {/* What came back from market, from every quoted plan - fixed 50% employer share, untouched by the controls above - and what to do next, with the assistant's recommendations beside it. */}
       <MarketResults plans={plans} />
 
 
@@ -509,10 +509,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       )}
 
       {/* The grid: its toolbar on top, then a short row per plan; the row opens
-          the card. Every dollar figure is a month at the group's own enrollment —
+          the card. Every dollar figure is a month at the group's own enrollment - 
           the column tooltips say so. */}
       <div className="panel" style={{ ...panel, padding: 0 }}>
-        {/* Employer Contribution: the grid card's top band — one line, Edit opens the four fields. */}
+        {/* Employer Contribution: the grid card's top band - one line, Edit opens the four fields. */}
         <div id="contribution" className="anchor noprint" style={{ background: C.band, borderBottom: `1px solid ${C.rule}`, borderRadius: "10px 10px 0 0" }}>
           <button
             onClick={() => setContribOpen((v) => !v)}
@@ -660,7 +660,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     AI Picks ({picks.size})
                   </button>
                   {picks.size > 0 && (
-                    <button onClick={askForPicks} disabled={asking} aria-label="Run AI Picks again" title="Run again — new quotes or a changed contribution can change the picks" style={{ ...segment(picksOnly, false), borderRight: "none", padding: "7px 9px 7px 4px", opacity: asking ? 0.6 : 1 }}>
+                    <button onClick={askForPicks} disabled={asking} aria-label="Run AI Picks again" title="Run again - new quotes or a changed contribution can change the picks" style={{ ...segment(picksOnly, false), borderRight: "none", padding: "7px 9px 7px 4px", opacity: asking ? 0.6 : 1 }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <path d="M20 12a8 8 0 1 1-2.3-5.7" />
                         <path d="M20 4v5h-5" />
@@ -802,7 +802,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const numCell = { ...cell, textAlign: "left" as const, ...num };
               return (
                 <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
-                  <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "—"}</td>
+                  <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
@@ -819,19 +819,19 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     </div>
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
-                  <td style={numCell}>{p.oop == null ? "—" : money0(p.oop)}</td>
+                  <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
-                    {sp ? money0(sp.er) : "—"}
+                    {sp ? money0(sp.er) : "-"}
                   </td>
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
-                    {p.monthly == null ? "—" : money0(p.monthly)}
+                    {p.monthly == null ? "-" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     {/* The AI pick mark: lit on a picked plan whatever view is on; the row opens the card with the reason. */}
                     {(() => {
                       const pk = picks.get(p.plan);
                       return (
-                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} — ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, width: "auto", minWidth: 30, height: "auto", minHeight: 30, padding: pk ? "2px 2px" : 0, gap: 1, fontSize: 9.5, lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.1, color: pk ? C.blueInk : C.hairline, cursor: pk ? "pointer" : "default" }}>
+                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} - ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, width: "auto", minWidth: 30, height: "auto", minHeight: 30, padding: pk ? "2px 2px" : 0, gap: 1, fontSize: 9.5, lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.1, color: pk ? C.blueInk : C.hairline, cursor: pk ? "pointer" : "default" }}>
                           <svg width={pk ? 16 : 20} height={pk ? 16 : 20} viewBox="0 0 24 24" fill={pk ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
                           </svg>
@@ -848,7 +848,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     </button>
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side — remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
+                    <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side - remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
                       {added ? (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -891,7 +891,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             </button>
             {picks.get(opened.plan) && (
               <div style={{ background: "#e8eef5", border: "1px solid #c9d6e6", borderRadius: 4, padding: "8px 12px", marginBottom: 8, fontSize: 13, color: C.navy, lineHeight: 1.5 }}>
-                <strong>{picks.get(opened.plan)!.start ? "★ Start here · " : "✦ "}{TIER_LABEL[picks.get(opened.plan)!.tier]}</strong> — {picks.get(opened.plan)!.reason}
+                <strong>{picks.get(opened.plan)!.start ? "★ Start here · " : "✦ "}{TIER_LABEL[picks.get(opened.plan)!.tier]}</strong> - {picks.get(opened.plan)!.reason}
               </div>
             )}
             <PlanCard m={card(opened)} actions={actionsFor(opened)} wide />

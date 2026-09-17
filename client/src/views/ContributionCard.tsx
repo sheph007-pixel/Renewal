@@ -3,7 +3,7 @@ import { money, money0, type TierContribution, type TierKey } from "@/lib/model"
 import { C, h2, num, panel } from "@/lib/ui";
 
 interface Props {
-  /** Today's employer contribution, one figure per tier — always the read basis. */
+  /** Today's employer contribution, one figure per tier - always the read basis. */
   tiers: TierContribution[];
   /**
    * Present only on the editable card: the employer's own dollar-per-tier for
@@ -24,7 +24,7 @@ const TIER_LABEL: Record<TierKey, string> = {
   FAM: "Employee + Family",
 };
 
-/** A single tier's dollar figure — a plain number when locked, an input when not. */
+/** A single tier's dollar figure - a plain number when locked, an input when not. */
 function TierBox({
   t,
   value,
@@ -35,7 +35,7 @@ function TierBox({
   onChange?: (v: number) => void;
 }) {
   const [text, setText] = useState(value == null ? "" : String(value));
-  // While the field is focused, what's typed is the source of truth — a
+  // While the field is focused, what's typed is the source of truth - a
   // round trip through the parent's number would strip a trailing "." mid
   // keystroke. Once it isn't focused, an outside change (Reset, a different
   // group loading) is free to overwrite it.
@@ -76,7 +76,7 @@ function TierBox({
         </div>
       ) : (
         <div style={{ fontSize: 19, fontWeight: 600, color: t.count ? C.ink : C.faint, ...num }}>
-          {value == null ? "—" : money0(value)}
+          {value == null ? "-" : money0(value)}
         </div>
       )}
       <div style={{ marginTop: 3, fontSize: 11.5, color: C.faint }}>
@@ -87,7 +87,7 @@ function TierBox({
 }
 
 /**
- * What the employer puts in, per tier — the figure a group actually wants
+ * What the employer puts in, per tier - the figure a group actually wants
  * first, before any plan detail: what am I spending, and can I keep spending
  * it? Current Medical Plans shows it locked, read off real rates and
  * enrollment. New 2027 Medical Options shows the same figure unlocked,
@@ -134,7 +134,7 @@ export default function ContributionCard({ tiers, editable }: Props) {
 
       <p style={{ margin: "6px 0 14px", fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>
         {editable
-          ? "What you'd put toward each tier for 2027, per enrolled employee per month. Starts equal to what you spend today — change any figure to see the cost."
+          ? "What you'd put toward each tier for 2027, per enrolled employee per month. Starts equal to what you spend today - change any figure to see the cost."
           : "What you put toward each tier today, per enrolled employee per month, averaged across your current plans."}
       </p>
 
@@ -170,7 +170,7 @@ export default function ContributionCard({ tiers, editable }: Props) {
             <div style={{ fontSize: 15, fontWeight: 600, color: C.body, ...num }}>{money0(annual!)}</div>
           </div>
           <div style={{ fontSize: 11.5, color: C.faint, maxWidth: 320, lineHeight: 1.5 }}>
-            At today&rsquo;s enrollment — {tiers.reduce((n, t) => n + t.count, 0)} employees. The plan you actually
+            At today&rsquo;s enrollment - {tiers.reduce((n, t) => n + t.count, 0)} employees. The plan you actually
             pick still sets the total premium; this is only the employer&rsquo;s share of it.
           </div>
         </div>
@@ -179,7 +179,7 @@ export default function ContributionCard({ tiers, editable }: Props) {
       {!editable && !tiers.some((t) => t.actual) && tiers.some((t) => t.count) && (
         <div style={{ marginTop: 12, fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
           Estimated from a standard employer/employee split until your Employee Navigator contribution
-          configuration is loaded — ask your account manager to confirm the real numbers.
+          configuration is loaded - ask your account manager to confirm the real numbers.
         </div>
       )}
     </div>

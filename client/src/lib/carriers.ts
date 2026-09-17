@@ -1,7 +1,7 @@
 /**
  * The same tolerant carrier rule the server uses (server/eligibility.js), so
- * the screen can put a carrier name from any source — the XML plan catalog,
- * the carrier stats report — into the same bucket the server would.
+ * the screen can put a carrier name from any source - the XML plan catalog,
+ * the carrier stats report - into the same bucket the server would.
  */
 export type Program = "EBPA" | "HealthEZ" | "BCBS-AL";
 

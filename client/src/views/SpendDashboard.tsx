@@ -76,8 +76,8 @@ function SpendTile({ icon, label, tip, amount, pct, bg, edge, fg }: { icon: Reac
 
 /**
  * The strip a client opens this page to see: Your Company Pays, Your
- * Employees Pay and Total Monthly Bill — the table below's employer cost,
- * employee cost and premium on a group basis — with the split as one thin
+ * Employees Pay and Total Monthly Bill - the table below's employer cost,
+ * employee cost and premium on a group basis - with the split as one thin
  * bar. Read straight off the table's own totals, so the two never disagree.
  * The per-tier estimate that used to sit under it is gone: the rate table
  * carries the figures, and an estimate dressed as four inputs read as

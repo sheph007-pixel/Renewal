@@ -6,7 +6,7 @@ interface Company {
   name: string;
   enIdentifier: string | null;
   tpa: string;
-  /** No medical in force — dental, vision or life only. Not a portal group. */
+  /** No medical in force - dental, vision or life only. Not a portal group. */
   ancillaryOnly?: boolean;
   pyStart: string | null;
   pyEnd: string | null;
@@ -34,7 +34,7 @@ interface Preview {
 const PROGRAM_LABEL: Record<string, string> = {
   EBPA: "EBPA",
   HealthEZ: "HealthEZ",
-  assumed: "Carrier not named — taken as EBPA/HealthEZ (group is all program)",
+  assumed: "Carrier not named - taken as EBPA/HealthEZ (group is all program)",
   "BCBS-AL": "BCBS of Alabama",
   unknown: "Carrier not recognised",
 };
@@ -101,9 +101,9 @@ export default function ImportPanel({ token, onImported, last }: Props) {
       setPreview(j);
       setChosen(Object.fromEntries(j.companies.map((c: Company) => [c.name, true])));
     } catch (e) {
-      // A network-level failure carries no server error body — a timed-out
+      // A network-level failure carries no server error body - a timed-out
       // or reset connection on a hundred-megabyte upload looks identical to
-      // the browser either way — so say what actually threw, not just that
+      // the browser either way - so say what actually threw, not just that
       // something did, or a real cause (an expired session, a dropped
       // connection partway through) reads as generic advice to "try again."
       const reason = e instanceof Error && e.message ? e.message : String(e);
@@ -130,7 +130,7 @@ export default function ImportPanel({ token, onImported, last }: Props) {
       onImported(j.groups, j.imports);
       const n = j.applied.length;
       setDone(
-        `Imported ${n} group${n > 1 ? "s" : ""} — ` +
+        `Imported ${n} group${n > 1 ? "s" : ""} - ` +
           j.applied
             .slice(0, 3)
             .map((a: { name: string; enrolled: number }) => `${a.name} (${a.enrolled})`)
@@ -168,7 +168,7 @@ export default function ImportPanel({ token, onImported, last }: Props) {
     <ImportSection
       step={1}
       title="Employee Navigator XML export"
-      what="Data_API_….xml — the full Data API export, every company in it"
+      what="Data_API_….xml - the full Data API export, every company in it"
       accept=".xml,text/xml,application/xml"
       ariaLabel="Upload the Employee Navigator XML export"
       inputRef={fileRef}
@@ -224,7 +224,7 @@ export default function ImportPanel({ token, onImported, last }: Props) {
           {!!preview.programs?.length && (
             <div style={{ marginBottom: 12, padding: "10px 12px", background: C.zebra, border: `1px solid ${C.hairline}`, borderRadius: 4 }}>
               <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
-                What this file says, by program — check it against Employee Navigator before importing
+                What this file says, by program - check it against Employee Navigator before importing
               </div>
               <table style={{ borderCollapse: "collapse", fontSize: 12.5, marginTop: 6 }}>
                 <tbody>
@@ -295,10 +295,10 @@ export default function ImportPanel({ token, onImported, last }: Props) {
                     <td style={{ padding: "8px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink }}>
                       {c.name}
                       {c.ancillaryOnly && (
-                        <div style={{ fontSize: 11.5, color: C.amber }}>no medical — other lines only; counts in premium totals, not a portal group</div>
+                        <div style={{ fontSize: 11.5, color: C.amber }}>no medical - other lines only; counts in premium totals, not a portal group</div>
                       )}
                       <div style={{ fontSize: 11.5, color: C.ghost }}>
-                        {c.tpa || "—"} · {c.plans.map((p) => `${p.plan} (${p.enrolled})`).join(" · ")}
+                        {c.tpa || "-"} · {c.plans.map((p) => `${p.plan} (${p.enrolled})`).join(" · ")}
                       </div>
                     </td>
                     <td
@@ -312,7 +312,7 @@ export default function ImportPanel({ token, onImported, last }: Props) {
                         overflowWrap: "anywhere",
                       }}
                     >
-                      {c.enIdentifier || "—"}
+                      {c.enIdentifier || "-"}
                     </td>
                     <td
                       style={{
@@ -383,7 +383,7 @@ export default function ImportPanel({ token, onImported, last }: Props) {
               C.amber,
               <>
                 {preview.failures.length} company record(s) skipped:{" "}
-                {preview.failures.slice(0, 3).map((f) => `${f.name} — ${f.reason}`).join("; ")}
+                {preview.failures.slice(0, 3).map((f) => `${f.name} - ${f.reason}`).join("; ")}
               </>,
             )}
 

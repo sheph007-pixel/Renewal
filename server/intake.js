@@ -1,7 +1,7 @@
 // Opens whatever lands in the proposals drop zone.
 //
 // A carrier proposal can arrive as a PDF, a spreadsheet, a Word file, a
-// picture of a rate sheet, a CSV — or as an email with any of those attached.
+// picture of a rate sheet, a CSV - or as an email with any of those attached.
 // This module turns one upload into the pieces worth reading: an email is
 // split into its attachments (with the email's subject, sender and body kept
 // as context for the match), and each piece is converted into something the

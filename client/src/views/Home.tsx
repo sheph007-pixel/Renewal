@@ -25,7 +25,7 @@ interface Props {
 /**
  * The Welcome tab: a short note from the President of Kennion Benefit
  * Advisors to the employer, saying what is happening for 2027, how this site
- * is laid out, and how to get a call on the calendar — with the two people
+ * is laid out, and how to get a call on the calendar - with the two people
  * to reach, the account manager and Hunter himself, beside it.
  */
 export default function Home({ g, currentHref, optionsHref, supplementalHref, signUpHref, manager, lastSignup }: Props) {
@@ -83,7 +83,7 @@ export default function Home({ g, currentHref, optionsHref, supplementalHref, si
 
       <div style={{ flex: "0 1 300px", display: "flex", flexDirection: "column", gap: 14, minWidth: 260 }}>
         <ContactCard manager={manager} />
-        <ContactCard manager={HUNTER} label="President" note="Questions about the program, the move for 2027, or anything at all — I am glad to talk." />
+        <ContactCard manager={HUNTER} label="President" note="Questions about the program, the move for 2027, or anything at all - I am glad to talk." />
       </div>
     </div>
   );

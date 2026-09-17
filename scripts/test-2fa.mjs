@@ -26,7 +26,7 @@ const post = (path, body, headers = {}) =>
 const signIn = (ip = "203.0.113.1") =>
   post("/api/signin", { email: "hunter@kennion.com", code: CODE }, { "X-Forwarded-For": ip });
 
-// 1. With nothing enrolled, the code alone signs in — and says so.
+// 1. With nothing enrolled, the code alone signs in - and says so.
 let r = await signIn();
 let j = await r.json();
 assert.equal(r.status, 200);

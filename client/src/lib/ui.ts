@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-/** Employee Navigator chrome — the palette the design settled on. */
+/** Employee Navigator chrome - the palette the design settled on. */
 export const C = {
   page: "#f5f7f9",
   card: "#fff",
@@ -33,9 +33,9 @@ export const C = {
   redEdge: "#f0c8c4",
   inputEdge: "#b6bfc4",
   zebra: "#fafbfc",
-  /** A subdued fill inside a white card — the grid's Employer Contribution band. */
+  /** A subdued fill inside a white card - the grid's Employer Contribution band. */
   band: "#e3e7eb",
-  /** A dark stripe — a grid's header row, a small round badge. */
+  /** A dark stripe - a grid's header row, a small round badge. */
   headerBg: "#202429",
   onColor: "#fff",
   /** The client's dark rail and what sits on it. */

@@ -1,5 +1,5 @@
 // The audit round trip: the workbook goes out, comes back with corrections
-// keyed into it, and the portal takes them on — or refuses, and says why.
+// keyed into it, and the portal takes them on - or refuses, and says why.
 //
 // The workbook is built by the very code the button uses and read by the very
 // code the upload uses, so this is the real path, not a re-implementation of
@@ -160,8 +160,8 @@ r = await send(toBuffer(stranger), false);
 assert.equal(r.status, 400);
 assert.match((await r.json()).error, /Group and Plan/, "the error says what is missing");
 
-// 8. Locking. With the rates locked nothing lands — not the workbook, not a
-//    single override by hand — and both say so with 423 rather than pretending.
+// 8. Locking. With the rates locked nothing lands - not the workbook, not a
+//    single override by hand - and both say so with 423 rather than pretending.
 let lock = await (
   await fetch(`${base}/api/admin/rates-lock`, {
     method: "POST",
@@ -192,7 +192,7 @@ assert.equal(
   "and the audited rate is untouched",
 );
 
-// 9. Reading a workbook while locked is still allowed — seeing what would
+// 9. Reading a workbook while locked is still allowed - seeing what would
 //    change is not changing anything.
 r = await send(toBuffer(book), false);
 assert.equal(r.status, 200, "a locked portal will still tell you what would change");
@@ -212,6 +212,6 @@ assert.equal(r.status, 200, "and the workbook lands again");
 assert.equal((await r.json()).appliedCount, 1);
 
 console.log(
-  "rates audit: workbook out, corrections back, money strings read, bad rates refused, lock holds — ok",
+  "rates audit: workbook out, corrections back, money strings read, bad rates refused, lock holds - ok",
 );
 server.kill();

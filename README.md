@@ -649,6 +649,13 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**No dashes as punctuation.** Nothing the app shows or writes uses an em
+dash or an en dash: not the pages, the PDFs, the spreadsheets, the emails or
+the assistant's replies (its instructions say so, and the PDFs' standard
+fonts render them as boxes anyway). A comma, a colon, a period or a plain
+hyphen does the job. `scripts/test-no-em-dash.mjs` scans the client, the
+server and the scripts and fails on one.
+
 **AI Picks.** On the 2027 grid's toolbar, beside Favorites and Compare,
 an "AI Picks" view. With no picks yet, pressing it opens the chat box on a
 conversation named "Plan recommendations" and asks for recommendations on

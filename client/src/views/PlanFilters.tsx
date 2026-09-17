@@ -28,7 +28,7 @@ import {
  * panel beneath it on a desktop, one Filters button that opens a drawer on
  * a phone, a Sort by control apart from both, and the row of chips that
  * shows what is applied. The rules they apply live in lib/planfilters.ts;
- * this file is only how they look and how they are reached — by pointer,
+ * this file is only how they look and how they are reached - by pointer,
  * by keyboard, and by a screen reader.
  */
 
@@ -149,7 +149,7 @@ export function FilterDropdown({ id, label, count, open, onToggle, onClose, widt
 
 /**
  * A list of checkboxes: any number may be on. A choice no plan would match
- * is greyed and disabled — unless it is already on, so it can still be
+ * is greyed and disabled - unless it is already on, so it can still be
  * turned off.
  */
 export function CheckList({ legend, options, selected, onToggle, hideLegend }: { legend: string; options: FilterOption[]; selected: string[]; onToggle: (value: string) => void; hideLegend?: boolean }) {
@@ -178,7 +178,7 @@ export function CheckList({ legend, options, selected, onToggle, hideLegend }: {
 /**
  * Minimum and maximum Total Monthly Bill. Given `onApply`, the pair waits
  * for its Apply button (or Enter); given `onChange` instead, every keystroke
- * goes straight out — the Filters drawer applies everything at once. Either
+ * goes straight out - the Filters drawer applies everything at once. Either
  * way a minimum above the maximum is called out and cannot be applied.
  */
 export function BillFields({ value, bounds, onApply, onChange }: { value: BillRange; bounds: BillBounds; onApply?: (b: BillRange) => void; onChange?: (b: BillRange) => void }) {
@@ -240,7 +240,7 @@ export function BillFields({ value, bounds, onApply, onChange }: { value: BillRa
       ) : (
         bounds && (
           <div style={{ fontSize: 12, color: C.faint, marginTop: 6 }}>
-            Plans run {money0(bounds.min)} – {money0(bounds.max)} a month.
+            Plans run {money0(bounds.min)} - {money0(bounds.max)} a month.
           </div>
         )
       )}

@@ -13,7 +13,7 @@ import InfoTip from "@/views/InfoTip";
  * the proposal on screen, the printed proposal and the Excel block.
  */
 export interface CardModel {
-  /** UH3, GR1 — the handle the client, Kennion and the assistant all use for this plan. */
+  /** UH3, GR1 - the handle the client, Kennion and the assistant all use for this plan. */
   optionId: string | null;
   carrier: string;
   links: { directory: { name: string; url: string } | null; formulary: { name: string; url: string } | null };
@@ -28,7 +28,7 @@ export interface CardModel {
   er: number | null;
   ee: number | null;
   premium: number | null;
-  /** Everyone enrolled, across the tiers — what the employee share is averaged over. */
+  /** Everyone enrolled, across the tiers - what the employee share is averaged over. */
   enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
   source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
@@ -48,7 +48,7 @@ export function fundingOf(p: MarketPlan): "Fully Insured" | "Level Funded" {
   return /fully/i.test(p.label) ? "Fully Insured" : "Level Funded";
 }
 
-/** Where the figures come from: always the carrier's own quote for this group — read off its proposal, or quoted on the menu. */
+/** Where the figures come from: always the carrier's own quote for this group - read off its proposal, or quoted on the menu. */
 export const basisOf = (p: MarketPlan) => (p.quoted ? "Carrier Proposal" : "Carrier Quote");
 
 export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
@@ -78,8 +78,8 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     basis: basisOf(p),
     quoted: !!p.quoted,
     monthly: p.monthly,
-    // The same rows on every plan, so cards read alike; "—" where the carrier's document (or Kennion's links) does not say.
-    benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== "On the proposal" ? v : "—"]),
+    // The same rows on every plan, so cards read alike; "-" where the carrier's document (or Kennion's links) does not say.
+    benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== "On the proposal" ? v : "-"]),
     tiers: TIERS.map((t) => {
       const s = tierSplit(p, contribution, t.key);
       return { key: t.key, label: TIER_NAMES[t.key], count: counts[t.key] || 0, rate: s?.rate ?? null, er: s?.er ?? null, ee: s?.ee ?? null };
@@ -140,23 +140,23 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
         <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
       </div>
       {/* Wide (the grid's dialog): what it costs and what it covers on the
-          left, the rates and the split on the right — one screen, no
+          left, the rates and the split on the right - one screen, no
           scrolling, every card the same shape. Narrow screens stack them. */}
       {wide ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", columnGap: 28, rowGap: 10, alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
       {/* The headline is what an employee pays on average once the company's
-          contribution is in — the figure a client can hold against a paycheck —
+          contribution is in - the figure a client can hold against a paycheck - 
           with what the company pays under it. Both follow the applied contribution. */}
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
-        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "—" : money(m.ee / m.enrolled)}</div>
+        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "-" : money(m.ee / m.enrolled)}</div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: C.muted }}>
           Average Employee Monthly Contribution
           <InfoTip text="Average employee contribution after your company’s contribution. Actual amounts vary by coverage tier." />
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginTop: 3, ...num }}>
           <span style={{ fontWeight: 500, color: C.muted }}>Your Company Pays: </span>
-          {m.er == null ? "—" : money(m.er)}
+          {m.er == null ? "-" : money(m.er)}
           <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
@@ -171,7 +171,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
                 <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
                   {value}
-                  {link && value !== "—" && (
+                  {link && value !== "-" && (
                     <>
                       {" · "}
                       <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -226,10 +226,10 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
                 <td style={{ padding: "3px 8px 3px 0", color: C.muted, whiteSpace: "nowrap" }}>
                   {t.label} <span style={{ color: C.faint }}>({t.count})</span>
                 </td>
-                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(per(t.rate)!)}</td>
+                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "-" : money(per(t.rate)!)}</td>
                 {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(per(t.er)!)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(per(t.ee)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
               </tr>
             ))}
           </tbody>
@@ -250,7 +250,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
                 <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>
-                  {v == null ? "—" : money(v)}
+                  {v == null ? "-" : money(v)}
                   {pct != null && <span style={{ color: C.faint, fontWeight: 400 }}> ({pct}%)</span>}
                 </td>
               </tr>
@@ -263,17 +263,17 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
       ) : (
         <>
       {/* The headline is what an employee pays on average once the company's
-          contribution is in — the figure a client can hold against a paycheck —
+          contribution is in - the figure a client can hold against a paycheck - 
           with what the company pays under it. Both follow the applied contribution. */}
       <div style={{ textAlign: "center", padding: "6px 0 8px", borderTop: `1px solid ${C.hairline}`, borderBottom: `1px solid ${C.hairline}` }}>
-        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "—" : money(m.ee / m.enrolled)}</div>
+        <div style={{ fontSize: 28, fontWeight: 600, color: C.ink, letterSpacing: "-0.5px", ...num }}>{m.ee == null || !m.enrolled ? "-" : money(m.ee / m.enrolled)}</div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: C.muted }}>
           Average Employee Monthly Contribution
           <InfoTip text="Average employee contribution after your company’s contribution. Actual amounts vary by coverage tier." />
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginTop: 3, ...num }}>
           <span style={{ fontWeight: 500, color: C.muted }}>Your Company Pays: </span>
-          {m.er == null ? "—" : money(m.er)}
+          {m.er == null ? "-" : money(m.er)}
           <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
@@ -288,7 +288,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
                 <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
                   {value}
-                  {link && value !== "—" && (
+                  {link && value !== "-" && (
                     <>
                       {" · "}
                       <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -341,10 +341,10 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
                 <td style={{ padding: "3px 8px 3px 0", color: C.muted, whiteSpace: "nowrap" }}>
                   {t.label} <span style={{ color: C.faint }}>({t.count})</span>
                 </td>
-                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "—" : money(per(t.rate)!)}</td>
+                <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "-" : money(per(t.rate)!)}</td>
                 {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "—" : money(per(t.er)!)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "—" : money(per(t.ee)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
               </tr>
             ))}
           </tbody>
@@ -365,7 +365,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
                 <td style={{ padding: "4px 0", textAlign: "right", color: C.ink, fontWeight: strong ? 600 : 500, ...num }}>
-                  {v == null ? "—" : money(v)}
+                  {v == null ? "-" : money(v)}
                   {pct != null && <span style={{ color: C.faint, fontWeight: 400 }}> ({pct}%)</span>}
                 </td>
               </tr>

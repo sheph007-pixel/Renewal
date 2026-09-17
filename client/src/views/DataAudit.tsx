@@ -64,7 +64,7 @@ interface XmlVerify {
 
 interface Props {
   token: string;
-  /** Whether the server has an Anthropic key — the assistant's briefing only matters when it does. */
+  /** Whether the server has an Anthropic key - the assistant's briefing only matters when it does. */
   ai: boolean;
 }
 
@@ -116,7 +116,7 @@ function StoredExport({ token, xml, onResult }: { token: string; xml: XmlVerify 
           </p>
           <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted }}>
             Export imported {when(xml.uploadedAt)}{xml.rawSize ? ` · ${mb(xml.rawSize)}` : ""} · re-read {when(xml.ranAt)}{xml.ranBy ? ` by ${xml.ranBy}` : ""}
-            {xml.stale && <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), marginLeft: 8 }}>A newer export has been imported since — run again</span>}
+            {xml.stale && <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), marginLeft: 8 }}>A newer export has been imported since - run again</span>}
           </div>
           {xml.differ.length > 0 && (
             <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13, color: C.ink, lineHeight: 1.6 }}>
@@ -175,7 +175,7 @@ const cell = { padding: "8px 8px", borderBottom: `1px solid ${C.hairline}`, font
 
 /**
  * One group opened: every check with its verdict, and the briefing the
- * assistant is handed — fetched when opened, since it is the full text.
+ * assistant is handed - fetched when opened, since it is the full text.
  */
 function GroupChecks({ row, token, ai }: { row: Row; token: string; ai: boolean }) {
   const [briefing, setBriefing] = useState<string | null>(null);
@@ -480,7 +480,7 @@ export default function DataAudit({ token, ai }: Props) {
                   <th style={{ ...th, textAlign: "left" }}>Group</th>
                   <th style={{ ...th, textAlign: "right" }} title="Employees enrolled in medical">Enrolled</th>
                   <th style={{ ...th, textAlign: "right" }} title="Medical premium per month">Medical / mo</th>
-                  <th style={{ ...th, textAlign: "right" }} title="Employees with status Active on the Employee Navigator roster — not an eligible count">EN roster</th>
+                  <th style={{ ...th, textAlign: "right" }} title="Employees with status Active on the Employee Navigator roster - not an eligible count">EN roster</th>
                   <th style={{ ...th, textAlign: "left" }}>Size</th>
                   <th style={{ ...th, textAlign: "right" }}>Quotes</th>
                   <th style={{ ...th, textAlign: "left" }}>Manager</th>
@@ -514,11 +514,11 @@ export default function DataAudit({ token, ai }: Props) {
                         <td style={{ ...cell, textAlign: "right", ...num }}>{r.figures.enrolled}</td>
                         <td style={{ ...cell, textAlign: "right", ...num }}>{money0(r.figures.monthly)}</td>
                         <td style={{ ...cell, textAlign: "right", ...num, color: r.figures.roster != null && r.figures.roster > r.figures.enrolled * 3 && r.figures.roster - r.figures.enrolled > 20 ? C.amber : undefined }}>
-                          {r.figures.roster ?? "—"}
+                          {r.figures.roster ?? "-"}
                         </td>
-                        <td style={cell}>{r.figures.sizeCategory || "—"}</td>
+                        <td style={cell}>{r.figures.sizeCategory || "-"}</td>
                         <td style={{ ...cell, textAlign: "right", ...num }}>{r.figures.quotes}</td>
-                        <td style={cell}>{r.figures.manager || "—"}</td>
+                        <td style={cell}>{r.figures.manager || "-"}</td>
                         <td style={cell}>
                           <span style={tone(r.status)}>{STATUS_WORD[r.status]}</span>
                         </td>

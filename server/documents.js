@@ -12,16 +12,16 @@ const TIER_KEYS = ["EE", "ES", "EC", "FAM"];
 const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
 const TIER_LABEL = { EE: "Employee", ES: "EE + Spouse", EC: "EE + Child(ren)", FAM: "EE + Family" };
 
-const money = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const money0 = (n) => (n == null || !Number.isFinite(Number(n)) ? "—" : "$" + Math.round(Number(n)).toLocaleString("en-US"));
-const signed = (n) => (n == null ? "—" : (n < 0 ? "−" : "+") + money0(Math.abs(n)));
+const money = (n) => (n == null || !Number.isFinite(Number(n)) ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const money0 = (n) => (n == null || !Number.isFinite(Number(n)) ? "-" : "$" + Math.round(Number(n)).toLocaleString("en-US"));
+const signed = (n) => (n == null ? "-" : (n < 0 ? "-" : "+") + money0(Math.abs(n)));
 const round2 = (n) => Math.round(n * 100) / 100;
 const today = () => new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 const safeName = (s) => String(s || "document").replace(/[^A-Za-z0-9 _-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || "document";
 
 const slotCarrier = (slot, carrier) => {
   if (/^UHC|Surest/.test(slot || "")) return "UnitedHealthcare";
-  return carrier || slot || "—";
+  return carrier || slot || "-";
 };
 // Funding is one of two things: UnitedHealthcare quotes fully insured and
 // level funded in separate slots; every other carrier and partner is level
@@ -82,11 +82,11 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
       rows.push({
         section: "Today (2026)",
         name: p.plan,
-        carrier: p.tpa || g.tpa || "—",
+        carrier: p.tpa || g.tpa || "-",
         funding: "In force",
-        network: "—",
-        deductible: "—",
-        oopMax: "—",
+        network: "-",
+        deductible: "-",
+        oopMax: "-",
         rates,
         enrolled: p.enrolled,
         monthly: p.monthly ?? null,
@@ -132,9 +132,9 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
       name: pl.optionId ? `${pl.optionId} · ${pl.name}` : pl.name,
       carrier: slotCarrier(pr.slot, pr.carrier),
       funding: slotFunding(pr.slot),
-      network: networkLabel(pl.network) || "—",
-      deductible: pl.deductible || "—",
-      oopMax: pl.oopMax || "—",
+      network: networkLabel(pl.network) || "-",
+      deductible: pl.deductible || "-",
+      oopMax: pl.oopMax || "-",
       rates,
       enrolled: g.enrolled,
       monthly,
@@ -154,7 +154,7 @@ export function comparisonText(table) {
   const lines = [];
   for (const r of table.rows) {
     const rates = TIER_KEYS.map((k) => `${k} ${money(r.rates[k])}`).join(", ");
-    lines.push(`${r.section} — ${r.name} (${r.carrier}, ${r.funding}): ${rates}; monthly ${money(r.monthly)}; annual ${money0(r.annual)}${r.vsToday != null ? `; vs today ${signed(r.vsToday)}/mo` : ""}${r.er != null ? `; employer ${money(r.er)}/mo, employees ${money(r.ee)}/mo` : ""}`);
+    lines.push(`${r.section} - ${r.name} (${r.carrier}, ${r.funding}): ${rates}; monthly ${money(r.monthly)}; annual ${money0(r.annual)}${r.vsToday != null ? `; vs today ${signed(r.vsToday)}/mo` : ""}${r.er != null ? `; employer ${money(r.er)}/mo, employees ${money(r.ee)}/mo` : ""}`);
   }
   for (const n of table.notes) lines.push(`Note: ${n}`);
   return lines.join("\n");
@@ -182,9 +182,9 @@ const cellText = (r, key) => {
   if (key.startsWith("rate_")) return money(r.rates[key.slice(5)]);
   if (key === "monthly" || key === "er" || key === "ee") return money(r[key]);
   if (key === "annual") return money0(r.annual);
-  if (key === "vsToday") return r.vsToday == null ? (r.section.startsWith("Today") ? "" : "—") : signed(r.vsToday);
+  if (key === "vsToday") return r.vsToday == null ? (r.section.startsWith("Today") ? "" : "-") : signed(r.vsToday);
   if (key === "carrier") return `${r.carrier}\n${r.funding}`;
-  return r[key] == null ? "—" : String(r[key]);
+  return r[key] == null ? "-" : String(r[key]);
 };
 
 // --------------------------------------------------------------------- PDF
@@ -296,7 +296,7 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
 }
 
 export async function renderComparison({ format, title, group: g, table }) {
-  const name = title || "2027 Medical Options — Comparison";
+  const name = title || "2027 Medical Options - Comparison";
   const stamp = new Date().toISOString().slice(0, 10);
   if (format === "xlsx") {
     const cols = columnsFor(table);
@@ -343,12 +343,12 @@ export async function renderComparison({ format, title, group: g, table }) {
         doc.moveDown(0.3);
         const bcols = [
           { key: "name", label: "Plan", width: 150, align: "left", text: (r) => r.name, strong: () => true },
-          { key: "pcp", label: "Doctor visit", width: 90, align: "left", text: (r) => r.benefits.doctorVisit || "—" },
-          { key: "spec", label: "Specialist", width: 90, align: "left", text: (r) => r.benefits.specialist || "—" },
-          { key: "uc", label: "Urgent care", width: 90, align: "left", text: (r) => r.benefits.urgentCare || "—" },
-          { key: "img", label: "Imaging / labs", width: 100, align: "left", text: (r) => r.benefits.imaging || "—" },
-          { key: "hosp", label: "Hospital", width: 100, align: "left", text: (r) => r.benefits.hospital || "—" },
-          { key: "rx", label: "Prescriptions", width: 110, align: "left", text: (r) => r.benefits.rx || "—" },
+          { key: "pcp", label: "Doctor visit", width: 90, align: "left", text: (r) => r.benefits.doctorVisit || "-" },
+          { key: "spec", label: "Specialist", width: 90, align: "left", text: (r) => r.benefits.specialist || "-" },
+          { key: "uc", label: "Urgent care", width: 90, align: "left", text: (r) => r.benefits.urgentCare || "-" },
+          { key: "img", label: "Imaging / labs", width: 100, align: "left", text: (r) => r.benefits.imaging || "-" },
+          { key: "hosp", label: "Hospital", width: 100, align: "left", text: (r) => r.benefits.hospital || "-" },
+          { key: "rx", label: "Prescriptions", width: 110, align: "left", text: (r) => r.benefits.rx || "-" },
         ];
         pdfTable(doc, { columns: bcols, rows: withBenefits });
       }
@@ -469,11 +469,11 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     const room = (need) => {
       if (doc.y + need > bottom) doc.addPage();
     };
-    pdfHeader(doc, { title: "AI Picks — Why These Plans", groupName: g.name, subtitle: `${picks.length} picks · run ${ranOn}` });
+    pdfHeader(doc, { title: "AI Picks: Why These Plans", groupName: g.name, subtitle: `${picks.length} picks · run ${ranOn}` });
 
     // What this is.
     doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(
-      `Kennion Benefit Advisors took ${g.name} to market. From the plans quoted, the assistant chose three from each Carrier/TPA lineup — a Lower Cost, a Best Fit and a Richer Benefits option — weighing your census (ages and family make-up), your enrollment by tier and the employer contribution set on the Medical Plans page. This report keeps those picks and the reason behind each one.`,
+      `Kennion Benefit Advisors took ${g.name} to market. From the plans quoted, the assistant chose three from each Carrier/TPA lineup - a Lower Cost, a Best Fit and a Richer Benefits option - weighing your census (ages and family make-up), your enrollment by tier and the employer contribution set on the Medical Plans page. This report keeps those picks and the reason behind each one.`,
       { width, lineGap: 1.5 },
     );
     if (rec && rec.summary) {
@@ -489,7 +489,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       pdfStats(doc, [
         { label: "Employees", value: String(enrolled || census.employees), note: `${census.employees} with an age on file` },
         { label: "Average age", value: String(census.average), note: `median ${census.median}` },
-        { label: "Age range", value: `${census.youngest}–${census.oldest}`, note: `${census.spread} spread` },
+        { label: "Age range", value: `${census.youngest}-${census.oldest}`, note: `${census.spread} spread` },
         { label: "Spouses", value: String(census.spouses), note: "covered" },
         { label: "Children", value: String(census.children), note: `in ${census.withChildren} famil${census.withChildren === 1 ? "y" : "ies"}` },
       ]);
@@ -498,8 +498,8 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       const b = census.bands || {};
       const yb = pdfBars(doc, { x: x0, y, width: half, title: "Ages", color: NAVY, bars: [
         { label: "Under 30", value: b.under30 || 0 },
-        { label: "30–44", value: b.from30to44 || 0 },
-        { label: "45–54", value: b.from45to54 || 0 },
+        { label: "30-44", value: b.from30to44 || 0 },
+        { label: "45-54", value: b.from45to54 || 0 },
         { label: "55+", value: b.from55 || 0 },
       ] });
       const yt = pdfBars(doc, { x: x0 + half + 24, y, width: half, title: "Enrollment by tier", color: GREEN, bars: TIER_KEYS.map((k) => ({ label: TIER_LABEL[k], value: counts[k] || 0 })) });
@@ -534,15 +534,22 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     const blockOf = (p) => {
       const r = rowFor(p);
       const facts = r
-        ? [r.network !== "—" ? `Network ${r.network}` : null, r.deductible !== "—" ? `Deductible ${r.deductible}` : null, r.oopMax !== "—" ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
+        ? [r.network !== "-" ? `Network ${r.network}` : null, r.deductible !== "-" ? `Deductible ${r.deductible}` : null, r.oopMax !== "-" ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
         : "";
       const bill = r && r.monthly != null
-        ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}${r.vsToday != null ? `  ·  ${r.vsToday < 0 ? "−" : "+"}${money0(Math.abs(r.vsToday))} vs today` : ""}`
+        ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}${r.vsToday != null ? `  ·  ${r.vsToday < 0 ? "-" : "+"}${money0(Math.abs(r.vsToday))} vs today` : ""}`
         : "Not priced at your enrollment.";
       const reason = p.reason || "";
+      // Every line wraps at the block's width; the block is as tall as its lines.
+      const w = width - 24;
       doc.font("Helvetica").fontSize(8.5);
-      const need = 26 + (facts ? 12 : 0) + 12 + (reason ? doc.heightOfString(reason, { width: width - 24 }) + 4 : 0) + 10;
-      return { facts, bill, reason, need };
+      const factsH = facts ? doc.heightOfString(facts, { width: w }) + 3 : 0;
+      doc.font("Helvetica-Bold").fontSize(8.5);
+      const billH = doc.heightOfString(bill, { width: w }) + 3;
+      doc.font("Helvetica-Oblique").fontSize(8.5);
+      const reasonH = reason ? doc.heightOfString(reason, { width: w }) + 4 : 0;
+      const need = 24 + factsH + billH + reasonH + 12;
+      return { facts, bill, reason, factsH, billH, need, w };
     };
     for (const l of lineups) {
       // The heading stays with its first pick.
@@ -551,22 +558,22 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       doc.moveDown(0.35);
       for (const p of l.picks) {
         const label = PICK_LABEL[p.tier] || p.tier;
-        const { facts, bill, reason, need } = blockOf(p);
+        const { facts, bill, reason, factsH, billH, need, w } = blockOf(p);
         room(need);
         const y = doc.y;
         doc.rect(x0, y, width, need - 6).fill(TINT);
         doc.rect(x0, y, 4, need - 6).fill(PICK_COLOR[p.tier] || NAVY);
         doc.font("Helvetica-Bold").fontSize(8).fillColor(PICK_COLOR[p.tier] || NAVY).text(label.toUpperCase(), x0 + 12, y + 8, { lineBreak: false });
         const lw = doc.widthOfString(label.toUpperCase()) + 10;
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.optionId} · ${p.plan}`, x0 + 12 + lw, y + 7, { width: width - 24 - lw, lineBreak: false, ellipsis: true });
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.optionId} · ${p.plan}`, x0 + 12 + lw, y + 7, { width: w - lw, height: 12, ellipsis: true });
         let ly = y + 22;
         if (facts) {
-          doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: width - 24, lineBreak: false, ellipsis: true });
-          ly += 12;
+          doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: w });
+          ly += factsH;
         }
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(bill, x0 + 12, ly, { width: width - 24, lineBreak: false, ellipsis: true });
-        ly += 12;
-        if (reason) doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(INK).text(reason, x0 + 12, ly + 2, { width: width - 24 });
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(bill, x0 + 12, ly, { width: w });
+        ly += billH;
+        if (reason) doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(INK).text(reason, x0 + 12, ly + 1, { width: w });
         doc.x = x0;
         doc.y = y + need;
       }

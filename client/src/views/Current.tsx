@@ -18,7 +18,7 @@ import { NAVIGATOR_URL } from "@/views/NavigatorCard";
  * What a group has today: one row per plan, the four tier rates, and what that
  * comes to a month.
  *
- * This page used to say the same numbers three times — a card per plan, five
+ * This page used to say the same numbers three times - a card per plan, five
  * tiles, and a combined table underneath. One grid says it once. The monthly
  * figure is the sum of each tier's rate times the people in that tier, which
  * is the only way to get it right: a headcount times the employee rate would
@@ -158,12 +158,12 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
   const by = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "plan" && key !== "carrier" }));
 
-  // Excel-style grid: a thin light line around every cell, plain white rows —
+  // Excel-style grid: a thin light line around every cell, plain white rows - 
   // not alternating bands, which read as color-coding when there is none here.
   const cell = { padding: "10px 10px", border: `1px solid ${C.rule}`, fontSize: 14, background: C.card };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
 
-  // Every section header button — View Invoice, Employee Navigator — reads
+  // Every section header button - View Invoice, Employee Navigator - reads
   // the same way, so the page never looks like it has two button styles.
   const headerBtn = {
     padding: "6px 14px",
@@ -188,7 +188,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
               href={invoiceHref}
               target="_blank"
               rel="noreferrer"
-              title={`${data.invoice.filename} — opens in a new tab`}
+              title={`${data.invoice.filename} - opens in a new tab`}
               style={headerBtn}
             >
               View Invoice
@@ -223,7 +223,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
                     {planName(r.p)}
                   </td>
                   <td style={{ ...cell, whiteSpace: "nowrap" }}>
-                    {r.p.tpa ? <CarrierMark name={r.p.tpa} size={20} fontSize={13.5} color={C.ink} /> : <span style={{ color: C.faint }}>—</span>}
+                    {r.p.tpa ? <CarrierMark name={r.p.tpa} size={20} fontSize={13.5} color={C.ink} /> : <span style={{ color: C.faint }}>-</span>}
                   </td>
                   <td style={{ ...rateCell, fontWeight: 600, color: C.ink }}>{n}</td>
                   {TIERS.map((t) => {
@@ -232,7 +232,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
                     return (
                       <td key={t.key} style={rateCell}>
                         <div style={{ fontWeight: 600, color: count ? C.ink : C.faint }}>
-                          {rate.rate == null ? "—" : money(rate.rate)}
+                          {rate.rate == null ? "-" : money(rate.rate)}
                         </div>
                         <div style={{ marginTop: 2, fontSize: 12, color: C.faint }}>
                           {count ? `× ${count}` : "none enrolled"}
@@ -250,7 +250,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
           <tfoot>
             <tr style={{ background: C.hairline }}>
               <td style={{ padding: "12px 10px 12px 14px", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}` }}>
-                {rows.length === 1 ? "Total" : `Total — ${rows.length} plans`}
+                {rows.length === 1 ? "Total" : `Total - ${rows.length} plans`}
               </td>
               <td style={{ border: `1px solid ${C.rule}` }} />
               <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}`, ...num }}>
@@ -286,7 +286,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
               <h2 style={h2}>Your 2026 Supplemental Package</h2>
               <div className="noprint" style={{ display: "flex", gap: 8 }}>
                 {data.invoice && (
-                  <a href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} — opens in a new tab`} style={headerBtn}>
+                  <a href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} - opens in a new tab`} style={headerBtn}>
                     View Invoice
                   </a>
                 )}
@@ -312,9 +312,9 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
                         <tr key={b.benefit}>
                           <td style={{ ...cell, paddingLeft: 14, fontWeight: 600, color: on ? C.ink : C.muted }}>{b.benefit}</td>
                           <td style={{ ...cell, textAlign: "center", fontSize: 16, color: on ? C.green : C.ghost }} aria-label={on ? "Offered" : "Not offered"}>
-                            {known ? (on ? "✓" : "✕") : "—"}
+                            {known ? (on ? "✓" : "✕") : "-"}
                           </td>
-                          <td style={{ ...rateCell, paddingRight: 14, fontWeight: on ? 600 : 400, color: on ? C.ink : C.ghost }}>{known ? (on ? b.enrolled : "—") : "—"}</td>
+                          <td style={{ ...rateCell, paddingRight: 14, fontWeight: on ? 600 : 400, color: on ? C.ink : C.ghost }}>{known ? (on ? b.enrolled : "-") : "-"}</td>
                         </tr>
                       );
                     })}

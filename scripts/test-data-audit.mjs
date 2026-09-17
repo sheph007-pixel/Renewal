@@ -137,7 +137,7 @@ assert.match(bo.detail, /Billed but not in this group's XML: EBPA Bronze \(2 bil
   assert.match(short.detail, /Gravie: 60 PPO plans stored; every group's Gravie quote is the same 67 designs/);
   const withEpo = auditGroup({ g: clean(), admin, split, proposals: [gravie(67, 67)] }).checks.find((c) => c.key === "quotes");
   assert.equal(withEpo.level, "warn");
-  assert.match(withEpo.detail, /67 EPO plans stored — Kennion offers PPO only/);
+  assert.match(withEpo.detail, /67 EPO plans stored - Kennion offers PPO only/);
 }
 
 // The stored export re-read against the portal: exact matches, drift named

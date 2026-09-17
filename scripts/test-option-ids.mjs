@@ -118,12 +118,12 @@ const gr = await settled("gravie.json");
 assert.deepEqual(storedIds(gr), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "EPO twins are never stored");
 assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "PPO only, and the numbers run without gaps");
 
-// 5b. A slot stored before that rule — EPO twins holding numbers — is
+// 5b. A slot stored before that rule - EPO twins holding numbers - is
 //     cleaned and renumbered once, compactly, and nothing from the old
 //     sequence leaks.
 await upload("gravie-legacy.json", "Gravie", reading("Gravie", "level funded", [plan("Gravie Copay 1500 PPO", "G1500", 610, { network: "Cigna OAP (PPO)", option_id: "GR1" }), plan("Gravie Copay 1500 EPO", "G1500E", 590, { network: "Cigna OAP (EPO)", plan_type: "EPO", option_id: "GR2" }), plan("Gravie Copay 2500 PPO", "G2500", 580, { network: "Cigna OAP (PPO)", option_id: "GR3" }), plan("Gravie Copay 2500 EPO", "G2500E", 560, { network: "Cigna OAP (EPO)", plan_type: "EPO", option_id: "GR4" })]));
 const grl = await settled("gravie-legacy.json");
-assert.deepEqual(storedIds(grl), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "the old GR1–GR4 becomes GR1–GR2, EPO twins gone");
+assert.deepEqual(storedIds(grl), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"], "the old GR1-GR4 becomes GR1-GR2, EPO twins gone");
 assert.deepEqual(await clientIds("Gravie"), ["GR1:Gravie Copay 1500 PPO", "GR2:Gravie Copay 2500 PPO"]);
 
 // 5c. UnitedHealthcare's two slots numbered under the old rule, one after
@@ -172,5 +172,5 @@ assert.deepEqual(
   ["UH9 · Custom 7000", "GR1 · Gravie Copay 1500 PPO"],
 );
 
-console.log("option ids: UH/GR per group in carrier order, kept across re-reads and newer quotes, never reused, on sign-up and in the comparison — ok", { group: mine.name });
+console.log("option ids: UH/GR per group in carrier order, kept across re-reads and newer quotes, never reused, on sign-up and in the comparison - ok", { group: mine.name });
 stop();

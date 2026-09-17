@@ -6,7 +6,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
- *   /:slug               a signed-in group's own pages — Welcome
+ *   /:slug               a signed-in group's own pages - Welcome
  *   /:slug/assistant     …Assistant (and /:slug/assistant/:id, one conversation)
  *   /:slug/changes       …an old address: What's Changing is a section of Welcome now
  *   /:slug/changes       …What's Changing For 2027
@@ -19,16 +19,16 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /admin               staff sign-in
  *   /current             Your 2026 Medical Plans
  *   /options             New 2027 Medical Options
- *   /admin/groups        Rate Administration — Groups
+ *   /admin/groups        Rate Administration - Groups
  *   /admin/groups/:name  one company's page
- *   /admin/rates         Rate Administration — Existing Plans & Rates
- *   /admin/proposals     Rate Administration — Proposals
- *   /admin/import        Rate Administration — Import
- *   /admin/assistant     Rate Administration — Assistant (conversations, playbook)
- *   /admin/data          Rate Administration — Data Check (every group's figures, checked)
+ *   /admin/rates         Rate Administration - Existing Plans & Rates
+ *   /admin/proposals     Rate Administration - Proposals
+ *   /admin/import        Rate Administration - Import
+ *   /admin/assistant     Rate Administration - Assistant (conversations, playbook)
+ *   /admin/data          Rate Administration - Data Check (every group's figures, checked)
  *
- * The slug in a group address is the company and its plan-year code — say
- * `johnson-storage-moving-jsmh2027` — so the address says whose page it is.
+ * The slug in a group address is the company and its plan-year code - say
+ * `johnson-storage-moving-jsmh2027` - so the address says whose page it is.
  * The session itself is a cookie the server sets at sign-in, so nothing
  * secret rides in the bar: a group's everyday address is just `/:slug/:tab`.
  * The permanent link, `/g/:slug/:token`, is the credential a client is sent;
@@ -106,7 +106,7 @@ export const groupHome = (group: { name?: string; code?: string | null }, tab: G
 };
 
 /**
- * A group's permanent link — the one a client is sent. With a name and code
+ * A group's permanent link - the one a client is sent. With a name and code
  * it carries the readable slug; without them it falls back to the bare token,
  * which is still accepted.
  */

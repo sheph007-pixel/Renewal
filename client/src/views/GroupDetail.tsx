@@ -42,7 +42,7 @@ const FIELDS: { key: string; label: string; width?: number }[] = [
 
 /**
  * The group's own sign-in link. Opening it is exactly what the client sees, so
- * staff can check a company's pages without knowing its code by heart — and it
+ * staff can check a company's pages without knowing its code by heart - and it
  * is the link to send the client. The code is the credential, so the link is
  * too: anyone holding it is signed in as that group.
  */
@@ -62,7 +62,7 @@ function ClientLink({
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  // The readable address — company, plan-year code, then the token — so the
+  // The readable address - company, plan-year code, then the token - so the
   // link a client is sent says whose pages it opens.
   const url = token
     ? origin + linkPath(token, "home", { name, code })
@@ -106,7 +106,7 @@ function ClientLink({
           "This group is archived, so the link is refused until it is restored."
         ) : (
           <>
-            The group&rsquo;s permanent address: bookmark it, send it, come back to it — no code to type, and it
+            The group&rsquo;s permanent address: bookmark it, send it, come back to it - no code to type, and it
             stays in the bar. Anyone holding it sees this company&rsquo;s pages, so send it to the client rather
             than posting it anywhere public.{" "}
             {confirmReset ? (
@@ -118,7 +118,7 @@ function ClientLink({
                   }}
                   style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.red, fontWeight: 600, cursor: "pointer" }}
                 >
-                  Replace it — the old link stops working
+                  Replace it - the old link stops working
                 </button>
                 {" · "}
                 <button onClick={() => setConfirmReset(false)} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.blue, cursor: "pointer" }}>
@@ -224,7 +224,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
               padding: "3px 8px",
             }}
           >
-            Archived — cannot sign in{group.notInExport ? " · not in the Employee Navigator export" : ""}
+            Archived - cannot sign in{group.notInExport ? " · not in the Employee Navigator export" : ""}
           </span>
         )}
       </div>
@@ -234,7 +234,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
           {group.name}
         </h2>
         <div style={{ marginTop: 6, fontSize: 13, color: C.muted }}>
-          {group.tpa || "—"} · {group.enrolled} enrolled · {group.lives} covered lives
+          {group.tpa || "-"} · {group.enrolled} enrolled · {group.lives} covered lives
           {group.pyStart && ` · plan year ${group.pyStart} to ${group.pyEnd}`}
         </div>
 
@@ -262,7 +262,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
             </div>
             <div style={{ marginTop: 10 }}>
               <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
-                Company ID — the code this group signs in with
+                Company ID - the code this group signs in with
               </label>
               <input
                 value={draft.companyId ?? group.code}
@@ -330,7 +330,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
               </div>
               {!group.sizeIsSet && (
                 <div style={{ fontSize: 11.5, color: C.ghost, marginTop: 4 }}>
-                  defaulted from headcount — set it to make the ALE call explicit
+                  defaulted from headcount - set it to make the ALE call explicit
                 </div>
               )}
             </div>
@@ -441,7 +441,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
             </div>
             <div style={{ marginTop: 10, fontSize: 12, color: C.ghost, lineHeight: 1.6 }}>
               Edits here override what the export supplied and survive the next import. The company
-              name is not editable — it is what an import matches on, so changing it would orphan
+              name is not editable - it is what an import matches on, so changing it would orphan
               the group.
             </div>
           </div>
@@ -517,7 +517,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
         </div>
       )}
 
-      {/* Everything that is not medical — dental, vision, life, disability —
+      {/* Everything that is not medical - dental, vision, life, disability - 
           as premium totals only; the portal never prices these. */}
       {!!group.plans?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
@@ -548,7 +548,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
                     <td style={{ padding: "9px 8px 9px 0", borderBottom: `1px solid ${C.hairline}`, color: C.ink }}>
                       {l.benefit}
                     </td>
-                    <td style={{ padding: 9, borderBottom: `1px solid ${C.hairline}`, color: C.body }}>{l.carrier || "—"}</td>
+                    <td style={{ padding: 9, borderBottom: `1px solid ${C.hairline}`, color: C.body }}>{l.carrier || "-"}</td>
                     <td style={{ padding: 9, borderBottom: `1px solid ${C.hairline}`, color: C.body }}>{l.plan}</td>
                     <td style={{ padding: 9, borderBottom: `1px solid ${C.hairline}`, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                       {l.enrolled}
@@ -587,7 +587,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
         </h3>
         <div style={{ marginTop: 8, fontSize: 12.5, color: C.muted, lineHeight: 1.6, maxWidth: 720 }}>
           {group.archived
-            ? `This group is archived${group.notInExport ? ` because the Employee Navigator export of ${new Date(group.notInExport).toLocaleDateString()} no longer carried it` : ""}: hidden from the list by default, and its access code is refused at sign-in. Nothing was deleted — restoring puts it straight back, and later imports leave that alone.`
+            ? `This group is archived${group.notInExport ? ` because the Employee Navigator export of ${new Date(group.notInExport).toLocaleDateString()} no longer carried it` : ""}: hidden from the list by default, and its access code is refused at sign-in. Nothing was deleted - restoring puts it straight back, and later imports leave that alone.`
             : "Archiving hides the group from the list and refuses its access code at sign-in. Nothing is deleted, and it can be restored at any time."}
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>

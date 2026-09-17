@@ -171,7 +171,7 @@ export default function AuditPanel({ token, version, ai }: Props) {
                       <td style={{ padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${C.hairline}` }}>{money0(c.report.monthly)}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${C.hairline}` }}>{money0(c.portal.monthly)}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${C.hairline}`, color: c.ok === false ? C.red : C.body }}>
-                        {c.service ? "—" : `${c.diff >= 0 ? "+" : "−"}${money0(Math.abs(c.diff))}${c.pct != null ? ` (${c.pct > 0 ? "+" : ""}${c.pct}%)` : ""}`}
+                        {c.service ? "-" : `${c.diff >= 0 ? "+" : "-"}${money0(Math.abs(c.diff))}${c.pct != null ? ` (${c.pct > 0 ? "+" : ""}${c.pct}%)` : ""}`}
                       </td>
                       <td style={{ padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${C.hairline}` }}>{c.report.enrolled.toLocaleString()}</td>
                       <td style={{ padding: "6px 8px", textAlign: "right", borderBottom: `1px solid ${C.hairline}` }}>{c.portal.heads.toLocaleString()}{c.portal.headsExact ? "" : "*"}</td>

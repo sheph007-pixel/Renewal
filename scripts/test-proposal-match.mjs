@@ -1,6 +1,6 @@
 // A proposal reading against the roster: the reader's own roster name when it
 // gives one, the carrier's spelling of the employer when it does not, and the
-// file name last — with anything ambiguous left unmatched.
+// file name last - with anything ambiguous left unmatched.
 import assert from "node:assert/strict";
 import { matchRosterGroup, groupNamedIn, spacedOut } from "../server/proposal-match.js";
 

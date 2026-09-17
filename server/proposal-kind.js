@@ -1,4 +1,4 @@
-// Does a proposal quote medical, or only ancillary lines — dental, vision,
+// Does a proposal quote medical, or only ancillary lines - dental, vision,
 // life, disability? Claude answers that when it reads a document; for the
 // ones read before it was asked, the document itself usually says.
 const ANCILLARY_WORDS = /\b(dental|vision|life|ad&d|disability|std|ltd|accident|critical illness|hospital indemnity|cancer|eyewear|orthodont\w*|voluntary)\b/i;
@@ -35,8 +35,8 @@ export function isAncillaryRow(row) {
 
 
 /**
- * A network name as shown to clients: every Cigna network — Gravie's "Cigna
- * OAP" or "Cigna Open Access Plus", Angle Health's "Cigna" — is one network
+ * A network name as shown to clients: every Cigna network - Gravie's "Cigna
+ * OAP" or "Cigna Open Access Plus", Angle Health's "Cigna" - is one network
  * with one provider lookup, so it reads "Cigna" everywhere. Other names pass
  * through untouched.
  */

@@ -14,7 +14,7 @@ export interface AdminGroup {
   brokerIsSet?: boolean;
   /** The Kennion account manager who looks after the group. */
   manager?: "debbie" | "tracy" | null;
-  /** The proposal slots this group has — Cobalt only where it is quoted. */
+  /** The proposal slots this group has - Cobalt only where it is quoted. */
   slots?: string[];
   /** The group's permanent, unguessable address token. */
   linkToken?: string | null;
@@ -51,11 +51,11 @@ export interface AdminGroup {
   duplicateOf?: string[];
   tpa?: string;
   plans?: { plan: string; tpa: string; enrolled: number; monthly: number }[];
-  /** Medical premium on EBPA + HealthEZ only — the captive program. BCBS of Alabama is excluded. */
+  /** Medical premium on EBPA + HealthEZ only - the captive program. BCBS of Alabama is excluded. */
   groupHealthMonthly?: number;
   /** Every medical plan, BCBS included. */
   medicalMonthly?: number;
-  /** Dental, vision, life, disability … — 0 until the group's export has been re-read for them. */
+  /** Dental, vision, life, disability … - 0 until the group's export has been re-read for them. */
   supplementalMonthly?: number;
   /** Medical + supplemental. */
   totalMonthly?: number;
@@ -116,18 +116,18 @@ function invoiceMonth(month: string | null): string {
 }
 
 /** Share of the block, as "4.2%". */
-const pct = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : "—");
+const pct = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : "-");
 
 /** Medical premium, summed from the plans in force. */
 const monthlyOf = (g: AdminGroup) => (g.plans || []).reduce((n, p) => n + (p.monthly || 0), 0);
 /** Group health: EBPA + HealthEZ medical only, as the server works it out. */
 const groupHealthOf = (g: AdminGroup) => g.groupHealthMonthly ?? 0;
-/** Every line — medical plus whatever supplemental has been loaded. */
+/** Every line - medical plus whatever supplemental has been loaded. */
 const totalOf = (g: AdminGroup) => g.totalMonthly ?? monthlyOf(g);
 
 /**
  * The rows on screen, as a CSV Excel opens cleanly. Exports exactly what the
- * table shows — same search, filters and sort — so a filtered view is a report.
+ * table shows - same search, filters and sort - so a filtered view is a report.
  */
 function groupsCsv(rows: AdminGroup[], blockEnrolled: number): string {
   const cols: [string, (g: AdminGroup) => unknown][] = [
@@ -630,7 +630,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
           <div style={{ padding: "12px 18px 0", fontSize: 13, color: C.muted, lineHeight: 1.65, maxWidth: 880 }}>
             These groups have no enrolled medical plan with EBPA, HealthEZ or BCBS of Alabama, so
             they are not in the 2027 portal and their access codes are refused. The carriers found
-            on each are listed — if one of those <em>is</em> a program carrier under a name the
+            on each are listed - if one of those <em>is</em> a program carrier under a name the
             rule does not recognise, say so and it will be matched.
           </div>
         )}
@@ -649,7 +649,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
             }}
           >
             <strong>{counts.dupes} rows look like the same client under two names.</strong> Open each
-            pair, decide which holds the current data, and archive the other — nothing is deleted.
+            pair, decide which holds the current data, and archive the other - nothing is deleted.
             Flagged with <span style={{ color: C.red }}>⚠ duplicate</span> below.
           </div>
         )}
@@ -725,7 +725,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                           }}
                           aria-label={`Company ID for ${g.name}`}
-                          title="Access code — type over it to change"
+                          title="Access code - type over it to change"
                           style={{
                             width: 92,
                             padding: "2px 5px",
@@ -762,7 +762,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                       {(g.proposals || 0) > 0 && (
                           <Link
                             href={groupPath(g.name)}
-                            title="Proposals on file — open the company page"
+                            title="Proposals on file - open the company page"
                             style={{ fontSize: 11.5, color: C.green, textDecoration: "none", whiteSpace: "nowrap" }}
                           >
                             📎 {g.proposals} proposal{g.proposals === 1 ? "" : "s"}
@@ -781,7 +781,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                       )}
                     </td>
                     <td style={{ ...td, color: g.city ? C.ink : C.ghost, lineHeight: 1.4 }}>
-                      {g.city ? `${g.city}${g.state ? `, ${g.state}` : ""}` : g.state || "—"}
+                      {g.city ? `${g.city}${g.state ? `, ${g.state}` : ""}` : g.state || "-"}
                       {g.zip && <div style={{ fontSize: 11.5, color: C.ghost, ...num }}>{g.zip}</div>}
                     </td>
                     <td style={{ ...td, lineHeight: 1.4 }}>
@@ -795,7 +795,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                           )}
                         </>
                       ) : (
-                        <span style={{ color: C.ghost }}>—</span>
+                        <span style={{ color: C.ghost }}>-</span>
                       )}
                     </td>
                     <td style={{ ...td, textAlign: "right", ...num }}>
@@ -846,7 +846,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                           saved === g.name + "|manager" ? C.greenTint : "#fff",
                         )}
                       >
-                        <option value="">—</option>
+                        <option value="">-</option>
                         {(Object.keys(MANAGER_LABEL) as Manager[]).map((m) => (
                           <option key={m} value={m}>
                             {MANAGER_LABEL[m]}
@@ -874,19 +874,19 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                           href={groupPath(g.name)}
                           title={`${g.invoice.filename}${
                             g.invoice.reconciles === true
-                              ? " — ties out"
+                              ? " - ties out"
                               : g.invoice.reconciles === false
-                                ? " — does not tie out to the plans on file"
+                                ? " - does not tie out to the plans on file"
                                 : g.invoice.error
-                                  ? ` — could not be read: ${g.invoice.error}`
-                                  : " — not read"
-                          } — open the company page`}
+                                  ? ` - could not be read: ${g.invoice.error}`
+                                  : " - not read"
+                          } - open the company page`}
                           style={{ color: g.invoice.reconciles === true ? C.green : C.amber, textDecoration: "none", fontWeight: 500 }}
                         >
                           {g.invoice.reconciles === true ? "✓" : "⚠"} {invoiceMonth(g.invoice.month) || "on file"}
                         </Link>
                       ) : (
-                        <span style={{ color: C.ghost }}>—</span>
+                        <span style={{ color: C.ghost }}>-</span>
                       )}
                     </td>
                   </tr>
@@ -905,7 +905,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                 </tr>
               )}
             </tbody>
-            {/* Totals for the rows shown — they move with every filter. */}
+            {/* Totals for the rows shown - they move with every filter. */}
             <tfoot>
               <tr>
                 <td colSpan={3} style={{ padding: "12px 10px", fontSize: 13, color: C.ink, borderTop: `1px solid ${C.border}` }}>

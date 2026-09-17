@@ -4,8 +4,8 @@ import type { Group, Overrides, TierKey } from "./model";
 /**
  * The audit workbook: group, plan, four rates. Nothing else.
  *
- * The rates are typed over in place — there is no separate column to key a
- * correction into — so what comes back is the same shape that went out, with
+ * The rates are typed over in place - there is no separate column to key a
+ * correction into - so what comes back is the same shape that went out, with
  * the wrong numbers made right. A row is found again by its group and plan.
  *
  * Built here rather than on the server so the numbers are produced by the very
@@ -32,7 +32,7 @@ export interface SheetRow {
 }
 
 /**
- * One row per program plan — EBPA and HealthEZ, which is what the program
+ * One row per program plan - EBPA and HealthEZ, which is what the program
  * runs on. A plan nobody is enrolled in is still listed: an empty plan with a
  * wrong rate is exactly the sort of thing an audit should catch.
  */

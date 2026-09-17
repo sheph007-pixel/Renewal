@@ -4,8 +4,8 @@ import { TIERS, fmtDate, hasActualSplit, money0, rateFor, split, type Group, typ
  * A group's own plans and rates, as a spreadsheet.
  *
  * The page answers "what do we have and what are the rates". The file answers
- * the third question an employer always asks next — "what are we paying versus
- * what are the employees paying" — which is why the split lives here and not
+ * the third question an employer always asks next - "what are we paying versus
+ * what are the employees paying" - which is why the split lives here and not
  * on the page.
  *
  * Whether that split is a fact or a guess depends on the group. Where Employee
@@ -110,11 +110,11 @@ export function tierRowsFor(
 /** How the employer and employee amounts were arrived at, in the group's own case. */
 export function splitNote(data: KennionData, g: Group, eePct: number, depPct: number): string {
   return hasActualSplit(data, g)
-    ? "Employer and employee amounts are the contributions configured in your Employee Navigator payroll setup — not an estimate."
+    ? "Employer and employee amounts are the contributions configured in your Employee Navigator payroll setup - not an estimate."
     : `Employer and employee amounts are illustrative: your payroll contributions are not in the data we hold, so they are modelled at ${eePct}% of the employee rate and ${depPct}% of the dependent cost.`;
 }
 
-/** Where the figures came from — the line the page used to carry. */
+/** Where the figures came from - the line the page used to carry. */
 export function sourceNote(data: KennionData): string {
   const m = data.funding?.month;
   const when = m
@@ -187,7 +187,7 @@ export async function downloadPlanSheet(
   const tiers = tierRowsFor(data, overrides, g, rows, eePct, depPct);
   if (tiers.length) {
     const sheet2: Cell[][] = [
-      [`${g.name} — by tier`],
+      [`${g.name} - by tier`],
       [],
       DETAIL_COLUMNS,
       ...tiers,

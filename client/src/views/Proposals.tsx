@@ -66,7 +66,7 @@ function AuditDetail({ a }: { a: ProposalAudit }) {
       {a.models.map((m) => (
         <div key={m.model}>
           <strong>{m.model}</strong>: {m.verdict}
-          {m.notes ? ` — ${m.notes}` : ""}
+          {m.notes ? ` - ${m.notes}` : ""}
         </div>
       ))}
       {a.mismatches.length > 0 && (
@@ -85,8 +85,8 @@ function AuditDetail({ a }: { a: ProposalAudit }) {
               <tr key={i}>
                 <td style={{ padding: "2px 10px 2px 0" }}>{x.plan}</td>
                 <td style={{ padding: "2px 10px 2px 0" }}>{x.field}</td>
-                <td style={{ padding: "2px 10px 2px 0", color: C.red }}>{x.stored || "—"}</td>
-                <td style={{ padding: "2px 10px 2px 0", color: C.green }}>{x.onDocument || "—"}</td>
+                <td style={{ padding: "2px 10px 2px 0", color: C.red }}>{x.stored || "-"}</td>
+                <td style={{ padding: "2px 10px 2px 0", color: C.green }}>{x.onDocument || "-"}</td>
                 <td style={{ padding: "2px 10px 2px 0", color: C.faint }}>{x.by.replace(/\s*\(.*\)$/, "")}</td>
               </tr>
             ))}
@@ -99,7 +99,7 @@ function AuditDetail({ a }: { a: ProposalAudit }) {
 
 interface Extraction {
   carrier?: string;
-  /** False for an ancillary-only document — it fills no slot. */
+  /** False for an ancillary-only document - it fills no slot. */
   quotes_medical?: boolean;
   group_name_on_document?: string | null;
   matched_group?: string | null;
@@ -128,7 +128,7 @@ interface Extraction {
 const ACCEPT =
   ".pdf,.eml,.msg,.xlsx,.xlsm,.xls,.csv,.txt,.docx,.png,.jpg,.jpeg,.gif,.webp,application/pdf,message/rfc822,application/vnd.ms-outlook,text/csv,text/plain,image/*";
 
-/** Rows that are proposals in their own right — not an email wrapper. */
+/** Rows that are proposals in their own right - not an email wrapper. */
 const isProposal = (p: Proposal) => p.status !== "container";
 
 /** The slots a group can hold; the first four are the ones tracked per group. */
@@ -143,7 +143,7 @@ const TRACKED = SLOTS;
 const isCurrent = (p: Proposal) => p.status === "assigned" && !p.superseded_by;
 
 /**
- * An ancillary proposal — dental, vision, life, disability — quotes no medical
+ * An ancillary proposal - dental, vision, life, disability - quotes no medical
  * rates, so it fills no slot and is kept apart from the group health quotes
  * the 2027 options are built from.
  */
@@ -193,7 +193,7 @@ const fmtSize = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math
 const fmtWhen = (s: string) =>
   new Date(s).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-const money = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(2)}`);
+const money = (v: number | null | undefined) => (v == null ? "-" : `$${v.toFixed(2)}`);
 
 /** The status pill: who assigned it, or what is still needed. */
 function StatusPill({ p }: { p: Proposal }) {
@@ -202,7 +202,7 @@ function StatusPill({ p }: { p: Proposal }) {
   if (p.superseded_by) return <span style={pill(C.faint, "#f2f4f5", "#e0e4e6")}>Superseded</span>;
   if (p.error && !p.group_name) return <span style={pill(C.red, C.redTint, C.redEdge)}>Could not read</span>;
   if (p.status === "unassigned") return <span style={pill(C.amber, C.amberTint, C.amberEdge)}>Needs assignment</span>;
-  if (p.status === "suggested") return <span style={pill(C.amber, C.amberTint, C.amberEdge)}>AI suggests — confirm</span>;
+  if (p.status === "suggested") return <span style={pill(C.amber, C.amberTint, C.amberEdge)}>AI suggests - confirm</span>;
   if (p.assigned_by === "ai") return <span style={pill(C.green, C.greenTint, C.greenEdge)}>Assigned by AI</span>;
   return <span style={pill(C.green, C.greenTint, C.greenEdge)}>Assigned</span>;
 }
@@ -287,7 +287,7 @@ function useProposals(token: string, group?: string) {
     const q = group ? `?group=${encodeURIComponent(group)}` : "";
     const r = await fetch(`/api/admin/proposals${q}`, { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) {
-      setError("Could not load proposals — sign in again.");
+      setError("Could not load proposals - sign in again.");
       return;
     }
     const j = await r.json();
@@ -363,9 +363,9 @@ function Extracted({ x }: { x: Extraction }) {
                     {p.plan_type && <span style={{ color: C.ghost }}> · {p.plan_type}</span>}
                     {p.plan_code && <div style={{ fontSize: 11.5, color: C.ghost }}>{p.plan_code}</div>}
                   </td>
-                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{networkLabel(p.network) || "—"}</td>
-                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.deductible || "—"}</td>
-                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.oop_max || "—"}</td>
+                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{networkLabel(p.network) || "-"}</td>
+                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.deductible || "-"}</td>
+                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.oop_max || "-"}</td>
                   {(["EE", "ES", "EC", "FAM"] as const).map((t) => (
                     <td
                       key={t}
@@ -375,7 +375,7 @@ function Extracted({ x }: { x: Extraction }) {
                     </td>
                   ))}
                   <td style={{ padding: "5px 0", textAlign: "right", color: C.ink, fontWeight: 600, borderBottom: `1px solid ${C.hairline}`, fontVariantNumeric: "tabular-nums" }}>
-                    {p.monthly_total == null ? "—" : money0(p.monthly_total)}
+                    {p.monthly_total == null ? "-" : money0(p.monthly_total)}
                   </td>
                 </tr>
               ))}
@@ -490,7 +490,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
               title="Which of the group's proposals this is"
               style={{ ...selectStyle, maxWidth: 180, borderColor: p.slot ? C.inputEdge : untracked ? C.inputEdge : C.amber }}
             >
-              <option value="">{ancillary ? "— ancillary, no slot —" : untracked ? "— not a tracked carrier —" : "— which proposal? —"}</option>
+              <option value="">{ancillary ? " - ancillary, no slot - " : untracked ? " - not a tracked carrier - " : " - which proposal? - "}</option>
               {SLOTS.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -509,7 +509,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
                 background: p.status === "suggested" ? C.amberTint : "#fff",
               }}
             >
-              <option value="">— assign to a group —</option>
+              <option value=""> - assign to a group - </option>
               {groups.map((g) => (
                 <option key={g.name} value={g.name}>
                   {g.name}
@@ -564,7 +564,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
       {p.context && (p.kind === "attachment" || p.kind === "email") && (
         <div style={{ marginTop: 6, fontSize: 12.5, color: C.faint }}>
           ✉ {p.kind === "attachment" ? "Attached to" : "Email"}: <span style={{ color: C.body }}>{p.context.subject || p.context.emailFilename || "(no subject)"}</span>
-          {p.context.from ? ` — from ${p.context.from}` : ""}
+          {p.context.from ? ` - from ${p.context.from}` : ""}
           {p.parent_id != null && (
             <>
               {" · "}
@@ -583,7 +583,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
       {untracked && (
         <div style={{ marginTop: 6, fontSize: 12.5, color: C.faint }}>
           {ancillary
-            ? "Ancillary proposal — no medical rates quoted. Kept on file, out of the group’s 2027 options."
+            ? "Ancillary proposal - no medical rates quoted. Kept on file, out of the group’s 2027 options."
             : "Not one of the tracked carriers. Kept on file, out of the group’s 2027 options."}
         </div>
       )}
@@ -709,7 +709,7 @@ function Uploader({
 /**
  * One cell of the grid: the group's current proposal in that slot, or an empty
  * box that takes a file straight into it. Uploading over a filled slot is the
- * ordinary way to replace one — the newer proposal supersedes the older.
+ * ordinary way to replace one - the newer proposal supersedes the older.
  */
 function SlotCell({
   group,
@@ -1068,7 +1068,7 @@ export default function Proposals({ token, groups }: Props) {
           <div>
             <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
               {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
-              Drop a file on any box, or on the batch uploader above — a newer proposal replaces the one in that slot and the old one is kept.
+              Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
             </div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
@@ -1100,7 +1100,7 @@ export default function Proposals({ token, groups }: Props) {
                           <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} token={token} onChanged={() => void load()} />
                         ) : (
                           <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
-                            —
+                            - 
                           </td>
                         ),
                       )}
@@ -1157,7 +1157,7 @@ export default function Proposals({ token, groups }: Props) {
                 <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.ink, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                   <Link href={groupPath(g.name)}>{g.name}</Link>
                   <span style={{ fontWeight: 400, fontSize: 12.5, color: C.faint }}>
-                    {g.enrolled} enrolled · {g.tpa || "—"} · {rs.length} proposal{rs.length === 1 ? "" : "s"}
+                    {g.enrolled} enrolled · {g.tpa || "-"} · {rs.length} proposal{rs.length === 1 ? "" : "s"}
                   </span>
                   <SlotChips rows={rs} />
                 </h2>

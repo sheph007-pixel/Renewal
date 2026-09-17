@@ -213,7 +213,7 @@ export default function Login({
                     </div>
                     {staffError && err("That code is not right. Try the next one the app shows.")}
                     <div style={{ marginTop: 12, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
-                      No phone to hand? Type one of your recovery codes instead — each works once.{" "}
+                      No phone to hand? Type one of your recovery codes instead - each works once.{" "}
                       <button
                         onClick={onCancelTwoFactor}
                         style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}

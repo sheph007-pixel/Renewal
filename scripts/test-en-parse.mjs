@@ -4,9 +4,9 @@
 // One company, five employees:
 //   Ann   Active   medical EBPA (EE, $500)      + dental Guardian ($40) + vision VSP ($12)
 //   Bob   Active   medical BCBS AL (ES, $1,100) + dental Guardian ($40)
-//   Cal   Active   dental TERMINATED (has an EndDate, $40) — excluded
-//   Dee   Active   medical WAIVED — excluded
-//   Eve   Terminated employee with an open medical + dental — excluded
+//   Cal   Active   dental TERMINATED (has an EndDate, $40) - excluded
+//   Dee   Active   medical WAIVED - excluded
+//   Eve   Terminated employee with an open medical + dental - excluded
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { parseEnStream, premiumBreakdown } from "../server/en-parse.js";
@@ -172,7 +172,7 @@ console.log({
 
 // Distinct employees per carrier, the way the Carrier Stats report counts:
 // Ann is on EBPA medical, Guardian dental and VSP vision; Bob on BCBS medical
-// and Guardian dental — Guardian has two people, every other carrier one.
+// and Guardian dental - Guardian has two people, every other carrier one.
 assert.deepEqual(g.carrierHeads, { EBPA: 1, Guardian: 2, VSP: 1, "Blue Cross Blue Shield of Alabama": 1 });
 assert.equal(g.ancillaryOnly, false);
 console.log("en-parse: carrier head counts ok", g.carrierHeads);

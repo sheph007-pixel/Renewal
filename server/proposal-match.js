@@ -1,8 +1,8 @@
 // Which roster group a proposal reading points at.
 //
 // The reader is asked to copy the matched roster name exactly, and mostly
-// does. But a carrier prints its own spelling — "tpi Global Solutions, Inc."
-// on the quote, "tpiGlobalSolutions,Inc." in the file name — and a reading
+// does. But a carrier prints its own spelling - "tpi Global Solutions, Inc."
+// on the quote, "tpiGlobalSolutions,Inc." in the file name - and a reading
 // that mirrors the paper instead of the roster used to fail the exact string
 // comparison and land in the queue as "needs assignment", however sure the
 // reader was. So the reading is matched in order of trust, and the outcome

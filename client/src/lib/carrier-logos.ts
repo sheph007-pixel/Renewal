@@ -41,7 +41,7 @@ export function brandOf(name: string): { bg: string; fg: string; short: string }
 
 export const logoUrl = (name: string, bust?: number) => `/api/carriers/${carrierSlug(name)}/logo${bust ? `?v=${bust}` : ""}`;
 
-/** Which carriers have a logo on file — fetched once, shared by every mark on the page. */
+/** Which carriers have a logo on file - fetched once, shared by every mark on the page. */
 let have: Set<string> | null = null;
 let version = 0;
 let inflight: Promise<void> | null = null;

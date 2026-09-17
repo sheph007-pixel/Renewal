@@ -1,8 +1,8 @@
 // Reads a carrier proposal and says which group it belongs to.
 //
 // A proposal from UnitedHealthcare, Gravie, Nationwide, Angle, Cobalt or anyone else arrives
-// as a PDF. Claude reads the document itself — no text extraction step to lose
-// a scanned page — and returns the carrier, the company named on the paper,
+// as a PDF. Claude reads the document itself - no text extraction step to lose
+// a scanned page - and returns the carrier, the company named on the paper,
 // the plans and tier rates, and the roster group it matches with a confidence.
 // Nothing here is authoritative: the staff can reassign any proposal, and the
 // extracted figures are stored for review, not pushed into the rate tables.
@@ -23,7 +23,7 @@ export const aiEnabled = () => !!(apiKey() || process.env.ANTHROPIC_AUTH_TOKEN |
 /**
  * Local end-to-end runs only (KENNION_FAKE_AI=1): no key, no network. A text
  * upload whose body is a JSON extraction is returned as the reading, so the
- * whole path after the model — filing, slots, the group's Options page — can
+ * whole path after the model - filing, slots, the group's Options page - can
  * be exercised. Never set in a deployment.
  */
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
@@ -84,12 +84,12 @@ const SCHEMA = {
     funding: {
       type: "string",
       description:
-        "How the quoted plan is funded: 'fully insured', 'level funded', 'self funded', or 'unknown'. UnitedHealthcare quotes are usually one of the first two — say which.",
+        "How the quoted plan is funded: 'fully insured', 'level funded', 'self funded', or 'unknown'. UnitedHealthcare quotes are usually one of the first two - say which.",
     },
     quotes_medical: {
       type: "boolean",
       description:
-        "True when the document quotes medical / health plan rates. False for an ancillary-only proposal — dental, vision, life, disability, accident or similar with no medical coverage quoted.",
+        "True when the document quotes medical / health plan rates. False for an ancillary-only proposal - dental, vision, life, disability, accident or similar with no medical coverage quoted.",
     },
     group_name_on_document: {
       ...nullable("string"),
@@ -98,7 +98,7 @@ const SCHEMA = {
     matched_group: {
       ...nullable("string"),
       description:
-        "The roster group this proposal is for — copied EXACTLY from the roster list — or null if no roster group clearly matches.",
+        "The roster group this proposal is for - copied EXACTLY from the roster list - or null if no roster group clearly matches.",
     },
     confidence: {
       type: "number",
@@ -108,7 +108,7 @@ const SCHEMA = {
     quote_id: {
       ...nullable("string"),
       description:
-        "The carrier's own identifier for this proposal — quote ID, proposal number, case or group number as printed on it. Null if none is shown.",
+        "The carrier's own identifier for this proposal - quote ID, proposal number, case or group number as printed on it. Null if none is shown.",
     },
     effective_date: {
       ...nullable("string"),
@@ -125,7 +125,7 @@ const SCHEMA = {
     plans: {
       type: "array",
       description:
-        "Every plan option quoted, with monthly composite rates by tier where given. A carrier quote often runs to dozens of options over many pages — list them all, in the order they appear.",
+        "Every plan option quoted, with monthly composite rates by tier where given. A carrier quote often runs to dozens of options over many pages - list them all, in the order they appear.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -134,12 +134,12 @@ const SCHEMA = {
           name: {
             type: "string",
             description:
-              "The plan's name exactly as printed on the document — the carrier's own wording, character for character, nothing added. Never append where it sat on the quote (no \"(headline option 2)\", \"(PPO alternate 32)\"); if the document prints an alternate's label as part of the name, keep it as printed. When the same design is priced twice under different drug lists or networks, the printed distinguishing words are part of the name.",
+              "The plan's name exactly as printed on the document - the carrier's own wording, character for character, nothing added. Never append where it sat on the quote (no \"(headline option 2)\", \"(PPO alternate 32)\"); if the document prints an alternate's label as part of the name, keep it as printed. When the same design is priced twice under different drug lists or networks, the printed distinguishing words are part of the name.",
           },
           plan_code: {
             ...nullable("string"),
             description:
-              "The carrier's code for this plan where one is printed — a benefit or plan code such as \"P1000B22\" or \"MP34/MP92\". Null when the plan is named but not coded.",
+              "The carrier's code for this plan where one is printed - a benefit or plan code such as \"P1000B22\" or \"MP34/MP92\". Null when the plan is named but not coded.",
           },
           network: {
             ...nullable("string"),
@@ -199,7 +199,7 @@ const SCHEMA = {
 
 const SYSTEM = `You read insurance carrier proposals for Kennion Benefit Advisors, a benefits brokerage in Alabama. Each proposal is a quote for one employer group's medical plan, sent by a carrier such as UnitedHealthcare (including Surest), Gravie, Nationwide, Angle Health, Cobalt, EBPA, HealthEZ or BCBS of Alabama.
 
-Your job: identify the carrier, read off the plans and tier rates, and decide which group on Kennion's roster the proposal is for. Match by the employer name on the document against the roster names. Treat legal-form words (LLC, Inc., Co., Corporation, Holdings) and punctuation loosely, but do not match on a shared common word alone — "Birmingham Steel" is not "Birmingham-Toledo". When two roster groups could both fit, pick neither and say so in the flags. Copy the matched roster name exactly as listed. Say whether the quote is fully insured or level funded. UnitedHealthcare sends one of each for a group, in separate documents, and Kennion tracks them as separate proposals, so decide from the document in front of you and say which — a UHC quote whose funding you cannot tell is worth an audit flag. A quote runs to many pages and often dozens of plan options: read every page and list every option, including the alternate, illustrative and benchmark grids that follow the headline plans — they are quotable options and Kennion prices from them. Give each one the name exactly as printed — the carrier's wording, nothing added, no placement labels of your own — and the plan or benefit code printed on it, the network it is priced on where the quote distinguishes them, and its own tier rates. Two plans that differ only by network or by deductible are two plans. Never summarise a grid as "and other options"; list them. Surest is a UnitedHealthcare product, not a separate carrier: report a Surest quote with carrier "UnitedHealthcare" and say which funding it is, so it files under the group's UnitedHealthcare proposal. Kennion tracks six medical proposals per group — UnitedHealthcare fully insured, UnitedHealthcare level funded, Gravie, Nationwide, Angle Health and Cobalt (a self-funded quote) — so set quotes_medical false for an ancillary-only document (dental, vision, life, disability) even when it comes from one of those carriers. Rates are monthly composite amounts per tier: EE (employee only), ES (employee + spouse), EC (employee + children), FAM (family). Leave a value null rather than guessing.`;
+Your job: identify the carrier, read off the plans and tier rates, and decide which group on Kennion's roster the proposal is for. Match by the employer name on the document against the roster names. Treat legal-form words (LLC, Inc., Co., Corporation, Holdings) and punctuation loosely, but do not match on a shared common word alone - "Birmingham Steel" is not "Birmingham-Toledo". When two roster groups could both fit, pick neither and say so in the flags. Copy the matched roster name exactly as listed. Say whether the quote is fully insured or level funded. UnitedHealthcare sends one of each for a group, in separate documents, and Kennion tracks them as separate proposals, so decide from the document in front of you and say which - a UHC quote whose funding you cannot tell is worth an audit flag. A quote runs to many pages and often dozens of plan options: read every page and list every option, including the alternate, illustrative and benchmark grids that follow the headline plans - they are quotable options and Kennion prices from them. Give each one the name exactly as printed - the carrier's wording, nothing added, no placement labels of your own - and the plan or benefit code printed on it, the network it is priced on where the quote distinguishes them, and its own tier rates. Two plans that differ only by network or by deductible are two plans. Never summarise a grid as "and other options"; list them. Surest is a UnitedHealthcare product, not a separate carrier: report a Surest quote with carrier "UnitedHealthcare" and say which funding it is, so it files under the group's UnitedHealthcare proposal. Kennion tracks six medical proposals per group - UnitedHealthcare fully insured, UnitedHealthcare level funded, Gravie, Nationwide, Angle Health and Cobalt (a self-funded quote) - so set quotes_medical false for an ancillary-only document (dental, vision, life, disability) even when it comes from one of those carriers. Rates are monthly composite amounts per tier: EE (employee only), ES (employee + spouse), EC (employee + children), FAM (family). Leave a value null rather than guessing.`;
 
 /**
  * Read one proposal. `file` is { filename, prepared, context } where `prepared`
@@ -244,7 +244,7 @@ export async function analyzeProposal(file, roster) {
     : "";
   content.push({
     type: "text",
-    text: `The file is named "${file.filename}".${emailNote}\n\nKennion's roster — the only groups a proposal can be matched to:\n${rosterText}\n\nRead the proposal and fill in the structured result.`,
+    text: `The file is named "${file.filename}".${emailNote}\n\nKennion's roster - the only groups a proposal can be matched to:\n${rosterText}\n\nRead the proposal and fill in the structured result.`,
   });
 
   const params = {
@@ -280,7 +280,7 @@ export async function analyzeProposal(file, roster) {
     throw new Error("The model declined to read this document.");
   }
   if (response.stop_reason === "max_tokens") {
-    throw new Error("This proposal is longer than one reading can hold — the result would be cut off mid-plan.");
+    throw new Error("This proposal is longer than one reading can hold - the result would be cut off mid-plan.");
   }
   // The output format constrains the reply to JSON matching the schema, so the
   // text blocks concatenate to the object.
@@ -304,11 +304,11 @@ export async function analyzeProposal(file, roster) {
 /**
  * Explain a reconciliation: Employee Navigator's carrier stats report against
  * what the import produced, with what the import left out and why. Aggregates
- * only — no member data leaves the server. Returns plain text for the screen.
+ * only - no member data leaves the server. Returns plain text for the screen.
  */
 /**
- * Claude's read of the whole audit — the carrier reconciliation and the
- * billing check together — written for a benefits advisor. Aggregates only.
+ * Claude's read of the whole audit - the carrier reconciliation and the
+ * billing check together - written for a benefits advisor. Aggregates only.
  */
 export async function explainAudit(payload) {
   if (fakeAi()) return "Canned audit read (KENNION_FAKE_AI).";
@@ -319,7 +319,7 @@ export async function explainAudit(payload) {
     max_tokens: 4000,
     output_config: { effort: "medium" },
     system:
-      "You are a benefits data analyst auditing a brokerage's renewal portal, which holds a snapshot in time built from three Employee Navigator files: the XML export (every company's enrollments and premiums), the Carrier Stats report (Employee Navigator's own count and plan cost per carrier, counting every line a carrier writes, distinct employees, every company including archived ones), and the month's funding workbook (what each group was actually billed by the two captives, EBPA and HealthEZ, per participant per product — Blue Cross of Alabama plans are billed elsewhere and are outside the workbook, so the billing check compares captive medical only). The payload has: where the month's whole medical billing sits (billing.coverage: `live` = invoices filed under a group the portal shows, `archived` = filed under a company archived or out of the program, `unfiled` = invoices with no group yet) — the Groups page tile counts live groups on the XML basis, so it sits below the workbook's total by the archived and unfiled parts, and that is expected, not a discrepancy; per carrier, the report's figure against the portal's on the same basis, with the difference; per group, the XML's enrolled and medical premium against the month's billed participants and premium; the import diagnostics (what the parser left out and why, medical and other lines, and company records it could not use); and the invoices not filed under any group. Write for a benefits advisor in plain language, no code, under 350 words: first a one-sentence overall verdict on whether the snapshot can be trusted for client renewals; then, for each carrier off by more than about 1% and for the groups whose billing differs from the XML, the most likely cause, citing the specific bucket or group and the numbers; then what, if anything, a person should do. Where a gap is explained by a known cause (companies not in the export, a group that has left, a plan renewed since the export), say so plainly rather than raising alarm.",
+      "You are a benefits data analyst auditing a brokerage's renewal portal, which holds a snapshot in time built from three Employee Navigator files: the XML export (every company's enrollments and premiums), the Carrier Stats report (Employee Navigator's own count and plan cost per carrier, counting every line a carrier writes, distinct employees, every company including archived ones), and the month's funding workbook (what each group was actually billed by the two captives, EBPA and HealthEZ, per participant per product - Blue Cross of Alabama plans are billed elsewhere and are outside the workbook, so the billing check compares captive medical only). The payload has: where the month's whole medical billing sits (billing.coverage: `live` = invoices filed under a group the portal shows, `archived` = filed under a company archived or out of the program, `unfiled` = invoices with no group yet) - the Groups page tile counts live groups on the XML basis, so it sits below the workbook's total by the archived and unfiled parts, and that is expected, not a discrepancy; per carrier, the report's figure against the portal's on the same basis, with the difference; per group, the XML's enrolled and medical premium against the month's billed participants and premium; the import diagnostics (what the parser left out and why, medical and other lines, and company records it could not use); and the invoices not filed under any group. Write for a benefits advisor in plain language, no code, under 350 words: first a one-sentence overall verdict on whether the snapshot can be trusted for client renewals; then, for each carrier off by more than about 1% and for the groups whose billing differs from the XML, the most likely cause, citing the specific bucket or group and the numbers; then what, if anything, a person should do. Where a gap is explained by a known cause (companies not in the export, a group that has left, a plan renewed since the export), say so plainly rather than raising alarm.",
     messages: [{ role: "user", content: JSON.stringify(payload) }],
   });
   if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
@@ -332,12 +332,12 @@ export async function explainAudit(payload) {
 
 /**
  * Claude's read of the data check: which groups to look at first and why,
- * from the per-group findings (aggregates and group names only — the checks
+ * from the per-group findings (aggregates and group names only - the checks
  * themselves are arithmetic done on the server; the model explains, it does
  * not decide a number).
  */
 const DATA_CHECK_SYSTEM =
-  "You are a benefits data analyst reviewing a brokerage's renewal portal, group by group. The portal holds a snapshot built from three Employee Navigator files — the XML export (each company's enrollments, tier rates and premiums), the Carrier Stats report (Employee Navigator's own totals per carrier) and the month's funding workbook (what each group was actually billed, per plan and tier). Every group has been run through arithmetic checks on the server; you are given only the findings that were not clean: per group, which checks warned or failed and the exact wording, plus the outcome of re-reading the stored XML against what the portal holds, and the cross-file verdict by carrier. Every number in the payload is computed, not estimated — do not recompute or second-guess them; explain them. Write for a benefits advisor in plain language, no code, under 350 words: one sentence on whether the data is fit for clients today; then the groups to look at first, in order, each with the most likely cause and the one thing to do (re-import, set the size category, file an invoice, ask the TPA about a rate); then anything that is expected rather than wrong — a roster count that is Employee Navigator's Active status rather than an eligible headcount, a one-person timing difference between the export and the month's billing — said plainly so nobody chases it.";
+  "You are a benefits data analyst reviewing a brokerage's renewal portal, group by group. The portal holds a snapshot built from three Employee Navigator files - the XML export (each company's enrollments, tier rates and premiums), the Carrier Stats report (Employee Navigator's own totals per carrier) and the month's funding workbook (what each group was actually billed, per plan and tier). Every group has been run through arithmetic checks on the server; you are given only the findings that were not clean: per group, which checks warned or failed and the exact wording, plus the outcome of re-reading the stored XML against what the portal holds, and the cross-file verdict by carrier. Every number in the payload is computed, not estimated - do not recompute or second-guess them; explain them. Write for a benefits advisor in plain language, no code, under 350 words: one sentence on whether the data is fit for clients today; then the groups to look at first, in order, each with the most likely cause and the one thing to do (re-import, set the size category, file an invoice, ask the TPA about a rate); then anything that is expected rather than wrong - a roster count that is Employee Navigator's Active status rather than an eligible headcount, a one-person timing difference between the export and the month's billing - said plainly so nobody chases it.";
 
 export async function explainDataCheck(payload) {
   if (fakeAi()) return "Canned data check read (KENNION_FAKE_AI).";
@@ -363,7 +363,7 @@ export async function explainDataCheck(payload) {
  * Claude, so two models that agree on what to look at first are worth more
  * than one. The key is the `ChatGPT` variable on Railway (or
  * OPENAI_API_KEY); the model can be pinned with CHATGPT_MODEL. Plain HTTPS
- * to OpenAI's chat completions endpoint — no SDK to carry for one call.
+ * to OpenAI's chat completions endpoint - no SDK to carry for one call.
  * Same payload, same rules: aggregates and group names only, and the model
  * explains the arithmetic, it never decides a figure.
  */
@@ -401,7 +401,7 @@ export async function explainReconciliation(payload) {
     max_tokens: 4000,
     output_config: { effort: "medium" },
     system:
-      "You are a benefits data analyst helping a brokerage reconcile its own import of an Employee Navigator XML export against Employee Navigator's Carrier Stats report. The report's 'Enrolled Employees' and 'Plan Costs' per carrier are the reference. The import's rules: an employee is skipped when their employment status says terminated/inactive/deceased; a medical enrollment counts when its EndDate is nil, absent or in the future; waived elections are skipped; an enrollment with no PlanCost adds nothing to premium. The diagnostics say how many enrollments each rule left out, by carrier program, with the premium they carried. Write for a benefits advisor: plain language, no code. For each carrier that differs by more than about 1%, say what most likely explains the difference, citing the specific exclusion bucket and numbers, and whether a rule should change to match Employee Navigator's counting — be concrete about which rule. If the gap cannot be explained by the buckets, say what to look at next. Keep it under 300 words.",
+      "You are a benefits data analyst helping a brokerage reconcile its own import of an Employee Navigator XML export against Employee Navigator's Carrier Stats report. The report's 'Enrolled Employees' and 'Plan Costs' per carrier are the reference. The import's rules: an employee is skipped when their employment status says terminated/inactive/deceased; a medical enrollment counts when its EndDate is nil, absent or in the future; waived elections are skipped; an enrollment with no PlanCost adds nothing to premium. The diagnostics say how many enrollments each rule left out, by carrier program, with the premium they carried. Write for a benefits advisor: plain language, no code. For each carrier that differs by more than about 1%, say what most likely explains the difference, citing the specific exclusion bucket and numbers, and whether a rule should change to match Employee Navigator's counting - be concrete about which rule. If the gap cannot be explained by the buckets, say what to look at next. Keep it under 300 words.",
     messages: [{ role: "user", content: JSON.stringify(payload) }],
   });
   if (response.stop_reason === "refusal") throw new Error("The model declined this request.");

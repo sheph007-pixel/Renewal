@@ -83,7 +83,7 @@ export function reconcileCarriers(stats, groups) {
 
 /**
  * Each group's month of billing against its XML: people and premium. The
- * workbook is the two captives' billing — EBPA and HealthEZ — so the XML side
+ * workbook is the two captives' billing - EBPA and HealthEZ - so the XML side
  * is the group's group-health medical; a Blue Cross plan is billed elsewhere
  * and is not expected here.
  */
@@ -160,7 +160,7 @@ export function runAudit({ groups, carrierStats, funding, lastImport }) {
   const complete = missing.length === 0;
 
   let verdict;
-  if (!files.xml) verdict = { kind: "none", headline: "Nothing to audit yet — the XML export comes first." };
+  if (!files.xml) verdict = { kind: "none", headline: "Nothing to audit yet - the XML export comes first." };
   else if (!complete) {
     const names = { stats: "the carrier stats report", funding: "the funding workbook" };
     verdict = { kind: "none", headline: `Waiting on ${missing.map((k) => names[k]).join(" and ")}.` };

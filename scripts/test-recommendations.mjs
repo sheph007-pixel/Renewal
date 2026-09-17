@@ -1,10 +1,10 @@
 // Get Plan Recommendations: the assistant is handed the group's census as
-// aggregates only — average age, range, age bands, dependants — never a
+// aggregates only - average age, range, age bands, dependants - never a
 // name or one person's age; its instructions carry the Lower Cost / Best
 // Fit / Richer Benefits rule; the page's request goes through the chat like
 // any other question and is answered in a new conversation; and the picks
 // are published to the Medical Plans page through the recommend_plans tool
-// — resolved against the quotes on file, one record per group, replaced on
+// - resolved against the quotes on file, one record per group, replaced on
 // the next answer, and never from a staff trial. Runs with
 // `node scripts/test-recommendations.mjs`.
 import assert from "node:assert/strict";
@@ -49,7 +49,7 @@ import { buildRecommendations, PICK_TIERS } from "../server/assistant.js";
     "carrier then tier order; a plan code resolves; a second pick for the same tier or plan is dropped",
   );
   assert.equal(buildRecommendations({ summary: "", start_with: "", start_with_reason: "", picks: [] }, proposals).record.picks.length, 0);
-  // UnitedHealthcare quotes fully insured and level funded: one lineup each, three picks each — the same tier twice is not a duplicate across fundings.
+  // UnitedHealthcare quotes fully insured and level funded: one lineup each, three picks each - the same tier twice is not a duplicate across fundings.
   const uhc = [
     { slot: "UHC Fully Insured", carrier: "UnitedHealthcare", plans: [{ optionId: "UH1", name: "FI 1", monthlyTotal: 30000 }, { optionId: "UH2", name: "FI 2", monthlyTotal: 32000 }] },
     { slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans: [{ optionId: "UH3", name: "LF 1", monthlyTotal: 28000 }, { optionId: "UH4", name: "LF 2", monthlyTotal: 29000 }] },
@@ -114,12 +114,12 @@ const { briefing } = await (await fetch(`${base}/api/admin/data-audit/${encodeUR
 const ages = g.members.map((m) => Number(m.age)).filter((a) => a > 0);
 const avg = Math.round(ages.reduce((s, a) => s + a, 0) / ages.length);
 assert.match(briefing, new RegExp(`Census profile \\(aggregates[^\\n]*${ages.length} enrolled employees, average age ${avg}, median \\d+, youngest ${Math.min(...ages)}, oldest ${Math.max(...ages)}; the age range is (narrow|moderate|wide)`));
-assert.match(briefing, /By age: under 30: \d+; 30–44: \d+; 45–54: \d+; 55 and over: \d+\. \d+ cover a spouse; \d+ cover children \(\d+ children in all\)/);
+assert.match(briefing, /By age: under 30: \d+; 30-44: \d+; 45-54: \d+; 55 and over: \d+\. \d+ cover a spouse; \d+ cover children \(\d+ children in all\)/);
 for (const m of g.members) if (m.last && m.last.length > 2) assert.ok(!briefing.includes(m.last), `no surname in the briefing (${m.last})`);
 
 // The rule the assistant answers the button with: the picks go through the tool, the chat stays short.
 const src = readFileSync(new URL("../server/assistant.js", import.meta.url), "utf8");
-assert.match(src, /Give three picks — Lower Cost, Best Fit, Richer Benefits — and when more than one carrier has quoted, give the three for each carrier/);
+assert.match(src, /Give three picks - Lower Cost, Best Fit, Richer Benefits - and when more than one carrier has quoted, give the three for each carrier/);
 assert.match(src, /Publish the picks with the recommend_plans tool/);
 assert.match(src, /name: "recommend_plans"/);
 
@@ -135,8 +135,8 @@ const none = await (await fetch(`${base}/api/chat/recommendations`, { headers: {
 assert.equal(none.recommendations, null);
 
 // The page's request is an ordinary question in a new conversation; the
-// answer places picks on the page — streamed to the box, and on file after.
-const ask = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us — and for UnitedHealthcare, for each funding it quoted.";
+// answer places picks on the page - streamed to the box, and on file after.
+const ask = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us - and for UnitedHealthcare, for each funding it quoted.";
 const r = await fetch(`${base}/api/chat/send`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ threadId: null, content: ask, page: "plans", compact: true, title: "Plan recommendations" }) });
 const body = await r.text();
 assert.equal(r.status, 200, body);
@@ -184,5 +184,5 @@ assert.equal(rec3.createdAt, rec2.createdAt, "the staff trial left the client's 
 // No session, no picks.
 assert.equal((await fetch(`${base}/api/chat/recommendations`)).status, 401);
 
-console.log("plan recommendations: census as aggregates in the briefing, the rule in place, the button's question answered, picks published to the page — ok", { group: g.name, employees: ages.length, average: avg, picks: rec.picks.length });
+console.log("plan recommendations: census as aggregates in the briefing, the rule in place, the button's question answered, picks published to the page - ok", { group: g.name, employees: ages.length, average: avg, picks: rec.picks.length });
 stop();

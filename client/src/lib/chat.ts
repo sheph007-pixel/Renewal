@@ -54,7 +54,7 @@ export interface MemoryLine {
 /** One of the assistant's plan picks: a quoted 2027 option, and why. */
 export interface RecommendedPick {
   carrier: string;
-  /** The lineup's funding — UnitedHealthcare's two fundings each get their three picks. */
+  /** The lineup's funding - UnitedHealthcare's two fundings each get their three picks. */
   funding?: string;
   slot?: string;
   tier: "lower_cost" | "best_fit" | "richer_benefits";
@@ -145,11 +145,11 @@ export function threadTitled(title: string): ChatThread | undefined {
 }
 
 /**
- * A question asked on the client's behalf — the Medical Plans page's "Get
+ * A question asked on the client's behalf - the Medical Plans page's "Get
  * Plan Recommendations" button. With a title, the conversation is made
  * once: the first press starts it under that name and sends the question;
  * a later press opens the same conversation again, recommendations and
- * all, rather than asking anew — unless `resend` is set, which asks the
+ * all, rather than asking anew - unless `resend` is set, which asks the
  * question again in that same conversation. Without a title, a fresh
  * conversation.
  */
@@ -169,7 +169,7 @@ export async function askAssistant(question: string, title: string | null = null
 }
 
 /**
- * Ask without opening the box — for the grid's AI Picks, which shows the
+ * Ask without opening the box - for the grid's AI Picks, which shows the
  * answer itself. Goes into the conversation of that name when there is one,
  * so the thread stays one; resolves when the answer is in (the picks arrive
  * on the stream as it runs).

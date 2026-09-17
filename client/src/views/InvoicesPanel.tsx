@@ -20,7 +20,7 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 /**
  * Fourth upload on the Import tab: Employee Navigator's monthly invoice
  * export, one zip with a PDF per group. Matched to groups by name on the
- * server and filed under each one — nothing here to review row by row,
+ * server and filed under each one - nothing here to review row by row,
  * just where the file goes in and what came back unmatched, if anything.
  */
 export default function InvoicesPanel({ token }: Props) {
@@ -54,14 +54,14 @@ export default function InvoicesPanel({ token }: Props) {
     <ImportSection
       step={4}
       title="Client invoices"
-      what="Invoices.zip — one PDF per group, from Employee Navigator"
+      what="Invoices.zip - one PDF per group, from Employee Navigator"
       accept=".zip,application/zip,application/x-zip-compressed"
       ariaLabel="Upload the monthly invoices zip"
       inputRef={ref}
       disabled={busy}
       onFile={(f) => void upload(f)}
       busy={busy ? "Reading…" : ""}
-      last={result ? { filename: `${result.stored} invoice${result.stored === 1 ? "" : "s"} — ${result.month}`, when: new Date().toISOString() } : null}
+      last={result ? { filename: `${result.stored} invoice${result.stored === 1 ? "" : "s"} - ${result.month}`, when: new Date().toISOString() } : null}
       status={
         !result
           ? { kind: "none", label: "Not uploaded yet" }

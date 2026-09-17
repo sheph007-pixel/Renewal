@@ -1,6 +1,6 @@
 // A Gravie rate workbook, built here the way Gravie lays one out, read back:
-// header facts, subscribers by tier, every plan on the PPO sheet — Kennion
-// offers PPO only, so the EPO sheet is never read — and the proposal shape
+// header facts, subscribers by tier, every plan on the PPO sheet - Kennion
+// offers PPO only, so the EPO sheet is never read - and the proposal shape
 // the Options page prices from.
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";

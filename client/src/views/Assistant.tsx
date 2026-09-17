@@ -12,7 +12,7 @@ interface Props {
   hrefFor: (thread?: number | null) => string;
 }
 
-/** "Today", "Yesterday", "This week", "Earlier" — how the list is grouped. */
+/** "Today", "Yesterday", "This week", "Earlier" - how the list is grouped. */
 function bucket(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -95,7 +95,7 @@ function MemoryIcon() {
 
 /**
  * Memory: what the assistant keeps in mind about the group between
- * conversations — the preferences the client has stated, and anything they
+ * conversations - the preferences the client has stated, and anything they
  * add here themselves. A button in the rail with a count; it opens a panel
  * listing every line with a way to remove it, and a box to add one. The
  * assistant records lines on its own as the client talks; this is where the
@@ -193,8 +193,8 @@ function MemoryButton({ lines }: { lines: MemoryLine[] }) {
 type Tab = "chat" | "documents";
 
 /**
- * Documents: everything the assistant has made for the group — comparisons,
- * memos — and every file the group has attached or added here, in one
+ * Documents: everything the assistant has made for the group - comparisons,
+ * memos - and every file the group has attached or added here, in one
  * place, newest first, to download or remove. A file made in a
  * conversation links back to it.
  */
@@ -244,7 +244,7 @@ function Documents({ hrefFor }: { hrefFor: (thread?: number | null) => string })
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.hairline}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Documents</div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Everything the assistant has made for you, and anything you have added — kept here, to open any time.</div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Everything the assistant has made for you, and anything you have added - kept here, to open any time.</div>
         </div>
         <input ref={input} type="file" accept={ATTACHMENT_ACCEPT} multiple hidden onChange={(e) => void add(e.target.files)} />
         <button onClick={() => input.current?.click()} disabled={busy} style={{ ...tool, background: C.blue, color: "#fff", border: "none", padding: "8px 14px", opacity: busy ? 0.6 : 1 }}>

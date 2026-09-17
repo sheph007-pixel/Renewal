@@ -1,6 +1,6 @@
 /**
  * Each carrier's and TPA's main website, so the Carrier/TPA name is a link
- * wherever it is shown — a plan card's header, a grid row, the Today page.
+ * wherever it is shown - a plan card's header, a grid row, the Today page.
  * One row per name the system uses; a name not listed here simply shows
  * without a link. Edit here to add a carrier or partner.
  */

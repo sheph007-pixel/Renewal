@@ -35,7 +35,7 @@ assert.equal(
     extracted: { plans: [{ name: "Dental PPO High", rates }, { name: "Vision Plan A", rates: { EE: 8, ES: 15, EC: 14, FAM: 22 } }] },
   }),
   false,
-  "rated dental and vision plans are still ancillary — rates alone do not make a medical quote",
+  "rated dental and vision plans are still ancillary - rates alone do not make a medical quote",
 );
 assert.equal(
   medicalFromDocument({

@@ -121,7 +121,7 @@ export default function Admin({
 }: Props) {
   /**
    * One roster rule for the whole admin: a group that is archived, or not on a
-   * program carrier, is not in the portal — so it is not rate-administered
+   * program carrier, is not in the portal - so it is not rate-administered
    * either. Plans & Rates used to iterate every group and disagreed with the
    * Groups tab's count.
    */
@@ -207,7 +207,7 @@ export default function Admin({
               value: "",
               placeholder: calc.rate.toFixed(2),
               title: offSchedule
-                ? "Approximate — this plan is priced off the standard schedule. Key the real rate."
+                ? "Approximate - this plan is priced off the standard schedule. Key the real rate."
                 : "Calculated at the program tier factors. Type over it with the billed rate.",
               style: {
                 ...cellBase,
@@ -221,7 +221,7 @@ export default function Admin({
           return {
             census: t.census,
             value: "",
-            placeholder: "—",
+            placeholder: "-",
             title: "No rate on file and nothing to calculate from.",
             style: {
               ...cellBase,
@@ -234,7 +234,7 @@ export default function Admin({
         });
 
         const missing = cells.filter((c) => c.value === "").length;
-        const noBasis = cells.every((c) => c.value === "" && c.placeholder === "—");
+        const noBasis = cells.every((c) => c.value === "" && c.placeholder === "-");
         const status = noBasis
           ? "No basis"
           : offSchedule
@@ -411,7 +411,7 @@ export default function Admin({
               : saveState === "saved"
                 ? "Saved"
                 : saveState === "error"
-                  ? "Not saved — sign in again"
+                  ? "Not saved - sign in again"
                   : `${rows.length} of ${all.length} plans`}
           </span>
         </div>
@@ -424,7 +424,7 @@ export default function Admin({
               <tr style={{ textAlign: "left" }}>
                 <th style={{ ...th, padding: "12px 8px 11px 0" }}>Group</th>
                 <th style={th}>Plan</th>
-                <th style={{ ...th, textAlign: "right" }} title="Employees enrolled in this plan — the same count the Groups page adds up per group">
+                <th style={{ ...th, textAlign: "right" }} title="Employees enrolled in this plan - the same count the Groups page adds up per group">
                   Enrolled
                 </th>
                 {TIERS.map((t) => (
@@ -484,7 +484,7 @@ export default function Admin({
                         value={c.value}
                         placeholder={c.placeholder}
                         title={ratesLocked ? "The rates are locked." : c.title}
-                        aria-label={`${r.group} — ${r.plan} — ${c.census}`}
+                        aria-label={`${r.group} - ${r.plan} - ${c.census}`}
                         onChange={(e) =>
                           onSetOverride(r.group, r.plan, c.census, e.target.value)
                         }
@@ -669,7 +669,7 @@ export default function Admin({
                           {new Date(im.uploaded_at).toLocaleString()}
                         </td>
                         <td style={{ padding: 8, borderBottom: `1px solid ${C.hairline}`, color: C.body }}>
-                          {im.uploaded_by || "—"}
+                          {im.uploaded_by || "-"}
                         </td>
                         <td
                           style={{

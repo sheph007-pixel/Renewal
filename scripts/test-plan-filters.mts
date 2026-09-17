@@ -98,7 +98,7 @@ assert.equal(parseDollars("$31,275"), 31275);
 assert.equal(parseDollars("31275.60"), 31276);
 assert.equal(parseDollars(""), null);
 assert.equal(parseDollars("abc"), null);
-assert.equal(billLabel({ min: 30000, max: 40000 }), "$30,000 – $40,000");
+assert.equal(billLabel({ min: 30000, max: 40000 }), "$30,000 - $40,000");
 assert.equal(billLabel({ min: 30000, max: null }), "at least $30,000");
 assert.equal(billLabel({ min: null, max: 40000 }), "up to $40,000");
 
@@ -119,7 +119,7 @@ f = withBill(f, { min: 30000, max: null });
 const chips = filterChips(f);
 assert.deepEqual(
   chips.map((c) => c.label),
-  ["Carrier/TPA: Gravie", "Funding: Level Funded", "Deductible: $2,501 – $5,000", "Monthly bill: at least $30,000"],
+  ["Carrier/TPA: Gravie", "Funding: Level Funded", "Deductible: $2,501 - $5,000", "Monthly bill: at least $30,000"],
 );
 const without = chips[2].remove(f);
 assert.deepEqual(without.deds, []);
@@ -130,7 +130,7 @@ assert.deepEqual(noBill.bill, { min: null, max: null });
 assert.equal(filterCount(noBill), 3);
 assert.equal(filterChips(EMPTY_FILTERS).length, 0);
 
-// 11. Clear all is the empty set — the sort is separate state and untouched by it.
+// 11. Clear all is the empty set - the sort is separate state and untouched by it.
 assert.ok(filtersEmpty(EMPTY_FILTERS));
 assert.deepEqual(DEFAULT_SORT, { key: "total", dir: 1 });
 

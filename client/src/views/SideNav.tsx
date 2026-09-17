@@ -12,7 +12,7 @@ export interface NavItem {
   tab: GroupTab;
   href: string;
   label: string;
-  /** This page's step number, 1 through 4 — Welcome carries none. */
+  /** This page's step number, 1 through 4 - Welcome carries none. */
   step?: number;
   /** Welcome's badge shows a house instead of a number. */
   mark?: "home";
@@ -176,7 +176,7 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
 }
 
 /**
- * The account manager as one quiet row — avatar and name — that opens a
+ * The account manager as one quiet row - avatar and name - that opens a
  * small card with phone, email and a meeting link. Contact details are a
  * click away rather than a block of text in the navigation.
  */

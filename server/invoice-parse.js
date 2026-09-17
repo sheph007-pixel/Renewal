@@ -182,7 +182,7 @@ function words(name, normalize) {
  * "R.E. Garrison Trucking 1099". In order:
  *
  *   1. the same name once normalised;
- *   2. the one group whose name carries every word of the file's name — with
+ *   2. the one group whose name carries every word of the file's name - with
  *      several, the one with the fewest words left over, if that is unique;
  *   3. the one group sharing a distinctive first word (four letters or more,
  *      not a common opener), when no other group starts with it.

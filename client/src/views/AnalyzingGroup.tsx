@@ -4,8 +4,8 @@ import { C, num, panel } from "@/lib/ui";
 
 /**
  * What the assistant is looking at while it picks: the group's census as
- * aggregates — employees, average age and spread, the age bands as one
- * short bar chart, who covers family — and the three steps it works
+ * aggregates - employees, average age and spread, the age bands as one
+ * short bar chart, who covers family - and the three steps it works
  * through. Shown the moment AI Picks is pressed, so the wait explains the
  * answer; closes itself once the picks are in. Nothing here names a person.
  */
@@ -49,7 +49,7 @@ export default function AnalyzingGroup({ profile, counts, enrolled, done, pickCo
           <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
             <Stat label="Employees" value={String(enrolled)} />
             <Stat label="Average age" value={String(profile.average)} sub={`median ${profile.median}`} />
-            <Stat label="Age range" value={`${profile.youngest}–${profile.oldest}`} sub={`${profile.spread} spread`} />
+            <Stat label="Age range" value={`${profile.youngest}-${profile.oldest}`} sub={`${profile.spread} spread`} />
             <Stat label="Dependants" value={String(profile.spouses + profile.children)} sub={`${profile.spouses} spouse${profile.spouses === 1 ? "" : "s"} · ${profile.children} child${profile.children === 1 ? "" : "ren"}`} />
           </div>
         ) : (
