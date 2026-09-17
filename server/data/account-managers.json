@@ -25,6 +25,13 @@
     "title": "Client Services",
     "email": "support@kennion.com"
   },
+  "broker": {
+    "name": "Hunter Shepherd",
+    "title": "President & Licensed Broker",
+    "phone": "205-641-0469",
+    "email": "hunter@kennion.com",
+    "calendly": "https://calendly.com/kennion/call"
+  },
   "list": [
     {
       "group": "Adobe HVAC Supply LLC",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { C, money0, panel } from "@/lib/importui";
+import { h3 } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { PATHS, linkPath } from "@/lib/router";
 import { BROKER_LABEL, RENEWALS, RENEWAL_LABEL, RENEWAL_TONE, type AdminGroup } from "@/views/GroupsTable";
@@ -450,7 +451,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
 
       {!!group.contacts?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Contacts</h3>
+          <h3 style={h3}>Contacts</h3>
           <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
             {group.contacts.map((c, i) => (
               <div key={i} style={{ fontSize: 13, color: C.body }}>
@@ -470,7 +471,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
 
       {!!group.plans?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Plans In Force</h3>
+          <h3 style={h3}>Plans In Force</h3>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
             <thead>
               <tr>
@@ -521,7 +522,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
           as premium totals only; the portal never prices these. */}
       {!!group.plans?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Other Lines In Force</h3>
+          <h3 style={h3}>Other Lines In Force</h3>
           {group.lines?.length ? (
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
               <thead>
@@ -582,7 +583,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
       <GroupProposals group={group.name} token={token} />
 
       <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>
+        <h3 style={h3}>
           {group.archived ? "Restore" : "Archive"}
         </h3>
         <div style={{ marginTop: 8, fontSize: 12.5, color: C.muted, lineHeight: 1.6, maxWidth: 720 }}>

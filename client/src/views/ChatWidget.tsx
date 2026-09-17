@@ -62,7 +62,7 @@ export default function ChatWidget({ page, assistantHref }: Props) {
               <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>Assistant</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.62)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
             </div>
-            <button className="chat-hbtn" onClick={() => setThreadId("new")} title="New conversation" aria-label="New conversation">
+            <button className="chat-hbtn" onClick={() => setThreadId("new")} title="New Conversation" aria-label="New Conversation">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M12 5v14M5 12h14" />
               </svg>

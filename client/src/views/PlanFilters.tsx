@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { money0 } from "@/lib/model";
-import { C, linkBtn, pill, primaryBtn, textInput, num } from "@/lib/ui";
+import { C, h2, linkBtn, pill, primaryBtn, textInput, num } from "@/lib/ui";
 import {
   CATEGORY_LABELS,
   EMPTY_FILTERS,
@@ -335,7 +335,7 @@ export function AppliedFilters({ showing, total, chips, onClearAll, showCount = 
       ))}
       {chips.length > 0 && (
         <button type="button" onClick={onClearAll} style={{ ...linkBtn, fontSize: 13, fontWeight: 600, marginLeft: 4 }}>
-          Clear all
+          Clear All
         </button>
       )}
     </div>
@@ -426,7 +426,7 @@ export function FilterDrawer({ open, onClose, applied, onApply, optionsFor, resu
     <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: LAYER + 10, background: "rgba(20,24,28,0.45)", display: "flex", justifyContent: "flex-end" }}>
       <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()} style={{ width: "min(420px, 100%)", height: "100%", background: C.card, display: "flex", flexDirection: "column", boxShadow: "-8px 0 32px rgba(11,33,56,0.22)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${C.hairline}` }}>
-          <h2 id={titleId} style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.navy }}>
+          <h2 id={titleId} style={{ ...h2, fontSize: 16 }}>
             Filters
           </h2>
           <button ref={closeBtn} type="button" onClick={onClose} aria-label="Close filters without applying" style={{ background: "none", border: "none", fontSize: 24, lineHeight: 1, color: C.muted, cursor: "pointer", padding: "2px 6px" }}>
@@ -446,7 +446,7 @@ export function FilterDrawer({ open, onClose, applied, onApply, optionsFor, resu
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 16px", borderTop: `1px solid ${C.hairline}`, background: C.zebra }}>
           <button type="button" onClick={() => setPending(EMPTY_FILTERS)} disabled={filterCount(pending) === 0} style={{ ...linkBtn, fontSize: 13.5, fontWeight: 600, color: filterCount(pending) ? C.blue : C.ghost }}>
-            Clear all
+            Clear All
           </button>
           <button
             type="button"

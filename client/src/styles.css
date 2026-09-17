@@ -37,7 +37,11 @@ select,
 textarea {
   font-family: inherit;
 }
-/* Every call to action reads in Title Case, small words included. */
+/* Every heading and every call to action reads in Title Case, small words
+   included: the first word and every word after it capitalised, site-wide. */
+h1,
+h2,
+h3,
 button,
 .cta {
   text-transform: capitalize;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, money0, panel } from "@/lib/importui";
-import { pill } from "@/lib/ui";
+import { h2, pill } from "@/lib/ui";
 
 interface CarrierRow {
   carrier: string;
@@ -97,7 +97,7 @@ export default function AuditPanel({ token, version, ai }: Props) {
   return (
     <section style={{ ...panel, marginTop: 16, padding: "18px 22px", borderLeft: `4px solid ${v.kind === "ok" ? C.green : v.kind === "warn" ? C.amber : C.hairline}` }} aria-label="Audit">
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>The Snapshot, Audited</h2>
+        <h2 style={h2}>The Snapshot, Audited</h2>
         <span style={{ ...tone, marginLeft: "auto" }}>{v.kind === "ok" ? "In order" : v.kind === "warn" ? "Needs a look" : "Incomplete"}</span>
       </div>
       <p style={{ margin: "10px 0 0", fontSize: 14, color: C.ink, lineHeight: 1.6, maxWidth: 900 }}>{v.headline}</p>

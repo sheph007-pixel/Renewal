@@ -21,7 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { comparisonTable, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet } from "./documents.js";
+import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
@@ -161,6 +161,11 @@ const MANAGER_BY_NAME = new Map(MANAGER_LIST.list.map((r) => [normalizeName(r.gr
 function managerContact(key) {
   const c = (MANAGER_LIST.contacts || {})[key];
   return c ? { ...c } : { ...(MANAGER_LIST.fallback || {}) };
+}
+/** The licensed broker every client's team card and summary name, or null when the list has none. */
+function brokerContact() {
+  const b = MANAGER_LIST.broker;
+  return b && b.name ? { ...b } : null;
 }
 /**
  * Cobalt quotes a self-funded plan for a handful of groups, not the whole
@@ -1025,6 +1030,8 @@ app.post("/api/signin", async (req, res) => {
     // Who to call. The manager key itself is Kennion's bookkeeping; only the
     // contact details travel to the client.
     accountManager: managerContact(g.manager),
+    // The licensed broker on every client's team card, beside the manager.
+    broker: brokerContact(),
     // The group's most recent submission, if it has ever sent one, so the
     // Sign Up page can say so instead of showing a blank form again.
     signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
@@ -1669,7 +1676,19 @@ app.post("/api/group/export", async (req, res) => {
   const proposals = clientProposals(g.name);
   let file;
   try {
-    if (body.format === "plan") {
+    if (body.format === "changes") {
+      // What's Changing For 2027: the group's 2026 plans beside its 2027
+      // options, built from what is on file right now. Nothing from the page.
+      file = await renderChangesReport({
+        group,
+        proposals,
+        slots: slotsForGroup(g.name),
+        manager: managerContact(g.manager),
+        broker: brokerContact(),
+        signup: await latestSignup(g.name).catch(() => null),
+        assistant: assistantEnabled(),
+      });
+    } else if (body.format === "plan") {
       // One plan's card, as the page shows it; checked for shape and size.
       const c = body.card && typeof body.card === "object" ? body.card : null;
       const str = (v, n = 200) => (v == null ? null : String(v).slice(0, n));

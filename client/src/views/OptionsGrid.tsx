@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, num, panel, textInput } from "@/lib/ui";
+import { C, chip, h3, num, panel, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
@@ -525,7 +525,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       {proposed.length > 0 && compareOpen && (
         <div id="proposal" className="panel noprint" style={{ ...panel, marginBottom: 12, padding: "14px 18px 16px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>
+            <h3 style={h3}>
               Compare · {proposed.length} of {MAX_COMPARE} plans
             </h3>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -923,13 +923,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             {!list.length && (
               <tr>
                 <td colSpan={11} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No favorites yet" : plans.length ? "No plans match these filters" : "No quoted plans yet"}</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No Favorites Yet" : plans.length ? "No Plans Match These Filters" : "No Quoted Plans Yet"}</div>
                   <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
                     {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
                   </div>
                   {filtering && (
                     <button onClick={clearAll} style={{ ...chip(false), color: C.blue, fontWeight: 600, marginTop: 14 }}>
-                      Clear filters
+                      Clear Filters
                     </button>
                   )}
                 </td>

@@ -1,12 +1,14 @@
-import { C, panel } from "@/lib/ui";
+import { useState } from "react";
+import { C, ctaLink, h2, h3, kicker, panel, primaryBtn } from "@/lib/ui";
 import Link from "@/lib/Link";
+import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import type { AccountManager, GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
 
-/** The President of Kennion Benefit Advisors, listed under the account manager on the team card. */
+/** The licensed broker on every client's team, used when the server sends no broker contact. */
 const HUNTER: AccountManager = {
   name: "Hunter Shepherd",
-  title: "President, Kennion Benefit Advisors",
+  title: "President & Licensed Broker",
   phone: "205-641-0469",
   email: "hunter@kennion.com",
   calendly: "https://calendly.com/kennion/call",
@@ -24,12 +26,62 @@ const HANDLED = [
 ];
 
 interface Props {
+  groupName: string;
   optionsHref: string;
   supplementalHref: string;
   signUpHref: string;
   assistantHref: string | null;
   manager: AccountManager | null | undefined;
+  /** The licensed broker, from the server; HUNTER when it sends none. */
+  broker?: AccountManager | null;
   lastSignup: GroupSignup | null;
+}
+
+/** A small arrow-down-into-tray icon for the download button. */
+function DownloadIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v11M7 10l5 5 5-5" />
+      <path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2" />
+    </svg>
+  );
+}
+
+/**
+ * The button that builds the group's own What's Changing For 2027 summary
+ * on the server and saves it through the browser. The PDF is made fresh
+ * each time, from the quotes on file at that moment, so it always says what
+ * the pages say.
+ */
+function DownloadChanges({ groupName }: { groupName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            await exportChangesPdf(groupName);
+          } catch (e) {
+            setError((e as Error).message || "Could not build the summary. Try again.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        style={{ ...primaryBtn, display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+      >
+        <DownloadIcon />
+        {busy ? "Building Your Summary…" : "Download What's Changing (PDF)"}
+      </button>
+      <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
+        {error || "Your 2026 plans beside your 2027 options, in a summary you can share."}
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -37,14 +89,14 @@ interface Props {
  * know Kennion and are already in the program. In about twenty seconds the
  * page says that the program expanded for 2027, that BenSync makes the
  * options easier to evaluate, that the client chooses what to offer, and
- * that Kennion handles everything after that. The team card beside it keeps
- * the people reachable without making a call the next step.
+ * that Kennion handles everything after that. The What's Changing summary
+ * is one click away, and the team card beside it keeps the people and the
+ * AI Assistant reachable without making a call the next step.
  */
-export default function Home({ optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup }: Props) {
+export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
-  const kicker = { margin: "0 0 4px", fontSize: 12, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" as const } as const;
-  const h = { margin: "0 0 10px", fontSize: 18, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px" } as const;
+  const head = { ...h2, marginBottom: 10, fontSize: 18, letterSpacing: "-0.2px" } as const;
   const assistant = assistantHref ? <Link href={assistantHref} style={link}>AI Assistant</Link> : "AI Assistant";
   const submitted = lastSignup ? new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
 
@@ -68,22 +120,26 @@ export default function Home({ optionsHref, supplementalHref, signUpHref, assist
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ ...panel, padding: "28px 34px 24px" }}>
-          <h2 style={{ ...h, fontSize: 20 }}>Welcome to your 2027 renewal</h2>
+          <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
           <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
           <p style={p}>
             Kennion has helped employers with employee benefits for more than 50 years, and we have operated the Kennion Program
             since 2013. As the program has grown, and as clients have asked for more choice, we are expanding our group health
             offering with major national partners, networks and programs.
           </p>
-          <p style={{ ...p, marginBottom: 0 }}>
+          <p style={p}>
             That means more medical plan options, more price points and more flexibility for your group, backed by the same
             Kennion team you already know.
           </p>
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
+            <p style={{ ...kicker, marginBottom: 8 }}>What's Changing From 2026 To 2027</p>
+            <DownloadChanges groupName={groupName} />
+          </div>
         </div>
 
         <div style={{ ...panel, padding: "24px 34px 22px" }}>
-          <p style={kicker}>Meet BenSync</p>
-          <h2 style={h}>More options. Smarter, faster decisions.</h2>
+          <p style={{ ...kicker, marginBottom: 4 }}>Meet BenSync</p>
+          <h2 style={head}>More Options. Smarter, Faster Decisions.</h2>
           <p style={{ ...p, marginBottom: 0 }}>
             BenSync is Kennion&rsquo;s new benefits decision platform. Review your medical options, model employer contributions,
             compare plans side by side and work with Kennion and the {assistant} to evaluate different strategies, without
@@ -92,7 +148,7 @@ export default function Home({ optionsHref, supplementalHref, signUpHref, assist
         </div>
 
         <div style={{ ...panel, padding: "24px 34px 22px" }}>
-          <p style={kicker}>How it works</p>
+          <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
           <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 14 }}>
             {steps.map((s, i) => (
               <li key={s.title} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -103,7 +159,7 @@ export default function Home({ optionsHref, supplementalHref, signUpHref, assist
                   {i + 1}
                 </span>
                 <div style={{ minWidth: 0 }}>
-                  <Link href={s.href} style={{ ...link, fontSize: 15.5 }}>
+                  <Link className="cta" href={s.href} style={{ ...ctaLink, fontSize: 15.5 }}>
                     {s.title}
                   </Link>
                   <div style={{ marginTop: 2, fontSize: 14, lineHeight: 1.6, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
@@ -112,7 +168,7 @@ export default function Home({ optionsHref, supplementalHref, signUpHref, assist
             ))}
           </ol>
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
-            <h3 style={{ margin: "0 0 6px", fontSize: 15.5, fontWeight: 600, color: C.ink }}>We handle the rest.</h3>
+            <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest.</h3>
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
               Once you make your selections, Kennion will coordinate the {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
             </p>
@@ -122,7 +178,11 @@ export default function Home({ optionsHref, supplementalHref, signUpHref, assist
       </div>
 
       <div style={{ flex: "0 1 300px", minWidth: 260 }}>
-        <TeamCard people={[manager, HUNTER]} note="Questions along the way? Your Kennion team is here throughout the process." />
+        <TeamCard
+          people={[manager, broker || HUNTER]}
+          assistant={assistantHref ? { href: assistantHref, onOpen: () => setChatOpen(true) } : null}
+          note="Questions along the way? Your Kennion team is here throughout the process."
+        />
       </div>
     </div>
   );
