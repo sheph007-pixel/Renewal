@@ -649,6 +649,11 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**Each view in its natural order.** Switching the grid to All sorts by
+total monthly bill, low to high; switching to AI Picks, Favorites or
+Compare sorts by option ID, so a chosen set reads carrier by carrier. The
+sort control still changes it after.
+
 **No dashes as punctuation.** Nothing the app shows or writes uses an em
 dash or an en dash: not the pages, the PDFs, the spreadsheets, the emails or
 the assistant's replies (its instructions say so, and the PDFs' standard
