@@ -853,7 +853,9 @@ export default function App() {
                 )}
               </div>
               {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
+                // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
                 <div
+                  title={groupSizeNote(g) ?? undefined}
                   style={{
                     ...panel,
                     flex: "0 0 auto",
@@ -861,14 +863,17 @@ export default function App() {
                     alignItems: "center",
                     gap: 10,
                     padding: "8px 14px",
+                    background: g.sizeCategory === "51+" ? C.amberTint : C.greenTint,
+                    borderColor: g.sizeCategory === "51+" ? C.amberEdge : C.greenEdge,
+                    cursor: "default",
                   }}
                 >
                   <PeopleIcon />
                   <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
                       {groupSizeLabel(g)}
-                      {groupSizeNote(g) && <InfoTip text={groupSizeNote(g)!} color={C.muted} place="below" />}
+                      {groupSizeNote(g) && <InfoTip text={groupSizeNote(g)!} color={g.sizeCategory === "51+" ? C.amber : C.green} place="below" />}
                     </div>
                   </div>
                 </div>

@@ -575,7 +575,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           >
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
               Employer Contribution
-              <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier, the carriers' participation requirement, not an ACA affordability determination; raise any tier from there. See the Group Size note for what applies at your size." color={C.blue} />
+              <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier, the Carrier/TPA's minimum contribution requirement, not an ACA affordability determination; raise any tier from there. See the Group Size note for what applies at your size." color={C.blue} />
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
