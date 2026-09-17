@@ -145,12 +145,20 @@ export interface Group {
  * when no category is on file.
  */
 /**
- * The employer-mandate note for a large group, as general information: it
- * states the rule and hands the judgment to Kennion. It never says a
- * contribution meets the rule; the page makes no such determination.
+ * What the Group Size badge says on hover: where the size comes from, what
+ * applies at that size, and who helps. General information, one note per
+ * category; it never says a contribution is affordable or compliant, and
+ * the page makes no such determination. Kennion is the broker.
  */
-export const ACA_ALE_NOTE =
-  "Under the Affordable Care Act (ACA), an Applicable Large Employer (ALE) with 50 or more full-time equivalent employees is subject to the employer mandate: to avoid penalties it must offer minimum essential coverage that provides minimum value and is affordable to at least 95% of its full-time employees. Whether a contribution meets the affordability test for the plan year is a determination your Kennion account manager reviews with you before you decide; this page does not make it.";
+export function groupSizeNote(g: Group): string | null {
+  const from = "Group size is based on the enrollment data on file for your group; tell us if your full-time equivalent count differs.";
+  const start = "The 50% starting point on the Medical Plans page is the carriers' participation requirement, not an ACA affordability determination.";
+  if (g.sizeCategory === "51+")
+    return `${from} At 50 or more full-time equivalent employees, the Affordable Care Act's employer mandate applies: an Applicable Large Employer must offer minimum essential coverage that provides minimum value and is affordable to at least 95% of its full-time employees, or face penalties. ${start} The AI Assistant and your Kennion team can help you work through what applies before you decide.`;
+  if (g.sizeCategory === "2-50")
+    return `${from} Under 50 full-time equivalent employees, the Affordable Care Act's employer mandate does not apply. ${start} If your count is near 50, the AI Assistant and your Kennion team can help you confirm which rules apply.`;
+  return null;
+}
 
 export function groupSizeLabel(g: Group): string | null {
   if (g.sizeCategory === "51+") return "Large Group 51+";

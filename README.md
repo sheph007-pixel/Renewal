@@ -649,12 +649,15 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
-**The employer mandate, as a note.** A group sized 51+ shows a small
-"ACA · ALE 50+" chip beside the Employer Contribution title (and the same
-text on the Group Size badge's hover): the rule in one paragraph, as general
-information, ending with the judgment left to the Kennion account manager.
-The page never says a contribution is affordable or compliant, and the
-contribution floor stays the carrier's 50% of the lowest employee-only rate.
+**Group size, as a note.** The Group Size badge (2-50 or 51+, from the
+enrollment data on file) carries an info tip per category (`groupSizeNote`):
+where the size comes from, what applies at that size (the ACA employer
+mandate at 50 or more full-time equivalents; not under 50), that the 50%
+starting contribution is the carriers' participation requirement and not an
+affordability determination, and that the AI Assistant and the Kennion team
+help work through it. The Employer Contribution tip says the same in one
+sentence, and the assistant's instructions carry the rule. The page never
+says a contribution is affordable or compliant; Kennion is the broker.
 
 **The picks stand against each other, not against today.** The plans in
 force today are not an option for 2027, so the AI Picks report, the

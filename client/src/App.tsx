@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
-  ACA_ALE_NOTE,
   groupSizeLabel,
+  groupSizeNote,
   marketPlans,
   minimumContribution,
   ovKey,
@@ -24,6 +24,7 @@ import {
 import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/session";
 import Link from "@/lib/Link";
 import { useNarrow } from "@/lib/narrow";
+import InfoTip from "@/views/InfoTip";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -865,7 +866,10 @@ export default function App() {
                   <PeopleIcon />
                   <div>
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
-                    <div title={g.sizeCategory === "51+" ? ACA_ALE_NOTE : undefined} style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
+                      {groupSizeLabel(g)}
+                      {groupSizeNote(g) && <InfoTip text={groupSizeNote(g)!} color={C.muted} place="below" />}
+                    </div>
                   </div>
                 </div>
               )}
