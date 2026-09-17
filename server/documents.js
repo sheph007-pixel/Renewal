@@ -129,7 +129,8 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
     const { er, ee } = splitFor(rates);
     rows.push({
       section: "2027 options",
-      name: pl.optionId ? `${pl.optionId} · ${pl.name}` : pl.name,
+      // The one way a plan is named everywhere: Carrier/TPA, Option, ID; the long document name under it.
+      name: pl.optionId ? `${slotCarrier(pr.slot, pr.carrier)} Option ${pl.optionId}\n${pl.name}` : pl.name,
       carrier: slotCarrier(pr.slot, pr.carrier),
       funding: slotFunding(pr.slot),
       network: networkLabel(pl.network) || "-",
@@ -398,6 +399,86 @@ export function renderPlanSheet({ group: g, columns, rows, contribution }) {
   return { filename: `${safeName(g.name)} - 2027 Medical Plans ${stamp}.xlsx`, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data };
 }
 
+// ------------------------------------------------------------ One plan's card
+
+/**
+ * One plan's card as a page: what the client sees when they open a plan on
+ * the grid, laid out for print. The page sends the card as it shows it
+ * (title, the benefit rows, the rates by tier with the split at the applied
+ * contribution, the totals); this only lays it out, so the file and the
+ * screen never disagree.
+ */
+export async function renderPlanCardPdf({ group: g, card }) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const data = await pdfBuffer((doc) => {
+    const x0 = doc.page.margins.left;
+    const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    pdfHeader(doc, { title: card.title, groupName: g.name, subtitle: [card.carrier, card.funding, card.type].filter(Boolean).join(" · ") });
+    if (card.subtitle) {
+      doc.font("Helvetica").fontSize(10).fillColor(MUTED).text(card.subtitle, x0, doc.y - 4, { width });
+      doc.moveDown(0.6);
+    }
+    // The headline: the average employee's monthly share, and what the company pays.
+    const y = doc.y;
+    doc.rect(x0, y, width, 58).fill(TINT);
+    doc.font("Helvetica-Bold").fontSize(22).fillColor(NAVY).text(card.headline.average == null ? "-" : money(card.headline.average), x0, y + 9, { width, align: "center" });
+    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text("Average Employee Monthly Contribution", x0, y + 34, { width, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(`Your Company Pays ${card.headline.companyPays == null ? "-" : money(card.headline.companyPays)} / month  ·  ${card.headline.basis || ""}`, x0, y + 45, { width, align: "center" });
+    doc.x = x0;
+    doc.y = y + 70;
+    // Two columns: what it covers on the left, what it costs on the right.
+    const gap = 24;
+    const colW = (width - gap) / 2;
+    const top = doc.y;
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("What it covers", x0, top, { width: colW });
+    let ly = top + 16;
+    for (const [label, value, url] of card.benefits || []) {
+      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(label, x0, ly, { width: 100, lineBreak: false });
+      doc.font("Helvetica").fontSize(8.5).fillColor(INK);
+      const vh = doc.heightOfString(String(value == null ? "-" : value), { width: colW - 104 });
+      doc.text(String(value == null ? "-" : value), x0 + 104, ly, { width: colW - 104, align: "right" });
+      if (url) doc.fillColor("#1F8A5B").fontSize(7.5).text(label === "Network" ? "Find a doctor" : "Formulary", x0 + 104, ly + vh, { width: colW - 104, align: "right", link: url, lineBreak: false });
+      ly += vh + (url ? 10 : 0) + 4;
+      doc.moveTo(x0, ly - 1).lineTo(x0 + colW, ly - 1).lineWidth(0.3).strokeColor(RULE).stroke();
+    }
+    const leftEnd = ly;
+    const rx = x0 + colW + gap;
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Monthly Composite Rates", rx, top, { width: colW });
+    let ry = top + 16;
+    const cw = [colW - 3 * 50, 50, 50, 50];
+    const rowText = (cells, bold = false, color = INK) => {
+      let cx = rx;
+      cells.forEach((c, i) => {
+        doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8).fillColor(color).text(c, cx, ry, { width: cw[i] - 4, align: i ? "right" : "left", lineBreak: false, height: 10, ellipsis: true });
+        cx += cw[i];
+      });
+      ry += 14;
+    };
+    rowText(["", "Rate", "Employer", "Employee"], false, MUTED);
+    for (const t of card.tiers || []) rowText([`${t.label} (${t.count})`, t.rate == null ? "-" : money(t.rate), t.er == null || !t.count ? "-" : money(t.er), t.ee == null || !t.count ? "-" : money(t.ee)]);
+    ry += 4;
+    doc.moveTo(rx, ry).lineTo(rx + colW, ry).lineWidth(0.5).strokeColor(RULE).stroke();
+    ry += 6;
+    const tot = card.totals || {};
+    const pct = (v) => (v != null && tot.premium ? ` (${Math.round((v / tot.premium) * 100)}%)` : "");
+    const totalRow = (label, v, strong) => {
+      doc.font(strong ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(INK).text(label, rx, ry, { width: colW - 120, lineBreak: false });
+      doc.text(`${v == null ? "-" : money(v)}${strong ? pct(v) : ""}`, rx + colW - 120, ry, { width: 120, align: "right", lineBreak: false });
+      ry += 15;
+    };
+    totalRow("Your Company Pays", tot.er, true);
+    totalRow("Your Employees Pay", tot.ee, true);
+    totalRow("Total Monthly Bill", tot.premium, false);
+    doc.x = x0;
+    doc.y = Math.max(leftEnd, ry) + 14;
+    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
+    if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page. Employees pay the rest of their tier's rate.`, { width });
+    if (card.audit) doc.text(card.audit, { width });
+    pdfFooter(doc);
+  });
+  return { filename: `${safeName(g.name)} - ${safeName(card.title)} ${stamp}.pdf`, mime: "application/pdf", data };
+}
+
 // ------------------------------------------------------------ AI Picks report
 
 const PICK_LABEL = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
@@ -485,7 +566,7 @@ function pdfBillChart(doc, { rows, todayTotal }) {
 export async function renderPicksReport({ group: g, proposals, recommendations: rec, contribution }) {
   const picks = Array.isArray(rec && rec.picks) ? rec.picks : [];
   const table = comparisonTable({ group: g, proposals, plans: picks.map((p) => p.optionId), includeCurrent: true, contribution });
-  const rowFor = (p) => table.rows.find((r) => r.section !== "Today (2026)" && r.name.startsWith(`${p.optionId} ·`)) || null;
+  const rowFor = (p) => table.rows.find((r) => r.section !== "Today (2026)" && r.name.includes(` Option ${p.optionId}\n`)) || null;
   const census = g.census || null;
   const counts = table.counts || {};
   const enrolled = TIER_KEYS.reduce((n, k) => n + (counts[k] || 0), 0);
@@ -559,12 +640,13 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       room(60);
       const y = doc.y;
       doc.font("Helvetica").fontSize(9.5);
-      const body = `${start.optionId} · ${start.plan} (${start.carrier}${start.funding ? `, ${start.funding}` : ""}, ${PICK_LABEL[start.tier] || start.tier}). ${rec.startWithReason || ""}`.trim();
-      const h = doc.heightOfString(body, { width: width - 28 }) + 30;
+      const lead = `${start.carrier} Option ${start.optionId}`;
+      const rest = ` (${start.funding ? `${start.funding}, ` : ""}${PICK_LABEL[start.tier] || start.tier}; the ${start.plan}). ${rec.startWithReason || ""}`.trimEnd();
+      const h = doc.heightOfString(lead + rest, { width: width - 28 }) + 30;
       doc.rect(x0, y, width, h).fill("#E8F3ED");
       doc.rect(x0, y, 4, h).fill(GREEN);
       doc.font("Helvetica-Bold").fontSize(9).fillColor("#16714A").text("START HERE", x0 + 14, y + 9, { lineBreak: false });
-      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, x0 + 14, y + 22, { width: width - 28 });
+      doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(lead, x0 + 14, y + 22, { width: width - 28, continued: true }).font("Helvetica").text(rest);
       doc.x = x0;
       doc.y = y + h + 14;
     }
@@ -587,7 +669,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       const billH = doc.heightOfString(bill, { width: w }) + 3;
       doc.font("Helvetica-Oblique").fontSize(8.5);
       const reasonH = reason ? doc.heightOfString(reason, { width: w }) + 4 : 0;
-      const need = 24 + factsH + billH + reasonH + 12;
+      const need = 24 + 11 + factsH + billH + reasonH + 12;
       return { facts, bill, reason, factsH, billH, need, w };
     };
     for (const l of lineups) {
@@ -604,8 +686,9 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
         doc.rect(x0, y, 4, need - 6).fill(PICK_COLOR[p.tier] || NAVY);
         doc.font("Helvetica-Bold").fontSize(8).fillColor(PICK_COLOR[p.tier] || NAVY).text(label.toUpperCase(), x0 + 12, y + 8, { lineBreak: false });
         const lw = doc.widthOfString(label.toUpperCase()) + 10;
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.optionId} · ${p.plan}`, x0 + 12 + lw, y + 7, { width: w - lw, height: 12, ellipsis: true });
-        let ly = y + 22;
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.carrier} Option ${p.optionId}`, x0 + 12 + lw, y + 7, { width: w - lw, height: 12, ellipsis: true });
+        doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(p.plan, x0 + 12, y + 21, { width: w, height: 10, ellipsis: true });
+        let ly = y + 33;
         if (facts) {
           doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: w });
           ly += factsH;
@@ -627,7 +710,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(`Each pick at your enrollment of ${enrolled}. Green is Lower Cost, navy Best Fit, orange Richer Benefits.`, { width });
       doc.moveDown(0.6);
       pdfBillChart(doc, {
-        rows: chart.sort((a, b) => a.r.monthly - b.r.monthly).map(({ p, r }) => ({ label: `${p.optionId} · ${p.carrier}${p.funding ? ` ${p.funding}` : ""} · ${PICK_LABEL[p.tier] || p.tier}`, monthly: r.monthly, color: PICK_COLOR[p.tier] || NAVY })),
+        rows: chart.sort((a, b) => a.r.monthly - b.r.monthly).map(({ p, r }) => ({ label: `${p.carrier} Option ${p.optionId}${p.funding ? ` (${p.funding})` : ""} · ${PICK_LABEL[p.tier] || p.tier}`, monthly: r.monthly, color: PICK_COLOR[p.tier] || NAVY })),
         todayTotal: table.todayTotal,
       });
     }

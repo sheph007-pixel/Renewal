@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlansExcel } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
@@ -464,8 +464,39 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     window.print();
     setTimeout(done, 2000);
   };
+  /** The open card as a PDF: the same model the card renders, sent as it shows. */
+  const [cardBusy, setCardBusy] = useState(false);
+  const downloadCard = async (p: MarketPlan) => {
+    const m = cardModel(p, applied, counts);
+    const title = m.optionId ? `${m.carrier} Option ${m.optionId}` : m.plan;
+    const audit = m.source?.audit;
+    const card = {
+      title,
+      subtitle: m.optionId ? m.plan : null,
+      carrier: m.carrier,
+      funding: m.funding,
+      type: m.type,
+      headline: { average: m.ee == null || !m.enrolled ? null : m.ee / m.enrolled, companyPays: m.er, basis: m.basis },
+      benefits: m.benefits.map(([label, value]) => [label, value, label === "Network" ? m.links.directory?.url ?? null : label === "Pharmacy (PBM)" ? m.links.formulary?.url ?? null : null]),
+      tiers: m.tiers.map((t) => ({ label: t.label, count: t.count, rate: t.rate, er: t.er, ee: t.ee })),
+      totals: { er: m.er, ee: m.ee, premium: m.premium, enrolled: m.enrolled },
+      audit: audit ? (audit.status === "pass" ? `Proposal audit completed ${new Date(audit.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}: the name, benefits and rates were checked against the carrier's own quote.` : "Proposal audit: under review.") : m.source ? "Proposal audit: not yet audited." : null,
+    };
+    setCardBusy(true);
+    setExportError("");
+    try {
+      await exportPlanCardPdf(card, title, g.name);
+    } catch (e) {
+      setExportError((e as Error).message || "Could not build that file.");
+    } finally {
+      setCardBusy(false);
+    }
+  };
   const actionsFor = (p: MarketPlan) => (
     <>
+      <button onClick={() => void downloadCard(p)} disabled={cardBusy} title="Save this plan's card as a PDF" style={{ ...chip(false), padding: "7px 12px", fontSize: 13, opacity: cardBusy ? 0.6 : 1 }}>
+        {cardBusy ? "Building…" : "⤓ Download PDF"}
+      </button>
       <button onClick={() => toggleHeart(p.plan)} title={heartTitle(p)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
         {selected[p.plan] ? "♥ On Your Shortlist" : "♡ Add To Shortlist"}
       </button>

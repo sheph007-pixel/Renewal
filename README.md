@@ -649,6 +649,13 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**One name for a plan, everywhere.** A plan is its Carrier/TPA, the word
+Option and its ID, in bold: **Angle Health Option AN19**. The plan card's
+title, the comparison and the AI Picks report say it that way with the
+carrier's long product name under it, and the assistant's instructions say
+the same for its answers, pick reasons and summaries (the long name at most
+once, in parentheses, never first).
+
 **Each view in its natural order.** Switching the grid to All sorts by
 total monthly bill, low to high; switching to AI Picks, Favorites or
 Compare sorts by option ID, so a chosen set reads carrier by carrier. The
