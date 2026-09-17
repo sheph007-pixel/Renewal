@@ -649,6 +649,14 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**The picks stand against each other, not against today.** The plans in
+force today are not an option for 2027, so the AI Picks report, the
+Favorites and Comparison PDFs and the assistant's pick reasons never say
+"vs today" or how much a new option costs over today's: no today rows, no
+today line on the chart, no "like today's Gold plan". The chat can still
+explain today's plans when asked; the picks and their documents compare the
+quoted options with each other.
+
 **One name for a plan, everywhere.** A plan is its Carrier/TPA, the word
 Option and its ID, in bold: **Angle Health Option AN19**. The plan card's
 title, the comparison and the AI Picks report say it that way with the

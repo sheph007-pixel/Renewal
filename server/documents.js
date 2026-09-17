@@ -171,7 +171,7 @@ const columnsFor = (table) => {
     ...TIER_KEYS.map((k) => ({ key: `rate_${k}`, label: `${SHORT_TIER[k]} (${table.counts[k] || 0})`, width: 50, align: "right" })),
     { key: "monthly", label: "Monthly", width: 58, align: "right" },
     { key: "annual", label: "Annual", width: 54, align: "right" },
-    { key: "vsToday", label: "vs today /mo", width: 50, align: "right" },
+    ...(table.todayTotal != null ? [{ key: "vsToday", label: "vs today /mo", width: 50, align: "right" }] : []),
   ];
   if (table.contribution) {
     cols.push({ key: "er", label: "Employer /mo", width: 56, align: "right" });
@@ -565,7 +565,11 @@ function pdfBillChart(doc, { rows, todayTotal }) {
  */
 export async function renderPicksReport({ group: g, proposals, recommendations: rec, contribution }) {
   const picks = Array.isArray(rec && rec.picks) ? rec.picks : [];
-  const table = comparisonTable({ group: g, proposals, plans: picks.map((p) => p.optionId), includeCurrent: true, contribution });
+  // The picks stand against each other only: the plans in force today are not
+  // an option for 2027, so nothing here says how a pick compares with today.
+  const table = comparisonTable({ group: g, proposals, plans: picks.map((p) => p.optionId), includeCurrent: false, contribution });
+  table.todayTotal = null;
+  for (const r of table.rows) r.vsToday = null;
   const rowFor = (p) => table.rows.find((r) => r.section !== "Today (2026)" && r.name.includes(` Option ${p.optionId}\n`)) || null;
   const census = g.census || null;
   const counts = table.counts || {};
@@ -631,7 +635,6 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     }
     doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
     if (table.contribution) doc.text(`Employer contribution applied: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money0(table.contribution[k])}`).join(" · ")} per month; employees pay the rest of their tier's rate.`, { width });
-    if (table.todayTotal != null) doc.text(`Today's total medical premium: ${money0(table.todayTotal)} per month.`, { width });
     doc.moveDown(1);
 
     // Where to start.
@@ -658,7 +661,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
         ? [r.network !== "-" ? `Network ${r.network}` : null, r.deductible !== "-" ? `Deductible ${r.deductible}` : null, r.oopMax !== "-" ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
         : "";
       const bill = r && r.monthly != null
-        ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}${r.vsToday != null ? `  ·  ${r.vsToday < 0 ? "-" : "+"}${money0(Math.abs(r.vsToday))} vs today` : ""}`
+        ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}`
         : "Not priced at your enrollment.";
       const reason = p.reason || "";
       // Every line wraps at the block's width; the block is as tall as its lines.
@@ -711,7 +714,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       doc.moveDown(0.6);
       pdfBillChart(doc, {
         rows: chart.sort((a, b) => a.r.monthly - b.r.monthly).map(({ p, r }) => ({ label: `${p.carrier} Option ${p.optionId}${p.funding ? ` (${p.funding})` : ""} · ${PICK_LABEL[p.tier] || p.tier}`, monthly: r.monthly, color: PICK_COLOR[p.tier] || NAVY })),
-        todayTotal: table.todayTotal,
+        todayTotal: null,
       });
     }
 

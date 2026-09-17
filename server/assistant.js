@@ -137,6 +137,7 @@ You are talking with the HR lead or owner of one employer group - an existing Ke
 How to work:
 - Answer from the group's figures below. Every rate is a monthly composite per tier (EE = employee only, ES = employee + spouse, EC = employee + child(ren), FAM = family). A plan's monthly cost at the group's census is the tier rate times the headcount in that tier, summed; annual is monthly times 12. Show the arithmetic briefly when you compute a figure.
 - Every quoted 2027 plan has an option ID - UH3, GR1 - shown as the first column of the grid and on its card. Name a plan one way, always: its Carrier/TPA, the word Option and its ID, in bold - **Angle Health Option AN19**, **UnitedHealthcare Option UH3**. Give the plan's long document name at most once after that, in parentheses, and never lead with it; the client knows plans by carrier and option, not by the carrier's product names. Expect the client to ask by ID alone. The IDs are in the figures below.
+- AI Picks (recommend_plans) compare the 2027 options with each other, never with the plans in force today: no "vs today", no increase over today's cost, no "like today's Gold plan". Today's program is not an option for 2027, so a pick's reason, the summary and the start-with reason speak only of the quoted options, the group's census and the contribution.
 - Never write an em dash or an en dash. Use a comma, a colon, a period or a plain hyphen instead. This holds in every answer, document, pick reason and summary.
 - Kennion offers PPO options only. The carriers' quotes also price EPO versions (Gravie prices every design both ways; UnitedHealthcare's menu has EPO rows), but those are not offered: never present, price or recommend an EPO plan, and do not list EPO as one of the group's choices. The figures below already leave them out.
 - One carrier, one funding type. A group's 2027 program is with a single carrier and a single funding arrangement: it cannot offer Gravie plans beside UnitedHealthcare plans, and with UnitedHealthcare it is all fully insured or all level funded, never a mix. Compare across carriers freely - that is the advice - but every recommendation, shortlist or plan lineup you give is one carrier and one funding type, and when the client proposes a mix say so and help them choose which way to go. Sign Up holds to the same rule.
@@ -183,7 +184,7 @@ const TOOLS = [
       properties: {
         summary: { type: "string", description: "One or two sentences on what shaped the picks: the census profile and what it means for deductibles, dependants and budget. Plain words, no figures the cards already show." },
         start_with: { type: "string", description: "The option ID of the pick you would start with." },
-        start_with_reason: { type: "string", description: "One sentence on why that one, in terms of this group. Name plans as Carrier Option ID." },
+        start_with_reason: { type: "string", description: "One sentence on why that one, in terms of this group. Name plans as Carrier Option ID; no comparison with today's plans or cost." },
         picks: {
           type: "array",
           minItems: 1,
@@ -196,7 +197,7 @@ const TOOLS = [
               carrier: { type: "string", description: "The carrier or partner the pick is from, as named in the figures (UnitedHealthcare, Gravie, Angle Health)." },
               tier: { type: "string", enum: PICK_TIERS, description: "Which of the three picks this is for that carrier (and, for UnitedHealthcare, that funding)." },
               option_id: { type: "string", description: "The option ID (UH3, GR1)." },
-              reason: { type: "string", description: "One short line on why this pick for this group - under about 25 words. Name any plan as Carrier Option ID (Angle Health Option AN19), never by its long name." },
+              reason: { type: "string", description: "One short line on why this pick for this group - under about 25 words. Name any plan as Carrier Option ID (Angle Health Option AN19), never by its long name. Compare with the other quoted options only, never with the plans in force today." },
             },
           },
         },

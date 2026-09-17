@@ -22,7 +22,7 @@ const proposals = [
 const recommendations = {
   summary: "A young, spread-out group; the level funded quotes carry the value.",
   startWith: "UH3",
-  startWithReason: "Balanced deductible for the ages on file at a bill below today.",
+  startWithReason: "Balanced deductible for the ages on file, at the middle of the quoted bills.",
   createdAt: "2026-09-17T02:00:00.000Z",
   picks: [
     { carrier: "UnitedHealthcare", funding: "Fully Insured", slot: "UHC Fully Insured", tier: "lower_cost", optionId: "UH2", plan: "Alt 15 EZ4C", reason: "Lowest fully insured bill." },
