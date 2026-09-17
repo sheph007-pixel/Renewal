@@ -670,7 +670,7 @@ plans. The rule is three picks per lineup — a carrier and a funding — so
 where UnitedHealthcare has quoted both fully insured and level funded, each
 gets its own Lower Cost, Best Fit and Richer Benefits (`buildRecommendations`
 keys picks by slot and tier). The picks are saved per group and replaced
-whenever the assistant gives a new set: from the ↻ beside the view control
+whenever the assistant gives a new set: from the ↻ inside the AI Picks segment
 once picks exist (new quotes or a changed contribution can change them), or
 from the chat, which is where any question about them goes. The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer

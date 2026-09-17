@@ -637,12 +637,22 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 All ({plans.length})
               </button>
               {assistantOn && (
-                <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? "The assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier" : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier, from your census"} style={{ ...segment(picksOnly, false), opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
-                  </svg>
-                  AI Picks ({picks.size})
-                </button>
+                <span style={{ display: "inline-flex", alignItems: "stretch", borderRight: `1px solid ${C.border}` }}>
+                  <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? "The assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier and funding" : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier and funding, from your census"} style={{ ...segment(picksOnly, false), borderRight: "none", paddingRight: picks.size ? 8 : 12, opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                    </svg>
+                    AI Picks ({picks.size})
+                  </button>
+                  {picks.size > 0 && (
+                    <button onClick={askForPicks} disabled={asking} aria-label="Run AI Picks again" title="Run again — new quotes or a changed contribution can change the picks" style={{ ...segment(picksOnly, false), borderRight: "none", padding: "7px 9px 7px 4px", opacity: asking ? 0.6 : 1 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+                        <path d="M20 4v5h-5" />
+                      </svg>
+                    </button>
+                  )}
+                </span>
               )}
               <button onClick={() => setView("favorites")} disabled={!favorites} aria-pressed={favoritesOnly} title={favorites ? "Only your favorites" : "Press ♡ on a plan to add it to your favorites"} style={segment(favoritesOnly, !favorites)}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill={favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
@@ -657,14 +667,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 Compare ({proposal.length})
               </button>
             </div>
-            {assistantOn && picks.size > 0 && (
-              <button onClick={askForPicks} disabled={asking} aria-label="Run AI Picks again" title="Run AI Picks again — new quotes or a changed contribution can change them" style={{ ...chip(false), padding: "7px 9px", opacity: asking ? 0.6 : 1 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M20 12a8 8 0 1 1-2.3-5.7" />
-                  <path d="M20 4v5h-5" />
-                </svg>
-              </button>
-            )}
             {proposal.length > 0 && (
               <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
                 {compareOpen ? "Hide Comparison" : "View Comparison"}
