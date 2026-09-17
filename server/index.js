@@ -1718,6 +1718,45 @@ app.post("/api/group/export", async (req, res) => {
   res.send(file.data);
 });
 
+/**
+ * The census every rate on the page is priced on, for the group's own HR
+ * lead: each employee's name, age, coverage tier, plan and dependants' ages
+ * from the enrollment data on file. Nothing else about anyone (no dates of
+ * birth, no gender, no ZIP, no costs). As JSON for the Census page, or
+ * `?format=csv` as a file. Read only: a correction goes through Kennion,
+ * whose import is the source of truth.
+ */
+const censusRows = (g) =>
+  (Array.isArray(g.members) ? g.members : [])
+    .map((m) => ({
+      name: [m.last, m.first].filter(Boolean).join(", ") || "(unnamed)",
+      age: Number.isFinite(Number(m.age)) ? Number(m.age) : null,
+      tier: tierKeyOfCensus(m.tier) || null,
+      tierLabel: m.tier || null,
+      plan: m.plan || null,
+      spouseAges: Array.isArray(m.spAges) ? m.spAges : [],
+      childAges: Array.isArray(m.chAges) ? m.chAges : [],
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+app.get("/api/group/census", (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const rows = censusRows(g);
+  if (String(req.query.format || "") === "csv") {
+    const cell = (v) => {
+      const t = v == null ? "" : String(v);
+      return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const head = ["Employee", "Age", "Coverage Tier", "Plan", "Spouse Age", "Child Ages"];
+    const lines = [head, ...rows.map((r) => [r.name, r.age, r.tierLabel || r.tier, r.plan, r.spouseAges.join(" / "), r.childAges.join(" / ")])].map((r) => r.map(cell).join(","));
+    const safe = String(g.name || "group").replace(/[^A-Za-z0-9 _-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${safe} - Census.csv"`);
+    return res.send("\ufeff" + lines.join("\r\n"));
+  }
+  res.json({ enrolled: rows.length, members: rows });
+});
+
 /** What the assistant remembers about the group; the client can drop any line. */
 app.get("/api/chat/memory", async (req, res) => {
   const g = groupForPage(req);

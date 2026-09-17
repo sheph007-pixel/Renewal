@@ -1,3 +1,4 @@
+import Link from "@/lib/Link";
 import type { ReactNode } from "react";
 import { money, money0 } from "@/lib/model";
 import InfoTip from "@/views/InfoTip";
@@ -7,6 +8,8 @@ import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 interface Props {
   totals: { er: number; ee: number; total: number };
   enrolled: number;
+  /** The Census page, behind "N enrolled". */
+  censusHref?: string;
 }
 
 function BuildingIcon({ color }: { color: string }) {
@@ -83,7 +86,7 @@ function SpendTile({ icon, label, tip, amount, pct, bg, edge, fg }: { icon: Reac
  * carries the figures, and an estimate dressed as four inputs read as
  * something to type over.
  */
-export default function SpendDashboard({ totals, enrolled }: Props) {
+export default function SpendDashboard({ totals, enrolled, censusHref }: Props) {
   const erPct = totals.total ? Math.round((totals.er / totals.total) * 1000) / 10 : 0;
   const eePct = totals.total ? Math.round((100 - erPct) * 10) / 10 : 0;
 
@@ -93,7 +96,17 @@ export default function SpendDashboard({ totals, enrolled }: Props) {
         <div style={{ fontSize: 12, fontWeight: 700, color: C.faint, textTransform: "uppercase", letterSpacing: "0.5px" }}>Current Group Plan</div>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: C.muted }}>
           <GroupIcon color={C.muted} />
-          Monthly amounts for {enrolled} enrolled employee{enrolled === 1 ? "" : "s"} · from Employee Navigator, for illustration ·{" "}
+          Monthly amounts for{" "}
+          {censusHref ? (
+            <Link href={censusHref} title="Who is enrolled: the census every rate is priced on" style={{ color: C.blue, fontWeight: 600, textDecoration: "none" }}>
+              {enrolled} enrolled employee{enrolled === 1 ? "" : "s"}
+            </Link>
+          ) : (
+            <>
+              {enrolled} enrolled employee{enrolled === 1 ? "" : "s"}
+            </>
+          )}{" "}
+          · from Employee Navigator, for illustration ·{" "}
           <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: "none" }}>
             View Details
           </a>

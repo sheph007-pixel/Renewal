@@ -5,6 +5,7 @@ import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, us
 import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
 import { groupHome } from "@/lib/router";
+import Link from "@/lib/Link";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
@@ -580,7 +581,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
-                Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> / mo for {totals.enrolled} enrolled
+                Your company pays <strong style={{ color: C.ink }}>{money0(TIERS.reduce((n, t) => n + (applied[t.key] || 0) * (counts[t.key] || 0), 0))}</strong> per month for{" "}
+                <Link href={groupHome(g, "census")} onClick={(e) => e.stopPropagation()} title="Who is enrolled: the census every rate is priced on" style={{ color: C.blue, fontWeight: 600, textDecoration: "none" }}>
+                  {totals.enrolled} enrolled
+                </Link>
                 {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
               </span>
               <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
