@@ -159,7 +159,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // Which plans the grid shows: all, the assistant's picks, favorites or the
   // comparison - one at a time, so a view is never "on" behind another. A
   // fresh set of picks switches to them.
-  const [view, setView] = useState<GridView>("all");
+  const [view, setViewState] = useState<GridView>("all");
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  /** Switch the view and give it its natural order: All by total bill, low to high; a chosen set (AI Picks, Favorites, Compare) by option ID. The sort can still be changed after. */
+  const setView = useCallback((next: GridView | ((v: GridView) => GridView)) => {
+    setViewState((v) => {
+      const n = typeof next === "function" ? next(v) : next;
+      if (n !== v) setSort(n === "all" ? DEFAULT_SORT : { key: "option", dir: 1 });
+      return n;
+    });
+  }, []);
   const picksOnly = view === "picks";
   const favoritesOnly = view === "favorites";
   const compareOnly = view === "compare";
@@ -236,7 +245,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     else askForPicks();
   };
   const [filters, setFilters] = useState<PlanFilters>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   // Closed until asked for: one line says what the company pays; Edit opens the fields.
   const [contribOpen, setContribOpen] = useState(false);
   const [query, setQuery] = useState("");
