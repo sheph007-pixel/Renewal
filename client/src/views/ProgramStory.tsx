@@ -52,9 +52,9 @@ const FRAMES: Frame[] = [
     tiles: [{ title: "Kennion Shops The Market" }, { title: "You Review And Compare In BenSync" }, { title: "We Model Your Strategy Together" }],
   },
   {
-    kicker: "You Make The Decisions",
-    title: "We Handle The Implementation.",
-    lead: "Kennion does the market work. BenSync makes it easier to understand. Our team handles the rest.",
+    kicker: "The Right Strategy",
+    title: "We Help You Build The Right Strategy. Then We Handle The Rest.",
+    lead: "Kennion shops the market, BenSync makes it easier to understand, and our team narrows the options with you and handles the implementation.",
     tiles: [{ title: "Employee Navigator Setup" }, { title: "Carrier Implementation" }, { title: "Open Enrollment Support" }],
   },
 ];

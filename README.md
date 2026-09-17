@@ -87,7 +87,7 @@ the client chooses what to offer, and Kennion handles the implementation
 after that. Its header is the group's name alone. It has four parts: The 2027 Kennion
 Program story first (`ProgramStory.tsx`: six frames from the program deck
 that advance on their own, pause on hover and under reduced motion, every
-tile the same size), a short introduction with the What's Changing
+tile the same size), a short introduction with the 2027 Program Overview
 download under it, a four-step How It Works (Review Medical
 Options, Review Supplemental Benefits, Build Your Strategy, Sign Up) with We
 Handle The Rest under it, and one Your Kennion Team card. The card
@@ -99,7 +99,7 @@ member is absent when the server cannot answer). Scheduling a call is never
 the page's call to action; the work happens in BenSync, and the card is
 there for questions along the way.
 
-"Download What's Changing (PDF)" builds the group's own 2026-to-2027 summary
+"Download 2027 Program Overview" builds the group's own 2026-to-2027 summary
 on the server each time it is pressed (`POST /api/group/export` with
 `format: "changes"`, `renderChangesReport` in `server/documents.js`,
 `exportChangesPdf` in `client/src/lib/chat.ts`): the expansion of the
