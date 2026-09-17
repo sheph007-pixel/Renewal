@@ -84,13 +84,14 @@ export default function SignUp({
           }}
         >
           <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Get your kickoff call on the calendar</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Get Your Kickoff Call On The Calendar</div>
             <div style={{ marginTop: 3, fontSize: 12.5, color: C.body, lineHeight: 1.5 }}>
               Talk through your shortlist, contribution strategy, and timing with {managerFirst} - no need to wait
               until you've picked plans below.
             </div>
           </div>
           <a
+            className="cta"
             href={manager.calendly}
             target="_blank"
             rel="noreferrer"
@@ -107,7 +108,7 @@ export default function SignUp({
               whiteSpace: "nowrap",
             }}
           >
-            Book your kickoff call &#8599;
+            Book Your Kickoff Call &#8599;
           </a>
         </div>
       )}
@@ -249,14 +250,14 @@ export default function SignUp({
                 }}
                 style={{ background: "none", border: "none", color: C.red, fontSize: 12.5, cursor: "pointer", padding: 0 }}
               >
-                Yes, clear it
+                Yes, Clear It
               </button>{" "}
               &middot;{" "}
               <button
                 onClick={() => setConfirmClear(false)}
                 style={{ background: "none", border: "none", color: C.blue, fontSize: 12.5, cursor: "pointer", padding: 0 }}
               >
-                Never mind
+                Never Mind
               </button>
             </span>
           ) : (
@@ -265,7 +266,7 @@ export default function SignUp({
               className="noprint"
               style={{ background: "none", border: "none", color: C.faint, fontSize: 12.5, cursor: "pointer", padding: 0 }}
             >
-              Clear shortlist
+              Clear Shortlist
             </button>
           )}
         </div>

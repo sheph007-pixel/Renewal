@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { C, money0, panel } from "@/lib/importui";
-import { pill } from "@/lib/ui";
+import { h3, pill } from "@/lib/ui";
 import { networkLabel } from "@/lib/model";
 import Link from "@/lib/Link";
 import { PATHS, groupPath } from "@/lib/router";
@@ -1211,7 +1211,7 @@ export function GroupProposals({ group, token }: { group: string; token: string 
   return (
     <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>Proposals</h3>
+        <h3 style={h3}>Proposals</h3>
         <span style={{ fontSize: 12.5, color: C.faint }}>
           {items.filter(isProposal).length ? `${items.filter(isProposal).length} on file` : "none yet"} ·{" "}
           <Link href={PATHS.proposals}>all proposals</Link>

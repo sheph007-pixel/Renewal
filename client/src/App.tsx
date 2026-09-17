@@ -10,7 +10,7 @@ import {
   type Overrides,
   type TierKey,
 } from "@/lib/model";
-import { BenSync, C, panel } from "@/lib/ui";
+import { BenSync, C, h1, panel } from "@/lib/ui";
 import {
   PATHS,
   currentPage,
@@ -103,6 +103,8 @@ export default function App() {
   const linkCode = useMemo(linkCodeAtLoad, []);
   /** Who at Kennion holds this group, for the contact card and the rail. */
   const [manager, setManager] = useState<AccountManager | null>(null);
+  /** The licensed broker on every client's team card, when the server names one. */
+  const [broker, setBroker] = useState<AccountManager | null>(null);
   /** Whether the server can answer the assistant: the chat box only shows when it can. */
   const [assistantOn, setAssistantOn] = useState(false);
   /** The rail, collapsed or not. Remembered per browser, so it stays that way. */
@@ -188,6 +190,7 @@ export default function App() {
     } as KennionData);
     setCode(group.code);
     setManager((p.accountManager as AccountManager) || null);
+    setBroker((p.broker as AccountManager) || null);
     setAssistantOn(!!p.assistant);
     saveSession({ kind: "group", code: group.code });
     setPageGroup({ token: (p.linkToken as string | null) || null, code: group.code });
@@ -845,7 +848,7 @@ export default function App() {
               <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
                 {/* Same wording as the side rail's current entry, so the page
                     a client lands on after clicking a link is never in doubt. */}
-                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px", display: "flex", alignItems: "center", gap: 10 }}>
+                <h1 style={{ ...h1, display: "flex", alignItems: "center", gap: 10 }}>
                   {tab === "assistant" && (
                     <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: C.navy, color: C.teal, flex: "none" }}>
                       <SyncMark size={18} />
@@ -937,11 +940,13 @@ export default function App() {
             ) : tab === "home" ? (
               <>
                 <Home
+                  groupName={g.name}
                   optionsHref={hrefFor("options")}
                   supplementalHref={hrefFor("supplemental")}
                   signUpHref={hrefFor("signup")}
                   assistantHref={assistantOn ? assistantHref() : null}
                   manager={manager}
+                  broker={broker}
                   lastSignup={data.signup || null}
                 />
                 {/* What's New for 2027 sits under the welcome: where the market review stands, one page, less to click through. */}

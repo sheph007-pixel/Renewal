@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, panel } from "@/lib/importui";
+import { h2 } from "@/lib/ui";
 
 /**
  * Change the staff sign-in code without leaving the app. The code lives in
@@ -74,7 +75,7 @@ export default function SignInCode({ token }: { token: string }) {
 
   return (
     <section style={{ ...panel, marginTop: 16, padding: "18px 22px" }} aria-label="Sign-in code">
-      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>Sign-In Code</h2>
+      <h2 style={h2}>Sign-In Code</h2>
 
       <p style={{ margin: "8px 0 0", fontSize: 13, color: C.body, lineHeight: 1.6, maxWidth: 720 }}>
         {where?.source === "env"

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { C, num, panel, pill, th } from "@/lib/ui";
+import { C, h2, num, panel, pill, th } from "@/lib/ui";
 import { money0 } from "@/lib/model";
 import Link from "@/lib/Link";
 import { groupPath } from "@/lib/router";
@@ -98,7 +98,7 @@ function StoredExport({ token, xml, onResult }: { token: string; xml: XmlVerify 
   return (
     <section style={{ ...panel, marginTop: 16, padding: "18px 22px", borderLeft: `4px solid ${status === "ok" ? C.green : status === "warn" ? C.amber : C.hairline}` }} aria-label="Stored export">
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>The Stored Export, Re-read</h2>
+        <h2 style={h2}>The Stored Export, Re-read</h2>
         {xml && <span style={{ ...tone(status), marginLeft: "auto" }}>{status === "ok" ? "Matches" : "Needs a look"}</span>}
       </div>
       <p style={{ margin: "8px 0 0", fontSize: 13.5, color: C.body, lineHeight: 1.6, maxWidth: 900 }}>
@@ -368,7 +368,7 @@ export default function DataAudit({ token, ai }: Props) {
         aria-label="Data check"
       >
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>Every Group, Checked</h2>
+          <h2 style={h2}>Every Group, Checked</h2>
           {audit && <span style={{ ...tone(overall), marginLeft: "auto" }}>{STATUS_WORD[overall]}</span>}
         </div>
         <p style={{ margin: "8px 0 0", fontSize: 13.5, color: C.body, lineHeight: 1.6, maxWidth: 900 }}>

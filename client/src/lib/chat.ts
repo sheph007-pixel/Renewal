@@ -327,6 +327,16 @@ export async function deleteFile(id: number): Promise<void> {
   set({ messages });
 }
 
+/**
+ * What's Changing For 2027, the group's own summary: its 2026 plans beside
+ * its 2027 options, where the market review stands, what stays the same and
+ * the next steps. Built on the server from the quotes on file when the
+ * button is pressed, so it always matches the pages. Saves through the browser.
+ */
+export async function exportChangesPdf(groupName: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - What's Changing For 2027.pdf`, { format: "changes" });
+}
+
 /** Fetch a file with the session headers and hand it to the browser as a download. */
 /** Which grid view a file is of: the AI Picks report, or a comparison of the favorites, the comparison or every plan showing. */
 export type ExportView = "picks" | "favorites" | "compare" | "all";

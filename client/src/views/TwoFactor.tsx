@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, panel } from "@/lib/importui";
+import { h2 } from "@/lib/ui";
 
 /**
  * Two-factor setup for a staff session. The secret is shown as text to type
@@ -76,7 +77,7 @@ export default function TwoFactor({ token }: { token: string }) {
   return (
     <section style={{ ...panel, marginTop: 16, padding: "18px 22px" }} aria-label="Two-factor sign-in">
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>Two-Factor Sign-In</h2>
+        <h2 style={h2}>Two-Factor Sign-In</h2>
         <span
           style={{
             fontSize: 12,

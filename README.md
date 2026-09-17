@@ -84,14 +84,39 @@ refused at sign-in, but nothing is deleted and it can be restored at any time.
 Welcome is written for an existing Kennion client, not a prospect: the
 program is expanding for 2027, BenSync makes the options easier to evaluate,
 the client chooses what to offer, and Kennion handles the implementation
-after that. It has four parts: a short introduction, Meet BenSync, a
-four-step How it works (Review Medical Options, Review Supplemental
-Benefits, Build Your Strategy, Sign Up) with We handle the rest under it,
-and one Your Kennion Team card naming the account manager and Hunter.
-Scheduling a call is never the page's call to action; the work happens in
-BenSync, and the card is there for questions along the way.
+after that. It has four parts: a short introduction with the What's Changing
+download under it, Meet BenSync, a four-step How It Works (Review Medical
+Options, Review Supplemental Benefits, Build Your Strategy, Sign Up) with We
+Handle The Rest under it, and one Your Kennion Team card. The card
+(`TeamCard.tsx`) has a navy band and three members: the account manager,
+the licensed broker (`broker` in `server/data/account-managers.json`, sent in
+the group payload, with Hunter as the client's fallback) and the BenSync AI
+Assistant, whose Ask The AI Assistant button opens the corner chat box (the
+member is absent when the server cannot answer). Scheduling a call is never
+the page's call to action; the work happens in BenSync, and the card is
+there for questions along the way.
 
-What's New for 2027, under it, says how many priced medical options the
+"Download What's Changing (PDF)" builds the group's own 2026-to-2027 summary
+on the server each time it is pressed (`POST /api/group/export` with
+`format: "changes"`, `renderChangesReport` in `server/documents.js`,
+`exportChangesPdf` in `client/src/lib/chat.ts`): the expansion of the
+program, stat tiles, the plans in force today with their premiums, every
+priced 2027 option by carrier lineup with its Employee Only rate, monthly
+total at the group's enrollment and the difference against today, what the
+numbers come to for this group, where the market review stands, what stays
+the same, the four next steps (with the date of any Sign Up already sent)
+and the team. It uses the same rules as the Medical Plans page (`optionRows`
+mirrors `proposalPlans`: priced at every enrolled tier, no duplicates, no
+Cobalt) and the same rates footer as every other document.
+
+Headings and calls to action read in Title Case site-wide, every word
+capitalised: the strings are written that way, `styles.css` holds `h1`-`h3`,
+`button` and `.cta` to it with `text-transform: capitalize`, and the heading
+scale lives in one place (`h1`, `h2`, `h3`, `kicker` and `ctaLink` in
+`client/src/lib/ui.ts`) so a page title, a section heading, a sub-head and
+a small uppercase label look the same on every page.
+
+What's New For 2027, under it, says how many priced medical options the
 group has and where the market review stands. `marketReview` in
 `client/src/lib/model.ts` counts the group's proposal slots (the program's
 five, less Cobalt): the review is complete once every slot holds a priced

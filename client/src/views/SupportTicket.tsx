@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { groupHeaders } from "@/lib/session";
-import { C, panel, primaryBtn, textInput } from "@/lib/ui";
+import { C, h2, panel, primaryBtn, textInput } from "@/lib/ui";
 
 const PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
 const MAX_FILE = 8 * 1024 * 1024;
@@ -77,7 +77,7 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
         {done ? (
           <div style={{ textAlign: "center", padding: "18px 6px 8px" }}>
             <div style={{ fontSize: 34, color: C.blue }}>✓</div>
-            <h2 style={{ margin: "6px 0 6px", fontSize: 19 }}>Ticket Sent</h2>
+            <h2 style={{ ...h2, margin: "6px 0 6px", fontSize: 19 }}>Ticket Sent</h2>
             <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
               Reference <b>{done.ref}</b>. We will reply to {requester.trim()}.
             </p>
@@ -87,7 +87,7 @@ export default function SupportTicket({ onClose }: { onClose: () => void }) {
           </div>
         ) : (
           <>
-            <h2 style={{ margin: "0 0 2px", fontSize: 19 }}>Submit A Ticket</h2>
+            <h2 style={{ ...h2, margin: "0 0 2px", fontSize: 19 }}>Submit A Ticket</h2>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Goes straight to your Kennion team. We reply by email.</div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

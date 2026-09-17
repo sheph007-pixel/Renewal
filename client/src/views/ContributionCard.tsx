@@ -111,7 +111,7 @@ export default function ContributionCard({ tiers, editable }: Props) {
               className="noprint"
               style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}
             >
-              Reset to what you spend today
+              Reset To What You Spend Today
             </button>
           )
         ) : (

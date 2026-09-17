@@ -1,6 +1,6 @@
 import { useState, type ReactNode, type Ref } from "react";
 import { C, panel } from "@/lib/importui";
-import { pill } from "@/lib/ui";
+import { h2, pill } from "@/lib/ui";
 
 export interface LastUpload {
   filename: string | null;
@@ -59,7 +59,7 @@ export default function ImportSection({ step, title, what, accept, ariaLabel, in
         >
           {step}
         </span>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>{title}</h2>
+        <h2 style={h2}>{title}</h2>
         <span style={{ ...tone, marginLeft: "auto" }}>{status.label}</span>
       </div>
 

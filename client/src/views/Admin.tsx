@@ -9,7 +9,7 @@ import {
   type KennionData,
   type Overrides,
 } from "@/lib/model";
-import { C, chip, Logo, num, panel, pill, textInput, th } from "@/lib/ui";
+import { C, chip, h2, Logo, num, panel, pill, textInput, th } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { PATHS, navigate } from "@/lib/router";
 import Footer from "@/views/Footer";
@@ -529,7 +529,7 @@ export default function Admin({
                   <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 10 }}>
                     <Link href={PATHS.groups}>Groups</Link>
                   </nav>
-                  <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: C.ink }}>
+                  <h2 style={h2}>
                     No group called &ldquo;{openGroup}&rdquo;
                   </h2>
                   <div style={{ marginTop: 8, fontSize: 13, color: C.muted, lineHeight: 1.65 }}>

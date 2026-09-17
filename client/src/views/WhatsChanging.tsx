@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { marketReview, type Group, type KennionData } from "@/lib/model";
-import { C, h2, panel, sectionHead } from "@/lib/ui";
+import { C, ctaLink, h2, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
 
 interface Props {
@@ -20,7 +20,7 @@ export default function WhatsChanging({ data, g, optionsHref }: Props) {
   return (
     <div>
       <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>What&rsquo;s New for 2027</h2>
+        <h2 style={h2}>What&rsquo;s New For 2027</h2>
       </div>
 
       <div style={{ ...panel, padding: "18px 20px" }}>
@@ -51,7 +51,7 @@ export default function WhatsChanging({ data, g, optionsHref }: Props) {
             <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: "currentColor" }} />
             {done ? "Market review complete: your options are ready to review." : "Market review in progress: additional options may still be added."}
           </span>
-          <Link href={optionsHref} style={{ fontSize: 14, fontWeight: 600, color: C.blue, textDecoration: "none" }}>
+          <Link className="cta" href={optionsHref} style={ctaLink}>
             Review Medical Options &rarr;
           </Link>
         </div>

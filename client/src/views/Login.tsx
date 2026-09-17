@@ -218,7 +218,7 @@ export default function Login({
                         onClick={onCancelTwoFactor}
                         style={{ background: "none", border: "none", padding: 0, fontSize: 12.5, color: C.blue, cursor: "pointer" }}
                       >
-                        Start again
+                        Start Again
                       </button>
                     </div>
                   </>
@@ -283,7 +283,7 @@ export default function Login({
                     cursor: "pointer",
                   }}
                 >
-                  Back to group sign in
+                  Back To Group Sign In
                 </button>
               </div>
             </>

@@ -102,7 +102,22 @@ export const sectionHead: CSSProperties = {
   borderBottom: `1px solid ${C.border}`,
 };
 
+/**
+ * The heading scale, one place: every page title, section heading, sub-head
+ * and small uppercase label reads the same way site-wide. Headings and calls
+ * to action are written in Title Case, every word capitalised, and
+ * styles.css holds them to it.
+ */
+/** A page's title: the one h1 at the top. */
+export const h1: CSSProperties = { margin: 0, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.2px" };
+/** A section heading, on the page or at the top of a panel. */
 export const h2: CSSProperties = { margin: 0, fontSize: 17, fontWeight: 600, color: C.ink };
+/** A sub-head inside a panel. */
+export const h3: CSSProperties = { margin: 0, fontSize: 15, fontWeight: 600, color: C.ink };
+/** The small uppercase label above a heading or a block: "Meet BenSync", "Your Kennion Team". */
+export const kicker: CSSProperties = { margin: 0, fontSize: 12, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" };
+/** A call to action that is a link rather than a button: green, bold, no underline. */
+export const ctaLink: CSSProperties = { fontSize: 14, fontWeight: 600, color: C.blue, textDecoration: "none" };
 
 export const th: CSSProperties = {
   padding: "12px 8px 11px",

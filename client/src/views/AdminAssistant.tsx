@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
-import { C, chip, panel, primaryBtn, smallPrimaryBtn, textInput, th } from "@/lib/ui";
+import { C, chip, h3, panel, primaryBtn, smallPrimaryBtn, textInput, th } from "@/lib/ui";
 import { readEvents, type ChatFile, type ChatMessage } from "@/lib/chat";
 import Markdown from "@/views/Markdown";
 import { FileChips } from "@/views/ChatPanel";
@@ -578,7 +578,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
 
   const section = (title: string, hint: string, children: ReactNode, ref?: RefObject<HTMLDivElement>) => (
     <div ref={ref} style={{ ...panel, padding: "16px 20px" }}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>{title}</h3>
+      <h3 style={h3}>{title}</h3>
       <div style={{ fontSize: 12.5, color: C.muted, margin: "3px 0 12px", lineHeight: 1.55 }}>{hint}</div>
       {children}
     </div>

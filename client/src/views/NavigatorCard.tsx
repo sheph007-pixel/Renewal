@@ -17,7 +17,7 @@ export default function NavigatorCard({ compact }: { compact?: boolean }) {
         Employee Navigator
       </div>
       <div style={{ marginTop: 8, fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink }}>
-        See everything on your group
+        See Everything On Your Group
       </div>
       <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.65, color: C.body }}>
         Sign in to Employee Navigator with your usual administrator login to see who is enrolled,
@@ -25,6 +25,7 @@ export default function NavigatorCard({ compact }: { compact?: boolean }) {
         is also where you add a new hire or make a change during the year.
       </p>
       <a
+        className="cta"
         href={NAVIGATOR_URL}
         target="_blank"
         rel="noreferrer"
@@ -41,7 +42,7 @@ export default function NavigatorCard({ compact }: { compact?: boolean }) {
           textDecoration: "none",
         }}
       >
-        Log in to Employee Navigator &#8599;
+        Log In To Employee Navigator &#8599;
       </a>
       <div style={{ marginTop: 9, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>
         Don&rsquo;t have a login, or can&rsquo;t get in? Your account manager can set one up.
