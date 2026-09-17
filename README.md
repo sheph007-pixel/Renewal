@@ -653,7 +653,7 @@ table.
 enrollment data on file) carries an info tip per category (`groupSizeNote`):
 where the size comes from, what applies at that size (the ACA employer
 mandate at 50 or more full-time equivalents; not under 50), that the 50%
-starting contribution is the carriers' participation requirement and not an
+starting contribution is the Carrier/TPA's minimum contribution requirement and not an
 affordability determination, and that the AI Assistant and the Kennion team
 help work through it. The Employer Contribution tip says the same in one
 sentence, and the assistant's instructions carry the rule. The page never

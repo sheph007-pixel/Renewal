@@ -152,7 +152,7 @@ export interface Group {
  */
 export function groupSizeNote(g: Group): string | null {
   const from = "Group size is based on the enrollment data on file for your group; tell us if your full-time equivalent count differs.";
-  const start = "The 50% starting point on the Medical Plans page is the carriers' participation requirement, not an ACA affordability determination.";
+  const start = "The 50% starting point on the Medical Plans page is the Carrier/TPA's minimum contribution requirement, not an ACA affordability determination.";
   if (g.sizeCategory === "51+")
     return `${from} At 50 or more full-time equivalent employees, the Affordable Care Act's employer mandate applies: an Applicable Large Employer must offer minimum essential coverage that provides minimum value and is affordable to at least 95% of its full-time employees, or face penalties. ${start} The AI Assistant and your Kennion team can help you work through what applies before you decide.`;
   if (g.sizeCategory === "2-50")
