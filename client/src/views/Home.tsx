@@ -79,7 +79,7 @@ function DownloadChanges({ groupName }: { groupName: string }) {
         {busy ? "Building Your Overview…" : "Download 2027 Program Overview"}
       </button>
       <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || "A simple two-page overview of the 2027 program for your group, ready to share with your team."}
+        {error || "A simple two-page overview of what's new for 2027, ready to share with your team."}
       </span>
     </div>
   );
@@ -103,7 +103,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   const submitted = lastSignup ? new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Review Medical Options", href: optionsHref, body: <>See the medical plans Kennion secured for your January 1 effective date.</> },
+    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your January 1 effective date.</> },
     { title: "Review Supplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
     { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans, model contributions and narrow the options that make the most sense for your group.</> },
     {
