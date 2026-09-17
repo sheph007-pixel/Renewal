@@ -1,4 +1,4 @@
-// What's Changing For 2027 renders as a two-page PDF: the story, what
+// The 2027 Program Overview renders as a two-page PDF: the story, what
 // stays the same and what is new, the two bills, next steps, FAQs and the
 // team. No rates and no plan table: those live on BenSync.
 import assert from "node:assert/strict";
@@ -16,7 +16,7 @@ const broker = { name: "Hunter Shepherd", title: "President & Licensed Broker", 
 
 const file = await renderChangesReport({ group, proposals, slots: ["UHC Fully Insured", "Gravie"], manager, broker, signup: null, assistant: true });
 assert.equal(file.mime, "application/pdf");
-assert.match(file.filename, /^Test Group Inc - What's Changing For 2027 \d{4}-\d{2}-\d{2}\.pdf$/);
+assert.match(file.filename, /^Test Group Inc - 2027 Program Overview \d{4}-\d{2}-\d{2}\.pdf$/);
 const pdf = await pdfParse(file.data);
 assert.equal(pdf.numpages, 2, `expected 2 pages, got ${pdf.numpages}`);
 const text = pdf.text.replace(/\s+/g, " ");
@@ -31,6 +31,7 @@ for (const phrase of [
   "Pat Example",
   "BenSync AI Assistant",
   "The bottom line: more options from major national programs",
+  "We help you build the right strategy. Then we handle the rest.",
 ]) assert.ok(text.includes(phrase), `missing: ${phrase}`);
 for (const banned of ["$720", "$3,200", "Vs Today", "Market Review In Progress"]) assert.ok(!text.includes(banned), `should not say: ${banned}`);
 

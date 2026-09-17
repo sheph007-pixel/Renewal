@@ -328,13 +328,13 @@ export async function deleteFile(id: number): Promise<void> {
 }
 
 /**
- * What's Changing For 2027, the group's own summary: its 2026 plans beside
- * its 2027 options, where the market review stands, what stays the same and
- * the next steps. Built on the server from the quotes on file when the
- * button is pressed, so it always matches the pages. Saves through the browser.
+ * The 2027 Program Overview, the group's own two-page summary: the program's
+ * expansion, what stays the same and what is new, the two bills, the next
+ * steps, FAQs and the team. Built on the server when the button is pressed,
+ * so it always matches the pages. Saves through the browser.
  */
 export async function exportChangesPdf(groupName: string): Promise<void> {
-  await downloadFile("/api/group/export", `${groupName} - What's Changing For 2027.pdf`, { format: "changes" });
+  await downloadFile("/api/group/export", `${groupName} - 2027 Program Overview.pdf`, { format: "changes" });
 }
 
 /** Fetch a file with the session headers and hand it to the browser as a download. */

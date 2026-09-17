@@ -4,6 +4,7 @@ import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import type { AccountManager, GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
+import ProgramStory from "@/views/ProgramStory";
 
 /** The licensed broker on every client's team, used when the server sends no broker contact. */
 const HUNTER: AccountManager = {
@@ -14,15 +15,15 @@ const HUNTER: AccountManager = {
   calendly: "https://calendly.com/kennion/call",
 };
 
-/** What Kennion takes on once the client has chosen, in the order it happens. */
+/** What Kennion coordinates once the client's selections are final, in the order it happens. */
 const HANDLED = [
   "Employee Navigator setup",
   "carrier implementation",
   "employee communications",
-  "open enrollment support",
-  "employee enrollment assistance",
-  "final carrier enrollment",
-  "first-month payment",
+  "open enrollment",
+  "enrollment support",
+  "final enrollment",
+  "first-month premium setup",
 ];
 
 interface Props {
@@ -48,7 +49,7 @@ function DownloadIcon() {
 }
 
 /**
- * The button that builds the group's own What's Changing For 2027 summary
+ * The button that builds the group's own 2027 Program Overview
  * on the server and saves it through the browser. The PDF is made fresh
  * each time, from the quotes on file at that moment, so it always says what
  * the pages say.
@@ -75,10 +76,10 @@ function DownloadChanges({ groupName }: { groupName: string }) {
         style={{ ...primaryBtn, display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
         <DownloadIcon />
-        {busy ? "Building Your Summary…" : "Download What's Changing (PDF)"}
+        {busy ? "Building Your Overview…" : "Download 2027 Program Overview"}
       </button>
       <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || "A simple two-page summary of what's new for 2027, ready to share with your team."}
+        {error || "A simple two-page overview of the 2027 program for your group, ready to share with your team."}
       </span>
     </div>
   );
@@ -89,9 +90,10 @@ function DownloadChanges({ groupName }: { groupName: string }) {
  * know Kennion and are already in the program. In about twenty seconds the
  * page says that the program expanded for 2027, that BenSync makes the
  * options easier to evaluate, that the client chooses what to offer, and
- * that Kennion handles everything after that. The What's Changing summary
- * is one click away, and the team card beside it keeps the people and the
- * AI Assistant reachable without making a call the next step.
+ * that Kennion handles everything after that. The 2027 Program Overview
+ * is one click away, the 2027 Kennion Program story (ProgramStory) plays
+ * first, at the top of the page, and the team card beside it keeps the
+ * people and the AI Assistant reachable without making a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
@@ -103,13 +105,13 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
     { title: "Review Medical Options", href: optionsHref, body: <>See the medical plans Kennion secured for your January 1 effective date.</> },
     { title: "Review Supplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
-    { title: "Build Your Strategy", href: optionsHref, body: <>Compare plans, model contributions and use Kennion and the {assistant} to determine what you want to offer employees.</> },
+    { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans, model contributions and narrow the options that make the most sense for your group.</> },
     {
       title: "Sign Up",
       href: signUpHref,
       body: (
         <>
-          When you are ready, tell us which plans you want to offer for 2027.
+          Once your strategy is set, confirm the plans and benefits you want to offer for 2027.
           {submitted && <> You submitted on {submitted}; you can send an update any time.</>}
         </>
       ),
@@ -119,33 +121,25 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <ProgramStory />
         <div style={{ ...panel, padding: "28px 34px 24px" }}>
           <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
           <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
           <p style={p}>
-            Kennion has helped employers with employee benefits for more than 50 years, and we have operated the Kennion Program
-            since 2013. As the program has grown, and as clients have asked for more choice, we are expanding our group health
-            offering with major national partners, networks and programs.
+            Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
+            since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
+            we&rsquo;re expanding our group health offering through major national partners, networks and programs.
           </p>
           <p style={p}>
-            That means more medical plan options, more price points and more flexibility for your group, backed by the same
-            Kennion team you already know.
+            That means more medical plan options, more flexibility and a better way to evaluate what works for your group, backed
+            by the same Kennion team you already know.
           </p>
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
-            <p style={{ ...kicker, marginBottom: 8 }}>What's Changing From 2026 To 2027</p>
+            <p style={{ ...kicker, marginBottom: 8 }}>2027 Program Overview</p>
             <DownloadChanges groupName={groupName} />
           </div>
         </div>
 
-        <div style={{ ...panel, padding: "24px 34px 22px" }}>
-          <p style={{ ...kicker, marginBottom: 4 }}>Meet BenSync</p>
-          <h2 style={head}>More Options. Smarter, Faster Decisions.</h2>
-          <p style={{ ...p, marginBottom: 0 }}>
-            BenSync is Kennion&rsquo;s new benefits decision platform. Review your medical options, model employer contributions,
-            compare plans side by side and work with Kennion and the {assistant} to evaluate different strategies, without
-            spreadsheets, manual math or unnecessary back-and-forth.
-          </p>
-        </div>
 
         <div style={{ ...panel, padding: "24px 34px 22px" }}>
           <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
@@ -168,11 +162,11 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             ))}
           </ol>
           <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
-            <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest.</h3>
+            <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest</h3>
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
-              Once you make your selections, Kennion will coordinate the {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
+              Once your selections are finalized, Kennion coordinates {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
             </p>
-            <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>You make the decisions. We handle the implementation.</p>
+            <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>We help you build the right strategy. Then we handle the rest.</p>
           </div>
         </div>
       </div>
