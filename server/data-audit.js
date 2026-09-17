@@ -7,8 +7,8 @@
 // with each other in aggregate. This one is per company: does the enrolled
 // count add up the same way everywhere, does the premium, is there a billed
 // rate behind every tier the pages price, is the employer/employee split on
-// file, does this month's billing agree, are the 2027 quotes usable, and —
-// the check that started it — is the headcount Employee Navigator reports
+// file, does this month's billing agree, are the 2027 quotes usable, and - 
+// the check that started it - is the headcount Employee Navigator reports
 // for the company a number anyone should repeat. Aggregates only, like
 // everything else that leaves the server: no member is named in a result.
 import { classifyPlans, premiumBreakdown, tierKeyOf } from "./en-parse.js";
@@ -45,7 +45,7 @@ const LABEL = Object.fromEntries(CHECKS.map((c) => [c.key, c.label]));
 
 /**
  * Active (non-terminated) headcount from a group's stored import
- * diagnostics — every <Employee> in the company's Employee Navigator record
+ * diagnostics - every <Employee> in the company's Employee Navigator record
  * whose status is not terminated. Read fresh off the counts kept with the
  * import rather than the value frozen at import time, so a change to the
  * rule applies to every group already in the database. Null when the group
@@ -53,8 +53,8 @@ const LABEL = Object.fromEntries(CHECKS.map((c) => [c.key, c.label]));
  *
  * This is NOT an eligible count, and it is never shown to a client or to
  * the assistant: Employee Navigator's "Active" status covers anyone not
- * marked terminated — part-time and PRN staff, people in classes that are
- * not benefit-eligible, and records nobody ever closed — so on some groups
+ * marked terminated - part-time and PRN staff, people in classes that are
+ * not benefit-eligible, and records nobody ever closed - so on some groups
  * it runs to many times the enrolled figure. It is kept for staff to judge.
  */
 export function rosterHeadcount(g) {
@@ -94,7 +94,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     if (fromTiers != null) parts.push(`tiers add to ${fromTiers}`);
     if (fromMembers != null) parts.push(`${fromMembers} on the census`);
     const off = fromPlans !== enrolled || (fromTiers != null && fromTiers !== enrolled) || (fromMembers != null && fromMembers !== enrolled);
-    add("count", off ? "fail" : "ok", off ? `The enrolled count does not add up the same way everywhere: ${parts.join(", ")}. Re-import the group.` : `${parts.join(", ")}; covered lives ${g.lives ?? "—"}.`);
+    add("count", off ? "fail" : "ok", off ? `The enrolled count does not add up the same way everywhere: ${parts.join(", ")}. Re-import the group.` : `${parts.join(", ")}; covered lives ${g.lives ?? "-"}.`);
   }
 
   // Premium: the group total, its plans and its census agree.
@@ -118,7 +118,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     add("tiers", "ok", `EE ${g.tiers.EE ?? 0} · ES ${g.tiers.ES ?? 0} · EC ${g.tiers.EC ?? 0} · FAM ${g.tiers.FAM ?? 0} (no census on this row).`);
   }
 
-  // Heads per plan and tier, from the census — what the pages price and what
+  // Heads per plan and tier, from the census - what the pages price and what
   // the month's billing is checked against.
   const counts = {};
   for (const m of members || []) {
@@ -159,7 +159,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     else add("rates", "ok", `${billedTiers} billed tier rate${billedTiers === 1 ? "" : "s"} across ${plans.length} plan${plans.length === 1 ? "" : "s"}, and they reproduce every plan's premium.`);
   }
 
-  // Split: what the employer pays, from payroll — or nothing, and the pages say Pending.
+  // Split: what the employer pays, from payroll - or nothing, and the pages say Pending.
   {
     const n = split && split.plans ? Object.values(split.plans).reduce((s, tiers) => s + Object.keys(tiers).length, 0) : 0;
     add("split", n ? "ok" : "info", n ? `Employer/employee split from Employee Navigator on ${n} plan-tier${n === 1 ? "" : "s"}.` : "No employer/employee split on file: the pages show Pending, and the assistant cannot say what employees pay today.");
@@ -179,7 +179,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
         "roster",
         inflated ? "warn" : "ok",
         inflated
-          ? `Employee Navigator lists ${roster} employees with status Active against ${enrolled} enrolled in medical — ${gap} with no medical at all.${onAnyLine} EN's Active status covers part-time and PRN staff, classes that are not benefit-eligible and records nobody closed, so this is not a headcount anyone should quote. It is not shown to the client or the assistant; if the client needs a true count, it comes from their census.`
+          ? `Employee Navigator lists ${roster} employees with status Active against ${enrolled} enrolled in medical - ${gap} with no medical at all.${onAnyLine} EN's Active status covers part-time and PRN staff, classes that are not benefit-eligible and records nobody closed, so this is not a headcount anyone should quote. It is not shown to the client or the assistant; if the client needs a true count, it comes from their census.`
           : `${roster} on the Employee Navigator roster, ${enrolled} enrolled in medical.${onAnyLine}`,
       );
     }
@@ -193,7 +193,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     const byRoster = roster != null ? (roster >= 51 ? "51+" : "2-50") : null;
     if (!cat) add("size", "warn", "No size category; the client's pages cannot show Group Size.");
     else if (set) add("size", "ok", `${cat}, set by staff. The client's pages show it as Group Size.`);
-    else if (byRoster && byRoster !== byEnrolled) add("size", "warn", `Defaulted to ${cat} from ${enrolled} enrolled, but the Employee Navigator roster has ${roster} — the ALE call could go either way. Set it on the company page; the client's pages show it as Group Size.`);
+    else if (byRoster && byRoster !== byEnrolled) add("size", "warn", `Defaulted to ${cat} from ${enrolled} enrolled, but the Employee Navigator roster has ${roster} - the ALE call could go either way. Set it on the company page; the client's pages show it as Group Size.`);
     else add("size", "info", `Defaulted to ${cat} from ${enrolled} enrolled; not confirmed by staff. The client's pages show it as Group Size.`);
   }
 
@@ -204,11 +204,11 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
     if (g.eligible === false) add("carrier", "fail", `Not on a program carrier: ${(g.carriersSeen || []).join(", ") || "no carrier read"}. The code is refused at sign-in.`);
     else if (unknown.length) add("carrier", "warn", `${unknown.length} plan${unknown.length === 1 ? "" : "s"} on a carrier the portal does not recognise: ${unknown.join(", ")}.`);
     else if (assumed.length) add("carrier", "warn", `No carrier could be read for ${assumed.join(", ")}; taken as group health because every other plan is.`);
-    else add("carrier", "ok", `${(g.programs || []).join(", ") || g.tpa || "—"}${g.tpa && (g.programs || []).length > 1 ? ` (billed under ${g.tpa})` : ""}.`);
+    else add("carrier", "ok", `${(g.programs || []).join(", ") || g.tpa || "-"}${g.tpa && (g.programs || []).length > 1 ? ` (billed under ${g.tpa})` : ""}.`);
   }
 
   // Billing: this month's funding workbook against the XML for the captive
-  // plans — the group's totals, then every billed plan and tier against the
+  // plans - the group's totals, then every billed plan and tier against the
   // census's heads and the XML's billed rate for that tier.
   {
     const xmlN = breakdown.groupHealthEnrolled;
@@ -248,7 +248,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
       const ok = totalsOk && !diffs.length && !extra.length;
       const head = `${fundingMonth}: ${billN} participants, ${money0(bill$)} billed; the XML has ${xmlN} enrolled at ${money0(xml$)}.`;
       const tail = [
-        totalsOk ? null : "The month's total and the export disagree — a hire or termination since the export, or a rate change.",
+        totalsOk ? null : "The month's total and the export disagree - a hire or termination since the export, or a rate change.",
         diffs.length ? `Plan by plan: ${diffs.slice(0, 8).join("; ")}${diffs.length > 8 ? `; and ${diffs.length - 8} more` : ""}.` : null,
         extra.length ? `Billed but not in this group's XML: ${extra.join(", ")}.` : null,
         ok && tiersChecked ? ` Every billed plan and tier agrees with the census and the XML's rates (${tiersChecked} tier${tiersChecked === 1 ? "" : "s"} checked).` : null,
@@ -281,7 +281,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
         // Kennion offers PPO plans only: no EPO twin belongs on any quote,
         // and every group's Gravie quote is the same 67 PPO designs.
         const epo = pl.filter((x) => /\bEPO\b/i.test(`${x.network || ""} ${x.planType || ""} ${x.name || ""}`)).length;
-        if (epo) problems.push(`${pr.carrier || pr.slot}: ${epo} EPO plan${epo === 1 ? "" : "s"} stored — Kennion offers PPO only; re-read the proposal`);
+        if (epo) problems.push(`${pr.carrier || pr.slot}: ${epo} EPO plan${epo === 1 ? "" : "s"} stored - Kennion offers PPO only; re-read the proposal`);
         if (pr.slot === "Gravie" && pl.length && pl.length - epo !== GRAVIE_PPO_PLANS) problems.push(`Gravie: ${pl.length - epo} PPO plans stored; every group's Gravie quote is the same ${GRAVIE_PPO_PLANS} designs`);
       }
       add("quotes", problems.length ? "warn" : "ok", `${summary.join(", ")}.${problems.length ? ` ${problems.join("; ")}.` : ""}`);
@@ -291,7 +291,7 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
   // Who looks after it, and whether the client can get in.
   add("manager", manager ? "ok" : "warn", manager ? `${manager}.` : "No account manager assigned; the assistant names the fallback contact.");
   if (g.archived) add("access", "info", "Archived: the code and link are refused.");
-  else add("access", admin.linkToken || g.linkToken ? "ok" : "warn", admin.linkToken || g.linkToken ? `Code ${g.code || "—"}; permanent link minted.` : `Code ${g.code || "—"}; no permanent link yet.`);
+  else add("access", admin.linkToken || g.linkToken ? "ok" : "warn", admin.linkToken || g.linkToken ? `Code ${g.code || "-"}; permanent link minted.` : `Code ${g.code || "-"}; no permanent link yet.`);
 
   // Where the data came from and how fresh it is.
   {
@@ -382,8 +382,8 @@ export function auditData(bundles) {
  * a fresh parse of the gzip kept with the last import (parseEnStream's
  * output); `groups` the server's groups; `match` finds a group for an
  * export name the way an import does (exact, then normalised). A company
- * whose figures differ from its group is listed field by field, so drift —
- * a partial import, a re-import that skipped it, an edit by hand — shows up
+ * whose figures differ from its group is listed field by field, so drift - 
+ * a partial import, a re-import that skipped it, an edit by hand - shows up
  * as what changed rather than as a bare "differs".
  */
 export function compareToExport(companies, groups, match) {

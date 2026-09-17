@@ -44,7 +44,7 @@ export function parseCarrierStats(buffer, filename = "") {
   );
   if (hi < 0) {
     throw new Error(
-      'This does not look like the Carrier Stats report — no "Carrier" / "Enrolled Employees" header row.',
+      'This does not look like the Carrier Stats report - no "Carrier" / "Enrolled Employees" header row.',
     );
   }
   const header = grid[hi].map((c) => String(c || "").trim());

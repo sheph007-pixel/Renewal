@@ -5,7 +5,7 @@ export const NAVIGATOR_URL = "https://goenroll.employeenavigator.com/";
 
 /**
  * These pages say what the group has and what 2027 looks like; Employee
- * Navigator is where the underlying detail lives — every enrolled employee,
+ * Navigator is where the underlying detail lives - every enrolled employee,
  * their plan and tier, dependants, effective dates, and the plan documents.
  * An employer who wants to go past the summary should not have to hunt for the
  * address, so it sits on the page that prompts the question.

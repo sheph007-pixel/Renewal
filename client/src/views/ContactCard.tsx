@@ -3,8 +3,8 @@ import type { AccountManager } from "@/lib/model";
 
 /**
  * Who to call. Every group is looked after by one account manager, and the
- * question an employer has on these pages — "is this rate right?", "how do I
- * add someone?" — is answered by that person, not by a general inbox. So the
+ * question an employer has on these pages - "is this rate right?", "how do I
+ * add someone?" - is answered by that person, not by a general inbox. So the
  * card names them, and gives the three ways to reach them: the direct line,
  * email, and a time on their calendar. The same card, with its own label and
  * note, introduces anyone else at Kennion a client should know.
@@ -13,7 +13,7 @@ export default function ContactCard({
   manager,
   compact,
   label = "Your account manager",
-  note = "Anything about your group — rates, enrollment, a question on these pages — reach out any time.",
+  note = "Anything about your group - rates, enrollment, a question on these pages - reach out any time.",
 }: {
   manager: AccountManager | null | undefined;
   compact?: boolean;

@@ -1,7 +1,7 @@
 // A Gravie rate workbook: the quote Gravie returns for one group, as an
 // Excel file. The "EPO" and "PPO" sheets each price the same 67 plan designs
-// on Cigna Open Access Plus — the EPO version has no out-of-network cover,
-// the PPO does — under a header block (group, effective date, quote number,
+// on Cigna Open Access Plus - the EPO version has no out-of-network cover,
+// the PPO does - under a header block (group, effective date, quote number,
 // subscribers quoted by tier). That is the quote Kennion works from: 134
 // plans for every group. Some workbooks also carry a "Narrow Network" sheet
 // (Cigna LocalPlus, offered only in a few areas) and a "Benefits Grid
@@ -105,15 +105,15 @@ function readPlans(rows, sheetName, network) {
 
 /**
  * The sheet that makes up the quote: Open Access Plus PPO. Kennion offers PPO
- * plans only, so the EPO sheet — the same designs priced without
- * out-of-network cover — is never read: nothing from it is stored, numbered
+ * plans only, so the EPO sheet - the same designs priced without
+ * out-of-network cover - is never read: nothing from it is stored, numbered
  * or shown, for any group.
  */
 const RATE_SHEETS = /^PPO$/i;
 
 /**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
- * tier, and every priced plan on the PPO sheet — the 67 designs Kennion
+ * tier, and every priced plan on the PPO sheet - the 67 designs Kennion
  * offers, in the carrier's order.
  */
 export function parseGravieWorkbook(buf) {

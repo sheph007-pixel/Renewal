@@ -34,7 +34,7 @@ const fmtDate = (iso: string) =>
 /**
  * Where a shortlist built on New 2027 Medical Options is reviewed, noted, and
  * actually sent. This used to be a panel at the bottom of the options page
- * that only pretended to send — the button just flipped a flag in the
+ * that only pretended to send - the button just flipped a flag in the
  * browser. It now posts to Kennion and is kept: your account manager sees
  * exactly what came in and when.
  */
@@ -86,7 +86,7 @@ export default function SignUp({
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Get your kickoff call on the calendar</div>
             <div style={{ marginTop: 3, fontSize: 12.5, color: C.body, lineHeight: 1.5 }}>
-              Talk through your shortlist, contribution strategy, and timing with {managerFirst} — no need to wait
+              Talk through your shortlist, contribution strategy, and timing with {managerFirst} - no need to wait
               until you've picked plans below.
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function SignUp({
             {lastSignup.note ? ` · “${lastSignup.note}”` : ""}
           </div>
           <div style={{ marginTop: 6, fontSize: 12, color: C.faint }}>
-            Changed your mind, or want to add another plan? Build a new shortlist below and send it — it does
+            Changed your mind, or want to add another plan? Build a new shortlist below and send it - it does
             not replace the one on file, it just gives {managerFirst} the latest.
           </div>
         </div>
@@ -143,11 +143,11 @@ export default function SignUp({
           <>
             <p style={{ margin: "0 0 4px", fontSize: 13, color: C.muted }}>
               {short.length} plan{short.length > 1 ? "s" : ""} shortlisted{bases.length === 1 ? `, all ${bases[0]}` : ""}. Add a note if you like, then send it
-              — {managerFirst} will come back with firm rates and a contribution model.
+             - {managerFirst} will come back with firm rates and a contribution model.
             </p>
             {mixed && (
               <div role="alert" style={{ margin: "6px 0 8px", padding: "9px 12px", borderRadius: 4, background: C.redTint, color: C.red, fontSize: 13, lineHeight: 1.5 }}>
-                One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes {bases.join(" and ")} — remove plans until one remains.
+                One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes {bases.join(" and ")} - remove plans until one remains.
               </div>
             )}
             {short.map((s) => (
@@ -186,7 +186,7 @@ export default function SignUp({
               value={note}
               onChange={(e) => onNote(e.target.value)}
               aria-label="Questions for your account manager"
-              placeholder="Questions for your account manager — anything you want quoted differently, contribution changes, timing…"
+              placeholder="Questions for your account manager - anything you want quoted differently, contribution changes, timing…"
               style={{
                 marginTop: 14,
                 width: "100%",

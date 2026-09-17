@@ -1,7 +1,7 @@
 import { C } from "@/lib/ui";
 
 /**
- * Site-wide disclaimer. Deliberately NOT marked `noprint` — it has to appear on
+ * Site-wide disclaimer. Deliberately NOT marked `noprint` - it has to appear on
  * the printed reports too, which are what actually get handed around.
  */
 export default function Footer() {

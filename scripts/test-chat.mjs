@@ -128,7 +128,7 @@ const pdfBytes = new Uint8Array(await (await fetch(`${base}/api/chat/files/${pdf
 assert.equal(String.fromCharCode(...pdfBytes.slice(0, 4)), "%PDF");
 const withFiles = await (await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie } })).json();
 assert.equal(withFiles.messages.filter((m) => (m.files || []).length).length, 3, "three answers carry a document when read back");
-console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as downloadable files — ok");
+console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as downloadable files - ok");
 
 // Attachments: a client uploads a file, sends it with a question, and it is
 // on the question for good; nobody else's message can claim it.
@@ -168,7 +168,7 @@ console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as down
   // Clean up the other group's stray thread so later counts hold.
   const otherList = await (await fetch(`${base}/api/chat/threads`, { headers: { cookie: otherCookie } })).json();
   for (const t of otherList.threads) await fetch(`${base}/api/chat/threads/${t.id}`, { method: "DELETE", headers: { cookie: otherCookie } });
-  console.log("assistant: attachments upload, attach to the question, reach the model, stay with the owner — ok");
+  console.log("assistant: attachments upload, attach to the question, reach the model, stay with the owner - ok");
 }
 
 // A conversation a page starts under its own name (Plan recommendations)
@@ -180,7 +180,7 @@ console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as down
   const list = (await (await fetch(`${base}/api/chat/threads`, { headers: { cookie } })).json()).threads;
   assert.equal(list.filter((x) => x.title === "Plan recommendations").length, 1);
   await fetch(`${base}/api/chat/threads/${t.data.id}`, { method: "DELETE", headers: { cookie } });
-  console.log("assistant: a page-named conversation keeps its name — ok");
+  console.log("assistant: a page-named conversation keeps its name - ok");
 }
 
 // The Documents tab: every file the assistant made and every attachment, in
@@ -216,7 +216,7 @@ console.log("assistant: comparison (xlsx, pdf) and memo (docx) come back as down
   assert.equal((await fetch(`${base}/api/chat/files/${keptFile.id}`, { method: "DELETE", headers: { cookie } })).status, 200);
   docs = (await (await fetch(`${base}/api/chat/files`, { headers: { cookie } })).json()).files;
   assert.equal(docs.length, 4);
-  console.log("assistant: the Documents tab lists, keeps and removes the group's files — ok");
+  console.log("assistant: the Documents tab lists, keeps and removes the group's files - ok");
 }
 
 // The admin: every conversation, transcripts, flags, the playbook, a staff trial.
@@ -281,7 +281,7 @@ assert.equal(log.threads.find((t) => t.id === trialId).staff, true);
 assert.equal(log.stats.groups, 1, "staff trials do not count as a group asking");
 assert.equal((await fetch(`${base}/api/admin/chat/send`, { method: "POST", headers: { ...json, ...staffAuth }, body: JSON.stringify({ group: "No Such Co", content: "hi" }) })).status, 404);
 assert.equal((await fetch(`${base}/api/admin/chat/threads/${trialId}`, { method: "DELETE", headers: staffAuth })).status, 200);
-console.log("assistant admin: log, transcript, flag, search, playbook and staff trials — ok");
+console.log("assistant admin: log, transcript, flag, search, playbook and staff trials - ok");
 
 // Memory: a stated preference is kept for the group, shown to the client,
 // visible and editable by staff, and gone when either side removes it.
@@ -316,7 +316,7 @@ assert.equal((await fetch(`${base}/api/chat/memory`, { method: "POST", headers: 
 assert.equal((await fetch(`${base}/api/chat/memory`, { method: "POST", headers: json, body: JSON.stringify({ text: "x" }) })).status, 401, "and nobody adds without a session");
 mem = (await (await fetch(`${base}/api/chat/memory/${mem[0].id}`, { method: "DELETE", headers: { cookie } })).json()).memory;
 assert.equal(mem.length, 0);
-console.log("assistant memory: preferences are kept per group, shown, addable and removable by client or staff — ok");
+console.log("assistant memory: preferences are kept per group, shown, addable and removable by client or staff - ok");
 
 // Two groups open in one browser: the cookie is the other group's (it signed
 // in last), but the page names its own group in a header, and that wins.
@@ -329,7 +329,7 @@ assert.equal(crossTurn.status, 200);
 assert.equal(crossTurn.events[0].data.id, tid, "the turn lands on the header's group's thread");
 assert.equal((await fetch(`${base}/api/chat/threads`, { headers: { cookie: otherCookie, "X-Kennion-Group-Code": "KEN-NOPE-0000" } })).status, 401, "a bad header is refused, not ignored");
 assert.equal((await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie: otherCookie } })).status, 404, "the cookie alone still cannot reach another group's thread");
-console.log("assistant isolation: a page's own group header beats a cookie left by another group's sign-in — ok");
+console.log("assistant isolation: a page's own group header beats a cookie left by another group's sign-in - ok");
 
 // Rename, then delete.
 const renamed = await (await fetch(`${base}/api/chat/threads/${tid}`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ title: "Medical spend" }) })).json();
@@ -339,5 +339,5 @@ assert.deepEqual((await (await fetch(`${base}/api/chat/threads`, { headers: { co
 assert.equal((await fetch(`${base}/api/chat/threads/${tid}`, { headers: { cookie } })).status, 404);
 assert.equal((await fetch(`${base}/api/chat/files/${pdfFile.id}`, { headers: { cookie } })).status, 404, "its documents go with it");
 
-console.log("assistant: threads are per group, questions stream and are kept, rename and delete work — ok", { group: mine.name });
+console.log("assistant: threads are per group, questions stream and are kept, rename and delete work - ok", { group: mine.name });
 stop();

@@ -14,7 +14,7 @@ import {
 import { C, chip, h2, num, panel, sectionHead, th } from "@/lib/ui";
 
 /**
- * The Kennion supplemental package — one rate grid per product line, each
+ * The Kennion supplemental package - one rate grid per product line, each
  * with the carrier's provider search beside its heading. The rates are the
  * same for every group, so this page takes no group data; the only state is
  * the pay frequency the rates are shown at.
@@ -113,7 +113,7 @@ export default function SupplementalPackage() {
                         const v = row[t.key];
                         return (
                           <td key={t.key} style={{ ...numCell, color: v == null ? C.ghost : C.ink }}>
-                            {v == null ? "—" : money(convertRate(v, freq))}
+                            {v == null ? "-" : money(convertRate(v, freq))}
                           </td>
                         );
                       })}

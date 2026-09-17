@@ -1,11 +1,11 @@
 // A private inbox: files the app ingests at boot, from a Railway storage
 // bucket or from a URL. Anything too large or too binary to travel through a
-// chat or an env var — a zip of client invoices, a carrier report — is put
+// chat or an env var - a zip of client invoices, a carrier report - is put
 // where the app can fetch it, and it lands in Postgres on the next boot with
 // INBOX_INGEST set.
 //
 //   INBOX_PRESIGN=inbox/a.zip,inbox/b.xls   log a presigned bucket PUT URL per key (one hour)
-//   (the inbox public key is logged at every boot — see envelope below)
+//   (the inbox public key is logged at every boot - see envelope below)
 //   INBOX_INGEST=inbox/a.zip,https://…/b.xls.enc
 //                                           fetch each entry (bucket key or URL) and ingest it
 //   INBOX_MONTH=2026-09                     the invoice month for any zip ingested

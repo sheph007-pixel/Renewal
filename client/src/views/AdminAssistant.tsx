@@ -67,7 +67,7 @@ const rowBtn = { display: "grid", placeItems: "center", width: 24, height: 24, b
 function LineRow({ line, onChange, onRemove }: { line: Line; onChange: (l: Line) => void; onRemove: () => void }) {
   return (
     <div className="pb-row" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 6px 6px 8px", borderRadius: 7, background: line.on ? "transparent" : C.zebra }}>
-      <input type="checkbox" checked={line.on} onChange={(e) => onChange({ ...line, on: e.target.checked })} title={line.on ? "On — the assistant follows this" : "Off — kept but not used"} style={{ marginTop: 5, accentColor: C.blue, cursor: "pointer" }} />
+      <input type="checkbox" checked={line.on} onChange={(e) => onChange({ ...line, on: e.target.checked })} title={line.on ? "On - the assistant follows this" : "Off - kept but not used"} style={{ marginTop: 5, accentColor: C.blue, cursor: "pointer" }} />
       <textarea
         value={line.text}
         onChange={(e) => onChange({ ...line, text: e.target.value.replace(/\n/g, " ") })}
@@ -170,7 +170,7 @@ function AnswerList({ items, onChange }: { items: Answer[]; onChange: (a: Answer
         {items.map((it) => (
           <div key={it.id} className="pb-row" style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", background: it.on ? C.card : C.zebra, display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input type="checkbox" checked={it.on} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, on: e.target.checked } : x)))} title={it.on ? "On" : "Off — kept but not used"} style={{ accentColor: C.blue, cursor: "pointer" }} />
+              <input type="checkbox" checked={it.on} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, on: e.target.checked } : x)))} title={it.on ? "On" : "Off - kept but not used"} style={{ accentColor: C.blue, cursor: "pointer" }} />
               <input value={it.q} onChange={(e) => onChange(items.map((x) => (x.id === it.id ? { ...x, q: e.target.value } : x)))} placeholder="Question" style={{ ...field, fontWeight: 600 }} />
               <button onClick={() => onChange(items.filter((x) => x.id !== it.id))} title="Remove" aria-label="Remove" style={rowBtn}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -180,7 +180,7 @@ function AnswerList({ items, onChange }: { items: Answer[]; onChange: (a: Answer
           </div>
         ))}
         <div style={{ border: `1px dashed ${C.inputEdge}`, borderRadius: 8, padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="A question clients ask — e.g. Who is our stop-loss carrier?" style={{ ...field, fontWeight: 600 }} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="A question clients ask - e.g. Who is our stop-loss carrier?" style={{ ...field, fontWeight: 600 }} />
           <textarea value={a} onChange={(e) => setA(e.target.value)} placeholder="The answer, in your words" rows={3} style={{ ...field, resize: "vertical", lineHeight: 1.5 }} />
           <div>
             <button onClick={add} disabled={!q.trim() || !a.trim()} style={{ ...chip(false), opacity: q.trim() && a.trim() ? 1 : 0.5 }}>
@@ -193,7 +193,7 @@ function AnswerList({ items, onChange }: { items: Answer[]; onChange: (a: Answer
   );
 }
 
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "-");
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
@@ -204,7 +204,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-/** One turn as it reads in the admin — the client's question, the assistant's answer with its documents. */
+/** One turn as it reads in the admin - the client's question, the assistant's answer with its documents. */
 interface MemoryLine {
   id: number;
   text: string;
@@ -384,7 +384,7 @@ function TryIt({ token, groups, ai, onActivity, dirty }: { token: string; groups
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: `1px solid ${C.hairline}` }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Try it as a group</div>
-          <div style={{ fontSize: 12, color: dirty ? C.amber : C.muted }}>{dirty ? "You have unsaved playbook changes — save them first to test them here." : "Uses the playbook as saved. The client never sees these conversations."}</div>
+          <div style={{ fontSize: 12, color: dirty ? C.amber : C.muted }}>{dirty ? "You have unsaved playbook changes - save them first to test them here." : "Uses the playbook as saved. The client never sees these conversations."}</div>
         </div>
         <select
           value={group}
@@ -406,7 +406,7 @@ function TryIt({ token, groups, ai, onActivity, dirty }: { token: string; groups
       </div>
       <div ref={scroller} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "14px 16px" }}>
         {!ai && <div style={{ fontSize: 13, color: C.amber }}>No Anthropic key is set, so the assistant cannot answer here or for clients.</div>}
-        {ai && !messages.length && !streaming && <div style={{ fontSize: 13, color: C.muted }}>Ask what a client would ask — a comparison, a summary for leadership, what level funded means for them — and see what the assistant says with this playbook.</div>}
+        {ai && !messages.length && !streaming && <div style={{ fontSize: 13, color: C.muted }}>Ask what a client would ask - a comparison, a summary for leadership, what level funded means for them - and see what the assistant says with this playbook.</div>}
         <Transcript messages={messages} token={token} />
         {streaming && (
           <div style={{ marginTop: 12, fontSize: 13, lineHeight: 1.55, color: C.ink }}>
@@ -429,8 +429,8 @@ function TryIt({ token, groups, ai, onActivity, dirty }: { token: string; groups
 
 /**
  * The admin's side of the assistant: what clients are asking, a place to
- * follow up, and the playbook — who the assistant is, Kennion's rules, the
- * house answers — that every reply is written by.
+ * follow up, and the playbook - who the assistant is, Kennion's rules, the
+ * house answers - that every reply is written by.
  */
 export default function AdminAssistant({ token, ai, groups }: Props) {
   const auth = { Authorization: `Bearer ${token}` };
@@ -593,11 +593,11 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
       )}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-        <Stat label="Conversations" value={stats ? stats.threads : "—"} />
-        <Stat label="Active this week" value={stats ? stats.thisWeek : "—"} />
-        <Stat label="Groups asking" value={stats ? stats.groups : "—"} />
-        <Stat label="Messages" value={stats ? stats.messages : "—"} />
-        <Stat label="Flagged for follow-up" value={stats ? stats.flagged : "—"} />
+        <Stat label="Conversations" value={stats ? stats.threads : "-"} />
+        <Stat label="Active this week" value={stats ? stats.thisWeek : "-"} />
+        <Stat label="Groups asking" value={stats ? stats.groups : "-"} />
+        <Stat label="Messages" value={stats ? stats.messages : "-"} />
+        <Stat label="Flagged for follow-up" value={stats ? stats.flagged : "-"} />
       </div>
 
       <div role="tablist" style={{ display: "flex", gap: 4, marginTop: 18, borderBottom: `1px solid ${C.border}` }}>
@@ -614,7 +614,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
               The assistant reads all of this on every question, so a saved change takes effect immediately. Untick an item to keep it without using it.
             </div>
             <span style={{ fontSize: 12.5, color: pbState === "error" ? C.red : pbState === "saved" && !dirty ? C.green : dirty ? C.amber : C.faint }}>
-              {pbState === "saving" ? "Saving…" : pbState === "error" ? pbError || "Not saved" : dirty ? "Unsaved changes" : pbState === "saved" ? "Saved" : pb?.updatedAt ? `Last saved ${when(pb.updatedAt)}${pb.updatedBy ? ` by ${pb.updatedBy}` : ""}` : "Defaults — never edited"}
+              {pbState === "saving" ? "Saving…" : pbState === "error" ? pbError || "Not saved" : dirty ? "Unsaved changes" : pbState === "saved" ? "Saved" : pb?.updatedAt ? `Last saved ${when(pb.updatedAt)}${pb.updatedBy ? ` by ${pb.updatedBy}` : ""}` : "Defaults - never edited"}
             </span>
             {dirty && pb && (
               <button onClick={() => setDraft(body(pb))} style={chip(false)}>
@@ -634,7 +634,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
           <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
             {section(
               "1 · Who It Is",
-              "Role, expertise, tone — one short paragraph, as if briefing a new hire.",
+              "Role, expertise, tone - one short paragraph, as if briefing a new hire.",
               <>
                 <textarea value={draft.persona} onChange={(e) => setDraft({ ...draft, persona: e.target.value })} rows={5} style={{ ...textInput, width: "100%", fontSize: 13.5, lineHeight: 1.55, resize: "vertical", fontFamily: "inherit" }} />
                 {pb && draft.persona !== pb.defaults.persona && (
@@ -652,7 +652,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
             {section(
               "3 · Facts About The Program",
               "Things the assistant should know that are not in a group's figures: the stop-loss carrier, when open enrollment runs, how billing works.",
-              <LineList title="" hint="" lines={draft.facts} onChange={(facts) => setDraft({ ...draft, facts })} placeholder="e.g. Open enrollment runs November 1–15; changes take effect January 1." />,
+              <LineList title="" hint="" lines={draft.facts} onChange={(facts) => setDraft({ ...draft, facts })} placeholder="e.g. Open enrollment runs November 1-15; changes take effect January 1." />,
             )}
             {section(
               "4 · House Answers",
@@ -741,7 +741,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
                       {t.flaggedAt && (
                         <span aria-label="Flagged" title={t.flagNote || "Flagged for follow-up"} style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: C.orange, marginRight: 7, verticalAlign: "middle" }} />
                       )}
-                      {t.preview || t.title || "—"}
+                      {t.preview || t.title || "-"}
                     </td>
                     <td style={{ padding: 8, borderBottom: `1px solid ${C.hairline}`, textAlign: "right", color: C.body, fontVariantNumeric: "tabular-nums" }}>{Math.ceil(t.messages / 2)}</td>
                     <td style={{ padding: 8, borderBottom: `1px solid ${C.hairline}`, color: C.body, whiteSpace: "nowrap" }}>{when(t.updatedAt)}</td>
@@ -779,7 +779,7 @@ export default function AdminAssistant({ token, ai, groups }: Props) {
               </button>
             </div>
             <div style={{ padding: "10px 16px", borderBottom: `1px solid ${C.hairline}`, background: open.thread.flaggedAt ? C.amberTint : C.zebra, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for follow-up — what the account manager should do" style={{ ...textInput, flex: 1, minWidth: 200, fontSize: 12.5, padding: "6px 9px" }} />
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for follow-up - what the account manager should do" style={{ ...textInput, flex: 1, minWidth: 200, fontSize: 12.5, padding: "6px 9px" }} />
               {open.thread.flaggedAt ? (
                 <>
                   <button onClick={() => void flag(open.thread, true)} style={chip(false)}>

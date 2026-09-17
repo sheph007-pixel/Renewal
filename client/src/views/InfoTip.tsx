@@ -5,7 +5,7 @@ import { C } from "@/lib/ui";
  * label, the explanation in a bubble on hover and on keyboard focus (the
  * bubble is `.info-tip` in styles.css), and read out as the icon's label.
  * `place` puts the bubble below the icon, hanging left, for a spot near
- * the top of a panel — a table header — where a bubble above would be cut off.
+ * the top of a panel - a table header - where a bubble above would be cut off.
  */
 export default function InfoTip({ text, color, place }: { text: string; color?: string; place?: "above" | "below" }) {
   return (

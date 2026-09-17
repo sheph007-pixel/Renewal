@@ -4,7 +4,7 @@ import { C, panel } from "@/lib/importui";
 /**
  * Two-factor setup for a staff session. The secret is shown as text to type
  * into an authenticator app and as the otpauth URL behind a link, so no QR
- * library and no third-party image service is needed — nothing about the
+ * library and no third-party image service is needed - nothing about the
  * secret leaves this page.
  */
 export default function TwoFactor({ token }: { token: string }) {
@@ -97,7 +97,7 @@ export default function TwoFactor({ token }: { token: string }) {
 
       {!state?.on && !secret && !recovery && (
         <div style={{ marginTop: 10, fontSize: 13, color: C.body, lineHeight: 1.6, maxWidth: 720 }}>
-          With this on, the sign-in code alone will not open the portal — it also asks for six digits from an
+          With this on, the sign-in code alone will not open the portal - it also asks for six digits from an
           authenticator app on your phone. Anyone who learns the code still gets nowhere.{" "}
           <button onClick={() => void start()} disabled={busy} style={{ ...link, fontWeight: 600 }}>
             Set it up
@@ -171,7 +171,7 @@ export default function TwoFactor({ token }: { token: string }) {
         <div style={{ marginTop: 12, fontSize: 13, color: C.body, lineHeight: 1.65, maxWidth: 720 }}>
           <p style={{ margin: "0 0 8px", color: C.green, fontWeight: 600 }}>Two-factor is on.</p>
           <p style={{ margin: "0 0 8px" }}>
-            Keep these recovery codes somewhere safe — each one signs you in once if you lose your phone. This
+            Keep these recovery codes somewhere safe - each one signs you in once if you lose your phone. This
             is the only time they are shown.
           </p>
           <div

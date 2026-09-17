@@ -2,7 +2,7 @@
 //
 // The 2027 program covers groups on EBPA, HealthEZ and BCBS of Alabama. A group
 // qualifies by having at least one MEDICAL plan from one of those with someone
-// actually enrolled in it — a plan on the books with nobody on it is not
+// actually enrolled in it - a plan on the books with nobody on it is not
 // coverage.
 //
 // Carrier names arrive as free text from the Employee Navigator plan catalog,
@@ -54,7 +54,7 @@ export function eligibilityOf(group) {
 
   for (const p of plans) {
     const key = programOf(p);
-    const label = (p.tpa || "").trim() || "—";
+    const label = (p.tpa || "").trim() || "-";
     seen.add(label);
     if (key && (p.enrolled || 0) > 0) {
       matched.add(key);

@@ -114,7 +114,7 @@ assert.equal(payload.group.medicalEligible, undefined, "the roster count does no
 assert.ok(["2-50", "51+"].includes(payload.group.sizeCategory), "the staff size category does");
 
 // 6c. The data check: every group's figures, and the briefing the assistant
-// answers from — staff only, aggregates only, and the roster count named to
+// answers from - staff only, aggregates only, and the roster count named to
 // staff is never told to the assistant.
 {
   const auth = { Authorization: `Bearer ${staff.token}` };
@@ -221,7 +221,7 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
   assert.equal("invoice" in p2, true, "the payload says whether an invoice is on file");
   const out = await fetch(`${base}/api/signout`, { method: "POST", headers: { cookie } });
   assert.match(out.headers.get("set-cookie") || "", /kennion_group=;.*Max-Age=0/, "sign-out clears the cookie");
-  console.log("cookie session: sign-in sets it, it signs in alone, forgeries and absence do not — ok");
+  console.log("cookie session: sign-in sets it, it signs in alone, forgeries and absence do not - ok");
 }
 
 // 8c. PPO only: no EPO plan reaches a client, from UnitedHealthcare's menu or
@@ -239,7 +239,7 @@ for (const path of ["/api/admin/session", "/api/admin/proposals", "/api/admin/re
       assert.ok(!/\bEPO\b/i.test(`${pl.network || ""} ${pl.planType || ""} ${pl.name || ""}`), `no EPO plan on proposal ${p.id}`);
     }
   }
-  console.log("ppo only: no EPO plan in the client payload — ok");
+  console.log("ppo only: no EPO plan in the client payload - ok");
 
 }
 
@@ -267,7 +267,7 @@ console.log("group payload: all assertions passed", {
   const page = await fetch(`${base}/admin/groups`);
   assert.equal(page.status, 200, "a real page still comes back");
   assert.match(page.headers.get("content-type") || "", /text\/html/, "as the app");
-  console.log("unknown API paths 404 as JSON, pages still serve the app — ok");
+  console.log("unknown API paths 404 as JSON, pages still serve the app - ok");
 }
 
 stop();

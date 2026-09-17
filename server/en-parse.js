@@ -4,16 +4,16 @@
 // indistinguishable from one that came out of the original census build.
 //
 // Deliberate choices, each of which changes the numbers:
-//   - Only Benefit=Medical enrollments make up the members, plans and rates the
+//  - Only Benefit=Medical enrollments make up the members, plans and rates the
 //     portal prices from. The exports also carry Dental, Vision, Life, Accident
 //     and Cancer; those are kept ONLY as per-line premium totals (`lines`) so
 //     the Groups dashboard can show total premium next to group health.
-//   - Only rows that are EmploymentStatus=Active AND have no EndDate. A
+//  - Only rows that are EmploymentStatus=Active AND have no EndDate. A
 //     terminated employee or a closed enrollment is not current coverage. The
 //     same rule applies to every benefit line.
-//   - CoverageLevel is used verbatim as the tier; EN's wording already matches
+//  - CoverageLevel is used verbatim as the tier; EN's wording already matches
 //     the portal's ("Employee + Child(ren)" etc).
-//   - A tier's rate is PlanCost for that tier, which EN bills uniformly per
+//  - A tier's rate is PlanCost for that tier, which EN bills uniformly per
 //     plan+tier. Tiers nobody is enrolled in get no rate here; the portal
 //     calculates those at the program factors and marks them "calc.".
 
@@ -29,7 +29,7 @@ const TIER_KEY = {
 const TIER_LABEL = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
 
 /**
- * Employee Navigator spells coverage levels many ways — "Employee Only",
+ * Employee Navigator spells coverage levels many ways - "Employee Only",
  * "Employee + Child", "Employee + Children", "Employee + Domestic Partner",
  * "Employee + Dependents", "Family". Every active medical enrollment must
  * count, so the level is read loosely; only a level that says nothing at all
@@ -104,7 +104,7 @@ export const GROUP_HEALTH_PROGRAMS = new Set(["EBPA", "HealthEZ"]);
  *
  *   groupHealthMonthly  medical plans on EBPA or HealthEZ only
  *   medicalMonthly      every medical plan, BCBS included
- *   supplementalMonthly dental, vision, life, disability … — 0 until loaded
+ *   supplementalMonthly dental, vision, life, disability … - 0 until loaded
  *   totalMonthly        medical + supplemental
  *   linesLoaded         whether the export this group came from was read for
  *                       supplemental lines at all; false for the shipped
@@ -116,7 +116,7 @@ export const GROUP_HEALTH_PROGRAMS = new Set(["EBPA", "HealthEZ"]);
  *   groupHealth  counted in the captive group-health figure
  *   assumed      the carrier could not be read, but every recognised plan in
  *                this group is EBPA/HealthEZ and none is BCBS, so it is taken
- *                as group health rather than dropped — and flagged
+ *                as group health rather than dropped - and flagged
  */
 export function classifyPlans(group) {
   const plans = Array.isArray(group.plans) ? group.plans : [];
@@ -168,7 +168,7 @@ export function newDiagnostics() {
       noPremium: { n: 0, byProgram: {} },
       endDates: { nil: 0, absent: 0, past: 0, future: 0 },
     },
-    // Every other benefit — dental, vision, life, disability… — by the same
+    // Every other benefit - dental, vision, life, disability… - by the same
     // rules, so a gap against a carrier's stats can be traced here too.
     lines: {
       kept: { n: 0, premium: 0 },
@@ -215,7 +215,7 @@ export function mergeDiagnostics(a, b) {
 
 /**
  * The catalog names plans slightly differently from the enrollment rows now
- * and then — a stray space, different case, a year in one place and not the
+ * and then - a stray space, different case, a year in one place and not the
  * other. Try the exact name, then a loose one, and finally, when the whole
  * catalog is on a single carrier, that carrier.
  */
@@ -300,7 +300,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
 
   const employees = blocks(xml, "Employee");
   // Every employee the census carries, minus a terminated (or otherwise
-  // gone) one — this export has no row at all for someone who declined
+  // gone) one - this export has no row at all for someone who declined
   // medical, so this headcount is the only reliable stand-in for eligible.
   let activeEmployees = 0;
   const members = [];
@@ -308,14 +308,14 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   let pyEnd = null;
   const carriers = new Map();
   // Supplemental lines, aggregated per benefit + carrier + plan. No member
-  // detail is kept for these — only the enrolled count and billed premium.
+  // detail is kept for these - only the enrolled count and billed premium.
   const lineAgg = new Map();
   // Coverage levels as the export spelled them, and any that could not be read.
   const levelsSeen = {};
   const unmappedLevels = {};
   const today = new Date();
 
-  // What was left out, and why — so the import can be reconciled to Employee
+  // What was left out, and why - so the import can be reconciled to Employee
   // Navigator's own counts and any gap explained rather than guessed at.
   const diag = newDiagnostics();
   const programFor = (plan) => {
@@ -342,8 +342,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   };
 
   // Distinct employees on any current line, per carrier as the export named
-  // it. Employee Navigator's Carrier Stats report counts people this way —
-  // an employee on a carrier's medical and its dental is one person — so the
+  // it. Employee Navigator's Carrier Stats report counts people this way - 
+  // an employee on a carrier's medical and its dental is one person - so the
   // portal can be reconciled to it.
   const heads = new Map();
   const headOf = (carrier, idx) => {
@@ -354,8 +354,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   };
 
   for (const [empIdx, emp] of employees.entries()) {
-    // Employee Navigator counts anyone still enrolled — on leave, on COBRA,
-    // a retiree with coverage — so only a terminated (or otherwise gone)
+    // Employee Navigator counts anyone still enrolled - on leave, on COBRA,
+    // a retiree with coverage - so only a terminated (or otherwise gone)
     // employee is skipped here; their enrollments carry end dates anyway.
     const status = text(emp, "EmploymentStatus") || "";
     diag.employees.total++;
@@ -489,8 +489,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   }
 
   // A company with no medical but with dental, vision or life in force is
-  // still a company Employee Navigator reports on. It is kept — with no
-  // members, no plans and no access to the portal — so its lines count in
+  // still a company Employee Navigator reports on. It is kept - with no
+  // members, no plans and no access to the portal - so its lines count in
   // the premium totals and the carrier reconciliation.
   const ancillaryOnly = !members.length && lineAgg.size > 0;
   if (!members.length && !ancillaryOnly) {
@@ -502,7 +502,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
   const splitPlans = {};
   const planAgg = new Map();
 
-  // Employer/employee split, averaged over everyone on a plan + tier — not
+  // Employer/employee split, averaged over everyone on a plan + tier - not
   // just whoever happened to come first. Contribution can differ member to
   // member even within one tier (a class, a raise mid-year, a payroll
   // rounding difference), and taking the first person's figures applied
@@ -564,7 +564,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
         y.monthly - x.monthly,
     );
 
-  // Strip the working fields the portal does not consume — but keep each
+  // Strip the working fields the portal does not consume - but keep each
   // person's own employer/employee cost. A tier-level split is a figure
   // derived from these, and derived figures are exactly what needs fixing
   // without notice: keeping the ingredients means a correction to how they
@@ -610,8 +610,8 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       /**
        * Every active employee on the census, whether or not they show up
        * in a medical enrollment. A declined election has no row of its own
-       * in this export — an employee who waives simply never appears under
-       * Medical — so `enrolled` plus a waived count would silently equal
+       * in this export - an employee who waives simply never appears under
+       * Medical - so `enrolled` plus a waived count would silently equal
        * `enrolled` on every group. The employee roster itself is the only
        * count this file gives that does not depend on that.
        */
@@ -621,7 +621,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
       monthly,
       annual: round2(monthly * 12),
       plans,
-      /** Every non-medical benefit in force — dental, vision, life, disability … — with no member detail. */
+      /** Every non-medical benefit in force - dental, vision, life, disability … - with no member detail. */
       lines,
       /** Distinct employees on any line, per carrier as the export named it. */
       carrierHeads: Object.fromEntries([...heads].map(([c, s]) => [c, s.size])),
@@ -633,7 +633,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     },
     split: Object.keys(splitPlans).length
       ? {
-          source: `Employee Navigator XML import — employer/employee cost as configured in payroll, averaged across everyone on a plan and tier`,
+          source: `Employee Navigator XML import - employer/employee cost as configured in payroll, averaged across everyone on a plan and tier`,
           plans: splitPlans,
         }
       : null,
@@ -656,7 +656,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
  * The document root is <Company>, with that company's plan catalog and all of
  * its employees nested inside, so a full Data API export is simply a run of
  * <Company> blocks. They are extracted and parsed one at a time and then
- * discarded, so peak memory is one company — not the whole file, which can run
+ * discarded, so peak memory is one company - not the whole file, which can run
  * to hundreds of megabytes.
  */
 export async function parseEnStream(readable) {
@@ -700,7 +700,7 @@ export async function parseEnStream(readable) {
   drain();
 
   if (!sawAny) {
-    throw new Error("This does not look like an Employee Navigator XML export — no <Company> record found.");
+    throw new Error("This does not look like an Employee Navigator XML export - no <Company> record found.");
   }
   if (!companies.length) {
     throw new Error(

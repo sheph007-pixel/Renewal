@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import { C } from "@/lib/ui";
 
 /**
- * The assistant writes Markdown — headings, lists, bold, the odd table — and
+ * The assistant writes Markdown - headings, lists, bold, the odd table - and
  * this turns just that much of it into elements. Everything is built as
  * React nodes from the text, so nothing the model writes is ever set as HTML.
  */

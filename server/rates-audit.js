@@ -2,7 +2,7 @@
 //
 // The workbook is group, plan and four rates, typed over in place. What comes
 // back is whatever Excel made of it: re-sorted, filtered, with currency
-// formatting and stray spaces. So nothing here trusts position — a row is
+// formatting and stray spaces. So nothing here trusts position - a row is
 // found by the group and plan it names, and every rate is compared against the
 // one the workbook showed, so a sheet that was only read and returned changes
 // nothing.
@@ -34,7 +34,7 @@ export function parseRate(raw) {
     return isFinite(raw) ? { value: raw } : { error: "not a number" };
   }
   const text = String(raw).trim();
-  if (!text || text === "—" || text === "-") return { empty: true };
+  if (!text || text === "-" || text === "-") return { empty: true };
   if (!/^\$?\s*-?[\d,]*\.?\d+\s*$/.test(text)) return { error: `not a rate: "${text}"` };
   const n = Number(text.replace(/[$,\s]/g, ""));
   if (!isFinite(n)) return { error: `not a rate: "${text}"` };
@@ -48,7 +48,7 @@ const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
  * Pull the corrections out of a workbook.
  *
  * `shown(group, plan, censusTier)` gives the rate the workbook displayed for
- * that cell — including one derived from the employee rate — so a rate that
+ * that cell - including one derived from the employee rate - so a rate that
  * came back untouched is not read as a change. `undefined` means there is no
  * such group and plan, which is reported rather than invented.
  *

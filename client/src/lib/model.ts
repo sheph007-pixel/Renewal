@@ -3,14 +3,14 @@
 // Ported from the Claude Design prototype. The rate rules below are the ones
 // the design iterated to and are load-bearing for every figure on the page:
 //
-//  - A tier rate is BILLED when Employee Navigator has a premium for it. That
+// - A tier rate is BILLED when Employee Navigator has a premium for it. That
 //    only happens when someone is actually enrolled in that tier.
-//  - A tier with nobody in it has no billed rate anywhere, so it is CALCULATED
+// - A tier with nobody in it has no billed rate anywhere, so it is CALCULATED
 //    at the program tier factors (EE 1.00 / EE+SP 2.00 / EE+CH 1.85 /
 //    EE+Family 2.85). These reconcile to 161 of 165 billed rates in the export.
-//  - Calculated tiers are labelled "calc." and never contribute to a total,
+// - Calculated tiers are labelled "calc." and never contribute to a total,
 //    because no one is enrolled in them.
-//  - A hand-keyed rate from a carrier sheet (MANUAL) beats both.
+// - A hand-keyed rate from a carrier sheet (MANUAL) beats both.
 
 export type TierKey = "EE" | "ES" | "EC" | "FAM";
 
@@ -24,7 +24,7 @@ export interface Tier {
 /**
  * The two third-party administrators the program runs on. A plan on anything
  * else is not Kennion's to rate-administer, so it is not on the Rates page and
- * not in the audit workbook — one rule, read by both, so they cannot disagree.
+ * not in the audit workbook - one rule, read by both, so they cannot disagree.
  */
 export const PROGRAM_TPAS = ["EBPA", "HealthEZ"];
 
@@ -42,7 +42,7 @@ export function programPlans(g: Group): GroupPlan[] {
 }
 
 /**
- * In program factor order — 1.00, 1.85, 2.00, 2.85 — so a row of rates always
+ * In program factor order - 1.00, 1.85, 2.00, 2.85 - so a row of rates always
  * climbs left to right and a tier out of step is obvious at a glance. Nothing
  * reads this list by position, so the order is presentation only.
  */
@@ -127,7 +127,7 @@ export interface Group {
   /** Derived at load time from the group name. */
   code: string;
   /**
-   * Dental, vision, life, disability … — every benefit besides medical.
+   * Dental, vision, life, disability … - every benefit besides medical.
    * Present only once an Employee Navigator export has been read for
    * supplemental lines; `linesLoaded` says whether it has been.
    */
@@ -138,8 +138,8 @@ export interface Group {
 
 /**
  * ACA's small/large group line: 2-50 employees is small, 51+ is large. Reads
- * the size category staff keep on the company page — the same one Rate
- * Administration shows — so the client and the admin never disagree. It
+ * the size category staff keep on the company page - the same one Rate
+ * Administration shows - so the client and the admin never disagree. It
  * used to be derived from the Employee Navigator roster count, which counts
  * everyone not marked terminated and put small groups over the line. Null
  * when no category is on file.
@@ -199,7 +199,7 @@ export interface GroupSplit {
 
 /** One plan option read off a carrier proposal, with monthly composite rates by tier. */
 export interface ProposalPlan {
-  /** The short handle everyone uses for the plan — UH3, GR1 — given once and kept. */
+  /** The short handle everyone uses for the plan - UH3, GR1 - given once and kept. */
   optionId?: string | null;
   name: string;
   /** The carrier's code for the plan, where one is printed. */
@@ -248,7 +248,7 @@ export interface ProposalAudit {
   completedAt: string;
 }
 
-/** What Employee Navigator billed the group for the month — counts and rates only. */
+/** What Employee Navigator billed the group for the month - counts and rates only. */
 export interface GroupFundingSnapshot {
   month: string | null;
   participants: number;
@@ -276,7 +276,7 @@ export interface KennionData {
   splits: Record<string, GroupSplit>;
   /** The signed-in group's proposals on file (group sessions only). */
   proposals?: GroupProposal[];
-  /** The proposal slots this group has — Cobalt only where it is quoted. */
+  /** The proposal slots this group has - Cobalt only where it is quoted. */
   slots?: string[];
   /** The signed-in group's billing this month (group sessions only). */
   funding?: GroupFundingSnapshot | null;
@@ -316,12 +316,12 @@ export type Overrides = Record<string, string>;
 // ------------------------------------------------------------------ utilities
 
 export function money(n: number | null | undefined): string {
-  if (n == null || isNaN(n)) return "—";
+  if (n == null || isNaN(n)) return "-";
   return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function money0(n: number | null | undefined): string {
-  if (n == null || isNaN(n)) return "—";
+  if (n == null || isNaN(n)) return "-";
   return "$" + Math.round(n).toLocaleString("en-US");
 }
 
@@ -375,7 +375,7 @@ export function override(
 
 /**
  * Employee-only rate: billed if present, otherwise the average of the bases
- * implied by every billed tier. Averaging keeps this order-independent — an
+ * implied by every billed tier. Averaging keeps this order-independent - an
  * earlier version depended on which tier happened to be visited first.
  */
 export function baseRate(overrides: Overrides, g: Group, plan: string): number | null {
@@ -466,7 +466,7 @@ export interface Split {
  * Employer/employee split for one tier.
  *
  * Where Employee Navigator carries the real configured split it is used exactly
- * and is not adjustable — it is payroll configuration, not something to model.
+ * and is not adjustable - it is payroll configuration, not something to model.
  * Groups whose EN export has not been loaded fall back to the placeholder
  * percentages, and the UI labels that clearly as pending.
  */
@@ -536,13 +536,13 @@ export interface TierContribution {
   /** Null when nobody in this tier has a priced plan to average from. */
   er: number | null;
   ee: number | null;
-  /** True only when every member counted here came off a real Employee Navigator split — not the placeholder estimate. */
+  /** True only when every member counted here came off a real Employee Navigator split - not the placeholder estimate. */
   actual: boolean;
 }
 
 /**
  * The employer's contribution today, one figure per tier rather than one per
- * plan — what "Employee Only", "Employee + Spouse", etc. actually cost the
+ * plan - what "Employee Only", "Employee + Spouse", etc. actually cost the
  * company on average, blended across however many plans a group runs. This is
  * the number a group already spends, read off its own current rates and
  * enrollment; New 2027 Medical Options starts an employer's own contribution
@@ -684,7 +684,7 @@ function slotPresentation(slot: string, carrier: string | null): { carrier: stri
 /**
  * Gravie and Angle Health both run on Cigna's network, and every
  * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
- * United Choice Plus network — a fixed rule, not something a carrier's own
+ * United Choice Plus network - a fixed rule, not something a carrier's own
  * proposal document gets to override with a differently-worded network name
  * ("Cigna OAP", "Cigna Open Access Plus", "Angle / Cigna PPO" are all Cigna).
  */
@@ -695,7 +695,7 @@ export const CIGNA_NETWORK = "Cigna";
 /** Cigna's public provider search: the lookup for every plan on a Cigna network, Gravie's and Angle Health's alike. */
 export const CIGNA_DIRECTORY = "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001";
 
-/** A network name as shown: any Cigna network — OAP, Open Access Plus, "Angle / Cigna PPO" — is "Cigna". */
+/** A network name as shown: any Cigna network - OAP, Open Access Plus, "Angle / Cigna PPO" - is "Cigna". */
 export function networkLabel(network: string | null | undefined): string | null {
   const s = String(network || "").trim();
   if (!s) return null;
@@ -706,16 +706,16 @@ export function networkLabel(network: string | null | undefined): string | null 
 /**
  * Where a client looks up a doctor on a plan's network. Gravie's plans run on
  * Cigna's Open Access Plus (OAP) network, and Cigna's public directory answers
- * "is my doctor in it?" — so every place a Gravie plan names its network links
+ * "is my doctor in it?" - so every place a Gravie plan names its network links
  * there. Null for a network with no public directory on file.
  */
 /**
  * How a plan's network works, which is the first thing an employer asks:
  * PPO (in and out of network, the carrier's contracted rates), EPO (in
- * network only) or RBP (reference-based pricing — no network; claims paid at
+ * network only) or RBP (reference-based pricing - no network; claims paid at
  * a multiple of Medicare, which is how Cobalt's self-funded plans work). Read
- * off what the proposal says — the plan's name, its type, the network it is
- * priced on — with the carrier as the fallback rule: UnitedHealthcare's Choice
+ * off what the proposal says - the plan's name, its type, the network it is
+ * priced on - with the carrier as the fallback rule: UnitedHealthcare's Choice
  * Plus and Cigna Open Access Plus are PPO networks; Gravie's EPO sheet says
  * EPO; Cobalt is RBP. Null when nothing on the quote says.
  */
@@ -725,8 +725,8 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
   const text = [p.plan, p.type, p.planType, p.network].filter(Boolean).join(" ");
   if (/\bRBP\b|reference[\s-]?based/i.test(text) || /cobalt/i.test(p.carrier || "")) return "RBP";
   if (/\bEPO\b/i.test(text)) return "EPO";
-  // Cigna's network is a PPO wherever it appears — Gravie's Cigna OAP, Angle
-  // Health's Cigna — so a quote that names only "Cigna" still reads PPO.
+  // Cigna's network is a PPO wherever it appears - Gravie's Cigna OAP, Angle
+  // Health's Cigna - so a quote that names only "Cigna" still reads PPO.
   if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b|cigna/i.test(text)) return "PPO";
   return null;
 }
@@ -735,7 +735,7 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
  * The pharmacy benefit manager behind a carrier's plans, with its public
  * formulary, so a client can check a drug the way they check a doctor. One
  * row per carrier as the links come in: Gravie's PBM is Express Scripts.
- * Null for a carrier with no PBM on file yet — the card still shows the
+ * Null for a carrier with no PBM on file yet - the card still shows the
  * row, blank, so every card reads the same.
  */
 export function pbmOf(carrier: string | null | undefined): { name: string; url: string } | null {
@@ -802,7 +802,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       const gb = fam ? GRAVIE_BENEFITS[fam] : null;
       const pb = pl.benefits || null;
       // Surest is UnitedHealthcare's own copay-only product, not a separate
-      // company — the carrier reads "UnitedHealthcare", so the plan name is
+      // company - the carrier reads "UnitedHealthcare", so the plan name is
       // where "Surest" has to show up.
       // The name is the carrier's, exactly as printed on the quote: it is what
       // the client will ask about by name, and what the audit checks.
@@ -820,7 +820,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         type: pl.planType || show.label,
         ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
         oop: moneyNum(pl.oopMax),
-        copays: gb ? `${gb.pcp} / ${gb.specialist}` : pb?.doctorVisit || pb?.specialist ? `${pb.doctorVisit ?? "—"} / ${pb.specialist ?? "—"}` : "On the proposal",
+        copays: gb ? `${gb.pcp} / ${gb.specialist}` : pb?.doctorVisit || pb?.specialist ? `${pb.doctorVisit ?? "-"} / ${pb.specialist ?? "-"}` : "On the proposal",
         rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : pb?.rx || "On the proposal",
         coins: null,
         pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
@@ -858,7 +858,7 @@ export function splitCopays(copays: string | null | undefined): [string | null, 
 
 /**
  * The 2027 options a group can be shown: the plans on its proposals, and
- * nothing else — every name and rate read off a carrier's own document by
+ * nothing else - every name and rate read off a carrier's own document by
  * the reader and checked by the audit, stored in the database. The menu
  * data in the seed file (UnitedHealthcare's August full-menu quotes, with
  * rates for some tiers only) is not a proposal and is not shown; nothing is
@@ -868,7 +868,7 @@ export function marketPlans(data: KennionData, g: Group): MarketPlan[] {
   return proposalPlans(data, g);
 }
 
-/** The headline comparison — today's total against 2027, plans mapped 1-for-1 — reused wherever the site needs it in one line rather than the full grid. */
+/** The headline comparison - today's total against 2027, plans mapped 1-for-1 - reused wherever the site needs it in one line rather than the full grid. */
 export interface MarketSummary {
   todayTotal: number;
   /** Null while every plan a group's members are on is still unpriced. */
@@ -883,7 +883,7 @@ export interface MarketSummary {
 /**
  * The same "today vs. 2027, mapped 1-for-1" figure Options.tsx builds for its
  * own summary card, factored out so a page that only needs the headline number
- * — not the whole grid — does not have to recompute it by hand and risk it
+ * - not the whole grid - does not have to recompute it by hand and risk it
  * drifting out of step with the grid's own math.
  */
 export function marketSummary(data: KennionData, g: Group, rows: PlanRow[], todayTotal: number): MarketSummary {
@@ -918,7 +918,7 @@ export function marketSummary(data: KennionData, g: Group, rows: PlanRow[], toda
  * A flat-dollar defined contribution, the way Employee Navigator sets one
  * up: the employer puts the same amount toward a tier whatever plan the
  * employee picks, and the employee pays the rest. `over` marks a plan that
- * costs less than the contribution for this tier — the employer would pay
+ * costs less than the contribution for this tier - the employer would pay
  * only the premium there, and the employee nothing.
  */
 export function tierSplit(
@@ -936,7 +936,7 @@ export function tierSplit(
 
 /**
  * A plan's monthly split at the employer's contribution: the contribution
- * times headcount in every tier — the same figure on every plan — and what
+ * times headcount in every tier - the same figure on every plan - and what
  * employees pay between them. Null when no enrolled tier has a rate.
  */
 export function costSplit(
@@ -967,7 +967,7 @@ export function costSplit(
 // (Kept in this file rather than its own module so the model stays runnable
 // under node --experimental-strip-types for scripts/test-market-plans.mts.)
 /**
- * Gravie's benefits by plan family — the static "Benefits Grid" sheet that
+ * Gravie's benefits by plan family - the static "Benefits Grid" sheet that
  * is the same in every rate workbook, transcribed once. A plan's family
  * (Comfort, ComfortFit, Copay, QHDHP, HDHP) is in its name and plan type;
  * its deductible and out-of-pocket max are on the rate row. In-network
@@ -991,7 +991,7 @@ export interface GravieBenefits {
 
 export type GravieFamily = "Comfort" | "ComfortFit" | "Copay" | "QHDHP" | "HDHP";
 
-const COINS = "0–20% coins after ded";
+const COINS = "0-20% coins after ded";
 
 export const GRAVIE_BENEFITS: Record<GravieFamily, GravieBenefits> = {
   Comfort: {
@@ -1030,7 +1030,7 @@ export const GRAVIE_BENEFITS: Record<GravieFamily, GravieBenefits> = {
     er: "$500 copay",
     basicLabs: COINS,
     advancedLabs: COINS,
-    hospital: "0–30% coins after ded",
+    hospital: "0-30% coins after ded",
     rxGeneric: "$10 copay",
     rxPreferredBrand: "$50 copay",
     rxNonPreferredBrand: "$125 copay",
@@ -1047,7 +1047,7 @@ export const GRAVIE_BENEFITS: Record<GravieFamily, GravieBenefits> = {
     hospital: COINS,
     rxGeneric: COINS,
     rxPreferredBrand: COINS,
-    rxNonPreferredBrand: "0–50% coins after ded",
+    rxNonPreferredBrand: "0-50% coins after ded",
     rxNonPreferredSpecialty: COINS,
   },
   HDHP: {
@@ -1084,7 +1084,7 @@ export function gravieFamily(planType: string | null | undefined, name: string):
 
 /**
  * "Your Market Results": what Kennion got back after taking this group to
- * market, summed up from the full set of quoted plans — never the filtered
+ * market, summed up from the full set of quoted plans - never the filtered
  * grid. Every figure is computed here, deterministically; the sentences are a
  * fixed template that only renders the clauses the group's data supports.
  * It recomputes from the plans it is given, so a new proposal or a change to
@@ -1133,7 +1133,7 @@ export interface MarketResults {
 const marketPartnerOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", "");
 
 /** A network name that names a network: the placeholder for "not on the quote" does not. */
-const isNamedNetwork = (s: string | null) => !!s && !/^on the proposal$/i.test(s) && s !== "—";
+const isNamedNetwork = (s: string | null) => !!s && !/^on the proposal$/i.test(s) && s !== "-";
 
 export function marketResults(plans: MarketPlan[]): MarketResults | null {
   if (!plans.length) return null;
@@ -1176,7 +1176,7 @@ export type MarketSentence = MarketSegment[];
 
 const T = (text: string): MarketSegment => ({ text });
 const V = (text: string): MarketSegment => ({ text, value: true });
-/** "A", "A and B", "A, B and C" — each name a value, the joins fixed. */
+/** "A", "A and B", "A, B and C" - each name a value, the joins fixed. */
 function listValues(names: string[]): MarketSegment[] {
   const out: MarketSegment[] = [];
   names.forEach((n, i) => {
@@ -1196,7 +1196,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function marketResultsSentences(s: MarketResults | null): MarketSentence[] {
   if (!s || !s.totalPlans) return [];
   const out: MarketSentence[] = [];
-  // Each partner with its own count, so the total is accounted for — and
+  // Each partner with its own count, so the total is accounted for - and
   // UnitedHealthcare's two fundings are named, since both count as its plans.
   const partnerList: MarketSegment[] = [];
   s.partners.forEach((x, i) => {
@@ -1268,7 +1268,7 @@ export function contributionFloor(plans: MarketPlan[]): number {
 }
 
 /**
- * Where a group's contribution starts: the floor on every tier — the same
+ * Where a group's contribution starts: the floor on every tier - the same
  * dollars toward each employee's coverage, dependents on top of that being
  * the employee's. The employer can raise any tier from there.
  */
@@ -1279,7 +1279,7 @@ export function minimumContribution(plans: MarketPlan[]): Record<TierKey, number
 
 /**
  * The group's census as the assistant is briefed with it (the server's
- * censusProfile, mirrored): aggregates only — how many employees, average
+ * censusProfile, mirrored): aggregates only - how many employees, average
  * and median age, youngest and oldest, how tight the spread is, counts by
  * age band, and who covers a spouse or children. No name and no one
  * person's age leaves this shape. Null with no ages on file.
@@ -1319,8 +1319,8 @@ export function censusProfile(g: Pick<Group, "members" | "census">): CensusProfi
       ...c,
       bands: [
         { label: "Under 30", count: c.bands.under30 },
-        { label: "30–44", count: c.bands.from30to44 },
-        { label: "45–54", count: c.bands.from45to54 },
+        { label: "30-44", count: c.bands.from30to44 },
+        { label: "45-54", count: c.bands.from45to54 },
         { label: "55+", count: c.bands.from55 },
       ],
     };
@@ -1341,8 +1341,8 @@ export function censusProfile(g: Pick<Group, "members" | "census">): CensusProfi
     spread: sd < 8 ? "narrow" : sd < 13 ? "moderate" : "wide",
     bands: [
       { label: "Under 30", count: band(0, 29) },
-      { label: "30–44", count: band(30, 44) },
-      { label: "45–54", count: band(45, 54) },
+      { label: "30-44", count: band(30, 44) },
+      { label: "45-54", count: band(45, 54) },
       { label: "55+", count: band(55, 200) },
     ],
     spouses: members.filter((m) => Array.isArray(m.spAges) && m.spAges.length).length,

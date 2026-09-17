@@ -1,5 +1,5 @@
 /**
- * The Kennion supplemental package — dental, vision, life, disability and the
+ * The Kennion supplemental package - dental, vision, life, disability and the
  * Guardian worksite lines. The rates are the same for every group, so they
  * live here as data rather than coming off any export. Plan year 2027
  * (calendar year), effective January 1, 2027. All rates are MONTHLY.
@@ -127,7 +127,7 @@ export const SUPPLEMENTAL_SECTIONS: SupplementalSection[] = [
   },
 ];
 
-/** The carrier's own footnote — keep verbatim. */
+/** The carrier's own footnote - keep verbatim. */
 export const SUPPLEMENTAL_FOOTNOTE =
   "Rates shown for: Vol. Life $100K EE / $50K Spouse / $10K Child(ren). Critical Illness $10K EE / $5K Spouse / $2.5K Child(ren). Vol. Disability $500 weekly benefit (Vol. Disability is not available for all groups). Additional rates for age 60+ available in platform.";
 
@@ -185,7 +185,7 @@ function sheetFor(XLSX: typeof import("xlsx"), f: Frequency) {
     rows.push(["Plan", ...SUPPLEMENTAL_TIERS.map((t) => t.label)]);
     for (const row of s.rows) {
       moneyRows.push(rows.length);
-      rows.push([row.plan, ...SUPPLEMENTAL_TIERS.map((t) => (row[t.key] == null ? "—" : convertRate(row[t.key]!, f)))]);
+      rows.push([row.plan, ...SUPPLEMENTAL_TIERS.map((t) => (row[t.key] == null ? "-" : convertRate(row[t.key]!, f)))]);
     }
     rows.push([`Carrier/TPA: ${s.carrier}`]);
     rows.push([SUPPLEMENTAL_FOOTNOTE]);

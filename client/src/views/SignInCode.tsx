@@ -3,7 +3,7 @@ import { C, panel } from "@/lib/importui";
 
 /**
  * Change the staff sign-in code without leaving the app. The code lives in
- * the database, not in the host's settings, so this is the whole of it —
+ * the database, not in the host's settings, so this is the whole of it - 
  * there is nothing to configure anywhere else.
  */
 export default function SignInCode({ token }: { token: string }) {
@@ -81,7 +81,7 @@ export default function SignInCode({ token }: { token: string }) {
           ? "The code is set in the host's settings, so it can only be changed there."
           : where?.source === "memory"
             ? "There is no database on this run, so the code lasts only until the server restarts."
-            : "The code is kept here, hashed, and survives every restart. Change it whenever you like — nothing needs setting anywhere else."}
+            : "The code is kept here, hashed, and survives every restart. Change it whenever you like - nothing needs setting anywhere else."}
       </p>
 
       {done && (

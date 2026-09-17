@@ -49,8 +49,8 @@ type G = AdminGroup & {
 
 /**
  * One side of the comparison, live groups or archived ones. Employee
- * Navigator's report counts every benefit line a carrier has — medical,
- * dental, vision, life … — and "enrolled" is distinct employees on any of
+ * Navigator's report counts every benefit line a carrier has - medical,
+ * dental, vision, life … - and "enrolled" is distinct employees on any of
  * them, so the portal is added up the same way.
  */
 interface Side {
@@ -70,7 +70,7 @@ export interface Recon {
   report: { enrolled: number; companies: number; monthly: number ; rows?: number };
   live: Side;
   archived: Side;
-  service: boolean; // no premium either side — an administrator, not a carrier
+  service: boolean; // no premium either side - an administrator, not a carrier
   ok: boolean | null;
 }
 
@@ -172,7 +172,7 @@ export function reconcile(stats: CarrierStats, groups: AdminGroup[]): Recon[] {
 interface Props {
   token: string;
   stats: CarrierStats | null;
-  /** Every group — live and archived — with classified plans, lines and head counts. */
+  /** Every group - live and archived - with classified plans, lines and head counts. */
   groups: AdminGroup[];
   onStats: (s: CarrierStats) => void;
   diagnostics?: ImportDiagnostics | null;
@@ -202,7 +202,7 @@ const diff = (portal: number, report: number, money = false) => {
   const s = money ? money0(Math.abs(d)) : Math.abs(d).toLocaleString();
   return (
     <span style={{ color: d < 0 ? C.red : C.amber }}>
-      {d < 0 ? "−" : "+"}
+      {d < 0 ? "-" : "+"}
       {s}
     </span>
   );
@@ -240,7 +240,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
   async function download() {
     const r = await fetch("/api/admin/reconcile/export", { headers: { Authorization: `Bearer ${token}` } });
     if (!r.ok) {
-      setError("Could not build the reconciliation file — sign in again.");
+      setError("Could not build the reconciliation file - sign in again.");
       return;
     }
     const blob = await r.blob();
@@ -285,7 +285,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
     <ImportSection
       step={2}
       title="Carrier stats report"
-      what="carrier_stats_report_yyyy_mm_dd.xls — Employee Navigator's own count per carrier"
+      what="carrier_stats_report_yyyy_mm_dd.xls - Employee Navigator's own count per carrier"
       accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
       ariaLabel="Upload the carrier stats report"
       inputRef={ref}
@@ -302,7 +302,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
       }
       summary={
         stats
-          ? `Report of ${stats.reportDate || "—"} · ${checked.length} carriers checked · ${okCount} match${mismatches.length ? ` · ${mismatches.length} off by more than 1%: ${mismatches.map((r) => r.carrier).join(", ")}` : ""}`
+          ? `Report of ${stats.reportDate || "-"} · ${checked.length} carriers checked · ${okCount} match${mismatches.length ? ` · ${mismatches.length} off by more than 1%: ${mismatches.map((r) => r.carrier).join(", ")}` : ""}`
           : "Once uploaded, every carrier is checked against the XML side by side."
       }
       error={error}
@@ -321,7 +321,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
               lineHeight: 1.7,
             }}
           >
-            <strong>EBPA + HealthEZ, on the report&rsquo;s basis</strong> — Employee Navigator:{" "}
+            <strong>EBPA + HealthEZ, on the report&rsquo;s basis</strong> - Employee Navigator:{" "}
             <strong>{gh.enrolled.toLocaleString()} enrolled · {money0(gh.monthly)} / mo</strong>; the portal:{" "}
             <strong>{money0(comparable.monthly)} / mo</strong> ({diff(comparable.monthly, gh.monthly, true)}).
             <div style={{ fontSize: 12.5, color: C.muted }}>
@@ -331,7 +331,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
             </div>
             <div style={{ fontSize: 12.5, color: C.muted }}>
               {checked.length} carrier{checked.length === 1 ? "" : "s"} checked ·{" "}
-              {mismatches.length ? `${mismatches.length} off by more than 1% — see the rows marked Check` : "all within 1%"}
+              {mismatches.length ? `${mismatches.length} off by more than 1% - see the rows marked Check` : "all within 1%"}
               {!linesLoaded ? " · supplemental lines will fill in after the next XML import" : ""}
             </div>
           </div>
@@ -370,11 +370,11 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
                         )}
                       </td>
                       <td style={cell(true)}>{r.report.enrolled.toLocaleString()}</td>
-                      <td style={cell(true)} title={exact ? "Distinct employees on any line with this carrier" : "Enrollments, not people — older import"}>
+                      <td style={cell(true)} title={exact ? "Distinct employees on any line with this carrier" : "Enrollments, not people - older import"}>
                         {r.live.heads.toLocaleString()}
                         {!exact ? "*" : ""}
                       </td>
-                      <td style={{ ...cell(true), color: C.faint }}>{r.archived.heads ? r.archived.heads.toLocaleString() : "—"}</td>
+                      <td style={{ ...cell(true), color: C.faint }}>{r.archived.heads ? r.archived.heads.toLocaleString() : "-"}</td>
                       <td style={cell(true)}>{r.report.companies}</td>
                       <td style={cell(true)}>
                         {r.live.groups}
@@ -390,7 +390,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
                         )}
                         {r.live.assumedMedical > 0 && <div style={{ fontSize: 11, color: C.amber }}>incl. {money0(r.live.assumedMedical)} assumed</div>}
                       </td>
-                      <td style={{ ...cell(true), color: C.faint }}>{total(r.archived) ? money0(total(r.archived)) : "—"}</td>
+                      <td style={{ ...cell(true), color: C.faint }}>{total(r.archived) ? money0(total(r.archived)) : "-"}</td>
                       <td style={cell(true)}>
                         {!r.service && diff(both, r.report.monthly, true)}
                         {!r.service && exact && <div style={{ fontSize: 11 }}>{diff(heads, r.report.enrolled)} people</div>}
@@ -415,7 +415,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
                     <td colSpan={5} />
                     <td style={{ ...cell(true), fontWeight: 600 }}>{money0(stats.total.planCosts)}</td>
                     <td colSpan={4} style={{ ...cell(), color: C.faint, fontSize: 12 }}>
-                      every line, every carrier — employee share {money0(stats.total.employeeCosts)}
+                      every line, every carrier - employee share {money0(stats.total.employeeCosts)}
                     </td>
                   </tr>
                 </tfoot>
@@ -424,7 +424,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
           </div>
           <div style={{ marginTop: 6, fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
             Diff is portal live + archived against the report. Groups you archived still count in Employee Navigator, so they are shown rather than dropped.
-            {rows.some((r) => !(r.live.headsExact && r.archived.headsExact)) ? " * Enrollments rather than people — re-import the XML for exact head counts." : ""}
+            {rows.some((r) => !(r.live.headsExact && r.archived.headsExact)) ? " * Enrollments rather than people - re-import the XML for exact head counts." : ""}
           </div>
         </>
       )}
@@ -466,20 +466,20 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
                         const v = b.byProgram[p];
                         return (
                           <td key={p} style={cell(true)}>
-                            {v ? `${v.n} · ${money0(v.premium)}` : "—"}
+                            {v ? `${v.n} · ${money0(v.premium)}` : "-"}
                           </td>
                         );
                       })}
-                      <td style={{ ...cell(true), fontWeight: 600 }}>{b.n ? `${b.n} · ${money0(b.premium)}` : "—"}</td>
+                      <td style={{ ...cell(true), fontWeight: 600 }}>{b.n ? `${b.n} · ${money0(b.premium)}` : "-"}</td>
                     </tr>
                   );
                 })}
                 <tr style={{ color: diagnostics.medical.noPremium.n ? C.amber : C.faint }}>
                   <td style={{ ...cell(), whiteSpace: "normal" }}>Counted as enrolled, but no PlanCost in the file (adds $0)</td>
                   {["EBPA", "HealthEZ", "BCBS-AL", "Other"].map((p) => (
-                    <td key={p} style={cell(true)}>{diagnostics.medical.noPremium.byProgram[p] ?? "—"}</td>
+                    <td key={p} style={cell(true)}>{diagnostics.medical.noPremium.byProgram[p] ?? "-"}</td>
                   ))}
-                  <td style={{ ...cell(true), fontWeight: 600 }}>{diagnostics.medical.noPremium.n || "—"}</td>
+                  <td style={{ ...cell(true), fontWeight: 600 }}>{diagnostics.medical.noPremium.n || "-"}</td>
                 </tr>
               </tbody>
             </table>
@@ -532,7 +532,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
           </button>
           <button
             onClick={() => void download()}
-            title="A small JSON file with the report, the portal totals by carrier, the import exclusions and each group's plan classification — no employee data."
+            title="A small JSON file with the report, the portal totals by carrier, the import exclusions and each group's plan classification - no employee data."
             style={{
               padding: "8px 14px",
               fontSize: 13,
@@ -546,7 +546,7 @@ export default function Reconciliation({ token, stats, groups, onStats, diagnost
           >
             Download reconciliation file
           </button>
-          <span style={{ fontSize: 12, color: C.faint }}>Aggregates only — no member data leaves the server.</span>
+          <span style={{ fontSize: 12, color: C.faint }}>Aggregates only - no member data leaves the server.</span>
         </div>
       )}
       {explanation && (

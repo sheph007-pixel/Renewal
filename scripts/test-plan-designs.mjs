@@ -48,5 +48,5 @@ list = await (await fetch(`${base}/api/admin/plan-designs`, { headers: auth })).
 assert.equal(list.designs.find((d) => d.planName === "Saver HSA").benefits.Deductible, "$6,500", "the correction is what staff read back");
 assert.equal((await fetch(`${base}/api/admin/plan-designs/${encodeURIComponent("Saver HSA")}`, { method: "POST", headers: { ...json, ...auth }, body: "{}" })).status, 400);
 
-console.log("plan designs: 15 current plans, benefits in the assistant's figures, readable and correctable by staff — ok");
+console.log("plan designs: 15 current plans, benefits in the assistant's figures, readable and correctable by staff - ok");
 stop();

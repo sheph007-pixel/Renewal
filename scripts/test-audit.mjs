@@ -55,7 +55,7 @@ assert.equal(a.portal.enrolled, 22, "live groups only");
 const b = runAudit({ groups, carrierStats: null, funding: null, lastImport });
 assert.equal(b.complete, false);
 assert.match(b.verdict.headline, /Waiting on the carrier stats report and the funding workbook/);
-assert.equal(runAudit({ groups, carrierStats: stats, funding, lastImport: null }).verdict.headline, "Nothing to audit yet — the XML export comes first.");
+assert.equal(runAudit({ groups, carrierStats: stats, funding, lastImport: null }).verdict.headline, "Nothing to audit yet - the XML export comes first.");
 assert.notEqual(auditFingerprint({ carrierStats: stats, funding, lastImport }), auditFingerprint({ carrierStats: stats, funding: { ...funding, byInvoice: { ...funding.byInvoice, 2: { group: "A" } } }, lastImport }), "filing an invoice changes the fingerprint");
 
 console.log("audit: all assertions passed", { carriers: rows.length, headline: a.verdict.headline });

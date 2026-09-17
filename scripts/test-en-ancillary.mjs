@@ -1,5 +1,5 @@
-// A company with no medical but dental in force is kept — no members, no
-// plans, no portal access — so its lines count toward the premium totals and
+// A company with no medical but dental in force is kept - no members, no
+// plans, no portal access - so its lines count toward the premium totals and
 // the carrier reconciliation. A company with nothing current at all is not.
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";

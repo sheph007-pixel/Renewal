@@ -14,7 +14,7 @@ export const sizeOf = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixe
 export const kindOf = (f: ChatFile) => KIND[f.mime] || (/^image\//.test(f.mime) ? "IMG" : /csv|text\/plain/.test(f.mime) ? "TXT" : "FILE");
 
 /**
- * Fetch a file with extra headers and hand it to the browser as a download —
+ * Fetch a file with extra headers and hand it to the browser as a download - 
  * for the admin, whose routes want the staff token a plain link cannot send.
  */
 async function downloadWith(url: string, filename: string, headers: Record<string, string>) {
@@ -264,7 +264,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             onClick={() => picker.current?.click()}
             disabled={busy || pending.length >= 5}
             aria-label="Attach a file"
-            title="Attach a file — a quote, a spreadsheet, a screenshot"
+            title="Attach a file - a quote, a spreadsheet, a screenshot"
             style={{ flex: "none", width: 34, height: 34, borderRadius: "50%", border: "none", background: "transparent", color: busy ? C.ghost : C.muted, cursor: busy ? "default" : "pointer", display: "grid", placeItems: "center" }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

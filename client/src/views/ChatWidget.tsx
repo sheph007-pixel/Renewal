@@ -41,7 +41,7 @@ export default function ChatWidget({ page, assistantHref }: Props) {
     const ready = into != null ? loadThread(into).catch(() => undefined) : Promise.resolve();
     void ready.then(() => sendMessage(into, q.question, page, (id) => setThreadId(id), true, [], q.title)).catch(() => undefined);
   }, [open, chat.pendingAsk, chat.streaming, page]);
-  // A conversation a page asked the box to open again — the recommendations already given.
+  // A conversation a page asked the box to open again - the recommendations already given.
   useEffect(() => {
     if (!open || chat.pendingThread == null) return;
     const id = takePendingThread();
@@ -86,7 +86,7 @@ export default function ChatWidget({ page, assistantHref }: Props) {
               onThread={(id) => setThreadId(id)}
               compact
               autoFocus
-              welcome="Hi — I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your options, or your renewal."
+              welcome="Hi - I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your options, or your renewal."
             />
           </div>
         </div>

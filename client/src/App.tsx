@@ -49,7 +49,7 @@ import type { AccountManager } from "@/lib/model";
 const EE_PCT = 80;
 const DEP_PCT = 32;
 
-const SITE = "BenSync — 2027 Renewal";
+const SITE = "BenSync - 2027 Renewal";
 
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
@@ -310,7 +310,7 @@ export default function App() {
     // A code in the address wins over whatever this tab had: it is a
     // deliberate "show me this group". The code is taken out of the address
     // once it is used, so it does not sit in the bar, the history or a
-    // screenshot — the group's own /g/<token> address is the one to keep.
+    // screenshot - the group's own /g/<token> address is the one to keep.
     if (linkCode) {
       (async () => {
         try {
@@ -337,7 +337,7 @@ export default function App() {
       return;
     }
 
-    // Otherwise the session this tab saved, or — with nothing saved — the
+    // Otherwise the session this tab saved, or - with nothing saved - the
     // cookie the server set the last time this browser signed in as a group.
     // A cookie for one group at another group's short address does not sign
     // anyone in: the address wins, and that group's code is asked for.
@@ -424,7 +424,7 @@ export default function App() {
 
   /**
    * What the group puts toward each tier today, read off its own rates and
-   * enrollment — the number New 2027 Medical Options starts an employer's own
+   * enrollment - the number New 2027 Medical Options starts an employer's own
    * contribution choice from, rather than from zero.
    */
   const contribution = useMemo(
@@ -458,8 +458,8 @@ export default function App() {
   }, [restoring, session, page.kind, g]);
 
   /**
-   * Rewrite a group address to its short, canonical form — the company and
-   * its plan-year code, then the tab — once the group is known. A permanent
+   * Rewrite a group address to its short, canonical form - the company and
+   * its plan-year code, then the tab - once the group is known. A permanent
    * link (`/g/…/<token>`) that signed the browser in, one minted before the
    * slug existed, or a slug whose company has since been renamed all open;
    * the bar just ends up reading the current way, with no token in it.
@@ -487,8 +487,8 @@ export default function App() {
   /** A title per page, so tabs and history entries can be told apart. */
   useEffect(() => {
     let t = SITE;
-    if (page.kind === "signin") t = `${page.staff ? "Staff sign in" : "Sign in"} — ${SITE}`;
-    else if (page.kind === "group" && g) t = `${TAB_LABEL[page.tab]} — ${g.name}`;
+    if (page.kind === "signin") t = `${page.staff ? "Staff sign in" : "Sign in"} - ${SITE}`;
+    else if (page.kind === "group" && g) t = `${TAB_LABEL[page.tab]} - ${g.name}`;
     else if (page.kind === "admin")
       t = `${
         page.group
@@ -504,7 +504,7 @@ export default function App() {
                   : page.tab === "data"
                     ? "Data Check"
                     : "Import"
-      } — Rate Administration`;
+      } - Rate Administration`;
     document.title = t;
   }, [page, g]);
 
@@ -621,7 +621,7 @@ export default function App() {
 
   // No session yet: there is nothing to load until a code is entered, because
   // the census is only handed out per-group in exchange for one. The address
-  // decides which form shows — /admin, or any admin page, gets the staff form —
+  // decides which form shows - /admin, or any admin page, gets the staff form - 
   // and sign-in returns to that address.
   if (!data || (!admin && !g)) {
     const staffMode = page.kind === "admin" || (page.kind === "signin" && page.staff);
@@ -728,7 +728,7 @@ export default function App() {
       ? "Effective January 1, 2027"
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
-          : `Calendar Year (January 1 – December 31, ${planYear})`;
+          : `Calendar Year (January 1 - December 31, ${planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup"
@@ -745,8 +745,8 @@ export default function App() {
   // Every page lives under the group's short address.
   const hrefFor = (t: GroupTab) => (g ? groupHome(g, t) : t === "options" ? PATHS.options : PATHS.current);
 
-  // Welcome carries no step — it is where you start, not part of the count,
-  // and What's Changing sits on it — so the three real pages run 1 through 3,
+  // Welcome carries no step - it is where you start, not part of the count,
+  // and What's Changing sits on it - so the three real pages run 1 through 3,
   // Sign Up included. Medical Plans is one step: today's plans and the 2027
   // options are two tabs on it.
   const TAB_STEP: Partial<Record<GroupTab, number>> = {
@@ -754,8 +754,8 @@ export default function App() {
     supplemental: 2,
     signup: 3,
   };
-  // Medical Plans in the rail opens on the 2027 options — the page the
-  // renewal is about — with today's plans a tab away.
+  // Medical Plans in the rail opens on the 2027 options - the page the
+  // renewal is about - with today's plans a tab away.
   const navItems: NavItem[] = (["home", "assistant", "options", "supplemental", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
@@ -769,8 +769,8 @@ export default function App() {
     }));
   /**
    * Medical Plans is one page in the rail with two tabs on it. The 2027
-   * options lead and carry the emphasis — that is what the client is here to
-   * decide — and today's plans sit beside them, muted, for reference.
+   * options lead and carry the emphasis - that is what the client is here to
+   * decide - and today's plans sit beside them, muted, for reference.
    */
   const medicalTabs: { tab: GroupTab; label: string; lead: boolean }[] = [
     { tab: "options", label: "New 2027 Medical Options", lead: true },
@@ -931,7 +931,7 @@ export default function App() {
                   manager={manager}
                   lastSignup={data.signup || null}
                 />
-                {/* The headline — today against 2027 — sits under the letter, one page, less to click through. */}
+                {/* The headline - today against 2027 - sits under the letter, one page, less to click through. */}
                 <section id="changes" className="anchor" style={{ marginTop: 26 }}>
                   <WhatsChanging
                     data={data}

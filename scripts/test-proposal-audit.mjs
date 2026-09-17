@@ -103,5 +103,5 @@ await wait(600);
 const again = ((await (await fetch(`${base}/api/admin/proposals`, { headers: staffAuth })).json()).proposals || []).find((r) => r.id === row.id);
 assert.ok(again.audit && again.audit.completedAt >= row.audit.completedAt);
 
-console.log("proposal audit: read, then checked by two models; outcome on the client's page; document behind the plan — ok", { group: mine.name });
+console.log("proposal audit: read, then checked by two models; outcome on the client's page; document behind the plan - ok", { group: mine.name });
 stop();

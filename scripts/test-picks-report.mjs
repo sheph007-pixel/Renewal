@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { renderPicksReport } from "../server/documents.js";
 
-const plan = (optionId, name, ee, extra = {}) => ({ optionId, name, network: "Choice Plus", deductible: "$4,000", oopMax: "$8,150", rates: { EE: ee, ES: ee * 2, EC: ee * 1.8, FAM: ee * 3 }, benefits: {}, ...extra });
+const plan = (optionId, name, ee, extra = {}) => ({ optionId, name, network: "Choice Plus", deductible: "$8,000 individual / $16,000 family", oopMax: "$8,000 individual / $16,000 family", rates: { EE: ee, ES: ee * 2, EC: ee * 1.8, FAM: ee * 3 }, benefits: {}, ...extra });
 const group = {
   name: "Test Group, Inc.",
   enrolled: 5,
@@ -46,4 +46,4 @@ assert.ok(pages >= 1 && pages <= 4, `${pages} pages`);
 const bare = await renderPicksReport({ group: { ...group, census: null }, proposals, recommendations, contribution: null });
 assert.equal(bare.data.subarray(0, 5).toString(), "%PDF-");
 
-console.log(`ok — picks report: ${file.data.length} bytes, ${pages} page(s)`);
+console.log(`ok - picks report: ${file.data.length} bytes, ${pages} page(s)`);

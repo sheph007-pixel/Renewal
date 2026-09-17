@@ -68,8 +68,8 @@ type G = AdminGroup & { funding?: GroupFunding | null; rates?: Record<string, Re
 const TIERS = ["Employee", "Employee + Spouse", "Employee + Child(ren)", "Employee + Family"];
 const TIER_SHORT: Record<string, string> = { Employee: "EE", "Employee + Spouse": "EE + SP", "Employee + Child(ren)": "EE + CH", "Employee + Family": "Family" };
 
-/** money0 with the sign in front of the dollar: "−$24,042", "+$1,160". */
-const signed = (n: number) => `${n < 0 ? "−" : "+"}${money0(Math.abs(n))}`;
+/** money0 with the sign in front of the dollar: "-$24,042", "+$1,160". */
+const signed = (n: number) => `${n < 0 ? "-" : "+"}${money0(Math.abs(n))}`;
 
 const monthLabel = (m: string | null) =>
   m ? new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : "the month";
@@ -90,7 +90,7 @@ const diff = (a: number, b: number, money = false) => {
   if (Math.abs(d) < 0.5) return <span style={{ color: C.green }}>match</span>;
   return (
     <span style={{ color: d < 0 ? C.red : C.amber }}>
-      {d < 0 ? "−" : "+"}
+      {d < 0 ? "-" : "+"}
       {money ? money0(Math.abs(d)) : Math.abs(d).toLocaleString()}
     </span>
   );
@@ -213,7 +213,7 @@ export default function FundingPanel({ token, funding, groups, onFunding, onOver
     <ImportSection
       step={3}
       title="Monthly funding workbook"
-      what="September_Funding_….xlsx — the month's billing, one line per participant per product"
+      what="September_Funding_….xlsx - the month's billing, one line per participant per product"
       accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
       ariaLabel="Upload the monthly funding workbook"
       inputRef={ref}
@@ -277,7 +277,7 @@ export default function FundingPanel({ token, funding, groups, onFunding, onOver
                           aria-label={`Group for invoice ${inv}`}
                           style={{ padding: "5px 8px", fontSize: 12.5, border: `1px solid ${C.inputEdge}`, borderRadius: 4, maxWidth: 280 }}
                         >
-                          <option value="">— file under a group —</option>
+                          <option value=""> - file under a group - </option>
                           {a.candidates.map((c) => (
                             <option key={"c" + c.group} value={c.group}>
                               {c.group} (likely: {c.votes} matched)
@@ -328,12 +328,12 @@ export default function FundingPanel({ token, funding, groups, onFunding, onOver
                       {f && f.orgs.length > 1 && <div style={{ fontSize: 11, color: C.ghost }}>{f.orgs.length} billing divisions</div>}
                     </td>
                     <td style={cell(true)}>{xmlN}</td>
-                    <td style={cell(true)}>{f ? billN : "—"}</td>
+                    <td style={cell(true)}>{f ? billN : "-"}</td>
                     <td style={cell(true)}>{f ? diff(billN, xmlN) : ""}</td>
                     <td style={cell(true)}>{money0(xml$)}</td>
-                    <td style={cell(true)}>{f ? money0(bill$) : "—"}</td>
+                    <td style={cell(true)}>{f ? money0(bill$) : "-"}</td>
                     <td style={cell(true)}>{f ? diff(bill$, xml$, true) : ""}</td>
-                    <td style={{ ...cell(true), color: C.body }}>{f ? money0(f.other.monthly) : "—"}</td>
+                    <td style={{ ...cell(true), color: C.body }}>{f ? money0(f.other.monthly) : "-"}</td>
                     <td style={cell(true)}>
                       {!f ? (
                         <span style={pill(C.amber, C.amberTint, C.amberEdge)}>No billing</span>
@@ -449,7 +449,7 @@ export function GroupBilling({ token, group, month, onOverrides }: BillingProps)
                       {x && (x.n > 0 || x.rate != null) ? (
                         <>
                           <div>
-                            <strong>{x.n}</strong> @ {x.rate == null ? "—" : `$${x.rate.toFixed(2)}`}
+                            <strong>{x.n}</strong> @ {x.rate == null ? "-" : `$${x.rate.toFixed(2)}`}
                             {x.rateProrated ? <span style={{ fontSize: 11, color: C.amber }}> prorated</span> : ""}
                           </div>
                           <div style={{ fontSize: 11, color: off ? C.red : xr == null ? C.amber : C.ghost }}>
@@ -460,11 +460,11 @@ export function GroupBilling({ token, group, month, onOverrides }: BillingProps)
                         </>
                       ) : x ? (
                         <span style={{ fontSize: 11, color: C.ghost }}>
-                          —{x.retro ? ` · ${x.retro} retro` : ""}
+                          - {x.retro ? ` · ${x.retro} retro` : ""}
                           {x.credits ? ` · ${x.credits} credit${x.credits === 1 ? "" : "s"}` : ""}
                         </span>
                       ) : (
-                        <span style={{ color: C.ghost }}>—</span>
+                        <span style={{ color: C.ghost }}>-</span>
                       )}
                     </td>
                   );

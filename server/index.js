@@ -111,7 +111,7 @@ function overridesFor(name) {
 }
 
 // The census export carries a grand-total row alongside the real groups; it has
-// no plans, members or rates and is not a client — filtered in rebuild().
+// no plans, members or rates and is not a client - filtered in rebuild().
 
 /** Superseded scheme, still accepted so codes already sent out keep working. */
 function legacyCodeFor(name) {
@@ -144,7 +144,7 @@ const defaultBroker = (name) =>
 /**
  * Which account manager looks after each group, from Kennion's own list. The
  * list names companies its own way, so the match is on the normalised name
- * with a single-candidate prefix fallback — the same rule an import uses. A
+ * with a single-candidate prefix fallback - the same rule an import uses. A
  * manager set by hand wins over this.
  */
 const MANAGER_LIST = JSON.parse(
@@ -164,7 +164,7 @@ function managerContact(key) {
 }
 /**
  * Cobalt quotes a self-funded plan for a handful of groups, not the whole
- * book, so its slot only applies to those — plus any group that already has a
+ * book, so its slot only applies to those - plus any group that already has a
  * Cobalt proposal on file, so nothing uploaded is ever hidden.
  */
 const COBALT_GROUPS = new Set(
@@ -214,11 +214,11 @@ let bySlug = new Map();
 let adminGroups = [];
 /** Proposals filed under each group, so the Groups page can show coverage. */
 let proposalCounts = {};
-/** The newest client invoice filed under each group — month, when, whether it tied out. */
+/** The newest client invoice filed under each group - month, when, whether it tied out. */
 let invoiceByGroup = {};
 /**
- * Each group's current proposals — the newest assigned one per slot, with
- * what Claude read off it (plans and tier rates) — keyed by group name. This
+ * Each group's current proposals - the newest assigned one per slot, with
+ * what Claude read off it (plans and tier rates) - keyed by group name. This
  * is what a group's 2027 Options page prices from; no file bytes, no flags.
  */
 let currentProposals = {};
@@ -421,7 +421,7 @@ async function mintMissingTokens() {
 const round2 = (n) => Math.round(n * 100) / 100;
 
 /**
- * The employer/employee split, built fresh from each member's own cost —
+ * The employer/employee split, built fresh from each member's own cost - 
  * not the value frozen on the group at the time of its last import. Once a
  * member carries employerCost/employeeCost (every import from here on),
  * a fix to how the split is derived applies immediately to every group
@@ -452,7 +452,7 @@ function splitFromMembers(g) {
   );
   if (!Object.keys(plans).length) return null;
   return {
-    source: "Employee Navigator XML import — employer/employee cost as configured in payroll, averaged across everyone on a plan and tier",
+    source: "Employee Navigator XML import - employer/employee cost as configured in payroll, averaged across everyone on a plan and tier",
     plans,
   };
 }
@@ -479,7 +479,7 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toL
  * variable, for two reasons: it survives a restart without anyone having to
  * configure the host, and it can be changed from inside the app. The first
  * time a database has no code, one strong code is minted and printed once in
- * the log — after that it stays put until it is changed from the Import tab.
+ * the log - after that it stays put until it is changed from the Import tab.
  *
  * Setting ADMIN_CODE in the environment still wins, for anyone who would
  * rather manage it there.
@@ -536,7 +536,7 @@ function seedCodeHash() {
 }
 
 function announceCode(code) {
-  const kept = db ? "It is kept, so it survives every restart from now on." : "This run only — there is no database to keep it in.";
+  const kept = db ? "It is kept, so it survives every restart from now on." : "This run only - there is no database to keep it in.";
   console.warn(
     [
       "",
@@ -691,7 +691,7 @@ app.use(compression());
 
 /**
  * Headers every response carries. A group's address holds its token, so the
- * referrer is kept off outbound requests entirely — otherwise a click on any
+ * referrer is kept off outbound requests entirely - otherwise a click on any
  * external link would hand the token to whoever it went to. The rest are the
  * ordinary defences: no framing, no MIME sniffing, HSTS once TLS is on.
  */
@@ -715,7 +715,7 @@ app.get("/healthz", (_req, res) => res.type("text/plain").send("ok"));
 /** What a staff session sees: the PII-free rate projection and its bookkeeping. */
 /**
  * The audit runs itself: after every upload and at boot, the computed result
- * is refreshed, and once all three files are in Claude reads it — once per
+ * is refreshed, and once all three files are in Claude reads it - once per
  * combination of uploads, the read kept in the database.
  */
 let audit = null;
@@ -746,8 +746,8 @@ async function refreshAudit() {
       console.error("could not save the audit:", e.message);
     }
   }
-  // The per-group data check runs on the same occasions — boot and every
-  // upload — and its result is kept beside the snapshot audit in Postgres,
+  // The per-group data check runs on the same occasions - boot and every
+  // upload - and its result is kept beside the snapshot audit in Postgres,
   // one row per state of the data, so what was found and when is never lost.
   await keepDataCheck();
   if (result.complete && !read && aiEnabled() && auditReadInFlight !== fingerprint) {
@@ -813,11 +813,11 @@ function adminPayload() {
  * Sign-in throttle. A code is four letters from the company name plus the plan
  * year, so it is guessable by anyone who knows the client list; without this,
  * codes could simply be enumerated. Counted per caller and per code tried, in
- * memory — one server, and a restart only ever forgives.
+ * memory - one server, and a restart only ever forgives.
  */
 /**
- * A group's session is a cookie, so its address can be short — the company
- * and its code, `/johnson-storage-moving-jsmh2027/options` — with no token in
+ * A group's session is a cookie, so its address can be short - the company
+ * and its code, `/johnson-storage-moving-jsmh2027/options` - with no token in
  * the bar. The cookie holds the group's link token signed with a secret kept
  * in settings (or made per process without a database); HttpOnly, so no
  * script reads it, SameSite=Lax, so no other site sends it, and it dies with
@@ -883,7 +883,7 @@ function clearGroupCookie(req, res) {
 
 /**
  * The group a client request speaks for: a permanent-link token, an access
- * code, or — with neither — the session cookie. Only a token or a code is a
+ * code, or - with neither - the session cookie. Only a token or a code is a
  * guess worth counting against the caller.
  */
 function groupFromRequest(req) {
@@ -1000,8 +1000,8 @@ app.post("/api/signin", async (req, res) => {
     // Only this group's contribution split, when Employee Navigator has one.
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
     overrides: overridesFor(g.name),
-    // The carrier proposals on file for this group — plans and tier rates as
-    // read off the documents — and this month's billing, counts and rates only.
+    // The carrier proposals on file for this group - plans and tier rates as
+    // read off the documents - and this month's billing, counts and rates only.
     proposals: clientProposals(g.name),
     slots: slotsForGroup(g.name),
     funding: fundingSnapshot(g.name),
@@ -1011,8 +1011,8 @@ app.post("/api/signin", async (req, res) => {
           month: (invoice.context && invoice.context.month) || null,
           filename: invoice.filename,
           uploadedAt: invoice.uploaded_at,
-          // The Charge Summary's product rows — product, tier and headcount, no
-          // names — so the client's page can say what else is in force.
+          // The Charge Summary's product rows - product, tier and headcount, no
+          // names - so the client's page can say what else is in force.
           products: Array.isArray(invoice.extracted && invoice.extracted.products)
             ? invoice.extracted.products.map((r) => ({ product: r.product, coverage: r.coverage, count: r.count ?? null }))
             : [],
@@ -1083,8 +1083,8 @@ app.post("/api/signout", (req, res) => {
 
 /**
  * A group's own Sign Up page: which of the 2027 options it shortlisted, and
- * any note, submitted back to Kennion. No staff token — the same code or
- * token that gets a group its data is what lets it submit, same as sign-in —
+ * any note, submitted back to Kennion. No staff token - the same code or
+ * token that gets a group its data is what lets it submit, same as sign-in - 
  * so it shares that endpoint's rate limit against guessing.
  *
  * Submitting also moves a group's renewal from Open to Sent, the one status
@@ -1111,7 +1111,7 @@ async function sendSupportEmail(t, g) {
     ["Group", g.name],
     ["Priority", t.priority],
     ["Requester", t.requester],
-    ["Manager", typeof g.manager === "string" ? g.manager : (g.manager && g.manager.name) || "—"],
+    ["Manager", typeof g.manager === "string" ? g.manager : (g.manager && g.manager.name) || "-"],
   ];
   const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
     <h2 style="margin:0 0 12px;font-size:17px">Support ticket ${ticketRef(t.id)} · ${escapeHtml(g.name)}</h2>
@@ -1195,7 +1195,7 @@ app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res)
     console.error(`support ticket #${record.id} (${g.name}) stored but not emailed:`, e.message);
     if (db) await db.markSupportTicketEmailed(record.id, e.message).catch(() => {});
   }
-  console.log(`support ticket #${record.id}: ${g.name} — ${priority} — ${subject}${emailed ? "" : " (email failed)"}`);
+  console.log(`support ticket #${record.id}: ${g.name} - ${priority} - ${subject}${emailed ? "" : " (email failed)"}`);
   res.json({ ok: true, id: record.id, ref: ticketRef(record.id), emailed });
 });
 
@@ -1279,7 +1279,7 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
     rebuild();
   }
 
-  console.log(`sign-up received: ${g.name} — ${plans.length} plan(s)`);
+  console.log(`sign-up received: ${g.name} - ${plans.length} plan(s)`);
   res.json({ ok: true, submittedAt: record.submitted_at });
 });
 
@@ -1466,8 +1466,8 @@ const chatStore = db || memoryChatStore();
 const chatBusy = new Set();
 
 /**
- * Kennion's guidance to the assistant — who it is, the rules, the house
- * answers — edited from the admin. Kept in settings with the last twenty
+ * Kennion's guidance to the assistant - who it is, the rules, the house
+ * answers - edited from the admin. Kept in settings with the last twenty
  * versions, so a change can be seen and undone.
  */
 const PLAYBOOK_KEY = "assistant.playbook";
@@ -1500,7 +1500,7 @@ const threadId = (raw) => {
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-/** Everything the assistant is told about a group — the same view its pages get. */
+/** Everything the assistant is told about a group - the same view its pages get. */
 async function assistantData(g) {
   const signup = await latestSignup(g.name);
   return {
@@ -1517,9 +1517,9 @@ async function assistantData(g) {
 }
 
 /**
- * The group's people as aggregates only — average and range of employee
+ * The group's people as aggregates only - average and range of employee
  * ages, how many are under 30 or 55 and over, how many carry a spouse or
- * children — so the assistant can say which plans suit the workforce.
+ * children - so the assistant can say which plans suit the workforce.
  * Never a name, never one person's age: the census itself stays with staff.
  */
 function censusProfile(g) {
@@ -1590,7 +1590,7 @@ async function streamTurn({ g, thread, content, page, compact = false, attachmen
         send("memory", { memory: list });
         return list;
       },
-      // Plan picks go to the client's Medical Plans page — from the client's
+      // Plan picks go to the client's Medical Plans page - from the client's
       // own conversations only; a staff trial publishes nothing.
       savePicks: thread.staff
         ? null
@@ -1671,13 +1671,13 @@ app.post("/api/group/export", async (req, res) => {
   try {
     if (view === "picks") {
       const rec = await chatStore.getRecommendations(g.name);
-      if (!rec || !Array.isArray(rec.picks) || !rec.picks.length) return res.status(404).json({ error: "No AI Picks yet — press AI Picks first." });
+      if (!rec || !Array.isArray(rec.picks) || !rec.picks.length) return res.status(404).json({ error: "No AI Picks yet - press AI Picks first." });
       file = await renderPicksReport({ group, proposals, recommendations: rec, contribution: any ? contribution : null });
     } else {
       const plans = (Array.isArray(body.plans) ? body.plans : []).map((x) => String(x || "").trim().slice(0, 120)).filter(Boolean).slice(0, 400);
       if (!plans.length) return res.status(400).json({ error: "Nothing to export: no plans showing." });
       const table = comparisonTable({ group, proposals, plans, includeCurrent: true, contribution: any ? contribution : null });
-      file = await renderComparison({ format: "pdf", title: `2027 Medical Options — ${EXPORT_TITLES[view]}`, group, table });
+      file = await renderComparison({ format: "pdf", title: `2027 Medical Options - ${EXPORT_TITLES[view]}`, group, table });
     }
   } catch (e) {
     console.error("export:", e);
@@ -1754,7 +1754,7 @@ app.delete("/api/chat/threads/:id", async (req, res) => {
 /**
  * The group's Documents tab: every file the assistant made in its
  * conversations, every file the client attached to a question, and what
- * the client put here itself — one place, to download or remove.
+ * the client put here itself - one place, to download or remove.
  */
 app.get("/api/chat/files", async (req, res) => {
   const g = groupForPage(req);
@@ -1778,7 +1778,7 @@ app.get("/api/chat/files/:id", async (req, res) => {
 });
 
 /**
- * A file the client wants to show the assistant — another broker's quote, a
+ * A file the client wants to show the assistant - another broker's quote, a
  * spreadsheet, a screenshot. Uploaded on its own first (the body is the file,
  * the name in the query), held for the group, and claimed by the message
  * that sends it. The same kinds the proposal reader takes.
@@ -1925,14 +1925,14 @@ app.post("/api/admin/assistant/playbook", requireStaff, express.json({ limit: "2
 /**
  * What a signed-in group is allowed to see of itself: everything but the
  * census. The per-plan tier counts the pages price from are computed here, so
- * no employee record — name, age, ZIP, dependants — ever leaves the server.
+ * no employee record - name, age, ZIP, dependants - ever leaves the server.
  */
 /**
  * The only fields an employer's own pages read. An allow-list, not a
  * deny-list: a field added to a group later is not shipped to a client until
- * someone puts it here on purpose. Kennion's own bookkeeping — who brokers the
+ * someone puts it here on purpose. Kennion's own bookkeeping - who brokers the
  * group, which manager holds it, where its renewal stands, its SIC and
- * division codes — stays on the admin side.
+ * division codes - stays on the admin side.
  */
 const CLIENT_GROUP_FIELDS = [
   "name",
@@ -1942,8 +1942,8 @@ const CLIENT_GROUP_FIELDS = [
   "enrolled",
   // The ALE bucket staff set (or the default from enrolled), for the Group
   // Size badge. The Employee Navigator roster count that used to travel here
-  // as `medicalEligible` counts everyone not marked terminated — part-time,
-  // ineligible, never closed — and is a staff figure now (see data-audit.js).
+  // as `medicalEligible` counts everyone not marked terminated - part-time,
+  // ineligible, never closed - and is a staff figure now (see data-audit.js).
   "sizeCategory",
   "lives",
   "tiers",
@@ -1954,7 +1954,7 @@ const CLIENT_GROUP_FIELDS = [
   "rates",
   "pyStart",
   "pyEnd",
-  // Dental, vision, life, disability … — the same shape the Groups page
+  // Dental, vision, life, disability … - the same shape the Groups page
   // shows staff, with no member detail: benefit, carrier, plan, enrolled,
   // monthly. Present only once an Employee Navigator export has been read
   // for supplemental lines; `linesLoaded` below says whether it has.
@@ -1976,12 +1976,12 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
-  // The census as aggregates — the same profile the assistant is briefed
-  // with — so the page can show what the picks were weighed on. No name and
+  // The census as aggregates - the same profile the assistant is briefed
+  // with - so the page can show what the picks were weighed on. No name and
   // no one person's age.
   out.census = censusProfile(g);
   // Whether supplemental has ever been read for this group, and what it
-  // comes to — the same figures the Groups page shows staff.
+  // comes to - the same figures the Groups page shows staff.
   const breakdown = premiumBreakdown(g);
   out.linesLoaded = breakdown.linesLoaded;
   out.supplementalMonthly = breakdown.supplementalMonthly;
@@ -2002,8 +2002,8 @@ function tierKeyOfCensus(census) {
  * The 2027 market data a single group may see: the carrier menu and the
  * current-to-UHC plan mapping, which name no company, and this group's own
  * quoted rows. Other companies' quotes, premiums and notes stay on the server.
- * `refEE` is the one cross-group number the pricing needs — an average EE rate
- * used to scale a group UHC has not underwritten — reduced to a scalar so no
+ * `refEE` is the one cross-group number the pricing needs - an average EE rate
+ * used to scale a group UHC has not underwritten - reduced to a scalar so no
  * other company's rows travel with it.
  */
 function clientUhc(g) {
@@ -2018,7 +2018,7 @@ function clientUhc(g) {
   if (ppoOnly()) {
     // PPO only: the EPO menu plans go; a current plan mapped to an EPO is
     // mapped to its PPO twin instead (same deductible, out-of-pocket and
-    // coinsurance — UHC codes them E… and P…), and a group's quoted rate on
+    // coinsurance - UHC codes them E… and P…), and a group's quoted rate on
     // an EPO is left out rather than shown under the twin's name.
     const byPlan = new Map(menu.map((m) => [m.plan, m]));
     menu = menu.filter((m) => !isEpoMenu(m));
@@ -2109,7 +2109,7 @@ function fundingSnapshot(name) {
 }
 
 /**
- * Re-enter a staff session the browser still holds a token for — a reload, or
+ * Re-enter a staff session the browser still holds a token for - a reload, or
  * a link to an admin page opened in the same tab. The token is checked the same
  * way every admin call checks it; an expired one gets a 401 and the sign-in form.
  */
@@ -2125,13 +2125,13 @@ async function readUpload(req) {
 }
 
 /**
- * Same as `readUpload`, but also keeps the file — gzip-compressed, so a
- * ~100MB export lands in the database at a fraction of its size — for the
+ * Same as `readUpload`, but also keeps the file - gzip-compressed, so a
+ * ~100MB export lands in the database at a fraction of its size - for the
  * import this actually applies. XML compresses well, and it's streamed
  * through the compressor alongside parsing rather than buffered whole, so
  * this carries none of the memory cost the streaming parser was built to
  * avoid. Once this is in the database, no import ever needs the original
- * file handed back to it again — the source Postgres already trusts, not a
+ * file handed back to it again - the source Postgres already trusts, not a
  * copy anyone has to keep track of.
  */
 async function readUploadWithRaw(req) {
@@ -2201,7 +2201,7 @@ const summarise = (parsed) => {
 };
 
 /**
- * Employee Navigator's Carrier Stats report — the second file, uploaded with
+ * Employee Navigator's Carrier Stats report - the second file, uploaded with
  * each XML export. Stored, and shown against the import carrier by carrier.
  */
 app.post(
@@ -2285,7 +2285,7 @@ app.get("/api/admin/audit", requireStaff, async (req, res) => {
 /**
  * The data check: every group against itself and against every file the
  * portal holds about it (server/data-audit.js). Computed on request from
- * what is in memory — it is cheap — so it is always about the data as it
+ * what is in memory - it is cheap - so it is always about the data as it
  * stands, including a rate keyed in a minute ago.
  */
 function dataAuditBundles() {
@@ -2308,7 +2308,7 @@ function dataAuditBundles() {
  * The stored export, re-read. The gzip kept with the last import is parsed
  * again and every company set against the group the portal holds, so drift
  * between the file Employee Navigator gave us and what clients are served
- * is caught — a re-import that skipped a company, a partial apply, an edit
+ * is caught - a re-import that skipped a company, a partial apply, an edit
  * by hand. Kept in settings so the result survives a deploy; the tab says
  * which export it was run against and whether a newer one has landed.
  */
@@ -2337,7 +2337,7 @@ async function readStoredExport() {
 
 /**
  * Fields a later parser learned to keep, filled in for groups imported
- * before it did — from the export already in the database, so nobody has
+ * before it did - from the export already in the database, so nobody has
  * to upload the file again. Today: each plan's full Employee Navigator
  * name (`enName`). Runs in the background at boot; the payload is updated
  * in place, keeping when and by whom the group was imported.
@@ -2397,11 +2397,11 @@ const xmlVerifyView = () => {
 };
 
 /**
- * Claude's read of the data check — once per state of the data (the three
+ * Claude's read of the data check - once per state of the data (the three
  * uploads, the stored-export check and the findings), kept in the audits
  * table under its own fingerprint so nobody presses anything twice.
  */
-/** One read per reader — Claude, and ChatGPT as the second opinion — each kept under its own fingerprint. */
+/** One read per reader - Claude, and ChatGPT as the second opinion - each kept under its own fingerprint. */
 const dataReads = { claude: null, chatgpt: null };
 const dataCheckFingerprint = (audit, who = "claude") =>
   [
@@ -2513,8 +2513,8 @@ app.post("/api/admin/data-audit/read", requireStaff, async (req, res) => {
 
 /**
  * One group in full: its checks, and the briefing the assistant is handed
- * word for word — the same describeGroup() text every answer is written
- * from — so staff can read exactly what a client's assistant knows.
+ * word for word - the same describeGroup() text every answer is written
+ * from - so staff can read exactly what a client's assistant knows.
  */
 app.get("/api/admin/data-audit/:name", requireStaff, async (req, res) => {
   const g = matchExisting(String(req.params.name || ""));
@@ -2532,7 +2532,7 @@ app.get("/api/admin/data-audit/:name", requireStaff, async (req, res) => {
 /**
  * The month's funding workbook from Employee Navigator. Every invoice is filed
  * under the group most of its billed people belong to (their names against
- * the groups' members), summarised per group, and kept — names and all — on
+ * the groups' members), summarised per group, and kept - names and all - on
  * the server only.
  */
 async function storeFunding(rec) {
@@ -2599,8 +2599,8 @@ const xmlPlansByGroup = () => Object.fromEntries(groups.map((g) => [g.name, (g.p
  * Set tier rates from billing: for each plan and tier the workbook bills,
  * where the XML has no billed rate for that tier or a different one, write a
  * hand-keyed override with the billed amount. Plans the group's XML does not
- * carry are skipped — a billed plan the census has never seen is a question,
- * not a rate — and so is a rate known only from a prorated line.
+ * carry are skipped - a billed plan the census has never seen is a question,
+ * not a rate - and so is a rate known only from a prorated line.
  */
 async function applyBilledRates(targets, by) {
   let applied = 0;
@@ -2653,7 +2653,7 @@ app.post("/api/admin/funding/assign", requireStaff, express.json({ limit: "16kb"
   res.json({ ok: true, funding: fundingView(funding), groups: adminGroups, overrides, audit });
 });
 
-/** Re-run the billed-rate write for one group or all — after a hand filing, say. */
+/** Re-run the billed-rate write for one group or all - after a hand filing, say. */
 app.post("/api/admin/funding/apply-rates", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
   if (!funding) return res.status(400).json({ error: "Upload the funding workbook first." });
   const { group, all } = req.body || {};
@@ -2669,7 +2669,7 @@ app.post("/api/admin/funding/apply-rates", requireStaff, express.json({ limit: "
 
 /**
  * Everything needed to reconcile the import against the carrier stats report,
- * as one small file — aggregates only, no member records — so it can be
+ * as one small file - aggregates only, no member records - so it can be
  * handed to someone (or to Claude in a chat) who cannot reach this server.
  */
 app.get("/api/admin/reconcile/export", requireStaff, (_req, res) => {
@@ -2774,8 +2774,8 @@ app.post("/api/admin/import/preview", requireStaff, async (req, res) => {
 });
 
 /**
- * A census row for a company a full export no longer carries — or carries
- * with nothing current — is a company that has left: archive it, once, and
+ * A census row for a company a full export no longer carries - or carries
+ * with nothing current - is a company that has left: archive it, once, and
  * say why. Staff can restore it and later imports leave that alone.
  */
 async function archiveLeavers(exported) {
@@ -2821,8 +2821,8 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
       if (prior && prior.name !== g.name) g.enName = g.name;
       g.name = key;
 
-      // Every count that went into medicalEligible — and everything else the
-      // parser tallied but had no field for — kept on the group itself, not
+      // Every count that went into medicalEligible - and everything else the
+      // parser tallied but had no field for - kept on the group itself, not
       // just rolled into this one import's batch-wide total, so a later
       // question about this company doesn't require re-uploading the file.
       g.diagnostics = parsed.stats.diagnostics;
@@ -2836,7 +2836,7 @@ app.post("/api/admin/import", requireStaff, async (req, res) => {
     saveImports();
 
     const diagnostics = rollupDiagnostics(companies);
-    // Company records the parser could not use are part of the record too —
+    // Company records the parser could not use are part of the record too - 
     // a carrier's stats may count them when the portal does not.
     diagnostics.rejected = failures.map((f) => ({ name: f.name, reason: f.reason }));
 
@@ -2959,7 +2959,7 @@ app.post("/api/admin/2fa/confirm", requireStaff, express.json({ limit: "4kb" }),
   const auth = await staffAuthStore.get(req.staffEmail);
   if (!auth || !auth.totp_secret) return res.status(400).json({ error: "Start the setup first." });
   if (!verifyTotp(auth.totp_secret, (req.body || {}).code)) {
-    return res.status(400).json({ error: "That code is not right — check the app and try again." });
+    return res.status(400).json({ error: "That code is not right - check the app and try again." });
   }
   const codes = newRecoveryCodes();
   await staffAuthStore.save(req.staffEmail, {
@@ -3156,7 +3156,7 @@ async function loadRatesLock() {
 const ratesLocked = () => !!(ratesLock && ratesLock.locked);
 
 /**
- * What a client is shown of the market. One rule today: **PPO only** — an
+ * What a client is shown of the market. One rule today: **PPO only** - an
  * EPO twin of a PPO plan (UnitedHealthcare's E-coded menu plans, Gravie's
  * "EPO" sheet) is priced a few dollars under it and adds a choice without
  * adding a decision, so it is kept out of every client page. The rule is a
@@ -3178,7 +3178,7 @@ async function loadMarketRules() {
 /**
  * Kennion offers PPO plans only. Every carrier's quote carries EPO twins
  * (UnitedHealthcare's E-coded plans, Gravie's EPO sheet on Cigna); they are
- * never shown to a client, whatever the stored setting says — the switch
+ * never shown to a client, whatever the stored setting says - the switch
  * that once turned this off is gone, so it cannot be flipped by accident.
  */
 const ppoOnly = () => true;
@@ -3370,7 +3370,7 @@ app.post(
     if (!read.sheetsRead) {
       return res.status(400).json({
         error:
-          "No rate sheet in that file. It needs Group and Plan columns and at least one tier column — send back the workbook this page produced.",
+          "No rate sheet in that file. It needs Group and Plan columns and at least one tier column - send back the workbook this page produced.",
       });
     }
 
@@ -3438,7 +3438,7 @@ app.post("/api/admin/override", requireStaff, express.json({ limit: "16kb" }), a
  * Carrier proposals.
  *
  * Each uploaded file is stored whole (Postgres when configured, memory
- * otherwise — the screen says which) and then read by Claude in the
+ * otherwise - the screen says which) and then read by Claude in the
  * background: carrier, the group named on the paper, plans and tier rates, and
  * the roster group it matches with a confidence. A confident match is assigned
  * outright; a weaker one is suggested for review; no match leaves the proposal
@@ -3526,15 +3526,15 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
- * — UH3, GR1 — a carrier prefix and a number, numbered per group in the
+ * - UH3, GR1 - a carrier prefix and a number, numbered per group in the
  * order the carrier lists its plans. UnitedHealthcare's two proposals share
  * one sequence. A number is never reused: a re-read or a newer proposal in
  * the same slot hands each surviving plan its old number (matched by plan
  * code, else by exact name) and gives new plans the next free ones.
  *
  * Only offered plans are numbered. Kennion offers PPO plans only, so an EPO
- * twin carries no number at all: Gravie's 67 designs read GR1–GR67, not
- * GR1–GR134 with every other number missing. A slot numbered before this
+ * twin carries no number at all: Gravie's 67 designs read GR1-GR67, not
+ * GR1-GR134 with every other number missing. A slot numbered before this
  * rule (an EPO twin holding a number) is renumbered once, compactly, and
  * the numbers its older readings held are released with it. A number held
  * twice in a group (the two UnitedHealthcare slots once restarted at UH1
@@ -3545,7 +3545,7 @@ const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gra
 /**
  * One proposal per slot per group: when a newer proposal replaces an older
  * one, the older one is deleted rather than kept as "superseded". The
- * numbers its plans held are remembered here — {group: {prefix: [n…]}} —
+ * numbers its plans held are remembered here - {group: {prefix: [n…]}} - 
  * so a retired number is never handed out again after the row is gone.
  */
 const RETIRED_KEY = "optionIds.retired";
@@ -3582,7 +3582,7 @@ const OPTION_ID = /^(UH|GR|NW|AN)(\d+)$/;
 /**
  * For one day UnitedHealthcare's menu was numbered too (optionIds.menu in
  * settings), and a proposal plan that was a menu plan took the menu's
- * number — so a group's UHC plans could read UH47, UH54. Only proposals
+ * number - so a group's UHC plans could read UH47, UH54. Only proposals
  * are numbered now: a group still listed there has its UH sequence
  * renumbered once, compactly, in proposal order, and the entry is cleared.
  */
@@ -3598,7 +3598,7 @@ const optName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim()
 
 async function assignOptionIds(rows, bySlot) {
   // Every number already handed out in a group, from every row it has ever
-  // had — current, superseded, or unfiled — so none is handed out twice.
+  // had - current, superseded, or unfiled - so none is handed out twice.
   const takenByGroup = new Map();
   for (const r of rows) {
     if (!r.group_name || !r.extracted || !Array.isArray(r.extracted.plans)) continue;
@@ -3631,7 +3631,7 @@ async function assignOptionIds(rows, bySlot) {
     const taken = takenByGroup.get(group) || new Map();
     // Which slots are renumbered from scratch: one numbered under the old
     // rule (an EPO twin holding a number, or flagged by a re-read), and
-    // every slot of a prefix that holds a number twice — the sequence was
+    // every slot of a prefix that holds a number twice - the sequence was
     // once reset per slot, so UnitedHealthcare's two proposals could both
     // start at UH1. Their numbers are released together, before any slot
     // is numbered, while the numbers of the prefix's untouched slots stay
@@ -3774,7 +3774,7 @@ function slotFor(carrier, funding, quotesMedical) {
   if (/united|uhc|surest|optum/.test(c)) {
     if (/level/.test(f)) return "UHC Level Funded";
     if (/fully/.test(f)) return "UHC Fully Insured";
-    return null; // UnitedHealthcare, funding unclear — leave for staff to say
+    return null; // UnitedHealthcare, funding unclear - leave for staff to say
   }
   if (/gravie/.test(c)) return "Gravie";
   if (/nationwide/.test(c)) return "Nationwide";
@@ -3784,7 +3784,7 @@ function slotFor(carrier, funding, quotesMedical) {
 }
 
 /**
- * Whether a proposal quotes no medical at all — dental, vision, life,
+ * Whether a proposal quotes no medical at all - dental, vision, life,
  * disability. Claude says so directly on anything read since the field was
  * added; for an older reading the document itself is the evidence: a file or
  * summary that calls itself ancillary, or one that names only ancillary
@@ -3792,14 +3792,14 @@ function slotFor(carrier, funding, quotesMedical) {
  */
 /**
  * After any change: recount proposals per group for the Groups page, and
- * settle supersession — within a group and slot, the newest assigned proposal
+ * settle supersession - within a group and slot, the newest assigned proposal
  * is current and older ones are marked as replaced by it. Nothing is deleted.
  */
 async function proposalsChanged() {
   try {
     let rows = await proposalStore.listProposals();
-    // A slot that is no longer one of the four — a Surest or "Other" filed
-    // before the list was cut back — is re-derived from what was read.
+    // A slot that is no longer one of the four - a Surest or "Other" filed
+    // before the list was cut back - is re-derived from what was read.
     let remapped = false;
     for (const r of rows) {
       // Read before Claude was asked whether a document quotes medical: the
@@ -3935,7 +3935,7 @@ function matchByFilename(filename, context) {
 
 /**
  * Read the file, match it, and write the outcome back. Runs in the background.
- * `file` is { filename, mime, buffer, context? } — context being the email it
+ * `file` is { filename, mime, buffer, context? } - context being the email it
  * came out of, if any.
  */
 /** The six benefit rows a plan card shows, as the reader found them; null where the reader predates them. */
@@ -4140,7 +4140,7 @@ async function runAnalysis(id, file, keepAssignment) {
 }
 
 /**
- * Upload one file — a proposal, or an email carrying proposals. Raw body;
+ * Upload one file - a proposal, or an email carrying proposals. Raw body;
  * filename and optional group in the query. An email is stored as its own row
  * and each usable attachment becomes a proposal of its own, read with the
  * email's subject, sender and body as context.
@@ -4235,8 +4235,8 @@ app.post(
 /**
  * A month's client invoices, all at once: a zip with one PDF per group,
  * named "<Group Name> <Month> Invoice.pdf" (Employee Navigator's own naming).
- * Stored the same way a single proposal file is — group, filename, bytes,
- * kind "invoice" — but never queued for AI analysis: an invoice isn't a
+ * Stored the same way a single proposal file is - group, filename, bytes,
+ * kind "invoice" - but never queued for AI analysis: an invoice isn't a
  * carrier quote to extract plan terms from, just a record to keep and
  * hand back. Anything not inside a per-group PDF (a combined summary, a
  * roster CSV) or whose name doesn't match a live group by name is skipped
@@ -4328,7 +4328,7 @@ async function ingestInvoiceZip(buf, month, by) {
 }
 
 /**
- * Carrier quotes as rows — kennion.carrier_quotes and carrier_quote_plans —
+ * Carrier quotes as rows - kennion.carrier_quotes and carrier_quote_plans - 
  * one quote per carrier and group, every priced plan under it. Without a
  * database they live in memory for the life of the process.
  */
@@ -4411,8 +4411,8 @@ async function settleGravieQuotes() {
 /**
  * A zip of Gravie rate workbooks, one per group: each is parsed, matched to
  * its group by the name in the sheet header, and filed as that group's Gravie
- * proposal — assigned, in the Gravie slot, with every priced plan in the
- * extracted shape the Options page reads — so the quote prices on the client's
+ * proposal - assigned, in the Gravie slot, with every priced plan in the
+ * extracted shape the Options page reads - so the quote prices on the client's
  * pages the moment it lands. A workbook whose quote number is already on file
  * for the group is skipped, so a batch can be run again.
  */
@@ -4563,7 +4563,7 @@ app.post("/api/admin/proposals/audit", requireStaff, async (req, res) => {
 
 /** Assign, reassign, confirm, or relabel a proposal. */
 /**
- * Re-read every proposal whose extraction predates the current questions —
+ * Re-read every proposal whose extraction predates the current questions - 
  * anything with no `quotes_medical` on it. One click after a schema change,
  * rather than pressing Re-read on each row. `all=1` re-reads everything.
  */
@@ -4619,7 +4619,7 @@ app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" 
   }
 });
 
-/** Read the document again — after the roster changed, or a key was added. */
+/** Read the document again - after the roster changed, or a key was added. */
 app.post("/api/admin/proposals/:id/analyze", requireStaff, async (req, res) => {
   const id = Number(req.params.id);
   const f = await proposalStore.getProposalFile(id).catch(() => null);
@@ -4664,7 +4664,7 @@ app.use("/api", (req, res) => {
   res.status(404).json({ error: `No such endpoint: ${req.method} /api${req.path}` });
 });
 
-// SPA fallback — the portal owns every non-API route.
+// SPA fallback - the portal owns every non-API route.
 app.use((_req, res) => res.sendFile(indexHtml));
 
 // Errors on API routes must stay JSON; the default handler returns an HTML
@@ -4697,7 +4697,7 @@ async function boot() {
         funding = { id: fr.id, month: fr.month, filename: fr.filename, fileStamp: fr.file_stamp, lines: fr.lines, byInvoice: fr.by_invoice, summary: fr.summary, uploadedBy: fr.uploaded_by, uploadedAt: fr.uploaded_at };
       }
       const st = await db.stats();
-      console.log(`postgres connected — ${st.groups} imported groups, ${st.overrides} rate overrides, ${st.quotes} carrier quotes`);
+      console.log(`postgres connected - ${st.groups} imported groups, ${st.overrides} rate overrides, ${st.quotes} carrier quotes`);
     } catch (e) {
       // A database that is configured but unreachable must not take the site
       // down; fall back to the shipped census and say so loudly.
@@ -4796,7 +4796,7 @@ app.listen(port, "0.0.0.0", () => {
   const n = Object.keys(imported.groups || {}).length;
   const store = db ? "postgres" : DURABLE ? "volume" : "ephemeral disk";
   console.log(
-    `Kennion renewal portal listening on :${port} — ${groups.length} groups, ` +
+    `Kennion renewal portal listening on :${port} - ${groups.length} groups, ` +
       `${n} imported, storage: ${store}`,
   );
 });

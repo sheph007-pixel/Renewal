@@ -39,7 +39,7 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
       <div style={card}>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: C.body, textWrap: "pretty" as const }}>
           Your 2026 program ends December 31. For 2027, we took {g.name}&rsquo;s census to the carriers;
-          every option shown carries their own rates for your group —{" "}
+          every option shown carries their own rates for your group - {" "}
           {summary.pricedCount} option{summary.pricedCount === 1 ? "" : "s"} so far, effective January 1, 2027.
           {summary.pricedCount === 0 && " Quotes for your group are still arriving, and the figures below fill in as they do."}
         </p>
@@ -69,13 +69,13 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
             <div style={{ fontSize: 12, color: C.faint }}>
               {summary.delta == null
                 ? "quotes arriving"
-                : `${summary.delta >= 0 ? "+" : "−"}${money0(Math.abs(summary.delta))} / mo vs today`}
+                : `${summary.delta >= 0 ? "+" : "-"}${money0(Math.abs(summary.delta))} / mo vs today`}
             </div>
           </div>
         </div>
 
         <p style={{ margin: "14px 0 0", fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
-          This maps each current plan to its closest 2027 match. It is not a recommendation — see Your 2027
+          This maps each current plan to its closest 2027 match. It is not a recommendation - see Your 2027
           Options for the full menu, including the plans we&rsquo;d actually suggest for your group.
         </p>
       </div>
@@ -90,7 +90,7 @@ export default function WhatsChanging({ data, g, rows, totals, optionsHref, sign
         <Link href={signUpHref} style={{ ...card, display: "block", color: "inherit", textDecoration: "none" }}>
           <div style={{ fontSize: 15.5, fontWeight: 600, color: C.green }}>Ready To Move Forward? &rarr;</div>
           <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            Shortlist plans and send them in, or get a kickoff call on the calendar — both live on Sign Up.
+            Shortlist plans and send them in, or get a kickoff call on the calendar - both live on Sign Up.
           </p>
         </Link>
       </div>

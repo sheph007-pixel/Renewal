@@ -5,10 +5,10 @@ import InfoTip from "@/views/InfoTip";
 
 /**
  * "Your Market Results": what Kennion did for this group and what to do on
- * this page. Three or four sentences on what came back from market — plan
+ * this page. Three or four sentences on what came back from market - plan
  * count per partner, the lowest average employee-only cost at a fixed 50%
  * employer contribution, the widest selection, the networks, and any
- * reference-based pricing — then what to do next, with the assistant's
+ * reference-based pricing - then what to do next, with the assistant's
  * recommendations button beside it. A fixed template over every quoted plan
  * (never the filtered grid), recomputed whenever the plans change, and
  * unmoved by the Employer Contribution controls beneath it. Each value

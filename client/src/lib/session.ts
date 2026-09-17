@@ -2,7 +2,7 @@
  * The signed-in session, kept in sessionStorage so a reload or a pasted link
  * lands on the page asked for instead of back at sign-in. sessionStorage is
  * scoped to the tab and cleared when it closes; nothing is written to disk
- * beyond that, and no census data is stored — only what is needed to sign in
+ * beyond that, and no census data is stored - only what is needed to sign in
  * again (the group's own code, or the staff bearer token).
  */
 const KEY = "kennion.session";

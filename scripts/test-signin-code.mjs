@@ -86,8 +86,8 @@ assert.deepEqual(await wrongEmail.json(), await wrongCode.json(), "one message f
 
 // 4. The shipped code opens the door, so the hash must be all the repository
 //    holds. Prove it the only way that generalises: nothing in the tracked
-//    text is a code that signs in. Every string in the shape a code takes —
-//    three groups of four from the unambiguous alphabet — is tried against
+//    text is a code that signs in. Every string in the shape a code takes - 
+//    three groups of four from the unambiguous alphabet - is tried against
 //    the live server, and every one of them must be refused.
 const tracked = ["server/index.js", "server/data/admin-seed.json", "README.md", import.meta.filename]
   .map((f) => readFileSync(f, "utf8"))
@@ -112,7 +112,7 @@ assert.equal(noSession.status, 401, "the code route needs a staff session");
 const noSessionPost = await post("/api/admin/code", { current: "x", next: "y".repeat(12) });
 assert.equal(noSessionPost.status, 401, "changing the code needs a staff session");
 
-console.log("sign-in code: shipped hash in force, published codes refused, route guarded — ok");
+console.log("sign-in code: shipped hash in force, published codes refused, route guarded - ok");
 server.kill();
 
 // ---------------------------------------------------------------------------
@@ -167,7 +167,7 @@ if (!DB) {
       body: JSON.stringify({ email: "hunter@kennion.com", code }),
     });
 
-  // A fresh database: the shipped code is used and, importantly, kept —
+  // A fresh database: the shipped code is used and, importantly, kept - 
   // the table it is kept in is created by the same boot, so this would fail
   // if the code were settled before the schema.
   let s = boot();
@@ -224,5 +224,5 @@ if (!DB) {
   s.p.kill();
 
   await pool.end();
-  console.log("database lifecycle: shipped code kept, changed in the app, survives a restart — ok");
+  console.log("database lifecycle: shipped code kept, changed in the app, survives a restart - ok");
 }

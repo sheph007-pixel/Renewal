@@ -50,7 +50,7 @@ export interface Progress {
   outside: number;
 }
 
-const money = (n: number | null) => (n == null ? "—" : n.toFixed(2));
+const money = (n: number | null) => (n == null ? "-" : n.toFixed(2));
 
 export default function RatesAudit({
   token,
@@ -242,10 +242,10 @@ export default function RatesAudit({
           `, and ${progress.offSchedule} plan${progress.offSchedule === 1 ? " is" : "s are"} priced off it`}
         .{" "}
         {progress.outside > 0 &&
-          ` ${progress.outside} plan${progress.outside === 1 ? " on another administrator is" : "s on other administrators are"} not shown — the program does not rate them.`}
+          ` ${progress.outside} plan${progress.outside === 1 ? " on another administrator is" : "s on other administrators are"} not shown - the program does not rate them.`}
         {" "}
         {lock.locked
-          ? `Locked${lock.at ? ` ${new Date(lock.at).toLocaleDateString()}` : ""}${lock.by ? ` by ${lock.by}` : ""} — no rate can change until it is unlocked.`
+          ? `Locked${lock.at ? ` ${new Date(lock.at).toLocaleDateString()}` : ""}${lock.by ? ` by ${lock.by}` : ""} - no rate can change until it is unlocked.`
           : "Correct them one at a time below, or in bulk with the workbook."}
       </div>
 
@@ -257,7 +257,7 @@ export default function RatesAudit({
       {preview && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 13, color: C.body }}>
-            {preview.filename} — read {preview.rowsRead} rows.{" "}
+            {preview.filename} - read {preview.rowsRead} rows.{" "}
             <strong style={{ color: C.ink }}>
               {preview.changes.length} rate{preview.changes.length === 1 ? "" : "s"} would change
             </strong>
@@ -326,7 +326,7 @@ export default function RatesAudit({
             <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.body, lineHeight: 1.7 }}>
               {preview.problems.slice(0, 15).map((p, i) => (
                 <li key={i}>
-                  {[p.group, p.plan, p.tier].filter(Boolean).join(" · ") || p.sheet} — {p.reason}
+                  {[p.group, p.plan, p.tier].filter(Boolean).join(" · ") || p.sheet} - {p.reason}
                 </li>
               ))}
               {preview.problems.length > 15 && <li>…and {preview.problems.length - 15} more.</li>}

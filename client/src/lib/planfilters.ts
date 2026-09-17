@@ -2,8 +2,8 @@
  * The Medical Plans filters and sort, as data: what is applied, what a plan
  * has to match, the chips that describe it, and the option counts each
  * dropdown shows. No React here, so `scripts/test-plan-filters.mts` can
- * exercise every rule — OR within a category, AND between them, clear all,
- * the bill range's validation — without a browser.
+ * exercise every rule - OR within a category, AND between them, clear all,
+ * the bill range's validation - without a browser.
  */
 
 /** The facets a plan is filtered on, read off it once by the grid. */
@@ -28,21 +28,21 @@ export interface Band {
 /** Fixed, round, non-overlapping bands; a group only sees the ones its quotes fall in. */
 export const DED_BANDS: Band[] = [
   { id: "0", label: "$0", min: 0, max: 0 },
-  { id: "1-1000", label: "$1 – $1,000", min: 1, max: 1000 },
-  { id: "1001-2500", label: "$1,001 – $2,500", min: 1001, max: 2500 },
-  { id: "2501-5000", label: "$2,501 – $5,000", min: 2501, max: 5000 },
+  { id: "1-1000", label: "$1 - $1,000", min: 1, max: 1000 },
+  { id: "1001-2500", label: "$1,001 - $2,500", min: 1001, max: 2500 },
+  { id: "2501-5000", label: "$2,501 - $5,000", min: 2501, max: 5000 },
   { id: "5001-", label: "$5,001+", min: 5001, max: null },
 ];
 export const OOP_BANDS: Band[] = [
-  { id: "0-3000", label: "$0 – $3,000", min: 0, max: 3000 },
-  { id: "3001-6000", label: "$3,001 – $6,000", min: 3001, max: 6000 },
-  { id: "6001-8000", label: "$6,001 – $8,000", min: 6001, max: 8000 },
+  { id: "0-3000", label: "$0 - $3,000", min: 0, max: 3000 },
+  { id: "3001-6000", label: "$3,001 - $6,000", min: 3001, max: 6000 },
+  { id: "6001-8000", label: "$6,001 - $8,000", min: 6001, max: 8000 },
   { id: "8001-", label: "$8,001+", min: 8001, max: null },
 ];
 
 export const inBand = (b: Band, v: number) => v >= b.min && (b.max == null || v <= b.max);
 
-/** The bands at least one of these values falls in, in order — so every band offered has a plan behind it. */
+/** The bands at least one of these values falls in, in order - so every band offered has a plan behind it. */
 export function bandsWithData(bands: Band[], values: (number | null)[]): Band[] {
   return bands.filter((b) => values.some((v) => v != null && inBand(b, v)));
 }
@@ -99,7 +99,7 @@ export const withBill = (f: PlanFilters, bill: BillRange): PlanFilters => ({ ...
 
 /**
  * Whether a plan passes the filters: OR within a category (any chosen carrier),
- * AND between categories. `except` leaves one category out — the count beside
+ * AND between categories. `except` leaves one category out - the count beside
  * each option is what choosing it would show, so it ignores that category's
  * own selections.
  */
@@ -161,9 +161,9 @@ export function billError(b: BillRange): string | null {
 
 const dollars = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
-/** "Monthly bill: $30,000 – $40,000", "at least $30,000", "up to $40,000". */
+/** "Monthly bill: $30,000 - $40,000", "at least $30,000", "up to $40,000". */
 export function billLabel(b: BillRange): string {
-  if (b.min != null && b.max != null) return `${dollars(b.min)} – ${dollars(b.max)}`;
+  if (b.min != null && b.max != null) return `${dollars(b.min)} - ${dollars(b.max)}`;
   if (b.min != null) return `at least ${dollars(b.min)}`;
   if (b.max != null) return `up to ${dollars(b.max)}`;
   return "";
@@ -215,7 +215,7 @@ const SORT_NAMES: Record<SortKey, string> = {
 };
 const TEXT_SORTS: SortKey[] = ["option", "carrier", "network", "plan"];
 
-/** "Monthly bill: Low to high", "Carrier/TPA: A to Z" — plain words, for the Sort by control and its options. */
+/** "Monthly bill: Low to high", "Carrier/TPA: A to Z" - plain words, for the Sort by control and its options. */
 export function sortLabel(s: SortState): string {
   const text = TEXT_SORTS.includes(s.key);
   const dir = text ? (s.dir > 0 ? "A to Z" : "Z to A") : s.dir > 0 ? "Low to high" : "High to low";

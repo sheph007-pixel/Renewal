@@ -1,5 +1,5 @@
 // Time-based one-time passwords (RFC 6238) and single-use recovery codes, on
-// node's own crypto — no dependency, and no secret ever leaves the server.
+// node's own crypto - no dependency, and no secret ever leaves the server.
 //
 // A staff member scans the otpauth URL into Google Authenticator, 1Password,
 // Authy or the like; the app then asks for the six digits after the sign-in
@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 
 const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-/** Base32 (RFC 4648, no padding) — the encoding authenticator apps expect. */
+/** Base32 (RFC 4648, no padding) - the encoding authenticator apps expect. */
 export function base32Encode(buf) {
   let bits = 0;
   let value = 0;

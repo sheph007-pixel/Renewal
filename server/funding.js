@@ -1,5 +1,5 @@
-// Reads Employee Navigator's monthly funding workbook — September's billing,
-// one line per participant per product — and files every invoice under the
+// Reads Employee Navigator's monthly funding workbook - September's billing,
+// one line per participant per product - and files every invoice under the
 // group it belongs to.
 //
 // The workbook names billing divisions ("Taz Bham LLC 101-0002", "116"), not
@@ -62,7 +62,7 @@ export function parseFunding(buffer, filename = "") {
   // medical subset. A workbook with different sheet names is not this report.
   const captives = ["AL", "VT"].filter((c) => wb.Sheets[c]);
   if (!captives.length) {
-    throw new Error('This does not look like the funding workbook — no "AL" or "VT" sheet.');
+    throw new Error('This does not look like the funding workbook - no "AL" or "VT" sheet.');
   }
   const medicalKeys = new Set();
   for (const c of captives) {
@@ -223,7 +223,7 @@ export function assignInvoices(lines, groups) {
     return hits.length === 1 ? hits[0][1] : null;
   };
   // A billing org that is a group's name outright (a typo or two allowed)
-  // says where the invoice belongs, whatever the names vote — sister
+  // says where the invoice belongs, whatever the names vote - sister
   // companies share people, and the org line is the carrier's own filing.
   const namedOutright = (org) => {
     const k = loose(org);
@@ -266,7 +266,7 @@ export function assignInvoices(lines, groups) {
 
 /**
  * Per-group summary of a month's billing: medical by plan and tier with the
- * billed rate, other products, and totals. No participant names here — this
+ * billed rate, other products, and totals. No participant names here - this
  * is what the admin screens and the reconciliation use.
  */
 export function summariseFunding(lines, byInvoice, xmlPlansByGroup = {}) {

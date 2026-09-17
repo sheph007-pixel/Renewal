@@ -5,13 +5,13 @@
 // missing or misconfigured database from taking the site down.
 //
 // Where a database IS configured it is the source of truth for everything a
-// human has entered — imported groups, their contribution splits, and rate
-// overrides — so it survives redeploys and is shared across the team rather
+// human has entered - imported groups, their contribution splits, and rate
+// overrides - so it survives redeploys and is shared across the team rather
 // than living in one browser.
 import pg from "pg";
 
 // Everything lives in its own `kennion` schema. The database may already carry
-// tables from a previous application — the first import failed because a
+// tables from a previous application - the first import failed because a
 // legacy `public.groups` existed with a different shape, so CREATE TABLE IF NOT
 // EXISTS silently did nothing and the insert hit the wrong columns. A dedicated
 // schema cannot collide, and leaves anything already in `public` untouched.
@@ -81,8 +81,8 @@ CREATE TABLE IF NOT EXISTS kennion.settings (
   updated_at timestamptz NOT NULL DEFAULT now(),
   updated_by text
 );
--- The plan designs in force today — the 15 EBPA / HealthEZ medical plans
--- (Deluxe Platinum … Freedom Bronze) — one row per plan name with every
+-- The plan designs in force today - the 15 EBPA / HealthEZ medical plans
+-- (Deluxe Platinum … Freedom Bronze) - one row per plan name with every
 -- benefit line as printed on Kennion's comparison sheet. Seeded from
 -- server/data/kennion.json at boot; the assistant reads them to compare a
 -- group's current plans with the 2027 options.
@@ -100,7 +100,7 @@ ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (rene
 
 -- What a group submitted on its own Sign Up page: the plans it shortlisted
 -- and any note, timestamped. One row per submission, so a second submission
--- does not erase the first — staff see the history, not just the latest.
+-- does not erase the first - staff see the history, not just the latest.
 CREATE TABLE IF NOT EXISTS kennion.group_signups (
   id            bigserial PRIMARY KEY,
   group_name    text NOT NULL,
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS kennion.imports (
 ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS diagnostics jsonb;
 -- The export itself, gzip-compressed (XML compresses to a fraction of its
 -- size), so the source of every import is on hand for anything a later fix
--- needs to recompute — no one has to go find the file and upload it again.
+-- needs to recompute - no one has to go find the file and upload it again.
 ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS raw_gzip bytea;
 ALTER TABLE kennion.imports ADD COLUMN IF NOT EXISTS raw_size integer;
 
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_stats (
 -- raw_gzip: on hand for good, nothing to re-upload if a fix ever needs it.
 ALTER TABLE kennion.carrier_stats ADD COLUMN IF NOT EXISTS raw_gzip bytea;
 
--- A month's funding workbook: every billed line (participant names included —
+-- A month's funding workbook: every billed line (participant names included - 
 -- server-side only, like the members), which invoice went to which group,
 -- and the per-group summary the screens use. Latest upload wins.
 CREATE TABLE IF NOT EXISTS kennion.funding (
@@ -309,7 +309,7 @@ CREATE INDEX IF NOT EXISTS chat_messages_thread_idx ON kennion.chat_messages (th
 ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS staff boolean NOT NULL DEFAULT false;
 ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS flagged_at timestamptz;
 ALTER TABLE kennion.chat_threads ADD COLUMN IF NOT EXISTS flag_note text;
--- Documents the assistant produced for a turn — a comparison, a memo — as
+-- Documents the assistant produced for a turn - a comparison, a memo - as
 -- [{id, filename, mime, size}], the bytes in chat_files.
 ALTER TABLE kennion.chat_messages ADD COLUMN IF NOT EXISTS files jsonb NOT NULL DEFAULT '[]'::jsonb;
 CREATE TABLE IF NOT EXISTS kennion.chat_files (
@@ -474,8 +474,8 @@ export function createDb(url) {
     },
 
     /**
-     * Rewrite a group's payload in place — a field filled in from the stored
-     * export, say — without touching when or by whom it was imported.
+     * Rewrite a group's payload in place - a field filled in from the stored
+     * export, say - without touching when or by whom it was imported.
      */
     async updateGroupPayload(name, payload) {
       await pool.query("UPDATE kennion.groups SET payload = $2 WHERE name = $1", [name, payload]);

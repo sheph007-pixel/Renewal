@@ -2,8 +2,8 @@
 // one sheet each.
 //
 // It runs against a live server and uses the payload the admin screen itself
-// receives, so the roster rules — archived groups, the totals row in the
-// source spreadsheet, who holds each group — are the server's, not a fixture's
+// receives, so the roster rules - archived groups, the totals row in the
+// source spreadsheet, who holds each group - are the server's, not a fixture's
 // guess at them. Runs with `npx tsx`.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -50,7 +50,7 @@ const overrides: Overrides = payload.overrides || {};
 const active = auditGroups(groups);
 const rows = rowsFor(active, overrides);
 
-// 1. The sheet is group, plan and the four rates. Nothing else — an auditor
+// 1. The sheet is group, plan and the four rates. Nothing else - an auditor
 //    should not have to read past the numbers they are checking.
 // In program factor order: 1.00, 1.85, 2.00, 2.85.
 assert.deepEqual(COLUMNS, [
@@ -70,7 +70,7 @@ assert.equal(rows.length, expected, "one row per plan");
 assert.ok(rows.length > 100, `the workbook is worth sending: ${rows.length} rows`);
 
 // A plan on another administrator, invented here because the roster carries
-// none today, must not reach a sheet — and the rule has to hold when the TPA
+// none today, must not reach a sheet - and the rule has to hold when the TPA
 // sits on the plan rather than the group.
 {
   const stray = {
@@ -107,7 +107,7 @@ for (const r of rows) assert.doesNotMatch(String(r.Group), /^TOTAL\b/i, "no tota
 const names = [...new Set(rows.map((r) => String(r.Group)))];
 assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)), "groups in name order");
 
-// 6. The rates are the rates the screen shows — same function on the same
+// 6. The rates are the rates the screen shows - same function on the same
 //    payload, so this checks the wiring rather than the arithmetic.
 for (const g of active) {
   for (const p of programPlans(g)) {
@@ -120,7 +120,7 @@ for (const g of active) {
   }
 }
 
-// 7. Group and plan together name the row, so they have to be unique — a
+// 7. Group and plan together name the row, so they have to be unique - a
 //    duplicate would take a correction to the wrong plan.
 const keys = rows.map((r) => `${r.Group} :: ${r.Plan}`);
 assert.equal(new Set(keys).size, keys.length, "no two rows name the same group and plan");
@@ -144,7 +144,7 @@ assert.equal(
 );
 
 console.log(
-  `audit workbook: ${rows.length} rows, ${COLUMNS.length} columns, across ${active.length} groups — ` +
+  `audit workbook: ${rows.length} rows, ${COLUMNS.length} columns, across ${active.length} groups - ` +
     [...perManager].sort().map(([m, n]) => `${m} ${n}`).join(", "),
 );
 server.kill();

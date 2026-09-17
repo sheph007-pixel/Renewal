@@ -24,7 +24,7 @@ interface Props {
  * New 2027 Medical Options: the employer sets a monthly budget per tier, and
  * one grid of every plan from every carrier shows what each would cost them
  * at that budget, and in total. The way a defined-contribution (ICHRA)
- * comparison reads — the employer in the driver's seat for monthly spend.
+ * comparison reads - the employer in the driver's seat for monthly spend.
  */
 export default function Options({
   data,

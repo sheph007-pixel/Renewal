@@ -97,7 +97,7 @@ assert.deepEqual(COLUMNS, [
 ]);
 
 // 2. Employer plus employee is the premium, on every plan. If these two ever
-//    drift apart the file is worse than useless — an employer would budget off
+//    drift apart the file is worse than useless - an employer would budget off
 //    a number that does not add up.
 for (const r of plans) {
   const er = r[ER] as number;
@@ -116,7 +116,7 @@ const eeAll = plans.reduce((n, r) => n + (r[EE] as number), 0);
 const premium = plans.reduce((n, r) => n + (r[TOTAL] as number), 0);
 assert.ok(Math.abs(erAll + eeAll - premium) < 0.05, "the totals add up too");
 
-// 4. The plan total is the sum of its tiers — the arithmetic an employer would
+// 4. The plan total is the sum of its tiers - the arithmetic an employer would
 //    do by hand if they doubted it.
 for (const r of plans) {
   const mine = tiers.filter((t) => t[0] === r[0]);
@@ -154,7 +154,7 @@ assert.match(actual, /configured in your Employee Navigator payroll setup/);
 assert.match(actual, /not an estimate/, "it says plainly that it is not one");
 assert.doesNotMatch(actual, /illustrative|modelled/, "and does not describe a fact as a model");
 
-//    With the split taken away — a group whose payroll setup we do not hold —
+//    With the split taken away - a group whose payroll setup we do not hold - 
 //    the same figures become a model, and the note has to say so.
 const noSplit = { ...data, splits: {} } as unknown as KennionData;
 assert.equal(hasActualSplit(noSplit, g), false);
@@ -186,7 +186,7 @@ assert.match(source, /Employee Navigator export/, "the file names its source");
 assert.equal(ENROLL_URL, "https://go.kennion.com/enroll");
 
 console.log(
-  `plan sheet: ${plans.length} plans, ${tiers.length} tier rows — employer ${erAll.toFixed(2)} + ` +
+  `plan sheet: ${plans.length} plans, ${tiers.length} tier rows - employer ${erAll.toFixed(2)} + ` +
     `employee ${eeAll.toFixed(2)} = ${premium.toFixed(2)}; both split notes read true`,
 );
 server.kill();

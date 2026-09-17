@@ -34,8 +34,8 @@ interface Props {
 
 /**
  * One upload on the Import tab: what goes here, the button, when it was last
- * done, and whether it is in order. Everything else — tables, diagnostics,
- * per-group checks — sits behind "Show details".
+ * done, and whether it is in order. Everything else - tables, diagnostics,
+ * per-group checks - sits behind "Show details".
  */
 export default function ImportSection({ step, title, what, accept, ariaLabel, inputRef, disabled, onFile, busy, last, status, summary, error, done, open, children }: Props) {
   const [show, setShow] = useState(false);
