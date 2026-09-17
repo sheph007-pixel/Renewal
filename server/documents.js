@@ -476,8 +476,9 @@ export async function renderPlanCardPdf({ group: g, card }) {
     doc.x = x0;
     doc.y = Math.max(leftEnd, ry) + 14;
     doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
-    const share = tot.er != null && tot.ee != null && tot.premium ? `On this plan your company pays ${Math.round((tot.er / tot.premium) * 100)}% and employees pay ${Math.round((tot.ee / tot.premium) * 100)}% of the total monthly bill. ` : "";
-    if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page. ${share}*Minimum contributions of 50% of the employee cost.`, { width });
+    const ee = (card.tiers || []).find((t) => /^employee only/i.test(t.label || ""));
+    const share = ee && ee.rate && ee.er != null ? `Your contribution is ${Math.round((ee.er / ee.rate) * 100)}% of this plan's Employee Only rate. ` : "";
+    if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page. ${share}*Plans require an employer contribution of at least 50% of the employee premium; with several plans offered, 50% of the lowest-cost plan's Employee Only rate.`, { width });
     if (card.audit) doc.text(card.audit, { width });
     pdfFooter(doc);
   });
