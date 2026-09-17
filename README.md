@@ -649,6 +649,13 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**The employer mandate, as a note.** A group sized 51+ shows a small
+"ACA · ALE 50+" chip beside the Employer Contribution title (and the same
+text on the Group Size badge's hover): the rule in one paragraph, as general
+information, ending with the judgment left to the Kennion account manager.
+The page never says a contribution is affordable or compliant, and the
+contribution floor stays the carrier's 50% of the lowest employee-only rate.
+
 **The picks stand against each other, not against today.** The plans in
 force today are not an option for 2027, so the AI Picks report, the
 Favorites and Comparison PDFs and the assistant's pick reasons never say
