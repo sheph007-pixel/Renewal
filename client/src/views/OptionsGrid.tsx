@@ -184,12 +184,24 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [exportOpen]);
-  const exportPdf = async () => {
+  /** The four sets a PDF can be of, whatever view is showing; an empty one is muted in the menu. */
+  const exportSets = (): { view: GridView; label: string; hint: string; plans: MarketPlan[] }[] => {
+    const favs = plans.filter((p) => selected[p.plan]);
+    const cmp = proposal.map((n) => plans.find((p) => p.plan === n)).filter((p): p is MarketPlan => !!p);
+    const pk = plans.filter((p) => picks.has(p.plan));
+    return [
+      { view: "all", label: "All plans", hint: `${plans.length} plan${plans.length === 1 ? "" : "s"} at your enrollment, with benefits`, plans },
+      { view: "picks", label: "AI Picks report", hint: pk.length ? "Your census, each pick's reason, the bills side by side" : "Press AI Picks first", plans: pk },
+      { view: "favorites", label: "Favorites", hint: favs.length ? `${favs.length} plan${favs.length === 1 ? "" : "s"} side by side, with benefits` : "Heart a plan first", plans: favs },
+      { view: "compare", label: "Comparison", hint: cmp.length ? `${cmp.length} plan${cmp.length === 1 ? "" : "s"} side by side, with benefits` : "Add a plan with + first", plans: cmp },
+    ];
+  };
+  const exportPdf = async (set: { view: GridView; plans: MarketPlan[] }) => {
     setExportOpen(false);
     setExporting(true);
     setExportError("");
     try {
-      await exportGridPdf(view, list.map((p) => p.optionId ?? p.plan), applied, g.name);
+      await exportGridPdf(set.view, set.plans.map((p) => p.optionId ?? p.plan), applied, g.name);
     } catch (e) {
       setExportError((e as Error).message || "Could not build that file.");
     } finally {
@@ -690,15 +702,21 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 104 }}
               />
               <div ref={exportRef} style={{ position: "relative" }}>
-                <button onClick={() => setExportOpen((v) => !v)} disabled={!list.length || exporting} aria-haspopup="menu" aria-expanded={exportOpen} title={exporting ? "Building your file…" : "Save what's showing: a PDF, or a spreadsheet"} style={{ ...chip(exportOpen), fontWeight: 700, opacity: exporting ? 0.6 : 1 }}>
+                <button onClick={() => setExportOpen((v) => !v)} disabled={!plans.length || exporting} aria-haspopup="menu" aria-expanded={exportOpen} title={exporting ? "Building your file…" : "Save what's showing: a PDF, or a spreadsheet"} style={{ ...chip(exportOpen), fontWeight: 700, opacity: exporting ? 0.6 : 1 }}>
                   {exporting ? "Exporting…" : "Export ▾"}
                 </button>
                 {exportOpen && (
-                  <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 5, minWidth: 220, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(15,42,71,0.14)", padding: 4 }}>
-                    <button role="menuitem" onClick={() => void exportPdf()} style={menuItem}>
-                      <strong>{{ picks: "AI Picks report", favorites: "Favorites", compare: "Comparison", all: "Plans showing" }[view]} (PDF)</strong>
-                      <span style={{ fontSize: 11.5, color: C.faint }}>{view === "picks" ? "Your census, each pick's reason, the bills side by side" : `${list.length} plan${list.length === 1 ? "" : "s"} at your enrollment, with benefits`}</span>
-                    </button>
+                  <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 5, minWidth: 250, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(15,42,71,0.14)", padding: 4 }}>
+                    {exportSets().map((set) => {
+                      const empty = !set.plans.length;
+                      return (
+                        <button key={set.view} role="menuitem" onClick={() => void exportPdf(set)} disabled={empty} aria-disabled={empty} style={{ ...menuItem, opacity: empty ? 0.45 : 1, cursor: empty ? "default" : "pointer" }}>
+                          <strong>{set.label} (PDF)</strong>
+                          <span style={{ fontSize: 11.5, color: C.faint }}>{set.hint}</span>
+                        </button>
+                      );
+                    })}
+                    <div style={{ height: 1, background: C.hairline, margin: "4px 6px" }} />
                     <button role="menuitem" onClick={() => { setExportOpen(false); exportCsv(g, list, applied, counts); }} style={menuItem}>
                       <strong>Spreadsheet (CSV)</strong>
                       <span style={{ fontSize: 11.5, color: C.faint }}>The rows showing, for Excel</span>
