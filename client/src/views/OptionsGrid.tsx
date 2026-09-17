@@ -493,7 +493,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           the column tooltips say so. */}
       <div className="panel" style={{ ...panel, padding: 0 }}>
         {/* Employer Contribution: the grid card's top band — one line, Edit opens the four fields. */}
-        <div id="contribution" className="anchor noprint" style={{ borderBottom: `1px solid ${C.rule}`, borderRadius: "10px 10px 0 0" }}>
+        <div id="contribution" className="anchor noprint" style={{ background: C.band, borderBottom: `1px solid ${C.rule}`, borderRadius: "10px 10px 0 0" }}>
           <button
             onClick={() => setContribOpen((v) => !v)}
             aria-expanded={contribOpen}
