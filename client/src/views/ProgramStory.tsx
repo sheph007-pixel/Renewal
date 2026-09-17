@@ -25,7 +25,7 @@ const FRAMES: Frame[] = [
   },
   {
     kicker: "Built On Trust",
-    title: "Building On A Legacy Of Trust And Evolution",
+    title: "50+ Years Of Experience. Built For What’s Next.",
     lead: "A half-century of serving employers, a program that set the standard, and a next chapter shaped by what clients asked for.",
     tiles: [
       { title: "50+ Years", sub: "Serving employers with trusted, expert benefits advice." },
