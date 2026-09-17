@@ -136,7 +136,7 @@ You are talking with the HR lead or owner of one employer group - an existing Ke
 
 How to work:
 - Answer from the group's figures below. Every rate is a monthly composite per tier (EE = employee only, ES = employee + spouse, EC = employee + child(ren), FAM = family). A plan's monthly cost at the group's census is the tier rate times the headcount in that tier, summed; annual is monthly times 12. Show the arithmetic briefly when you compute a figure.
-- Every quoted 2027 plan has an option ID - UH3, GR1 - shown as the first column of the grid and on its card. Refer to a plan by its ID first, then its name ("UH3, the P4000i8021B"), and expect the client to ask by ID alone. The IDs are in the figures below.
+- Every quoted 2027 plan has an option ID - UH3, GR1 - shown as the first column of the grid and on its card. Name a plan one way, always: its Carrier/TPA, the word Option and its ID, in bold - **Angle Health Option AN19**, **UnitedHealthcare Option UH3**. Give the plan's long document name at most once after that, in parentheses, and never lead with it; the client knows plans by carrier and option, not by the carrier's product names. Expect the client to ask by ID alone. The IDs are in the figures below.
 - Never write an em dash or an en dash. Use a comma, a colon, a period or a plain hyphen instead. This holds in every answer, document, pick reason and summary.
 - Kennion offers PPO options only. The carriers' quotes also price EPO versions (Gravie prices every design both ways; UnitedHealthcare's menu has EPO rows), but those are not offered: never present, price or recommend an EPO plan, and do not list EPO as one of the group's choices. The figures below already leave them out.
 - One carrier, one funding type. A group's 2027 program is with a single carrier and a single funding arrangement: it cannot offer Gravie plans beside UnitedHealthcare plans, and with UnitedHealthcare it is all fully insured or all level funded, never a mix. Compare across carriers freely - that is the advice - but every recommendation, shortlist or plan lineup you give is one carrier and one funding type, and when the client proposes a mix say so and help them choose which way to go. Sign Up holds to the same rule.
@@ -183,7 +183,7 @@ const TOOLS = [
       properties: {
         summary: { type: "string", description: "One or two sentences on what shaped the picks: the census profile and what it means for deductibles, dependants and budget. Plain words, no figures the cards already show." },
         start_with: { type: "string", description: "The option ID of the pick you would start with." },
-        start_with_reason: { type: "string", description: "One sentence on why that one, in terms of this group." },
+        start_with_reason: { type: "string", description: "One sentence on why that one, in terms of this group. Name plans as Carrier Option ID." },
         picks: {
           type: "array",
           minItems: 1,
@@ -196,7 +196,7 @@ const TOOLS = [
               carrier: { type: "string", description: "The carrier or partner the pick is from, as named in the figures (UnitedHealthcare, Gravie, Angle Health)." },
               tier: { type: "string", enum: PICK_TIERS, description: "Which of the three picks this is for that carrier (and, for UnitedHealthcare, that funding)." },
               option_id: { type: "string", description: "The option ID (UH3, GR1)." },
-              reason: { type: "string", description: "One short line on why this pick for this group - under about 25 words." },
+              reason: { type: "string", description: "One short line on why this pick for this group - under about 25 words. Name any plan as Carrier Option ID (Angle Health Option AN19), never by its long name." },
             },
           },
         },
@@ -379,7 +379,7 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.rx ? `Rx ${b.rx}` : null,
       ].filter(Boolean).join("; ");
       out.push(
-        `- ${pl.optionId ? `${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}`,
+        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}`,
       );
     }
     if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);
@@ -499,7 +499,7 @@ async function runTool(name, input, { data, keep, onStatus, saveMemory, savePick
     const { record, unknown } = buildRecommendations(input, data.proposals);
     if (!record.picks.length) return `None of those option IDs is on the quotes on file (${unknown.join(", ") || "no picks given"}). The options are: ${quotedOptionIds(data.proposals).join(", ")}. Call recommend_plans again with option IDs from that list.`;
     await savePicks(record);
-    const placed = record.picks.map((p) => `${p.optionId} (${p.carrier}, ${tierLabel(p.tier)})`).join(", ");
+    const placed = record.picks.map((p) => `${p.carrier} Option ${p.optionId} (${tierLabel(p.tier)})`).join(", ");
     return `Placed ${record.picks.length} pick(s) on the Medical Plans page: ${placed}.${unknown.length ? ` Not placed - not on the quotes on file: ${unknown.join(", ")}.` : ""} Now answer in a few lines: the picks are on the page; which you would start with and why; one closing line inviting their budget or must-haves.`;
   }
   if (name === "update_client_memory") {

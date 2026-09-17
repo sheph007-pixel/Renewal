@@ -132,12 +132,13 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
     <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          {m.optionId && <span style={{ fontSize: 12, fontWeight: 700, color: C.onColor, background: C.navy, borderRadius: 6, padding: "2px 8px", letterSpacing: "0.3px", fontVariantNumeric: "tabular-nums" }}>{m.optionId}</span>}
           <CarrierMark name={m.carrier} size={20} fontSize={12.5} color={C.muted} />
           <span style={{ fontSize: 11, fontWeight: 600, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 10, padding: "1px 8px" }}>{m.funding}</span>
           {m.type && !compact && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}
         </div>
-        <div style={{ fontSize: compact ? 15 : 16, fontWeight: 600, color: C.ink, lineHeight: 1.3, marginTop: 4, minHeight: compact ? 40 : undefined }}>{m.plan}</div>
+        {/* The one way a plan is named everywhere: Carrier/TPA, Option, ID - in bold; the carrier's long name under it. */}
+        <div style={{ fontSize: compact ? 15 : 17, fontWeight: 700, color: C.ink, lineHeight: 1.3, marginTop: 4, ...num }}>{m.optionId ? `${m.carrier} Option ${m.optionId}` : m.plan}</div>
+        {m.optionId && <div style={{ fontSize: compact ? 12 : 12.5, color: C.muted, lineHeight: 1.3, marginTop: 1, minHeight: compact ? 32 : undefined }}>{m.plan}</div>}
       </div>
       {/* Wide (the grid's dialog): what it costs and what it covers on the
           left, the rates and the split on the right - one screen, no

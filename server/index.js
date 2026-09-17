@@ -21,7 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { comparisonTable, renderComparison, renderPicksReport, renderPlanSheet } from "./documents.js";
+import { comparisonTable, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
@@ -1669,7 +1669,26 @@ app.post("/api/group/export", async (req, res) => {
   const proposals = clientProposals(g.name);
   let file;
   try {
-    if (body.format === "xlsx") {
+    if (body.format === "plan") {
+      // One plan's card, as the page shows it; checked for shape and size.
+      const c = body.card && typeof body.card === "object" ? body.card : null;
+      const str = (v, n = 200) => (v == null ? null : String(v).slice(0, n));
+      const numv = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      if (!c || !str(c.title)) return res.status(400).json({ error: "Nothing to export: no plan." });
+      const card = {
+        title: str(c.title, 120),
+        subtitle: str(c.subtitle, 200),
+        carrier: str(c.carrier, 80),
+        funding: str(c.funding, 40),
+        type: str(c.type, 60),
+        headline: { average: numv(c.headline && c.headline.average), companyPays: numv(c.headline && c.headline.companyPays), basis: str(c.headline && c.headline.basis, 40) },
+        benefits: (Array.isArray(c.benefits) ? c.benefits.slice(0, 20) : []).map((b) => [str(b && b[0], 40) || "", str(b && b[1], 300) || "-", /^https?:\/\//.test(String(b && b[2] || "")) ? str(b[2], 300) : null]),
+        tiers: (Array.isArray(c.tiers) ? c.tiers.slice(0, 6) : []).map((t) => ({ label: str(t && t.label, 40) || "", count: numv(t && t.count) || 0, rate: numv(t && t.rate), er: numv(t && t.er), ee: numv(t && t.ee) })),
+        totals: { er: numv(c.totals && c.totals.er), ee: numv(c.totals && c.totals.ee), premium: numv(c.totals && c.totals.premium), enrolled: numv(c.totals && c.totals.enrolled) },
+        audit: str(c.audit, 120),
+      };
+      file = await renderPlanCardPdf({ group, card });
+    } else if (body.format === "xlsx") {
       // The workbook: the page sends the card's columns and rows; checked for shape and size, nothing else.
       const columns = Array.isArray(body.columns) ? body.columns.slice(0, 80).map((c) => String(c == null ? "" : c).slice(0, 80)) : [];
       const rows = Array.isArray(body.rows) ? body.rows.slice(0, 800) : [];

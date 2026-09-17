@@ -346,6 +346,11 @@ export async function exportPlansExcel(columns: string[], rows: (string | number
   await downloadFile("/api/group/export", `${groupName} - 2027 Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
 }
 
+/** One plan's card as a PDF: the page sends the card as it shows it, the server lays it out. */
+export async function exportPlanCardPdf(card: unknown, title: string, groupName: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - ${title}.pdf`, { view: "all", format: "plan", card });
+}
+
 export async function downloadFile(url: string, filename: string, post?: unknown): Promise<void> {
   const r = await fetch(url, post === undefined ? { headers: groupHeaders() } : { method: "POST", headers: { ...groupHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(post) });
   if (!r.ok) throw new Error(await failure(r));
