@@ -181,8 +181,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   const favoritesOnly = view === "favorites";
   const compareOnly = view === "compare";
   const picksStamp = rec?.createdAt ?? null;
+  // The grid opens on All every time (a refresh, a tab and back); it moves
+  // to AI Picks only when a run started here lands, never on loading saved picks.
   useEffect(() => {
-    if (picksStamp && picks.size) setView("picks");
+    if (picksStamp && picks.size && analyzing !== "off") setView("picks");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [picksStamp]);
   // Asking for picks happens in place: the button spins, the chat stays
