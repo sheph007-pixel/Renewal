@@ -1,3 +1,4 @@
+import { groupHome } from "@/lib/router";
 import { useMemo, useState } from "react";
 import {
   TIERS,
@@ -178,7 +179,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
 
   return (
     <div>
-      <SpendDashboard totals={totals} enrolled={enrolled} />
+      <SpendDashboard totals={totals} enrolled={enrolled} censusHref={groupHome(g, "census")} />
 
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <h2 style={h2}>Your 2026 Medical Plans</h2>

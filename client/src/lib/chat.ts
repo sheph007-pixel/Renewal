@@ -346,6 +346,27 @@ export async function exportPlansExcel(columns: string[], rows: (string | number
   await downloadFile("/api/group/export", `${groupName} - 2027 Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
 }
 
+/** One employee on the census every rate is priced on: name, age, tier, plan and dependants' ages. Nothing else about anyone. */
+export interface CensusMember {
+  name: string;
+  age: number | null;
+  tier: "EE" | "ES" | "EC" | "FAM" | null;
+  tierLabel: string | null;
+  plan: string | null;
+  spouseAges: number[];
+  childAges: number[];
+}
+
+export async function loadCensus(): Promise<{ enrolled: number; members: CensusMember[] }> {
+  const r = await fetch("/api/group/census", { headers: groupHeaders() });
+  if (!r.ok) throw new Error(await failure(r));
+  return (await r.json()) as { enrolled: number; members: CensusMember[] };
+}
+
+export function downloadCensusCsv(groupName: string): Promise<void> {
+  return downloadFile("/api/group/census?format=csv", `${groupName} - Census.csv`);
+}
+
 /** One plan's card as a PDF: the page sends the card as it shows it, the server lays it out. */
 export async function exportPlanCardPdf(card: unknown, title: string, groupName: string): Promise<void> {
   await downloadFile("/api/group/export", `${groupName} - ${title}.pdf`, { view: "all", format: "plan", card });

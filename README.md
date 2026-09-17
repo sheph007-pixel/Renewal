@@ -649,6 +649,17 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**Census: who is enrolled.** Every "N enrolled" on the client pages (the
+Employer Contribution band, the Current tab's strip) links to
+`/:slug/census`: each employee's name, age, coverage tier, plan and
+dependants' ages from the enrollment data on file, with counts by tier,
+average age, spouses and children, and a CSV download (`GET
+/api/group/census`, `?format=csv`). Nothing else about anyone: no dates of
+birth, gender, ZIP or costs. Read only: a correction goes to the Kennion
+team, whose import is the source of truth; the page says so and names the
+account manager. Rates are illustrative until the Carrier/TPA sets final
+rates on the final census.
+
 **Illustrative quotes, and the notice.** Every rate the site shows is an
 "Illustrative Quote" (`basisOf`), never a proposal, an offer or a guarantee,
 and one notice (`RATE_DISCLAIMER` in `client/src/lib/model.ts`, the same

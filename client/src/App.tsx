@@ -26,6 +26,7 @@ import Link from "@/lib/Link";
 import { useNarrow } from "@/lib/narrow";
 import InfoTip from "@/views/InfoTip";
 import Disclaimers from "@/views/Disclaimers";
+import Census from "@/views/Census";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -63,6 +64,7 @@ const TAB_LABEL: Record<GroupTab, string> = {
   supplemental: "Supplemental Package",
   signup: "Sign Up",
   disclaimers: "Disclaimers",
+  census: "Census",
 };
 
 /** Two people, for the Group Size badge. */
@@ -732,6 +734,8 @@ export default function App() {
       ? "Effective January 1, 2027"
       : tab === "disclaimers"
         ? "What every rate, benefit and recommendation here is, and is not."
+      : tab === "census"
+        ? "Who is enrolled: the people every rate here is priced on."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
           : `Calendar Year (January 1 - December 31, ${planYear})`;
@@ -982,6 +986,8 @@ export default function App() {
                 onContributionReset={() => setContributionOverride(null)}
                 onToggleSelected={toggleSelected}
               />
+            ) : tab === "census" ? (
+              <Census g={g} manager={manager} />
             ) : tab === "disclaimers" ? (
               <Disclaimers g={g} />
             ) : tab === "supplemental" ? (

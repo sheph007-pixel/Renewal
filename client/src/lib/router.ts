@@ -14,6 +14,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /:slug/options       …New 2027 Medical Options
  *   /:slug/supplemental  …Supplemental Package
  *   /:slug/disclaimers   …Disclaimers (the full text behind every "View Disclaimers" link)
+ *   /:slug/census        …Census (who is enrolled: the link behind every "N enrolled")
  *   /:slug/signup        …Sign Up
  *   /g/:slug/:token      a group's permanent link: signs the browser in and
  *                        lands on /:slug (a tab after the token is kept)
@@ -44,7 +45,7 @@ export interface Route {
 }
 
 /** The pages a signed-in group has, in the order the side navigation lists them. */
-export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemental" | "signup" | "disclaimers";
+export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemental" | "signup" | "disclaimers" | "census";
 
 export type Page =
   | { kind: "signin"; staff: boolean }
@@ -69,7 +70,7 @@ export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent
 
 /** First path segments that are pages of their own, never a group's slug. */
 const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz"]);
-const TABS = "assistant|changes|current|options|supplemental|signup|disclaimers";
+const TABS = "assistant|changes|current|options|supplemental|signup|disclaimers|census";
 /** The Assistant page may name one conversation: `/:slug/assistant/:id`. */
 const TAB_TAIL = `(?:\\/(${TABS})(?:\\/(\\d{1,12}))?)?`;
 
