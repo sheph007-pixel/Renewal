@@ -359,6 +359,244 @@ export async function renderComparison({ format, title, group: g, table }) {
   return { filename: `${safeName(g.name)} - ${safeName(name)} ${stamp}.pdf`, mime: "application/pdf", data };
 }
 
+// ------------------------------------------------------------ AI Picks report
+
+const PICK_LABEL = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
+const PICK_ORDER = ["lower_cost", "best_fit", "richer_benefits"];
+const PICK_COLOR = { lower_cost: "#1F8A5B", best_fit: "#0F2A47", richer_benefits: "#e8781a" };
+const GREEN = "#1F8A5B";
+const TINT = "#f3f5f7";
+
+/** A row of small labelled figures, each in a light box; returns the y below them. */
+function pdfStats(doc, stats) {
+  const x0 = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const gap = 8;
+  const w = (width - gap * (stats.length - 1)) / stats.length;
+  const h = 44;
+  const y = doc.y;
+  stats.forEach((st, i) => {
+    const x = x0 + i * (w + gap);
+    doc.rect(x, y, w, h).fill(TINT);
+    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(st.label.toUpperCase(), x + 8, y + 8, { width: w - 16, lineBreak: false });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(NAVY).text(st.value, x + 8, y + 20, { width: w - 16, lineBreak: false });
+    if (st.note) doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(st.note, x + 8, y + 34, { width: w - 16, lineBreak: false });
+  });
+  doc.x = x0;
+  doc.y = y + h + 12;
+  doc.fillColor(INK).font("Helvetica");
+}
+
+/** Vertical bars with a label under each and the count above; drawn in a box at (x, y) of the given width. */
+function pdfBars(doc, { x, y, width, title, bars, color }) {
+  const height = 96;
+  doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY).text(title, x, y, { width, lineBreak: false });
+  const top = y + 18;
+  const base = top + height - 22;
+  const max = Math.max(1, ...bars.map((b) => b.value));
+  const gap = 10;
+  const w = (width - gap * (bars.length - 1)) / bars.length;
+  doc.moveTo(x, base + 0.5).lineTo(x + width, base + 0.5).lineWidth(0.6).strokeColor(RULE).stroke();
+  bars.forEach((b, i) => {
+    const bx = x + i * (w + gap);
+    const bh = Math.round(((base - top - 12) * b.value) / max);
+    doc.rect(bx, base - bh, w, bh).fill(b.value ? color : RULE);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(String(b.value), bx, base - bh - 11, { width: w, align: "center", lineBreak: false });
+    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(b.label, bx, base + 4, { width: w, align: "center", lineBreak: false });
+  });
+  doc.fillColor(INK).font("Helvetica");
+  return top + height;
+}
+
+/** Horizontal bars, one per pick, longest to the page width; today's bill as a dashed line when known. */
+function pdfBillChart(doc, { rows, todayTotal }) {
+  const x0 = doc.page.margins.left;
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const labelW = 236;
+  const valueW = 56;
+  const barW = width - labelW - valueW;
+  const rowH = 18;
+  const max = Math.max(1, ...rows.map((r) => r.monthly || 0), todayTotal || 0);
+  const y0 = doc.y;
+  rows.forEach((r, i) => {
+    const y = y0 + i * rowH;
+    doc.font("Helvetica").fontSize(7.5).fillColor(INK).text(r.label, x0, y + 4, { width: labelW - 8, height: 10, ellipsis: true });
+    const w = Math.max(2, Math.round((barW * (r.monthly || 0)) / max));
+    doc.rect(x0 + labelW, y + 3, w, rowH - 7).fill(r.color);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(money0(r.monthly), x0 + labelW + barW + 6, y + 4, { width: valueW - 6, lineBreak: false });
+  });
+  const bottom = y0 + rows.length * rowH;
+  if (todayTotal) {
+    const tx = x0 + labelW + Math.round((barW * todayTotal) / max);
+    doc.moveTo(tx, y0 - 2).lineTo(tx, bottom + 2).lineWidth(0.8).dash(3, { space: 2 }).strokeColor(MUTED).stroke().undash();
+    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(`Today ${money0(todayTotal)}`, tx - 60, bottom + 4, { width: 120, align: "center", lineBreak: false });
+  }
+  doc.x = x0;
+  doc.y = bottom + (todayTotal ? 18 : 8);
+  doc.fillColor(INK).font("Helvetica");
+}
+
+/**
+ * The AI Picks as a document the client can keep: the census the picks were
+ * weighed on, each pick with the assistant's reason, the bills side by side
+ * and where to start. `recommendations` is the stored record (summary,
+ * startWith, picks with reasons); `contribution` is the employer amount per
+ * tier the page had applied, so the split matches what the client saw.
+ */
+export async function renderPicksReport({ group: g, proposals, recommendations: rec, contribution }) {
+  const picks = Array.isArray(rec && rec.picks) ? rec.picks : [];
+  const table = comparisonTable({ group: g, proposals, plans: picks.map((p) => p.optionId), includeCurrent: true, contribution });
+  const rowFor = (p) => table.rows.find((r) => r.section !== "Today (2026)" && r.name.startsWith(`${p.optionId} ·`)) || null;
+  const census = g.census || null;
+  const counts = table.counts || {};
+  const enrolled = TIER_KEYS.reduce((n, k) => n + (counts[k] || 0), 0);
+  const ran = rec && rec.createdAt ? new Date(rec.createdAt) : new Date();
+  const ranOn = ran.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const lineups = [];
+  for (const p of picks) {
+    const key = `${p.carrier}|${p.funding || ""}`;
+    let l = lineups.find((x) => x.key === key);
+    if (!l) lineups.push((l = { key, carrier: p.carrier, funding: p.funding || "", picks: [] }));
+    l.picks.push(p);
+  }
+  for (const l of lineups) l.picks.sort((a, b) => PICK_ORDER.indexOf(a.tier) - PICK_ORDER.indexOf(b.tier));
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  const data = await pdfBuffer((doc) => {
+    const x0 = doc.page.margins.left;
+    const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const bottom = doc.page.height - 60;
+    const room = (need) => {
+      if (doc.y + need > bottom) doc.addPage();
+    };
+    pdfHeader(doc, { title: "AI Picks — Why These Plans", groupName: g.name, subtitle: `${picks.length} picks · run ${ranOn}` });
+
+    // What this is.
+    doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(
+      `Kennion Benefit Advisors took ${g.name} to market. From the plans quoted, the assistant chose three from each Carrier/TPA lineup — a Lower Cost, a Best Fit and a Richer Benefits option — weighing your census (ages and family make-up), your enrollment by tier and the employer contribution set on the Medical Plans page. This report keeps those picks and the reason behind each one.`,
+      { width, lineGap: 1.5 },
+    );
+    if (rec && rec.summary) {
+      doc.moveDown(0.5);
+      doc.font("Helvetica-Oblique").fontSize(9.5).fillColor(INK).text(rec.summary, { width, lineGap: 1.5 });
+    }
+    doc.moveDown(0.9);
+
+    // The group the picks were weighed on.
+    doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Your group");
+    doc.moveDown(0.4);
+    if (census) {
+      pdfStats(doc, [
+        { label: "Employees", value: String(enrolled || census.employees), note: `${census.employees} with an age on file` },
+        { label: "Average age", value: String(census.average), note: `median ${census.median}` },
+        { label: "Age range", value: `${census.youngest}–${census.oldest}`, note: `${census.spread} spread` },
+        { label: "Spouses", value: String(census.spouses), note: "covered" },
+        { label: "Children", value: String(census.children), note: `in ${census.withChildren} famil${census.withChildren === 1 ? "y" : "ies"}` },
+      ]);
+      const half = (width - 24) / 2;
+      const y = doc.y;
+      const b = census.bands || {};
+      const yb = pdfBars(doc, { x: x0, y, width: half, title: "Ages", color: NAVY, bars: [
+        { label: "Under 30", value: b.under30 || 0 },
+        { label: "30–44", value: b.from30to44 || 0 },
+        { label: "45–54", value: b.from45to54 || 0 },
+        { label: "55+", value: b.from55 || 0 },
+      ] });
+      const yt = pdfBars(doc, { x: x0 + half + 24, y, width: half, title: "Enrollment by tier", color: GREEN, bars: TIER_KEYS.map((k) => ({ label: TIER_LABEL[k], value: counts[k] || 0 })) });
+      doc.x = x0;
+      doc.y = Math.max(yb, yt) + 6;
+    } else {
+      doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(`No census ages on file. The picks were weighed on enrollment by tier: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${counts[k] || 0}`).join(", ")}.`, { width });
+      doc.moveDown(0.6);
+    }
+    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
+    if (table.contribution) doc.text(`Employer contribution applied: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money0(table.contribution[k])}`).join(" · ")} per month; employees pay the rest of their tier's rate.`, { width });
+    if (table.todayTotal != null) doc.text(`Today's total medical premium: ${money0(table.todayTotal)} per month.`, { width });
+    doc.moveDown(1);
+
+    // Where to start.
+    const start = rec && rec.startWith ? picks.find((p) => p.optionId === rec.startWith) : null;
+    if (start) {
+      room(60);
+      const y = doc.y;
+      doc.font("Helvetica").fontSize(9.5);
+      const body = `${start.optionId} · ${start.plan} (${start.carrier}${start.funding ? `, ${start.funding}` : ""}, ${PICK_LABEL[start.tier] || start.tier}). ${rec.startWithReason || ""}`.trim();
+      const h = doc.heightOfString(body, { width: width - 28 }) + 30;
+      doc.rect(x0, y, width, h).fill("#E8F3ED");
+      doc.rect(x0, y, 4, h).fill(GREEN);
+      doc.font("Helvetica-Bold").fontSize(9).fillColor("#16714A").text("START HERE", x0 + 14, y + 9, { lineBreak: false });
+      doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, x0 + 14, y + 22, { width: width - 28 });
+      doc.x = x0;
+      doc.y = y + h + 14;
+    }
+
+    // Each lineup: its three picks, each with the figures and the reason.
+    const blockOf = (p) => {
+      const r = rowFor(p);
+      const facts = r
+        ? [r.network !== "—" ? `Network ${r.network}` : null, r.deductible !== "—" ? `Deductible ${r.deductible}` : null, r.oopMax !== "—" ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
+        : "";
+      const bill = r && r.monthly != null
+        ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}${r.vsToday != null ? `  ·  ${r.vsToday < 0 ? "−" : "+"}${money0(Math.abs(r.vsToday))} vs today` : ""}`
+        : "Not priced at your enrollment.";
+      const reason = p.reason || "";
+      doc.font("Helvetica").fontSize(8.5);
+      const need = 26 + (facts ? 12 : 0) + 12 + (reason ? doc.heightOfString(reason, { width: width - 24 }) + 4 : 0) + 10;
+      return { facts, bill, reason, need };
+    };
+    for (const l of lineups) {
+      // The heading stays with its first pick.
+      room(28 + blockOf(l.picks[0]).need);
+      doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text(`${l.carrier}${l.funding ? ` · ${l.funding}` : ""}`, x0, doc.y, { width });
+      doc.moveDown(0.35);
+      for (const p of l.picks) {
+        const label = PICK_LABEL[p.tier] || p.tier;
+        const { facts, bill, reason, need } = blockOf(p);
+        room(need);
+        const y = doc.y;
+        doc.rect(x0, y, width, need - 6).fill(TINT);
+        doc.rect(x0, y, 4, need - 6).fill(PICK_COLOR[p.tier] || NAVY);
+        doc.font("Helvetica-Bold").fontSize(8).fillColor(PICK_COLOR[p.tier] || NAVY).text(label.toUpperCase(), x0 + 12, y + 8, { lineBreak: false });
+        const lw = doc.widthOfString(label.toUpperCase()) + 10;
+        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.optionId} · ${p.plan}`, x0 + 12 + lw, y + 7, { width: width - 24 - lw, lineBreak: false, ellipsis: true });
+        let ly = y + 22;
+        if (facts) {
+          doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: width - 24, lineBreak: false, ellipsis: true });
+          ly += 12;
+        }
+        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(bill, x0 + 12, ly, { width: width - 24, lineBreak: false, ellipsis: true });
+        ly += 12;
+        if (reason) doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(INK).text(reason, x0 + 12, ly + 2, { width: width - 24 });
+        doc.x = x0;
+        doc.y = y + need;
+      }
+      doc.moveDown(0.5);
+    }
+
+    // The bills side by side.
+    const chart = picks.map((p) => ({ p, r: rowFor(p) })).filter((x) => x.r && x.r.monthly != null);
+    if (chart.length) {
+      room(40 + chart.length * 18 + 30);
+      doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Total monthly bill, side by side", x0, doc.y, { width });
+      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(`Each pick at your enrollment of ${enrolled}. Green is Lower Cost, navy Best Fit, orange Richer Benefits.`, { width });
+      doc.moveDown(0.6);
+      pdfBillChart(doc, {
+        rows: chart.sort((a, b) => a.r.monthly - b.r.monthly).map(({ p, r }) => ({ label: `${p.optionId} · ${p.carrier}${p.funding ? ` ${p.funding}` : ""} · ${PICK_LABEL[p.tier] || p.tier}`, monthly: r.monthly, color: PICK_COLOR[p.tier] || NAVY })),
+        todayTotal: table.todayTotal,
+      });
+    }
+
+    room(50);
+    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("How the picks were made", x0, doc.y, { width });
+    doc.font("Helvetica").fontSize(8.5).fillColor(INK).text(
+      "For each Carrier/TPA lineup the assistant read every quoted plan's rates, deductible, out-of-pocket maximum and benefits, then chose the option that costs least at your enrollment (Lower Cost), the one whose design best matches your group's ages and family make-up (Best Fit), and the one that covers the most for the money (Richer Benefits). UnitedHealthcare's fully insured and level funded quotes are separate lineups, so each gets its three. Run AI Picks again after new quotes arrive or the employer contribution changes; the picks can change with them. Your Kennion account manager can walk through any of these.",
+      { width, lineGap: 1.2 },
+    );
+    pdfFooter(doc);
+  });
+  return { filename: `${safeName(g.name)} - AI Picks ${stamp}.pdf`, mime: "application/pdf", data };
+}
+
 // ----------------------------------------------------------- Markdown → doc
 
 /** The same small Markdown the chat renders, as blocks. */

@@ -21,6 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
+import { comparisonTable, renderComparison, renderPicksReport } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
@@ -1640,6 +1641,51 @@ app.get("/api/chat/recommendations", async (req, res) => {
   const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
   res.json({ recommendations: await chatStore.getRecommendations(g.name) });
+});
+
+/**
+ * What the Medical Plans grid is showing, as a file to keep: the AI Picks
+ * view as the picks report (census, each pick's reason, the bills side by
+ * side); any other view as a comparison of the plans showing. `plans` are
+ * option IDs (or names); `contribution` the employer amount per tier the
+ * page has applied, so the split matches the screen.
+ */
+const EXPORT_TITLES = { picks: "AI Picks", favorites: "Favorites", compare: "Comparison", all: "Plans" };
+app.post("/api/group/export", async (req, res) => {
+  const g = groupForPage(req);
+  if (!g) return res.status(401).json({ error: "no session" });
+  const body = req.body || {};
+  const view = EXPORT_TITLES[body.view] ? body.view : "all";
+  const contribution = {};
+  let any = false;
+  for (const k of ["EE", "ES", "EC", "FAM"]) {
+    const v = Number(body.contribution && body.contribution[k]);
+    if (Number.isFinite(v) && v >= 0) {
+      contribution[k] = v;
+      any = true;
+    }
+  }
+  const group = clientGroupView(g);
+  const proposals = clientProposals(g.name);
+  let file;
+  try {
+    if (view === "picks") {
+      const rec = await chatStore.getRecommendations(g.name);
+      if (!rec || !Array.isArray(rec.picks) || !rec.picks.length) return res.status(404).json({ error: "No AI Picks yet — press AI Picks first." });
+      file = await renderPicksReport({ group, proposals, recommendations: rec, contribution: any ? contribution : null });
+    } else {
+      const plans = (Array.isArray(body.plans) ? body.plans : []).map((x) => String(x || "").trim().slice(0, 120)).filter(Boolean).slice(0, 400);
+      if (!plans.length) return res.status(400).json({ error: "Nothing to export: no plans showing." });
+      const table = comparisonTable({ group, proposals, plans, includeCurrent: true, contribution: any ? contribution : null });
+      file = await renderComparison({ format: "pdf", title: `2027 Medical Options — ${EXPORT_TITLES[view]}`, group, table });
+    }
+  } catch (e) {
+    console.error("export:", e);
+    return res.status(500).json({ error: "Could not build that file." });
+  }
+  res.setHeader("Content-Type", file.mime);
+  res.setHeader("Content-Disposition", `attachment; filename="${file.filename.replace(/"/g, "")}"`);
+  res.send(file.data);
 });
 
 /** What the assistant remembers about the group; the client can drop any line. */

@@ -672,7 +672,19 @@ gets its own Lower Cost, Best Fit and Richer Benefits (`buildRecommendations`
 keys picks by slot and tier). The picks are saved per group and replaced
 whenever the assistant gives a new set: from the ↻ inside the AI Picks segment
 once picks exist (new quotes or a changed contribution can change them), or
-from the chat, which is where any question about them goes. The assistant answers straight
+from the chat, which is where any question about them goes. The picks and
+their reasons are stored per group (`kennion.plan_recommendations`, one row
+per group, replaced on each run) and kept as a document from the grid's
+Export menu: on the AI Picks view, "AI Picks report (PDF)" (`POST
+/api/group/export` with `view: "picks"`, `renderPicksReport` in
+`server/documents.js`) — the census the picks were weighed on with age-band
+and tier charts, where to start, each lineup's three picks with the figures
+at the group's enrollment and the assistant's reason, the bills side by
+side against today's, and how the picks were made. On any other view the
+same menu gives a comparison PDF of the plans showing (Favorites,
+Comparison, Plans) and, on every view, the rows as CSV. The heart has no
+rules: any plan can be a favorite, as many as you like — Sign Up is where
+the one-carrier, one-funding rule is applied. The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer
 Benefits — each by option ID with its monthly cost at the group's census,
 says which it would start with, and closes by asking for a budget or
