@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf } from "@/lib/chat";
+import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlansExcel } from "@/lib/chat";
+import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
@@ -58,25 +59,32 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
-/** CSV of whatever rows are showing (all, or the current filter). */
-function exportCsv(g: Group, list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>) {
-  const head = ["Option", "Carrier/TPA", "Network Type", "Network", "Provider Directory", "PBM", "Formulary", "Plan", "Funding", "Deductible", "OOP Max", "Your Company Pays", "Employee Cost", "Total Monthly Bill", "Rate Basis", ...TIERS.map((t) => `${t.label} Rate`)];
-  const cell = (v: unknown) => {
-    const t = v == null ? "" : String(v);
-    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-  };
+/**
+ * Every plan's card as one row: the same details the card shows (benefits
+ * as printed, rates by tier and the split at the applied contribution, the
+ * totals), plus the lookups as links. Numbers stay numbers so Excel can sum.
+ */
+function planSheet(list: MarketPlan[], applied: Record<TierKey, number>, counts: Record<TierKey, number>): { columns: string[]; rows: (string | number | null)[][] } {
+  const columns = [
+    "Option", "Carrier/TPA", "Carrier Website", "Funding", "Plan", "Plan Type", "Network Type", "Network", "Provider Directory",
+    "Deductible", "Out-of-Pocket Max", "Doctor Visit", "Specialist", "Imaging", "Urgent Care", "Hospital", "Prescription Drugs", "Pharmacy (PBM)", "Formulary",
+    ...TIERS.flatMap((t) => [`${TIER_NAMES[t.key]} Rate`, `${TIER_NAMES[t.key]} Employer`, `${TIER_NAMES[t.key]} Employee`]),
+    "Your Company Pays / Mo", "Your Employees Pay / Mo", "Total Monthly Bill", "Average Employee Monthly Contribution", "Rate Basis", "Proposal Audit",
+  ];
+  const cents = (v: number | null | undefined) => (v == null ? null : Math.round(v * 100) / 100);
   const rows = list.map((p) => {
-    const s = costSplit(p, applied, counts);
-    return [p.optionId ?? "", carrierOf(p), netType(p), p.network ?? "", networkDirectory(p.network)?.url ?? "", pbmOf(p.carrier)?.name ?? "", pbmOf(p.carrier)?.url ?? "", p.plan, fundingOf(p), p.ded ?? "", p.oop ?? "", s ? Math.round(s.er) : "", s ? Math.round(s.ee) : "", s ? Math.round(s.total) : "", p.quoted ? "Quoted" : "Carrier Quote", ...TIERS.map((t) => p.rates[t.key] ?? "")];
+    const m = cardModel(p, applied, counts);
+    const b = Object.fromEntries(m.benefits) as Record<string, string>;
+    const audit = m.source?.audit;
+    return [
+      m.optionId, m.carrier, websiteOf(m.carrier), m.funding, m.plan, m.type, b["Network type"], b["Network"], m.links.directory?.url ?? null,
+      b["Deductible"], b["Out-of-pocket max"], b["Doctor visit"], b["Specialist"], b["Imaging"], b["Urgent care"], b["Hospital"], b["Prescription drugs"], b["Pharmacy (PBM)"], m.links.formulary?.url ?? null,
+      ...m.tiers.flatMap((t) => [cents(t.rate), t.count ? cents(t.er) : null, t.count ? cents(t.ee) : null]),
+      cents(m.er), cents(m.ee), cents(m.premium), m.ee == null || !m.enrolled ? null : cents(m.ee / m.enrolled), m.basis,
+      audit ? (audit.status === "pass" ? `Completed ${new Date(audit.completedAt).toLocaleDateString("en-US")}` : "Under review") : m.source ? "Not yet audited" : null,
+    ];
   });
-  const csv = [head, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${g.name.replace(/[^\w]+/g, "-")}-2027-options.csv`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return { columns, rows };
 }
 
 /**
@@ -199,7 +207,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     const cmp = proposal.map((n) => plans.find((p) => p.plan === n)).filter((p): p is MarketPlan => !!p);
     const pk = plans.filter((p) => picks.has(p.plan));
     return [
-      { view: "all", label: "All plans", hint: `${plans.length} plan${plans.length === 1 ? "" : "s"} at your enrollment, with benefits`, plans },
+      { view: "all", label: "All Plans", hint: `Every 2027 plan's details, one row each (${plans.length})`, plans },
       { view: "picks", label: "AI Picks report", hint: pk.length ? "Your census, each pick's reason, the bills side by side" : "Press AI Picks first", plans: pk },
       { view: "favorites", label: "Favorites", hint: favs.length ? `${favs.length} plan${favs.length === 1 ? "" : "s"} side by side, with benefits` : "Heart a plan first", plans: favs },
       { view: "compare", label: "Comparison", hint: cmp.length ? `${cmp.length} plan${cmp.length === 1 ? "" : "s"} side by side, with benefits` : "Add a plan with + first", plans: cmp },
@@ -210,7 +218,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setExporting(true);
     setExportError("");
     try {
-      await exportGridPdf(set.view, set.plans.map((p) => p.optionId ?? p.plan), applied, g.name);
+      if (set.view === "all") {
+        const sheet = planSheet(set.plans, applied, counts);
+        await exportPlansExcel(sheet.columns, sheet.rows, applied, g.name);
+      } else {
+        await exportGridPdf(set.view, set.plans.map((p) => p.optionId ?? p.plan), applied, g.name);
+      }
     } catch (e) {
       setExportError((e as Error).message || "Could not build that file.");
     } finally {
@@ -710,7 +723,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 104 }}
               />
               <div ref={exportRef} style={{ position: "relative" }}>
-                <button onClick={() => setExportOpen((v) => !v)} disabled={!plans.length || exporting} aria-haspopup="menu" aria-expanded={exportOpen} title={exporting ? "Building your file…" : "Save what's showing: a PDF, or a spreadsheet"} style={{ ...chip(exportOpen), fontWeight: 700, opacity: exporting ? 0.6 : 1 }}>
+                <button onClick={() => setExportOpen((v) => !v)} disabled={!plans.length || exporting} aria-haspopup="menu" aria-expanded={exportOpen} title={exporting ? "Building your file…" : "Save the plans: every plan as a spreadsheet, or a set as a PDF"} style={{ ...chip(exportOpen), fontWeight: 700, opacity: exporting ? 0.6 : 1 }}>
                   {exporting ? "Exporting…" : "Export ▾"}
                 </button>
                 {exportOpen && (
@@ -719,16 +732,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       const empty = !set.plans.length;
                       return (
                         <button key={set.view} role="menuitem" onClick={() => void exportPdf(set)} disabled={empty} aria-disabled={empty} style={{ ...menuItem, opacity: empty ? 0.45 : 1, cursor: empty ? "default" : "pointer" }}>
-                          <strong>{set.label} (PDF)</strong>
+                          <strong>{set.label} ({set.view === "all" ? "Excel" : "PDF"})</strong>
                           <span style={{ fontSize: 11.5, color: C.faint }}>{set.hint}</span>
                         </button>
                       );
                     })}
-                    <div style={{ height: 1, background: C.hairline, margin: "4px 6px" }} />
-                    <button role="menuitem" onClick={() => { setExportOpen(false); exportCsv(g, list, applied, counts); }} style={menuItem}>
-                      <strong>Spreadsheet (CSV)</strong>
-                      <span style={{ fontSize: 11.5, color: C.faint }}>The rows showing, for Excel</span>
-                    </button>
                   </div>
                 )}
               </div>

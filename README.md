@@ -692,9 +692,13 @@ Export menu: on the AI Picks view, "AI Picks report (PDF)" (`POST
 `server/documents.js`) — the census the picks were weighed on with age-band
 and tier charts, where to start, each lineup's three picks with the figures
 at the group's enrollment and the assistant's reason, the bills side by
-side against today's, and how the picks were made. On any other view the
-same menu gives a comparison PDF of the plans showing (Favorites,
-Comparison, Plans) and, on every view, the rows as CSV. The heart has no
+side against today's, and how the picks were made. The same menu always lists
+Favorites and Comparison as PDFs of those plans, and "All Plans (Excel)":
+every 2027 plan's card as one row of a workbook (`planSheet` in
+`OptionsGrid.tsx` builds the columns and rows from the card model, the
+server writes the file with `renderPlanSheet`), no current plans and no
+comparison, a header row Excel can filter and an About sheet naming the
+group, enrollment and contribution. A set with nothing in it is greyed. The heart has no
 rules: any plan can be a favorite, as many as you like — Sign Up is where
 the one-carrier, one-funding rule is applied. The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer

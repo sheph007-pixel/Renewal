@@ -21,7 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { comparisonTable, renderComparison, renderPicksReport } from "./documents.js";
+import { comparisonTable, renderComparison, renderPicksReport, renderPlanSheet } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
@@ -1669,7 +1669,15 @@ app.post("/api/group/export", async (req, res) => {
   const proposals = clientProposals(g.name);
   let file;
   try {
-    if (view === "picks") {
+    if (body.format === "xlsx") {
+      // The workbook: the page sends the card's columns and rows; checked for shape and size, nothing else.
+      const columns = Array.isArray(body.columns) ? body.columns.slice(0, 80).map((c) => String(c == null ? "" : c).slice(0, 80)) : [];
+      const rows = Array.isArray(body.rows) ? body.rows.slice(0, 800) : [];
+      if (!columns.length || !rows.length) return res.status(400).json({ error: "Nothing to export: no plans." });
+      const cell = (v) => (v == null ? null : typeof v === "number" && Number.isFinite(v) ? v : String(v).slice(0, 400));
+      const clean = rows.map((r) => (Array.isArray(r) ? columns.map((_, i) => cell(r[i])) : columns.map(() => null)));
+      file = renderPlanSheet({ group, columns, rows: clean, contribution: any ? contribution : null });
+    } else if (view === "picks") {
       const rec = await chatStore.getRecommendations(g.name);
       if (!rec || !Array.isArray(rec.picks) || !rec.picks.length) return res.status(404).json({ error: "No AI Picks yet - press AI Picks first." });
       file = await renderPicksReport({ group, proposals, recommendations: rec, contribution: any ? contribution : null });

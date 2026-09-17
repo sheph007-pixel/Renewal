@@ -341,6 +341,11 @@ export async function exportGridPdf(view: ExportView, plans: string[], contribut
   await downloadFile("/api/group/export", `${groupName} - ${label}.pdf`, { view, plans, contribution });
 }
 
+/** Every 2027 plan's card as a row of an Excel workbook: the page builds the columns and rows, the server writes the file. */
+export async function exportPlansExcel(columns: string[], rows: (string | number | null)[][], contribution: Record<string, number>, groupName: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - 2027 Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
+}
+
 export async function downloadFile(url: string, filename: string, post?: unknown): Promise<void> {
   const r = await fetch(url, post === undefined ? { headers: groupHeaders() } : { method: "POST", headers: { ...groupHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(post) });
   if (!r.ok) throw new Error(await failure(r));
