@@ -1,7 +1,5 @@
 import { useMemo } from "react";
 import { marketPlans, type AccountManager, type Group, type KennionData, type TierContribution, type TierKey } from "@/lib/model";
-import { C, h2, panel } from "@/lib/ui";
-import Link from "@/lib/Link";
 import OptionsGrid from "@/views/OptionsGrid";
 
 interface Props {
@@ -9,8 +7,6 @@ interface Props {
   g: Group;
   totals: { total: number; enrolled: number };
   selected: Record<string, boolean>;
-  /** Where the shortlist is reviewed and sent — its own page now. */
-  signUpHref: string;
   /** Shown on the printed proposal's footer. */
   manager: AccountManager | null;
   /** Today's employer contribution by tier, and the employer's own editable 2027 figures. */
@@ -35,7 +31,6 @@ export default function Options({
   g,
   totals,
   selected,
-  signUpHref,
   manager,
   contribution,
   contributionValues,
@@ -46,7 +41,6 @@ export default function Options({
   assistantOn = false,
 }: Props) {
   const plans = useMemo(() => marketPlans(data, g), [data, g]);
-  const short = plans.filter((p) => selected[p.plan]);
 
   return (
     <div>
@@ -64,33 +58,6 @@ export default function Options({
         onApply={onContributionApply}
         onReset={onContributionReset}
       />
-
-      <div className="panel noprint" style={{ ...panel, marginTop: 18, padding: "14px 20px", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-          <h2 style={{ ...h2, margin: "0 0 2px", fontSize: 16 }}>Ready to move forward?</h2>
-          <p style={{ margin: 0, fontSize: 13, color: C.muted, lineHeight: 1.5 }}>
-            {short.length
-              ? `${short.length} plan${short.length > 1 ? "s" : ""} on your shortlist. Review it, add a note, and send it in on Sign Up.`
-              : "Heart any plan above to add it to your shortlist. Nothing is binding — it just tells us what to price for you."}
-          </p>
-        </div>
-        <Link
-          href={signUpHref}
-          style={{
-            display: "inline-block",
-            padding: "9px 18px",
-            fontSize: 13.5,
-            fontWeight: 500,
-            color: "#fff",
-            background: C.blue,
-            border: `1px solid ${C.blue}`,
-            borderRadius: 4,
-            textDecoration: "none",
-          }}
-        >
-          {short.length ? "Review your shortlist →" : "Go to Sign Up →"}
-        </Link>
-      </div>
     </div>
   );
 }
