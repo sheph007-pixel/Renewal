@@ -662,12 +662,16 @@ tip both say, with the Carrier/TPA confirming at enrollment.
 
 **Census: who is enrolled.** Every "N enrolled" on the client pages (the
 Employer Contribution band, the Current tab's strip) links to
-`/:slug/census`: each employee's name, age, coverage tier, plan and
-dependants' ages from the Employee Navigator data on file, a CSV download
-(`GET /api/group/census`, `?format=csv`) and the link to Employee
+`/:slug/census`: the Employee Navigator census itself, one row per person
+(the employee, then each dependant) in its own columns - First Name, Last
+Name, Relationship, Gender, Date of Birth, Zip Code, Tier - with a CSV
+download (`GET /api/group/census`, `?format=csv`) and the link to Employee
 Navigator, under one line saying it is illustrative and where it came
-from. Nothing else about anyone: no dates of birth, gender, ZIP or costs,
-and no editing here; the census lives in Employee Navigator.
+from. No costs and no editing here; the census lives in Employee
+Navigator. The parser keeps each member's date of birth and each
+dependant's name, gender, relationship and date of birth (`dob`, `deps`);
+groups imported before it did are filled in at boot from the export kept
+in the database (`backfillFromStoredExport`), so nothing is re-uploaded.
 
 **Illustrative quotes, and the notice.** Every rate the site shows is an
 "Illustrative Quote" (`basisOf`), never a proposal, an offer or a guarantee,
