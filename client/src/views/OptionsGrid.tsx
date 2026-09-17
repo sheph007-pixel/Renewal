@@ -708,7 +708,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             )}
             <SortSelect sort={sort} onChange={setSort} />
             {!narrow && <span aria-hidden="true" style={{ width: 1, height: 22, background: C.border, margin: "0 2px" }} />}
-            {/* One view at a time: All, AI Picks, Favorites, Compare. The selected segment is tinted; a view with nothing in it is greyed. */}
+            {/* One view at a time: All, AI Picks, Favorites, Compare. The selected segment is tinted; a view with nothing in it is greyed. Each icon takes its row icon's colour (green star, red heart, green plus) once the view has something in it, so the tab and the button on the row read as a pair. */}
             <div role="group" aria-label="Which plans to show" style={{ display: "inline-flex", alignItems: "stretch", border: `1px solid ${C.border}`, borderRadius: 4, overflow: "hidden", background: C.card }}>
               <button onClick={() => setView("all")} aria-pressed={view === "all"} title="Every quoted plan" style={segment(view === "all", false)}>
                 All ({plans.length})
@@ -716,7 +716,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               {assistantOn && (
                 <span style={{ display: "inline-flex", alignItems: "stretch", borderRight: `1px solid ${C.border}` }}>
                   <button onClick={aiPicksAction} disabled={asking} aria-pressed={picksOnly} aria-busy={asking} title={asking ? "Working on your picks…" : picks.size ? "The assistant's picks: a Lower Cost, Best Fit and Richer Benefits option from each carrier and funding" : "The assistant picks a Lower Cost, Best Fit and Richer Benefits option from each carrier and funding, from your census"} style={{ ...segment(picksOnly, false), borderRight: "none", paddingRight: picks.size ? 8 : 12, opacity: asking ? 0.6 : 1, cursor: asking ? "progress" : "pointer" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill={picksOnly ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: picks.size ? C.blueInk : "currentColor" }}>
                       <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
                     </svg>
                     AI Picks ({picks.size})
@@ -732,13 +732,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 </span>
               )}
               <button onClick={() => setView("favorites")} disabled={!favorites} aria-pressed={favoritesOnly} title={favorites ? "Only your favorites" : "Press ♡ on a plan to add it to your favorites"} style={segment(favoritesOnly, !favorites)}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill={favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={favorites ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true" style={{ color: favorites ? C.red : "currentColor" }}>
                   <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
                 </svg>
                 Favorites ({favorites})
               </button>
               <button onClick={() => setView("compare")} disabled={!proposal.length} aria-pressed={compareOnly} title={proposal.length ? `Only the plans you're comparing (up to ${MAX_COMPARE})` : `Press + on a plan to compare it (up to ${MAX_COMPARE})`} style={segment(compareOnly, !proposal.length)}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true" style={{ color: proposal.length ? C.blue : "currentColor" }}>
                   <path d="M12 5v14M5 12h14" />
                 </svg>
                 Compare ({proposal.length})
