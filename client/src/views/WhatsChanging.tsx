@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { marketReview, type Group, type KennionData } from "@/lib/model";
-import { C, ctaLink, h2, panel, sectionHead } from "@/lib/ui";
+import { C, h2, panel, primaryBtn, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
 
 interface Props {
@@ -10,13 +10,12 @@ interface Props {
 }
 
 /**
- * What's New for 2027, under the welcome: one line on where the market
- * review stands and how many options are waiting on Medical Plans. No
- * carrier names, networks or figures here; those belong on Medical Plans.
+ * What's New for 2027, under the welcome: how many options are waiting on
+ * Medical Plans and one large button to get there. No carrier names,
+ * networks or figures here; those belong on Medical Plans.
  */
 export default function WhatsChanging({ data, g, optionsHref }: Props) {
   const review = useMemo(() => marketReview(data, g), [data, g]);
-  const done = review.complete;
   return (
     <div>
       <div className="anchor" style={sectionHead}>
@@ -32,26 +31,22 @@ export default function WhatsChanging({ data, g, optionsHref }: Props) {
           </strong>{" "}
           available to review in BenSync.
         </p>
-        <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          <span
-            role="status"
+        <div style={{ marginTop: 18 }}>
+          <Link
+            className="cta"
+            href={optionsHref}
             style={{
+              ...primaryBtn,
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              padding: "6px 12px",
-              borderRadius: 999,
-              fontSize: 13,
+              gap: 10,
+              padding: "14px 28px",
+              fontSize: 16,
               fontWeight: 600,
-              color: done ? C.green : C.amber,
-              background: done ? C.greenTint : C.amberTint,
-              border: `1px solid ${done ? C.greenEdge : C.amberEdge}`,
+              borderRadius: 6,
+              textDecoration: "none",
             }}
           >
-            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: "currentColor" }} />
-            {done ? "Market review complete: your options are ready to review." : "Market review in progress: additional options may still be added."}
-          </span>
-          <Link className="cta" href={optionsHref} style={ctaLink}>
             Review Medical Options &rarr;
           </Link>
         </div>
