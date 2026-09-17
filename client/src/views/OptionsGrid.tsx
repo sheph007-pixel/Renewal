@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, num, panel, pill, textInput } from "@/lib/ui";
-import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick } from "@/lib/chat";
+import { C, chip, num, panel, textInput } from "@/lib/ui";
+import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
@@ -171,6 +171,31 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // Asking for picks happens in place: the button spins, the chat stays
   // closed, and the picks land in the grid when the answer is in.
   const [asking, setAsking] = useState(false);
+  // Export: a small menu — the view showing as a PDF, or the rows as CSV.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const exportRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!exportOpen) return;
+    const away = (e: MouseEvent) => {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [exportOpen]);
+  const exportPdf = async () => {
+    setExportOpen(false);
+    setExporting(true);
+    setExportError("");
+    try {
+      await exportGridPdf(view, list.map((p) => p.optionId ?? p.plan), applied, g.name);
+    } catch (e) {
+      setExportError((e as Error).message || "Could not build that file.");
+    } finally {
+      setExporting(false);
+    }
+  };
   // The analysis dialog: open while the request runs, "picks ready" for a beat once they land, then closed.
   const [analyzing, setAnalyzing] = useState<"off" | "working" | "done">("off");
   const profile = useMemo(() => censusProfile(g), [g]);
@@ -346,12 +371,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     setView("all");
   };
   // What is applied, as chips: one per selection in a category, then the
-  // search, Favorites and Compare views, each removable on its own.
+  // search, each removable on its own. A view (AI Picks, Favorites, Compare)
+  // is not a chip: its segment says it is on, and nothing shifts when it is.
   const appliedChips: AppliedChip[] = [
     ...filterChips(filters).map((c) => ({ key: c.key, label: c.label, onRemove: () => setFilters((f) => c.remove(f)) })),
     ...(q ? [{ key: "search", label: `Search: “${query.trim()}”`, onRemove: () => setQuery("") }] : []),
-    ...(favoritesOnly ? [{ key: "favorites", label: "Favorites only", onRemove: () => setView("all") }] : []),
-    ...(compareOnly ? [{ key: "compare", label: "Comparing only", onRemove: () => setView("all") }] : []),
   ];
   // "Show in grid" from a recommended plan: its row is scrolled to and lit
   // for a moment — after the filters are cleared, when they were hiding it.
@@ -366,32 +390,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   }, [flash, list]);
   /** A column heading: first click sorts it ascending, the next flips it. The Sort by control shows the same. */
   const sortOn = (k: SortKey) => setSort((s) => (s.key === k ? { key: k, dir: s.dir > 0 ? -1 : 1 } : { key: k, dir: 1 }));
-  const MAX_FAVORITES = 8;
   const MAX_COMPARE = 4;
   const inProposal = (name: string) => proposal.includes(name);
   const compareFull = proposal.length >= MAX_COMPARE;
-  const favoritesFull = favorites >= MAX_FAVORITES;
-  // One carrier, one funding type: a group's 2027 plans all come from one
-  // carrier, and with UnitedHealthcare all fully insured or all level
-  // funded — the shortlist is what Sign Up sends, so it holds to that. The
-  // first plan shortlisted sets the carrier and funding; a plan that does
-  // not fit cannot be added until the shortlist is cleared. Comparing
-  // across carriers (the + column) is still open.
-  const shortlist = plans.filter((p) => selected[p.plan]);
-  const lock = shortlist.length ? { carrier: carrierOf(shortlist[0]), funding: fundingOf(shortlist[0]) } : null;
-  const fits = (p: MarketPlan) => !lock || (carrierOf(p) === lock.carrier && fundingOf(p) === lock.funding);
-  const heartBlocked = (p: MarketPlan) => !selected[p.plan] && (favoritesFull || !fits(p));
-  const heartTitle = (p: MarketPlan) =>
-    selected[p.plan] ? "Remove From Favorites" : favoritesFull ? `Up to ${MAX_FAVORITES} favorites — remove one first` : !fits(p) ? `One carrier, one funding type: your shortlist is ${lock!.carrier} ${lock!.funding}` : "Add To Favorites";
+  // Any plan can be a favorite, as many as you like — the heart works like
+  // the +. Sign Up is where the one-carrier, one-funding rule lives.
+  const heartTitle = (p: MarketPlan) => (selected[p.plan] ? "Remove From Favorites" : "Add To Favorites");
   /** Up to four plans side by side; a fifth is refused until one is removed. */
   const toggleProposal = (name: string) =>
     setProposal((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : prev.length >= MAX_COMPARE ? prev : [...prev, name]));
-  /** Up to eight favorites; a ninth is refused until one is removed. */
-  const toggleHeart = (name: string) => {
-    const p = plans.find((x) => x.plan === name);
-    if (p && heartBlocked(p)) return;
-    onToggleSelected(name);
-  };
+  const toggleHeart = (name: string) => onToggleSelected(name);
   const viewComparison = () => {
     setCompareOpen(true);
     setTimeout(() => document.getElementById("proposal")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -425,7 +433,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   };
   const actionsFor = (p: MarketPlan) => (
     <>
-      <button onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} title={heartTitle(p)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
+      <button onClick={() => toggleHeart(p.plan)} title={heartTitle(p)} style={{ ...chip(!!selected[p.plan]), padding: "7px 12px", fontSize: 13 }}>
         {selected[p.plan] ? "♥ On Your Shortlist" : "♡ Add To Shortlist"}
       </button>
       <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(inProposal(p.plan)), padding: "7px 12px", fontSize: 13 }}>
@@ -469,7 +477,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 compact
                 actions={
                   <>
-                    <button onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} title={heartTitle(p)} style={chip(!!selected[p.plan])}>
+                    <button onClick={() => toggleHeart(p.plan)} title={heartTitle(p)} style={chip(!!selected[p.plan])}>
                       {selected[p.plan] ? "♥ Favorite" : "♡ Favorite"}
                     </button>
                     <button onClick={() => toggleProposal(p.plan)} style={{ ...chip(false), color: C.blue }}>
@@ -624,7 +632,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             ) : (
               <FiltersButton count={filterCount(filters)} open={filtersOpen} onClick={() => setFiltersOpen((v) => !v)} buttonRef={filtersBtn} />
             )}
-            {filtering && (
+            {/* The count reads only when a filter or search narrows the list; a view switch says its count on its own segment. */}
+            {(!filtersEmpty(filters) || !!q) && (
               <span aria-live="polite" style={{ fontSize: 13, color: C.muted, margin: "0 6px 0 2px", ...num }}>
                 {showingText(list.length, plans.length)}
               </span>
@@ -680,14 +689,33 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 aria-label="Search 2027 plan options"
                 style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 104 }}
               />
-              <button onClick={() => exportCsv(g, list, applied, counts)} disabled={!list.length} title="Export the plans showing to CSV" style={{ ...chip(false), fontWeight: 700 }}>
-                Export
-              </button>
+              <div ref={exportRef} style={{ position: "relative" }}>
+                <button onClick={() => setExportOpen((v) => !v)} disabled={!list.length || exporting} aria-haspopup="menu" aria-expanded={exportOpen} title={exporting ? "Building your file…" : "Save what's showing: a PDF, or a spreadsheet"} style={{ ...chip(exportOpen), fontWeight: 700, opacity: exporting ? 0.6 : 1 }}>
+                  {exporting ? "Exporting…" : "Export ▾"}
+                </button>
+                {exportOpen && (
+                  <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 5, minWidth: 220, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(15,42,71,0.14)", padding: 4 }}>
+                    <button role="menuitem" onClick={() => void exportPdf()} style={menuItem}>
+                      <strong>{{ picks: "AI Picks report", favorites: "Favorites", compare: "Comparison", all: "Plans showing" }[view]} (PDF)</strong>
+                      <span style={{ fontSize: 11.5, color: C.faint }}>{view === "picks" ? "Your census, each pick's reason, the bills side by side" : `${list.length} plan${list.length === 1 ? "" : "s"} at your enrollment, with benefits`}</span>
+                    </button>
+                    <button role="menuitem" onClick={() => { setExportOpen(false); exportCsv(g, list, applied, counts); }} style={menuItem}>
+                      <strong>Spreadsheet (CSV)</strong>
+                      <span style={{ fontSize: 11.5, color: C.faint }}>The rows showing, for Excel</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </span>
           </div>
           {!narrow && filtersOpen && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 10 }}>
               <FilterDropdowns filters={filters} onChange={setFilters} options={options} bounds={bounds} open={openPanel} setOpen={setOpenPanel} />
+            </div>
+          )}
+          {exportError && (
+            <div role="alert" style={{ padding: "0 16px 8px", fontSize: 12.5, color: C.red }}>
+              {exportError}
             </div>
           )}
           {appliedChips.length > 0 && <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} showCount={false} />}
@@ -728,7 +756,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // alike, on one margin; the digits stay tabular so the
                     // dollar columns still line up under each other.
                     textAlign: "left",
-                    width: i >= 8 ? 40 : i === 0 ? 72 : undefined,
+                    width: i === 8 ? (picks.size ? 58 : 40) : i > 8 ? 40 : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -765,15 +793,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     <div style={{ fontSize: 11.5, color: C.faint }}>{networkOf(p) || ""}</div>
                   </td>
                   <td style={cell}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span>{p.plan}</span>
-                      {picks.get(p.plan) && (
-                        <span title={picks.get(p.plan)!.reason} style={{ ...pill(C.navy, "#e8eef5", "#c9d6e6"), fontSize: 10.5, padding: "1px 7px", textTransform: "none", whiteSpace: "nowrap" }}>
-                          {picks.get(p.plan)!.start ? "★ " : "✦ "}
-                          {TIER_LABEL[picks.get(p.plan)!.tier]}
-                        </span>
-                      )}
-                    </div>
+                    <div>{p.plan}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
                       {fundingOf(p)}
                       {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
@@ -793,16 +813,17 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {(() => {
                       const pk = picks.get(p.plan);
                       return (
-                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} — ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, color: pk ? C.blue : C.hairline, cursor: pk ? "pointer" : "default" }}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill={pk ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} — ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, width: "auto", minWidth: 30, height: "auto", minHeight: 30, padding: pk ? "2px 2px" : 0, gap: 1, fontSize: 9.5, lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.1, color: pk ? C.blueInk : C.hairline, cursor: pk ? "pointer" : "default" }}>
+                          <svg width={pk ? 16 : 20} height={pk ? 16 : 20} viewBox="0 0 24 24" fill={pk ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
                           </svg>
+                          {pk && <span style={{ display: "block", maxWidth: 54, whiteSpace: "normal" }}>{TIER_LABEL[pk.tier]}</span>}
                         </button>
                       );
                     })()}
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, color: heart ? C.red : heartBlocked(p) ? C.hairline : C.ghost }}>
+                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
                         <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
                       </svg>
@@ -910,6 +931,22 @@ const segment = (on: boolean, empty: boolean): CSSProperties => ({
   borderRight: `1px solid ${C.border}`,
   cursor: empty ? "default" : "pointer",
 });
+
+const menuItem = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: 2,
+  width: "100%",
+  padding: "8px 10px",
+  background: "none",
+  border: "none",
+  borderRadius: 6,
+  textAlign: "left",
+  fontSize: 13,
+  color: C.ink,
+  cursor: "pointer",
+} as const;
 
 const iconBtn = {
   display: "inline-grid",

@@ -328,8 +328,21 @@ export async function deleteFile(id: number): Promise<void> {
 }
 
 /** Fetch a file with the session headers and hand it to the browser as a download. */
-export async function downloadFile(url: string, filename: string): Promise<void> {
-  const r = await fetch(url, { headers: groupHeaders() });
+/** Which grid view a file is of: the AI Picks report, or a comparison of the favorites, the comparison or every plan showing. */
+export type ExportView = "picks" | "favorites" | "compare" | "all";
+
+/**
+ * What the Medical Plans grid is showing, as a PDF: the AI Picks view as the
+ * picks report (the census, each pick's reason, the bills side by side); any
+ * other view as a comparison of the plans showing. Saves through the browser.
+ */
+export async function exportGridPdf(view: ExportView, plans: string[], contribution: Record<string, number>, groupName: string): Promise<void> {
+  const label = { picks: "AI Picks", favorites: "Favorites", compare: "Comparison", all: "Plans" }[view];
+  await downloadFile("/api/group/export", `${groupName} - ${label}.pdf`, { view, plans, contribution });
+}
+
+export async function downloadFile(url: string, filename: string, post?: unknown): Promise<void> {
+  const r = await fetch(url, post === undefined ? { headers: groupHeaders() } : { method: "POST", headers: { ...groupHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(post) });
   if (!r.ok) throw new Error(await failure(r));
   const blob = await r.blob();
   const href = URL.createObjectURL(blob);
