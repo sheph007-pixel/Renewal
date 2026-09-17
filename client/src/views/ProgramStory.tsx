@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { C, kicker, panel } from "@/lib/ui";
 
 /** How long each frame holds before the next one, when the story is playing. */
-const HOLD_MS = 7000;
+const HOLD_MS = 10000;
 
 interface Tile {
   title: string;
@@ -61,7 +61,7 @@ const FRAMES: Frame[] = [
 
 /**
  * The 2027 Kennion Program, told in six frames that advance on their own
- * about every seven seconds: the story the program deck tells, on the page
+ * about every ten seconds: the story the program deck tells, on the page
  * instead of behind a download. It pauses while the pointer or keyboard is
  * on it and while the tab is hidden, never auto-plays for someone who asked
  * for reduced motion, and can be stepped by hand with the dots and arrows.

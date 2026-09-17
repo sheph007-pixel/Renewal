@@ -627,7 +627,7 @@ button,
   background: #1f8a5b;
 }
 .story-dot.on > i {
-  animation: story-fill var(--story-ms, 7000ms) linear forwards;
+  animation: story-fill var(--story-ms, 10000ms) linear forwards;
 }
 .story-dot.paused > i {
   animation-play-state: paused;
