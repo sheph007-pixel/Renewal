@@ -49,6 +49,25 @@ import { buildRecommendations, PICK_TIERS } from "../server/assistant.js";
     "carrier then tier order; a plan code resolves; a second pick for the same tier or plan is dropped",
   );
   assert.equal(buildRecommendations({ summary: "", start_with: "", start_with_reason: "", picks: [] }, proposals).record.picks.length, 0);
+  // UnitedHealthcare quotes fully insured and level funded: one lineup each, three picks each — the same tier twice is not a duplicate across fundings.
+  const uhc = [
+    { slot: "UHC Fully Insured", carrier: "UnitedHealthcare", plans: [{ optionId: "UH1", name: "FI 1", monthlyTotal: 30000 }, { optionId: "UH2", name: "FI 2", monthlyTotal: 32000 }] },
+    { slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans: [{ optionId: "UH3", name: "LF 1", monthlyTotal: 28000 }, { optionId: "UH4", name: "LF 2", monthlyTotal: 29000 }] },
+  ];
+  const both = buildRecommendations(
+    { summary: "", start_with: "UH3", start_with_reason: "", picks: [
+      { carrier: "UnitedHealthcare", tier: "best_fit", option_id: "UH1", reason: "FI." },
+      { carrier: "UnitedHealthcare", tier: "best_fit", option_id: "UH3", reason: "LF." },
+      { carrier: "UnitedHealthcare", tier: "lower_cost", option_id: "UH4", reason: "LF cheap." },
+      { carrier: "UnitedHealthcare", tier: "best_fit", option_id: "UH2", reason: "Second FI best fit: dropped." },
+    ] },
+    uhc,
+  ).record;
+  assert.deepEqual(
+    both.picks.map((p) => [p.funding, p.tier, p.optionId]),
+    [["Fully Insured", "best_fit", "UH1"], ["Level Funded", "lower_cost", "UH4"], ["Level Funded", "best_fit", "UH3"]],
+    "a Best Fit for each UnitedHealthcare funding; a second for the same funding is dropped; funding then tier order",
+  );
   assert.equal(buildRecommendations({ summary: "", start_with: "ZZ", start_with_reason: "", picks: [{ carrier: "Gravie", tier: "lower_cost", option_id: "GR1", reason: "" }] }, proposals).record.startWith, "GR1", "an unknown start falls back to the first pick");
   assert.deepEqual(PICK_TIERS, ["lower_cost", "best_fit", "richer_benefits"]);
 }
@@ -117,7 +136,7 @@ assert.equal(none.recommendations, null);
 
 // The page's request is an ordinary question in a new conversation; the
 // answer places picks on the page — streamed to the box, and on file after.
-const ask = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us.";
+const ask = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us — and for UnitedHealthcare, for each funding it quoted.";
 const r = await fetch(`${base}/api/chat/send`, { method: "POST", headers: { ...json, cookie }, body: JSON.stringify({ threadId: null, content: ask, page: "plans", compact: true, title: "Plan recommendations" }) });
 const body = await r.text();
 assert.equal(r.status, 200, body);

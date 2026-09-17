@@ -283,7 +283,8 @@ export function SortSelect({ sort, onChange }: { sort: SortState; onChange: (s: 
   const listed = SORT_CHOICES.some((c) => c.key === sort.key && c.dir === sort.dir);
   return (
     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>
-      Sort by
+      {/* The select reads as its own label ("Monthly bill: Low to high"); the words stay for screen readers. */}
+      <span style={srOnly}>Sort by</span>
       <select
         value={sortValue(sort)}
         onChange={(e) => {
@@ -314,7 +315,7 @@ export interface AppliedChip {
  * applied selection, and Clear all. The count is announced as it changes.
  */
 /** "Showing all 152 plans" / "Showing 12 of 152 plans". */
-export const showingText = (showing: number, total: number) => (showing === total ? `Showing all ${total} plan${total === 1 ? "" : "s"}` : `Showing ${showing} of ${total} plans`);
+export const showingText = (showing: number, total: number) => (showing === total ? `All ${total} plan${total === 1 ? "" : "s"}` : `${showing} of ${total} plans`);
 
 export function AppliedFilters({ showing, total, chips, onClearAll, showCount = true }: { showing: number; total: number; chips: AppliedChip[]; onClearAll: () => void; showCount?: boolean }) {
   return (

@@ -49,7 +49,7 @@ type GridView = "all" | "picks" | "favorites" | "compare";
 
 /** The assistant's three picks per carrier, as tagged on the grid. */
 const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
-const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
+const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us — and for UnitedHealthcare, for each funding it quoted, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 /** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
 const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 /** PPO / EPO / RBP, from the proposal; "—" where the quote does not say. */
@@ -657,6 +657,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 Compare ({proposal.length})
               </button>
             </div>
+            {assistantOn && picks.size > 0 && (
+              <button onClick={askForPicks} disabled={asking} aria-label="Run AI Picks again" title="Run AI Picks again — new quotes or a changed contribution can change them" style={{ ...chip(false), padding: "7px 9px", opacity: asking ? 0.6 : 1 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+                  <path d="M20 4v5h-5" />
+                </svg>
+              </button>
+            )}
             {proposal.length > 0 && (
               <button onClick={compareOpen ? () => setCompareOpen(false) : viewComparison} style={{ ...chip(compareOpen), fontWeight: 600 }}>
                 {compareOpen ? "Hide Comparison" : "View Comparison"}
