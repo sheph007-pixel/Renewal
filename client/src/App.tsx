@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
-  GROUP_SIZE_TIP,
   groupSizeLabel,
-  groupSizeNote,
   marketPlans,
   minimumContribution,
   ovKey,
@@ -25,7 +23,6 @@ import {
 import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/session";
 import Link from "@/lib/Link";
 import { useNarrow } from "@/lib/narrow";
-import InfoTip from "@/views/InfoTip";
 import Disclaimers from "@/views/Disclaimers";
 import Census from "@/views/Census";
 import Login from "@/views/Login";
@@ -879,10 +876,7 @@ export default function App() {
                   <PeopleIcon />
                   <div>
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>
-                      {groupSizeLabel(g)}
-                      {groupSizeNote(g) && <InfoTip text={GROUP_SIZE_TIP} color={g.sizeCategory === "51+" ? C.amber : C.green} place="below" />}
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
                   </div>
                 </div>
               )}
