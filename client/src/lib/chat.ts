@@ -54,6 +54,9 @@ export interface MemoryLine {
 /** One of the assistant's plan picks: a quoted 2027 option, and why. */
 export interface RecommendedPick {
   carrier: string;
+  /** The lineup's funding — UnitedHealthcare's two fundings each get their three picks. */
+  funding?: string;
+  slot?: string;
   tier: "lower_cost" | "best_fit" | "richer_benefits";
   optionId: string;
   plan: string;

@@ -149,7 +149,7 @@ How to work:
 - Networks and doctors: every Gravie plan and every Angle Health plan is on Cigna's network — the same network and the same lookup for both. When the client asks whether a doctor, hospital or clinic is in network on a Gravie or Angle Health plan, or where to check, give Cigna's public directory: https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001 — and say to search it as Open Access Plus. Gravie's pharmacy benefit manager (PBM) is Express Scripts; when the client asks whether a drug is covered or what tier it is on a Gravie plan, give the formulary: https://www.express-scripts.com/frontend/open-enrollment/gravie. Every UnitedHealthcare plan quoted here is on the Choice Plus network; for whether a doctor or hospital is in network on a UnitedHealthcare plan, give UnitedHealthcare's Choice Plus directory: https://connect.werally.com/guest/eyJkZWxzeXMiOiI1MiIsInBsYW5OYW1lIjoiQ2hvaWNlIFBsdXMifQouGJEydhvvIF0CEkL7OR4zyxz11_MPxoMvtvbzh-eZw — a guest link, no sign-in needed. For any other carrier's network, or a UnitedHealthcare formulary, say the account manager can send the link.
 - Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
 - Advise like a benefits advisor, not a catalogue. When the client asks what they should do, what you recommend, or which option is best, give a recommendation: name the plan or plans, say why in terms of their figures (cost at their census, what changes for employees, funding tradeoffs, network), and say what would change your mind. Frame it as "here is what we would recommend" — Kennion's recommendation, with the account manager confirming before anything binds. If you do not yet know what matters to them, ask two or three short questions first (budget or a cost ceiling; whether they would rather keep employee cost flat or hold the employer's spend; network or carrier must-haves; appetite for a level-funded refund versus a fixed premium; anything the team has complained about), then recommend. Never tell them they must pick a carrier before you can advise — comparing across carriers is the advice. When they push back or say what they prefer, revise the recommendation and say what changed.
-- Plan recommendations. When the client asks for plan recommendations (the Medical Plans page has a "Get Plan Recommendations" button that sends that request), do not ask questions first: recommend straight from their figures and census profile, then invite them to tell you what matters so you can refine. Give three picks — Lower Cost, Best Fit, Richer Benefits — and when more than one carrier has quoted, give the three for each carrier. Publish the picks with the recommend_plans tool: it puts them on the Medical Plans page as cards, each with the plan's own figures, so the client reads them there, not in the chat. Ground the advice in the census: a young, narrowly spread workforce with few dependants can do well on a higher-deductible design with a lower premium; a wide age range or an older workforce needs the Best Fit pick to protect the people most likely to use care (lower deductible and out-of-pocket max), and it is worth saying that plainly; many families or spouses covered means the family tier rate matters more than the employee-only rate. Use their standing preferences if any are on file. After the tool returns, the chat answer is short — under about 90 words: say the picks are on the page, which one you would start with and why in a sentence or two, and close with one line inviting their budget or must-haves so you can sharpen the picks — this is the one place a closing question is right. Do not list every pick's figures in the chat; the cards carry them. When the client later asks you to revise the picks (a budget, a carrier, a must-have), call recommend_plans again with the whole new set — it replaces the old one on the page — and say what changed.
+- Plan recommendations. When the client asks for plan recommendations (the Medical Plans page has a "Get Plan Recommendations" button that sends that request), do not ask questions first: recommend straight from their figures and census profile, then invite them to tell you what matters so you can refine. Give three picks — Lower Cost, Best Fit, Richer Benefits — and when more than one carrier has quoted, give the three for each carrier; and where UnitedHealthcare has quoted both fully insured and level funded, give the three for each funding, since a group's program is one carrier and one funding and each lineup is chosen on its own. Publish the picks with the recommend_plans tool: it puts them on the Medical Plans page as cards, each with the plan's own figures, so the client reads them there, not in the chat. Ground the advice in the census: a young, narrowly spread workforce with few dependants can do well on a higher-deductible design with a lower premium; a wide age range or an older workforce needs the Best Fit pick to protect the people most likely to use care (lower deductible and out-of-pocket max), and it is worth saying that plainly; many families or spouses covered means the family tier rate matters more than the employee-only rate. Use their standing preferences if any are on file. After the tool returns, the chat answer is short — under about 90 words: say the picks are on the page, which one you would start with and why in a sentence or two, and close with one line inviting their budget or must-haves so you can sharpen the picks — this is the one place a closing question is right. Do not list every pick's figures in the chat; the cards carry them. When the client later asks you to revise the picks (a budget, a carrier, a must-have), call recommend_plans again with the whole new set — it replaces the old one on the page — and say what changed.
 - Remember what the client tells you. When they state a preference, a constraint, or a decision — a budget, a contribution philosophy, a carrier or network they need, a plan they liked or ruled out, who decides — record it with update_client_memory in one plain sentence so the next conversation starts from it. Do not record figures that are already in their data, guesses, or anything they did not say. When they change their mind, remove the old line and add the new one. What you have on file for this client is listed below; treat it as their standing preferences and say when a recommendation follows from it.
 - You are not a lawyer, tax adviser or actuary: on ACA, ERISA, COBRA, tax treatment, or plan legality, give the general shape and point them to their account manager or counsel.
 - The portal's pages, which you may point to by name: Welcome (the letter, with What's Changing For 2027 — today against 2027, the headline — below it); Assistant (this); Medical Plans, which has two tabs — New 2027 Medical Options (every quoted plan side by side, with a contribution modeler; the tab the page opens on) and Current 2026 Medical Plans (what is in force today, with rates and the employer/employee split); Supplemental Package (dental, vision, life, disability and the rest); Sign Up (shortlist plans and send a note to Kennion to start the renewal).
@@ -174,7 +174,7 @@ const TOOLS = [
   {
     name: "recommend_plans",
     description:
-      "Publish plan recommendations to this group's Medical Plans page, where the grid's AI Picks view shows just those plans, each tagged Lower Cost, Best Fit or Richer Benefits with your one-line reason on its card, priced at the group's enrollment, with the same shortlist and compare buttons as every row. Call it once per answer with every pick — Lower Cost, Best Fit and Richer Benefits for each carrier that quoted — and again with the whole set whenever you revise them; each call replaces the last. Picks are quoted 2027 options by their option ID (UH3, GR1) as they appear in the figures. Returns which picks were placed.",
+      "Publish plan recommendations to this group's Medical Plans page, where the grid's AI Picks view shows just those plans, each tagged Lower Cost, Best Fit or Richer Benefits with your one-line reason on its card, priced at the group's enrollment, with the same shortlist and compare buttons as every row. Call it once per answer with every pick — Lower Cost, Best Fit and Richer Benefits for each carrier that quoted, and for each of UnitedHealthcare's fundings (fully insured and level funded) where both quoted — and again with the whole set whenever you revise them; each call replaces the last. Picks are quoted 2027 options by their option ID (UH3, GR1) as they appear in the figures. Returns which picks were placed.",
     input_schema: {
       type: "object",
       additionalProperties: false,
@@ -186,14 +186,14 @@ const TOOLS = [
         picks: {
           type: "array",
           minItems: 1,
-          maxItems: 12,
+          maxItems: 18,
           items: {
             type: "object",
             additionalProperties: false,
             required: ["carrier", "tier", "option_id", "reason"],
             properties: {
               carrier: { type: "string", description: "The carrier or partner the pick is from, as named in the figures (UnitedHealthcare, Gravie, Angle Health)." },
-              tier: { type: "string", enum: PICK_TIERS, description: "Which of the three picks this is for that carrier." },
+              tier: { type: "string", enum: PICK_TIERS, description: "Which of the three picks this is for that carrier (and, for UnitedHealthcare, that funding)." },
               option_id: { type: "string", description: "The option ID (UH3, GR1)." },
               reason: { type: "string", description: "One short line on why this pick for this group — under about 25 words." },
             },
@@ -443,9 +443,12 @@ const clean = (v, max) => String(v == null ? "" : v).replace(/\s+/g, " ").trim()
 /**
  * The tool's input as the record the page reads: each pick resolved to a
  * quoted plan by option ID (a plan name or code also works), one pick per
- * carrier and tier, in carrier-then-tier order. Picks that resolve to
+ * lineup and tier — a lineup being a carrier and a funding, so
+ * UnitedHealthcare's fully insured and level funded quotes each get their
+ * three — in carrier, funding, then tier order. Picks that resolve to
  * nothing are returned separately so the model can be told.
  */
+const fundingOfSlot = (slot) => (slot === "UHC Fully Insured" ? "Fully Insured" : "Level Funded");
 export function buildRecommendations(input, proposals) {
   const plans = quotedPlans(proposals);
   const byId = new Map(plans.map((pl) => [String(pl.optionId).toUpperCase(), pl]));
@@ -458,7 +461,7 @@ export function buildRecommendations(input, proposals) {
   const unknown = [];
   const seen = new Set();
   const picks = [];
-  for (const raw of Array.isArray(input.picks) ? input.picks.slice(0, 12) : []) {
+  for (const raw of Array.isArray(input.picks) ? input.picks.slice(0, 18) : []) {
     const pl = find(raw && raw.option_id);
     const tier = PICK_TIERS.includes(raw && raw.tier) ? raw.tier : null;
     if (!pl || !tier) {
@@ -466,12 +469,13 @@ export function buildRecommendations(input, proposals) {
       continue;
     }
     const carrier = clean(raw.carrier, 60) || pl.proposalCarrier || pl.slot;
-    const key = `${carrier.toLowerCase()}|${tier}`;
+    const slot = pl.slot || carrier;
+    const key = `${slot.toLowerCase()}|${tier}`;
     if (seen.has(key) || picks.some((p) => p.optionId === pl.optionId)) continue;
     seen.add(key);
-    picks.push({ carrier, tier, optionId: pl.optionId, plan: pl.name, reason: clean(raw.reason, 200) });
+    picks.push({ carrier, funding: fundingOfSlot(slot), slot, tier, optionId: pl.optionId, plan: pl.name, reason: clean(raw.reason, 200) });
   }
-  picks.sort((a, b) => a.carrier.localeCompare(b.carrier) || PICK_TIERS.indexOf(a.tier) - PICK_TIERS.indexOf(b.tier));
+  picks.sort((a, b) => a.carrier.localeCompare(b.carrier) || a.slot.localeCompare(b.slot) || PICK_TIERS.indexOf(a.tier) - PICK_TIERS.indexOf(b.tier));
   const start = find(input.start_with);
   const startWith = start && picks.some((p) => p.optionId === start.optionId) ? start.optionId : picks.length ? picks[0].optionId : null;
   return {
@@ -537,12 +541,14 @@ async function fakeReply(question, ctx) {
     // richest, by monthly total — the shape the real answer has.
     const byCarrier = new Map();
     for (const pl of quotedPlans(ctx.data.proposals)) {
-      const k = pl.proposalCarrier;
+      // One lineup per slot: UnitedHealthcare's two fundings each get their three.
+      const k = pl.slot || pl.proposalCarrier;
       if (!byCarrier.has(k)) byCarrier.set(k, []);
       byCarrier.get(k).push(pl);
     }
     const picks = [];
-    for (const [carrier, list] of byCarrier) {
+    for (const [, list] of byCarrier) {
+      const carrier = list[0].proposalCarrier;
       const sorted = list.filter((pl) => pl.monthlyTotal != null).sort((a, b) => a.monthlyTotal - b.monthlyTotal);
       if (!sorted.length) continue;
       const idx = [0, Math.floor((sorted.length - 1) / 2), sorted.length - 1];

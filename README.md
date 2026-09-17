@@ -666,9 +666,13 @@ Cost, Best Fit or Richer Benefits (a star on the one to start with), and a
 row's plan card opens with the assistant's one-line reason on top. Every
 row also carries an AI-pick mark beside the heart and the plus — lit on a
 picked plan whatever view is on — so the picks read at a glance among all
-plans. The picks are saved per group and replaced whenever the assistant
-gives a new set — from the chat, which is where any question about them
-goes. The assistant answers straight
+plans. The rule is three picks per lineup — a carrier and a funding — so
+where UnitedHealthcare has quoted both fully insured and level funded, each
+gets its own Lower Cost, Best Fit and Richer Benefits (`buildRecommendations`
+keys picks by slot and tier). The picks are saved per group and replaced
+whenever the assistant gives a new set: from the ↻ beside the view control
+once picks exist (new quotes or a changed contribution can change them), or
+from the chat, which is where any question about them goes. The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer
 Benefits — each by option ID with its monthly cost at the group's census,
 says which it would start with, and closes by asking for a budget or
