@@ -987,7 +987,7 @@ export default function App() {
                 onToggleSelected={toggleSelected}
               />
             ) : tab === "census" ? (
-              <Census g={g} manager={manager} />
+              <Census g={g} />
             ) : tab === "disclaimers" ? (
               <Disclaimers g={g} />
             ) : tab === "supplemental" ? (
