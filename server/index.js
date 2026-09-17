@@ -4888,7 +4888,16 @@ app.use(
   "/assets",
   express.static(path.join(publicDir, "assets"), { maxAge: "1y", immutable: true }),
 );
-app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
+app.use(
+  express.static(publicDir, {
+    index: false,
+    maxAge: "1h",
+    // A direct request for the shell gets the same rule as the fallback.
+    setHeaders: (res, file) => {
+      if (file === indexHtml) res.setHeader("Cache-Control", "no-store");
+    },
+  }),
+);
 
 // An API path no route claimed is a mistake, not a page. Falling through to
 // the app answered a mistyped endpoint with 200 and a lump of HTML, so the
@@ -4897,8 +4906,13 @@ app.use("/api", (req, res) => {
   res.status(404).json({ error: `No such endpoint: ${req.method} /api${req.path}` });
 });
 
-// SPA fallback - the portal owns every non-API route.
-app.use((_req, res) => res.sendFile(indexHtml));
+// SPA fallback - the portal owns every non-API route. The page shell is never
+// cached: its script names change with every build, so a browser or proxy
+// holding yesterday's shell would keep loading yesterday's app after a deploy.
+app.use((_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.sendFile(indexHtml, { cacheControl: false });
+});
 
 // Errors on API routes must stay JSON; the default handler returns an HTML
 // stack trace, which the client could only report as "could not read that file".
