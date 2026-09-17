@@ -649,6 +649,15 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**Illustrative quotes, and the notice.** Every rate the site shows is an
+"Illustrative Quote" (`basisOf`), never a proposal, an offer or a guarantee,
+and one notice (`RATE_DISCLAIMER` in `client/src/lib/model.ts`, the same
+text in `server/disclaimer.js`, kept identical by
+`scripts/test-disclaimer.mjs`) sits under every rate: the page footer, the
+plan card, the printed proposal, every PDF's footer, every workbook and the
+assistant's documents. The assistant's instructions say the same. BenSync is
+a proposal platform; the notice is what makes that safe.
+
 **Group size, as a note.** The Group Size badge (2-50 or 51+, from the
 enrollment data on file) carries an info tip per category (`groupSizeNote`):
 where the size comes from, what applies at that size (the ACA employer

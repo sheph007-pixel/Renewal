@@ -4,7 +4,7 @@ import { renderPlanCardPdf } from "../server/documents.js";
 
 const card = {
   title: "Gravie Option GR25", subtitle: "Gravie HDHP $9,100 Ded/$9,100 OOPM", carrier: "Gravie", funding: "Level Funded", type: "HDHP",
-  headline: { average: 354.43, companyPays: 8784, basis: "Carrier Proposal" },
+  headline: { average: 354.43, companyPays: 8784, basis: "Illustrative Quote" },
   benefits: [["Deductible", "$9,100", null], ["Out-of-pocket max", "$9,100", null], ["Doctor visit", "No cost after ded", null], ["Prescription drugs", "No cost after ded generic · No cost after ded preferred brand · No cost after ded non-preferred", null], ["Network type", "PPO", null], ["Network", "Cigna", "https://example.com/find"], ["Pharmacy (PBM)", "Express Scripts", "https://example.com/formulary"]],
   tiers: [{ label: "Employee Only", count: 37, rate: 427.64, er: 183, ee: 244.64 }, { label: "Employee + Spouse", count: 3, rate: 883.06, er: 183, ee: 700.06 }, { label: "Employee + Children", count: 5, rate: 720.41, er: 183, ee: 537.41 }, { label: "Employee + Family", count: 3, rate: 1240.9, er: 183, ee: 1057.9 }],
   totals: { er: 8784, ee: 17012.61, premium: 25796.61, enrolled: 48 },
