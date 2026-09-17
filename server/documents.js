@@ -359,6 +359,45 @@ export async function renderComparison({ format, title, group: g, table }) {
   return { filename: `${safeName(g.name)} - ${safeName(name)} ${stamp}.pdf`, mime: "application/pdf", data };
 }
 
+// ------------------------------------------------------------ Plan workbook
+
+/**
+ * Every 2027 plan's card as one row of a workbook: the columns and rows come
+ * from the page (the same figures the plan card shows, at the group's
+ * enrollment and applied contribution), so the file reads exactly like the
+ * screen. Sheet "Plans" is the table, header in row 1 so Excel's filters
+ * work; sheet "About" says whose figures they are.
+ */
+export function renderPlanSheet({ group: g, columns, rows, contribution }) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const ws = XLSX.utils.aoa_to_sheet([columns, ...rows]);
+  ws["!cols"] = columns.map((c, i) => {
+    const longest = rows.reduce((n, r) => Math.max(n, String(r[i] == null ? "" : r[i]).length), String(c).length);
+    return { wch: Math.min(44, Math.max(9, longest + 2)) };
+  });
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: Math.max(0, columns.length - 1) } }) };
+  const counts = g.tiers || {};
+  const about = [
+    ["2027 Medical Plans"],
+    [g.name],
+    [`Prepared ${today()}`],
+    [],
+    ["Enrollment by tier", TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${counts[k] || 0}`).join(", ")],
+    ["Enrolled", TIER_KEYS.reduce((n, k) => n + (counts[k] || 0), 0)],
+    ...(contribution ? [["Employer contribution applied", `${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money(contribution[k])}`).join(", ")} per month; employees pay the rest of their tier's rate.`]] : []),
+    [],
+    ["Every 2027 plan quoted for the group, one row each, with the same details the plan card shows: benefits as printed on the carrier's quote, monthly composite rates by tier, and the split at the employer contribution applied on the Medical Plans page."],
+    ["Figures from the carriers' quotes on file and the group's current enrollment; monthly composite rates. Not a binding quote."],
+  ];
+  const wa = XLSX.utils.aoa_to_sheet(about);
+  wa["!cols"] = [{ wch: 30 }, { wch: 110 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Plans");
+  XLSX.utils.book_append_sheet(wb, wa, "About");
+  const data = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  return { filename: `${safeName(g.name)} - 2027 Medical Plans ${stamp}.xlsx`, mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", data };
+}
+
 // ------------------------------------------------------------ AI Picks report
 
 const PICK_LABEL = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
