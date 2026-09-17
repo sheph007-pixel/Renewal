@@ -656,6 +656,11 @@ carrier's long product name under it, and the assistant's instructions say
 the same for its answers, pick reasons and summaries (the long name at most
 once, in parentheses, never first).
 
+**The grid opens on All.** Every time: a refresh, the Current tab and
+back, a new sign-in. It moves to AI Picks only when a run started on that
+page lands, never on loading saved picks; the saved picks still mark their
+rows and the AI Picks segment still counts them.
+
 **Each view in its natural order.** Switching the grid to All sorts by
 total monthly bill, low to high; switching to AI Picks, Favorites or
 Compare sorts by option ID, so a chosen set reads carrier by carrier. The
