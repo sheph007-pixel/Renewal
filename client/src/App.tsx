@@ -837,7 +837,7 @@ export default function App() {
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                alignItems: "flex-end",
+                alignItems: "flex-start",
                 justifyContent: "space-between",
                 gap: 16,
                 margin: "0 0 18px",
