@@ -1,98 +1,60 @@
 import { useMemo } from "react";
-import {
-  marketSummary,
-  money,
-  money0,
-  type Group,
-  type KennionData,
-  type PlanRow,
-} from "@/lib/model";
-import { C, h2, num, panel, sectionHead } from "@/lib/ui";
+import { marketReview, type Group, type KennionData } from "@/lib/model";
+import { C, h2, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
 
 interface Props {
   data: KennionData;
   g: Group;
-  rows: PlanRow[];
-  totals: { total: number };
   optionsHref: string;
-  signUpHref: string;
 }
 
 /**
- * The first stop after Welcome: what actually changes on January 1, 2027,
- * before the full grid of every priced option. Same headline figure Your
- * New 2027 Medical Options builds (`marketSummary`, shared rather than recomputed), read
- * in one line instead of found by scanning a table.
+ * What's New for 2027, under the welcome: one line on where the market
+ * review stands and how many options are waiting on Medical Plans. No
+ * carrier names, networks or figures here; those belong on Medical Plans.
  */
-export default function WhatsChanging({ data, g, rows, totals, optionsHref, signUpHref }: Props) {
-  const summary = useMemo(() => marketSummary(data, g, rows, totals.total), [data, g, rows, totals.total]);
-
-  const card = { ...panel, padding: "18px 20px" };
-
+export default function WhatsChanging({ data, g, optionsHref }: Props) {
+  const review = useMemo(() => marketReview(data, g), [data, g]);
+  const done = review.complete;
   return (
     <div>
       <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>What&rsquo;s Changing For 2027</h2>
+        <h2 style={h2}>What&rsquo;s New for 2027</h2>
       </div>
 
-      <div style={card}>
-        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.65, color: C.body, textWrap: "pretty" as const }}>
-          Your 2026 program ends December 31. For 2027, we took {g.name}&rsquo;s census to the carriers;
-          every option shown carries their own rates for your group - {" "}
-          {summary.pricedCount} option{summary.pricedCount === 1 ? "" : "s"} so far, effective January 1, 2027.
-          {summary.pricedCount === 0 && " Quotes for your group are still arriving, and the figures below fill in as they do."}
+      <div style={{ ...panel, padding: "18px 20px" }}>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: C.body, textWrap: "pretty" as const }}>
+          Your current Kennion Program coverage runs through December 31. For January 1, 2027, Kennion has taken your group to
+          market across our expanded carrier and program partners. You currently have{" "}
+          <strong style={{ color: C.ink }}>
+            {review.options} medical plan option{review.options === 1 ? "" : "s"}
+          </strong>{" "}
+          available to review in BenSync.
         </p>
-
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            border: `1px solid ${C.border}`,
-            borderRadius: 4,
-            overflow: "hidden",
-            width: "fit-content",
-          }}
-        >
-          <div style={{ padding: "14px 22px", borderRight: `1px solid ${C.border}`, background: C.zebra }}>
-            <div style={{ fontSize: 12.5, color: C.muted }}>Today</div>
-            <div style={{ marginTop: 6, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.4px", ...num }}>
-              {money(totals.total)}
-            </div>
-            <div style={{ fontSize: 12, color: C.faint }}>per month</div>
-          </div>
-          <div style={{ padding: "14px 22px", background: C.zebra }}>
-            <div style={{ fontSize: 12.5, color: C.muted }}>2027, plans mapped 1-for-1</div>
-            <div style={{ marginTop: 6, fontSize: 22, fontWeight: 600, color: C.ink, letterSpacing: "-0.4px", ...num }}>
-              {summary.mappedTotal ? money0(summary.mappedTotal) : "In progress"}
-            </div>
-            <div style={{ fontSize: 12, color: C.faint }}>
-              {summary.delta == null
-                ? "quotes arriving"
-                : `${summary.delta >= 0 ? "+" : "-"}${money0(Math.abs(summary.delta))} / mo vs today`}
-            </div>
-          </div>
+        <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+          <span
+            role="status"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 12px",
+              borderRadius: 999,
+              fontSize: 13,
+              fontWeight: 600,
+              color: done ? C.green : C.amber,
+              background: done ? C.greenTint : C.amberTint,
+              border: `1px solid ${done ? C.greenEdge : C.amberEdge}`,
+            }}
+          >
+            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: "currentColor" }} />
+            {done ? "Market review complete: your options are ready to review." : "Market review in progress: additional options may still be added."}
+          </span>
+          <Link href={optionsHref} style={{ fontSize: 14, fontWeight: 600, color: C.blue, textDecoration: "none" }}>
+            Review Medical Options &rarr;
+          </Link>
         </div>
-
-        <p style={{ margin: "14px 0 0", fontSize: 12, color: C.faint, lineHeight: 1.6 }}>
-          This maps each current plan to its closest 2027 match. It is not a recommendation - see Your 2027
-          Options for the full menu, including the plans we&rsquo;d actually suggest for your group.
-        </p>
-      </div>
-
-      <div className="cardgrid" style={{ marginTop: 16 }}>
-        <Link href={optionsHref} style={{ ...card, display: "block", color: "inherit", textDecoration: "none" }}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.blue }}>See New 2027 Medical Options &rarr;</div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            Every priced plan, side by side with what you pay now, plus what we&rsquo;d recommend for {g.name}.
-          </p>
-        </Link>
-        <Link href={signUpHref} style={{ ...card, display: "block", color: "inherit", textDecoration: "none" }}>
-          <div style={{ fontSize: 15.5, fontWeight: 600, color: C.green }}>Ready To Move Forward? &rarr;</div>
-          <p style={{ margin: "6px 0 0", fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
-            Shortlist plans and send them in, or get a kickoff call on the calendar - both live on Sign Up.
-          </p>
-        </Link>
       </div>
     </div>
   );

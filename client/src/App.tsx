@@ -727,6 +727,8 @@ export default function App() {
    * as a different plan year to anyone comparing two groups.
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
+  // The renewal year on Welcome: the year after the plan year in force.
+  const renewalYear = String(Number(planYear) + 1);
   const subline =
     tab === "signup" || tab === "supplemental"
       ? "Effective January 1, 2027"
@@ -736,7 +738,7 @@ export default function App() {
         ? "Employee Navigator census on file."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
-          : `Calendar Year (January 1 - December 31, ${planYear})`;
+          : `Calendar Year (January 1 - December 31, ${tab === "home" ? renewalYear : planYear})`;
 
   const printLine =
     (tab === "options" || tab === "signup"
@@ -854,7 +856,7 @@ export default function App() {
                 {/* Medical Plans carries no line under its title: its two tabs name their own years. */}
                 {tab !== "options" && tab !== "current" && (
                   <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>
-                    {tab === "home" ? `Your 2027 renewal with Kennion Benefit Advisors · ${subline}` : subline}
+                    {tab === "home" ? `Your ${renewalYear} renewal with Kennion Benefit Advisors · ${subline}` : subline}
                   </div>
                 )}
               </div>
@@ -935,24 +937,16 @@ export default function App() {
             ) : tab === "home" ? (
               <>
                 <Home
-                  g={g}
-                  currentHref={hrefFor("current")}
                   optionsHref={hrefFor("options")}
                   supplementalHref={hrefFor("supplemental")}
                   signUpHref={hrefFor("signup")}
+                  assistantHref={assistantOn ? assistantHref() : null}
                   manager={manager}
                   lastSignup={data.signup || null}
                 />
-                {/* The headline - today against 2027 - sits under the letter, one page, less to click through. */}
+                {/* What's New for 2027 sits under the welcome: where the market review stands, one page, less to click through. */}
                 <section id="changes" className="anchor" style={{ marginTop: 26 }}>
-                  <WhatsChanging
-                    data={data}
-                    g={g}
-                    rows={rows}
-                    totals={totals}
-                    optionsHref={hrefFor("options")}
-                    signUpHref={hrefFor("signup")}
-                  />
+                  <WhatsChanging data={data} g={g} optionsHref={hrefFor("options")} />
                 </section>
               </>
             ) : tab === "current" ? (

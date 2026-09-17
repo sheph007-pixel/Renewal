@@ -9,7 +9,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /:slug               a signed-in group's own pages - Welcome
  *   /:slug/assistant     …Assistant (and /:slug/assistant/:id, one conversation)
  *   /:slug/changes       …an old address: What's Changing is a section of Welcome now
- *   /:slug/changes       …What's Changing For 2027
+ *   /:slug/changes       …What's New for 2027
  *   /:slug/current       …Your 2026 Medical Plans
  *   /:slug/options       …New 2027 Medical Options
  *   /:slug/supplemental  …Supplemental Package
