@@ -34,7 +34,7 @@ export const C = {
   inputEdge: "#b6bfc4",
   zebra: "#fafbfc",
   /** A subdued fill inside a white card — the grid's Employer Contribution band. */
-  band: "#eef1f3",
+  band: "#e3e7eb",
   /** A dark stripe — a grid's header row, a small round badge. */
   headerBg: "#202429",
   onColor: "#fff",
