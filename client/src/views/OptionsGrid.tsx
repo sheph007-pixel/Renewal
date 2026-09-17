@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkDirectory, networkLabel, networkTypeOf, optionSortKey, pbmOf, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, pill, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick } from "@/lib/chat";
 import { useNarrow } from "@/lib/narrow";
@@ -8,6 +8,7 @@ import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelec
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
+import AnalyzingGroup from "@/views/AnalyzingGroup";
 import MarketResults from "@/views/MarketResults";
 
 /**
@@ -170,13 +171,28 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // Asking for picks happens in place: the button spins, the chat stays
   // closed, and the picks land in the grid when the answer is in.
   const [asking, setAsking] = useState(false);
+  // The analysis dialog: open while the request runs, "picks ready" for a beat once they land, then closed.
+  const [analyzing, setAnalyzing] = useState<"off" | "working" | "done">("off");
+  const profile = useMemo(() => censusProfile(g), [g]);
   const askForPicks = () => {
     if (asking) return;
     setAsking(true);
+    setAnalyzing("working");
     askQuietly(RECOMMEND_ASK, RECOMMENDATIONS_TITLE, "options")
       .catch(() => undefined)
       .finally(() => setAsking(false));
   };
+  useEffect(() => {
+    if (analyzing !== "working" || !picks.size || !picksStamp) return;
+    setAnalyzing("done");
+    const t = setTimeout(() => setAnalyzing("off"), 1100);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picksStamp]);
+  useEffect(() => {
+    // The request ended without picks (an error, or none placed): nothing to wait for.
+    if (!asking && analyzing === "working" && !picks.size) setAnalyzing("off");
+  }, [asking, analyzing, picks.size]);
   /** The AI Picks segment: with picks, show them (or go back to all); without, ask. */
   const aiPicksAction = () => {
     if (picks.size) setView((v) => (v === "picks" ? "all" : "picks"));
@@ -467,14 +483,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
       )}
 
-      {/* While the assistant is picking: one quiet line, no chat. */}
-      {asking && (
-        <div role="status" aria-live="polite" style={{ position: "fixed", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 60, display: "inline-flex", alignItems: "center", gap: 9, padding: "9px 16px", borderRadius: 999, background: C.headerBg, color: "rgba(255,255,255,0.88)", fontSize: 13, boxShadow: "0 4px 14px rgba(16,24,40,0.18)", opacity: 0.94, whiteSpace: "nowrap" }}>
-          <svg className="ai-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-            <path d="M12 3a9 9 0 1 1-6.4 2.6" />
-          </svg>
-          Working on your picks…
-        </div>
+      {/* While the assistant is picking: what it is looking at, and where it is. */}
+      {analyzing !== "off" && (
+        <AnalyzingGroup profile={profile} counts={counts} enrolled={TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0)} done={analyzing === "done"} pickCount={picks.size} onClose={() => setAnalyzing("off")} />
       )}
 
       {/* The grid: its toolbar on top, then a short row per plan; the row opens
@@ -688,6 +699,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   ["total", "Total Monthly Bill"],
                   [null, ""],
                   [null, ""],
+                  [null, ""],
                 ] as [SortKey | null, string][]
               ).map(([k, h], i) => (
                 <th
@@ -706,7 +718,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // alike, on one margin; the digits stay tabular so the
                     // dollar columns still line up under each other.
                     textAlign: "left",
-                    width: i >= 8 ? 52 : i === 0 ? 72 : undefined,
+                    width: i >= 8 ? 40 : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -766,21 +778,34 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "—" : money0(p.monthly)}
                   </td>
-                  <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                  <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                    {/* The AI pick mark: lit on a picked plan whatever view is on; the row opens the card with the reason. */}
+                    {(() => {
+                      const pk = picks.get(p.plan);
+                      return (
+                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} — ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, color: pk ? C.blue : C.hairline, cursor: pk ? "pointer" : "default" }}>
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill={pk ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                          </svg>
+                        </button>
+                      );
+                    })()}
+                  </td>
+                  <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button className="grid-icon" onClick={() => toggleHeart(p.plan)} disabled={heartBlocked(p)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, color: heart ? C.red : heartBlocked(p) ? C.hairline : C.ghost }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
                         <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
                       </svg>
                     </button>
                   </td>
-                  <td className="noprint" style={{ ...cell, textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                  <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                     <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side — remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
                       {added ? (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12.5l4.5 4.5L19 7.5" />
                         </svg>
                       ) : (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                           <path d="M12 5v14M5 12h14" />
                         </svg>
                       )}
@@ -791,7 +816,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             })}
             {!list.length && (
               <tr>
-                <td colSpan={10} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
+                <td colSpan={11} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No favorites yet" : plans.length ? "No plans match these filters" : "No quoted plans yet"}</div>
                   <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
                     {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
@@ -879,8 +904,8 @@ const segment = (on: boolean, empty: boolean): CSSProperties => ({
 const iconBtn = {
   display: "inline-grid",
   placeItems: "center",
-  width: 36,
-  height: 36,
+  width: 30,
+  height: 30,
   background: "none",
   border: "none",
   padding: 0,

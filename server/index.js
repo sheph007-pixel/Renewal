@@ -1930,6 +1930,10 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
+  // The census as aggregates — the same profile the assistant is briefed
+  // with — so the page can show what the picks were weighed on. No name and
+  // no one person's age.
+  out.census = censusProfile(g);
   // Whether supplemental has ever been read for this group, and what it
   // comes to — the same figures the Groups page shows staff.
   const breakdown = premiumBreakdown(g);

@@ -655,15 +655,20 @@ conversation named "Plan recommendations" and asks for recommendations on
 the client's behalf — once: the send carries the name (`title` on `POST
 /api/chat/send`), and while the group has a conversation of that name
 without picks the button reopens it rather than asking again
-(`askQuietly` in `client/src/lib/chat.ts`) — without opening the chat box:
-a quiet "Working on your picks…" toast, and nothing else moves. When the
-assistant publishes its picks (the `recommend_plans` tool) the view
-switches on by itself: the grid shows just those plans, each tagged Lower
+(`askQuietly` in `client/src/lib/chat.ts`) — without opening the chat box.
+While it works, an "Analyzing your group" dialog shows what the picks are
+weighed on: the census as aggregates (`census` on the group payload — the
+same profile the assistant is briefed with: employees, average and median
+age, the range and how tight it is, employees by age band, dependants)
+and the three steps under way; it closes itself when the picks land. Then
+the view switches on: the grid shows just those plans, each tagged Lower
 Cost, Best Fit or Richer Benefits (a star on the one to start with), and a
-row's plan card opens with the assistant's one-line reason on top. Off
-again, the tags stay on the picked rows among all plans. The picks are
-saved per group and replaced whenever the assistant gives a new set — from
-the chat, which is where any question about them goes. The assistant answers straight
+row's plan card opens with the assistant's one-line reason on top. Every
+row also carries an AI-pick mark beside the heart and the plus — lit on a
+picked plan whatever view is on — so the picks read at a glance among all
+plans. The picks are saved per group and replaced whenever the assistant
+gives a new set — from the chat, which is where any question about them
+goes. The assistant answers straight
 away with three picks per carrier that quoted — Lower Cost, Best Fit, Richer
 Benefits — each by option ID with its monthly cost at the group's census,
 says which it would start with, and closes by asking for a budget or
