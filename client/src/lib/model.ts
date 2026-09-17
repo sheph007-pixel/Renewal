@@ -945,6 +945,33 @@ export function marketSummary(data: KennionData, g: Group, rows: PlanRow[], toda
   };
 }
 
+/** Where the market review stands for the Welcome page: how many priced options there are, and whether every proposal slot the group has is quoted yet. */
+export interface MarketReview {
+  /** Priced 2027 medical options on the Medical Plans page. */
+  options: number;
+  /** Proposal slots that hold at least one priced plan. */
+  slotsQuoted: number;
+  /** Proposal slots this group is taken to market in. */
+  slotsExpected: number;
+  /** True once every slot holds a priced plan: nothing more is expected. */
+  complete: boolean;
+}
+
+/**
+ * The Welcome page's one-line status. A group goes to market in a fixed set
+ * of proposal slots (`data.slots`, or the program's slots when a group
+ * carries none); the review is complete once every one of them holds a priced plan,
+ * and in progress while any is still empty, so the page can say more options
+ * may still be added without naming a carrier.
+ */
+export function marketReview(data: KennionData, g: Group): MarketReview {
+  const priced = marketPlans(data, g).filter((p) => p.monthly != null);
+  const expected = (data.slots && data.slots.length ? data.slots : PROPOSAL_SLOTS).filter((sl) => sl !== "Cobalt");
+  const quoted = new Set(priced.map((p) => p.quoted?.slot).filter((sl): sl is string => !!sl));
+  const slotsQuoted = expected.filter((sl) => quoted.has(sl)).length;
+  return { options: priced.length, slotsQuoted, slotsExpected: expected.length, complete: expected.length > 0 && slotsQuoted === expected.length };
+}
+
 /**
  * A flat-dollar defined contribution, the way Employee Navigator sets one
  * up: the employer puts the same amount toward a tier whatever plan the

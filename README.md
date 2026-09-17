@@ -36,7 +36,7 @@ as a link, and a reload comes back to the same place.
 | --- | --- |
 | `/` | Group sign-in |
 | `/<group-slug>` | A signed-in group's Welcome page — `/johnson-storage-moving-jsmh2027` |
-| `/<group-slug>/<tab>` | …its other pages: `assistant`, `current`, `options`, `supplemental`, `signup` (`changes`, an old address, lands on Welcome, where What's Changing is a section now) |
+| `/<group-slug>/<tab>` | …its other pages: `assistant`, `current`, `options`, `supplemental`, `signup` (`changes`, an old address, lands on Welcome, where What's New for 2027 is a section now) |
 | `/<group-slug>/assistant/<id>` | One conversation with the assistant |
 | | The rail lists **Medical Plans** once and opens it on the 2027 options; the page has two tabs, *New 2027 Medical Options* (`options`, leading, marked NEW) and *Current 2026 Medical Plans* (`current`, muted, for reference), to switch between. |
 | `/g/<group-slug>/<token>` | A group's permanent link: signs the browser in and lands on `/<group-slug>` |
@@ -78,6 +78,30 @@ renaming would orphan the group.
 
 A group can be **archived**: it drops out of the list and its access code is
 refused at sign-in, but nothing is deleted and it can be restored at any time.
+
+### The Welcome page
+
+Welcome is written for an existing Kennion client, not a prospect: the
+program is expanding for 2027, BenSync makes the options easier to evaluate,
+the client chooses what to offer, and Kennion handles the implementation
+after that. It has four parts: a short introduction, Meet BenSync, a
+four-step How it works (Review Medical Options, Review Supplemental
+Benefits, Build Your Strategy, Sign Up) with We handle the rest under it,
+and one Your Kennion Team card naming the account manager and Hunter.
+Scheduling a call is never the page's call to action; the work happens in
+BenSync, and the card is there for questions along the way.
+
+What's New for 2027, under it, says how many priced medical options the
+group has and where the market review stands. `marketReview` in
+`client/src/lib/model.ts` counts the group's proposal slots (the program's
+five, less Cobalt): the review is complete once every slot holds a priced
+plan, and in progress while any is still empty, in which case the page says
+more options may still be added. A carrier that declines to quote leaves
+its slot empty, so such a group reads as in progress until that slot is
+filled or removed from the group's slots. No carrier names, networks or
+figures appear on Welcome; those belong on Medical Plans. The subline under
+the page title names the renewal year, the year after the plan year in
+force. `scripts/test-market-review.mts` covers the rule.
 
 ## Access codes and group size
 
