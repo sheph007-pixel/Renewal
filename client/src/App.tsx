@@ -735,7 +735,7 @@ export default function App() {
       : tab === "disclaimers"
         ? "What every rate, benefit and recommendation here is, and is not."
       : tab === "census"
-        ? "Who is enrolled: the people every rate here is priced on."
+        ? "Employee Navigator census on file."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
           : `Calendar Year (January 1 - December 31, ${planYear})`;
