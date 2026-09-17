@@ -85,7 +85,10 @@ Welcome is written for an existing Kennion client, not a prospect: the
 program is expanding for 2027, BenSync makes the options easier to evaluate,
 the client chooses what to offer, and Kennion handles the implementation
 after that. It has four parts: a short introduction with the What's Changing
-download under it, Meet BenSync, a four-step How It Works (Review Medical
+download under it, The 2027 Kennion Program story (`ProgramStory.tsx`: six
+frames from the program deck that advance on their own, pause on hover and
+under reduced motion, with the deck itself as a PDF under
+`client/public/assets/docs`), a four-step How It Works (Review Medical
 Options, Review Supplemental Benefits, Build Your Strategy, Sign Up) with We
 Handle The Rest under it, and one Your Kennion Team card. The card
 (`TeamCard.tsx`) has a navy band and three members: the account manager,
