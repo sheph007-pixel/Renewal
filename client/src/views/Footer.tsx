@@ -1,10 +1,12 @@
+import { RATE_NOTICE_SHORT } from "@/lib/model";
+import Link from "@/lib/Link";
 import { C } from "@/lib/ui";
 
 /**
  * Site-wide disclaimer. Deliberately NOT marked `noprint` - it has to appear on
  * the printed reports too, which are what actually get handed around.
  */
-export default function Footer() {
+export default function Footer({ disclaimersHref }: { disclaimersHref?: string }) {
   return (
     <div
       style={{
@@ -24,8 +26,15 @@ export default function Footer() {
           textWrap: "pretty",
         }}
       >
-        All above rates and benefits are for general information and discussion only. Rates are
-        determined by the carrier and are not final until the group is enrolled with the carrier.
+        {RATE_NOTICE_SHORT}
+        {disclaimersHref && (
+          <>
+            {" "}
+            <Link href={disclaimersHref} style={{ color: C.blue, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+              View Disclaimers
+            </Link>
+          </>
+        )}
         <div style={{ marginTop: 8 }}>
           <span style={{ fontWeight: 700, color: C.muted }}>BenSync</span> · Powered by Kennion Benefit Advisors
         </div>

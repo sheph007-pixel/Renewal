@@ -25,6 +25,7 @@ import { clearSession, loadSession, saveSession, setPageGroup } from "@/lib/sess
 import Link from "@/lib/Link";
 import { useNarrow } from "@/lib/narrow";
 import InfoTip from "@/views/InfoTip";
+import Disclaimers from "@/views/Disclaimers";
 import Login from "@/views/Login";
 import Footer from "@/views/Footer";
 import Admin, { type ImportRecord } from "@/views/Admin";
@@ -61,6 +62,7 @@ const TAB_LABEL: Record<GroupTab, string> = {
   options: "New 2027 Medical Options",
   supplemental: "Supplemental Package",
   signup: "Sign Up",
+  disclaimers: "Disclaimers",
 };
 
 /** Two people, for the Group Size badge. */
@@ -728,6 +730,8 @@ export default function App() {
   const subline =
     tab === "signup" || tab === "supplemental"
       ? "Effective January 1, 2027"
+      : tab === "disclaimers"
+        ? "What every rate, benefit and recommendation here is, and is not."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
           : `Calendar Year (January 1 - December 31, ${planYear})`;
@@ -979,6 +983,8 @@ export default function App() {
                 onContributionReset={() => setContributionOverride(null)}
                 onToggleSelected={toggleSelected}
               />
+            ) : tab === "disclaimers" ? (
+              <Disclaimers g={g} />
             ) : tab === "supplemental" ? (
               <SupplementalPackage />
             ) : (
@@ -1002,7 +1008,7 @@ export default function App() {
               />
             )}
 
-            <Footer />
+            <Footer disclaimersHref={hrefFor("disclaimers")} />
           </div>
         </div>
         {assistantOn && tab !== "assistant" && <ChatWidget page={tab} assistantHref={assistantHref} />}

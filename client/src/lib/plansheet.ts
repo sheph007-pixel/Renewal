@@ -1,3 +1,4 @@
+import { RATE_DISCLAIMER } from "@/lib/model";
 import { TIERS, fmtDate, hasActualSplit, money0, rateFor, split, type Group, type KennionData, type Overrides, type PlanRow } from "./model";
 
 /**
@@ -125,8 +126,7 @@ export function sourceNote(data: KennionData): string {
     : "Enrollment and rates from your Employee Navigator export.";
 }
 
-const DISCLAIMER =
-  "For general information and discussion only. Rates are determined by the carrier and are not final until the group is enrolled with the carrier.";
+const DISCLAIMER = RATE_DISCLAIMER;
 
 /** Build the workbook and hand it to the browser. */
 export async function downloadPlanSheet(

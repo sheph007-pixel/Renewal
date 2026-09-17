@@ -150,6 +150,21 @@ export interface Group {
  * category; it never says a contribution is affordable or compliant, and
  * the page makes no such determination. Kennion is the broker.
  */
+/** What every quoted rate is called, on the card, in the files and in the assistant's answers: never a proposal, an offer or a guarantee. */
+export const ILLUSTRATIVE_QUOTE = "Illustrative Quote";
+
+/**
+ * The notice under every rate the site shows or writes: the page footer,
+ * the plan card, the printed proposal, every PDF and workbook. The same
+ * text lives in server/disclaimer.js for the server-made files;
+ * scripts/test-disclaimer.mjs keeps the two identical.
+ */
+export const RATE_DISCLAIMER =
+  "The above rates and benefits are for general information and discussion purposes only and are not valid unless approved by the Carrier/TPA. This rate quote is not an offer or a guarantee of coverage. The rates quoted are applicable to the plan design selected. Actual costs will vary based on factors such as the case characteristics of the group and/or the employees and dependents to be insured, the insurance plan selected and the start date. Rates are determined by the Carrier/TPA and are not final until the group is enrolled with the Carrier/TPA. A quote is final only when coverage is offered by the Carrier/TPA and final rates have been accepted by, and the initial premium paid by, the group.";
+
+/** The one-line notice under rates on screen, with "View Disclaimers" beside it for the full text. */
+export const RATE_NOTICE_SHORT = "All above rates and benefits are for general information and discussion only. Rates are determined by the Carrier/TPA and are not final until the group is enrolled with the Carrier/TPA.";
+
 export function groupSizeNote(g: Group): string | null {
   const from = "Group size is based on the enrollment data on file for your group; tell us if your full-time equivalent count differs.";
   const start = "The 50% starting point on the Medical Plans page is the Carrier/TPA's minimum contribution requirement, not an ACA affordability determination.";

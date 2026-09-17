@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey } from "@/lib/model";
+import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
+import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
@@ -49,7 +50,8 @@ export function fundingOf(p: MarketPlan): "Fully Insured" | "Level Funded" {
 }
 
 /** Where the figures come from: always the carrier's own quote for this group - read off its proposal, or quoted on the menu. */
-export const basisOf = (p: MarketPlan) => (p.quoted ? "Carrier Proposal" : "Carrier Quote");
+/** Every rate is an illustrative quote, read from the carrier's document or not: never a proposal or an offer. */
+export const basisOf = (_p: MarketPlan) => ILLUSTRATIVE_QUOTE;
 
 export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
   const sp = costSplit(p, contribution, counts);
@@ -118,7 +120,7 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   );
 }
 
-export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; actions?: React.ReactNode; compact?: boolean; wide?: boolean }) {
+export default function PlanCard({ m, actions, compact, wide, disclaimersHref }: { m: CardModel; actions?: React.ReactNode; compact?: boolean; wide?: boolean; disclaimersHref?: string }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
   // The pay cycle the rates and totals are shown per: monthly as quoted, or
   // divided down to what comes out of a paycheck. Local to the card; the
@@ -160,7 +162,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
           {m.er == null ? "-" : money(m.er)}
           <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
         </div>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, marginTop: 2 }}>{m.basis}</div>
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
         <tbody>
@@ -277,7 +279,7 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
           {m.er == null ? "-" : money(m.er)}
           <span style={{ fontWeight: 500, color: C.muted }}>/month</span>
         </div>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: m.quoted ? C.green : C.amber, marginTop: 2 }}>{m.basis}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, marginTop: 2 }}>{m.basis}</div>
       </div>
       <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
         <tbody>
@@ -377,6 +379,20 @@ export default function PlanCard({ m, actions, compact, wide }: { m: CardModel; 
         </>
       )}
       {m.source && <AuditFoot source={m.source} />}
+      {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}
+      {!compact && (
+        <div className="noprint" style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.45, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+          {RATE_NOTICE_SHORT}
+          {disclaimersHref && (
+            <>
+              {" "}
+              <Link href={disclaimersHref} style={{ color: C.blue, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+                View Disclaimers
+              </Link>
+            </>
+          )}
+        </div>
+      )}
       {actions && <div className="noprint" style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>{actions}</div>}
     </div>
   );

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
+import { groupHome } from "@/lib/router";
 import { DED_BANDS, DEFAULT_SORT, EMPTY_FILTERS, OOP_BANDS, bandsWithData, filterChips, filterCount, filtersEmpty, matches, optionCounts, type FilterKey, type ListKey, type PlanFacets, type PlanFilters, type SortKey, type SortState } from "@/lib/planfilters";
 import { AppliedFilters, FilterDrawer, FilterDropdowns, FiltersButton, SortSelect, type AppliedChip, type BillBounds, type FilterOptionLists, showingText } from "@/views/PlanFilters";
 import PlanCard, { TIER_NAMES, carrierOf, cardModel, fundingOf } from "@/views/PlanCard";
@@ -943,7 +944,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 <strong>{picks.get(opened.plan)!.start ? "★ Start here · " : "✦ "}{TIER_LABEL[picks.get(opened.plan)!.tier]}</strong> - {picks.get(opened.plan)!.reason}
               </div>
             )}
-            <PlanCard m={card(opened)} actions={actionsFor(opened)} wide />
+            <PlanCard m={card(opened)} actions={actionsFor(opened)} wide disclaimersHref={groupHome(g, "disclaimers")} />
           </div>
         </div>
       )}
@@ -964,7 +965,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             ))}
           </div>
           <div style={{ fontSize: 10.5, color: C.faint, marginTop: 12, lineHeight: 1.5 }}>
-            Rates shown are monthly composite rates by tier, as quoted by the carrier for this group. All rates and benefits are for general information and discussion only and are not final until the group is enrolled with the carrier.
+            Rates shown are monthly composite rates by tier, as quoted by the Carrier/TPA for this group. {RATE_DISCLAIMER}
           </div>
           {(manager?.name || manager?.phone || manager?.email) && (
             <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${C.hairline}`, textAlign: "center", fontSize: 11, color: C.muted }}>
