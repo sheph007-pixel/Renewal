@@ -91,9 +91,9 @@ function DownloadChanges({ groupName }: { groupName: string }) {
  * page says that the program expanded for 2027, that BenSync makes the
  * options easier to evaluate, that the client chooses what to offer, and
  * that Kennion handles everything after that. The What's Changing summary
- * is one click away, the 2027 Kennion Program story plays under it
- * (ProgramStory), and the team card beside it keeps the people and the
- * AI Assistant reachable without making a call the next step.
+ * is one click away, the 2027 Kennion Program story (ProgramStory) plays
+ * first, at the top of the page, and the team card beside it keeps the
+ * people and the AI Assistant reachable without making a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
@@ -121,6 +121,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+        <ProgramStory optionsHref={optionsHref} />
         <div style={{ ...panel, padding: "28px 34px 24px" }}>
           <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
           <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
@@ -139,7 +140,6 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           </div>
         </div>
 
-        <ProgramStory optionsHref={optionsHref} />
 
         <div style={{ ...panel, padding: "24px 34px 22px" }}>
           <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
