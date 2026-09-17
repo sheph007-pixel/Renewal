@@ -563,3 +563,12 @@ button,
 .ai-spin {
   animation: ai-spin 0.9s linear infinite;
 }
+
+/* The analysis bar while the assistant works: a slow pulse, so it reads as alive. */
+@keyframes ai-progress {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.ai-progress {
+  animation: ai-progress 1.4s ease-in-out infinite;
+}

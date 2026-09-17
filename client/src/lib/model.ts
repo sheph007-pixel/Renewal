@@ -119,6 +119,8 @@ export interface Group {
   annual?: number;
   plans?: GroupPlan[];
   members?: Member[];
+  /** The census as aggregates, from the server: what the assistant's picks are weighed on. */
+  census?: ServerCensus | null;
   rates?: Record<string, Record<string, number>>;
   /** Which account manager holds the group. Staff payloads only. */
   manager?: string | null;
@@ -1273,4 +1275,78 @@ export function contributionFloor(plans: MarketPlan[]): number {
 export function minimumContribution(plans: MarketPlan[]): Record<TierKey, number> {
   const floor = contributionFloor(plans);
   return TIERS.reduce((acc, t) => ({ ...acc, [t.key]: floor }), {} as Record<TierKey, number>);
+}
+
+/**
+ * The group's census as the assistant is briefed with it (the server's
+ * censusProfile, mirrored): aggregates only — how many employees, average
+ * and median age, youngest and oldest, how tight the spread is, counts by
+ * age band, and who covers a spouse or children. No name and no one
+ * person's age leaves this shape. Null with no ages on file.
+ */
+export interface CensusProfile {
+  employees: number;
+  average: number;
+  median: number;
+  youngest: number;
+  oldest: number;
+  spread: "narrow" | "moderate" | "wide";
+  bands: { label: string; count: number }[];
+  spouses: number;
+  withChildren: number;
+  children: number;
+}
+
+/** The server's shape of the profile, as it travels in the group payload. */
+export interface ServerCensus {
+  employees: number;
+  average: number;
+  median: number;
+  youngest: number;
+  oldest: number;
+  spread: "narrow" | "moderate" | "wide";
+  bands: { under30: number; from30to44: number; from45to54: number; from55: number };
+  spouses: number;
+  withChildren: number;
+  children: number;
+}
+
+export function censusProfile(g: Pick<Group, "members" | "census">): CensusProfile | null {
+  // The page gets the profile from the server (members never travel to a client page); a staff view with members computes it.
+  if (g.census) {
+    const c = g.census;
+    return {
+      ...c,
+      bands: [
+        { label: "Under 30", count: c.bands.under30 },
+        { label: "30–44", count: c.bands.from30to44 },
+        { label: "45–54", count: c.bands.from45to54 },
+        { label: "55+", count: c.bands.from55 },
+      ],
+    };
+  }
+  const members = Array.isArray(g.members) ? g.members : [];
+  const ages = members.map((m) => Number(m.age)).filter((a) => Number.isFinite(a) && a > 0);
+  if (!ages.length) return null;
+  const sorted = [...ages].sort((a, b) => a - b);
+  const mean = ages.reduce((s, a) => s + a, 0) / ages.length;
+  const sd = Math.sqrt(ages.reduce((s, a) => s + (a - mean) ** 2, 0) / ages.length);
+  const band = (lo: number, hi: number) => ages.filter((a) => a >= lo && a <= hi).length;
+  return {
+    employees: ages.length,
+    average: Math.round(mean),
+    median: sorted[Math.floor(sorted.length / 2)],
+    youngest: sorted[0],
+    oldest: sorted[sorted.length - 1],
+    spread: sd < 8 ? "narrow" : sd < 13 ? "moderate" : "wide",
+    bands: [
+      { label: "Under 30", count: band(0, 29) },
+      { label: "30–44", count: band(30, 44) },
+      { label: "45–54", count: band(45, 54) },
+      { label: "55+", count: band(55, 200) },
+    ],
+    spouses: members.filter((m) => Array.isArray(m.spAges) && m.spAges.length).length,
+    withChildren: members.filter((m) => Array.isArray(m.chAges) && m.chAges.length).length,
+    children: members.reduce((s, m) => s + (Array.isArray(m.chAges) ? m.chAges.length : 0), 0),
+  };
 }
