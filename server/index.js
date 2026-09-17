@@ -1703,7 +1703,10 @@ app.post("/api/group/export", async (req, res) => {
     } else {
       const plans = (Array.isArray(body.plans) ? body.plans : []).map((x) => String(x || "").trim().slice(0, 120)).filter(Boolean).slice(0, 400);
       if (!plans.length) return res.status(400).json({ error: "Nothing to export: no plans showing." });
-      const table = comparisonTable({ group, proposals, plans, includeCurrent: true, contribution: any ? contribution : null });
+      // New options against each other: no rows for the plans in force today and no "vs today" column.
+      const table = comparisonTable({ group, proposals, plans, includeCurrent: false, contribution: any ? contribution : null });
+      table.todayTotal = null;
+      for (const r of table.rows) r.vsToday = null;
       file = await renderComparison({ format: "pdf", title: `2027 Medical Options - ${EXPORT_TITLES[view]}`, group, table });
     }
   } catch (e) {
