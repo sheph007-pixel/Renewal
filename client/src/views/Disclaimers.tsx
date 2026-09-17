@@ -27,7 +27,10 @@ export default function Disclaimers({ g }: { g: Group }) {
       <section style={section}>
         <h2 style={{ ...h2, margin: 0, fontSize: 16 }}>Employer contribution</h2>
         <p style={p}>
-          Carriers and TPAs require the employer to contribute at least 50% of the individual (Employee Only) rate toward each employee's coverage. The rule is per employee, whatever coverage tier they are in, so the Medical Plans page holds every tier's amount to at least half the Employee Only rate; contributions toward spouses and children are the employer's choice. The page computes that minimum on the lowest-cost plan quoted for your group, which is how the requirement is met when several plans are offered and a richer plan is a buy-up the employee pays. If you offer only one richer plan, the minimum is half that plan's Employee Only rate. The Carrier/TPA applies its own rule at enrollment; confirm the contribution with your Kennion team before you decide.
+          BenSync models a defined contribution: the employer sets a fixed monthly amount per coverage tier, and that amount goes toward whichever plan and tier each employee chooses. That is how the employer controls its spend, regardless of what plan or tier an employee picks; an employee who chooses a costlier plan pays the difference.
+        </p>
+        <p style={p}>
+          Carriers and TPAs require minimum contributions of 50% of the employee cost. When more than one plan is offered, that requirement applies to the lowest-cost plan offered, and a richer plan is a buy-up the employee pays. If only one plan is offered, it applies to that plan. The Medical Plans page therefore starts every tier at 50% of the lowest-cost quoted plan's Employee Only rate and holds every tier to at least that; contributions toward spouses and children are the employer's choice. The Carrier/TPA applies its own rule at enrollment; confirm the contribution with your Kennion team before you decide.
         </p>
       </section>
 
