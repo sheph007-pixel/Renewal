@@ -346,21 +346,23 @@ export async function exportPlansExcel(columns: string[], rows: (string | number
   await downloadFile("/api/group/export", `${groupName} - 2027 Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
 }
 
-/** One employee on the census every rate is priced on: name, age, tier, plan and dependants' ages. Nothing else about anyone. */
-export interface CensusMember {
-  name: string;
+/** One person on the census, employee or dependant, in the Employee Navigator census's own columns. */
+export interface CensusRow {
+  first: string;
+  last: string;
+  relationship: string;
+  gender: string | null;
+  /** YYYY-MM-DD, or null when the import did not keep it. */
+  dob: string | null;
   age: number | null;
-  tier: "EE" | "ES" | "EC" | "FAM" | null;
-  tierLabel: string | null;
-  plan: string | null;
-  spouseAges: number[];
-  childAges: number[];
+  zip: string | null;
+  tier: string | null;
 }
 
-export async function loadCensus(): Promise<{ enrolled: number; members: CensusMember[] }> {
+export async function loadCensus(): Promise<{ enrolled: number; rows: CensusRow[] }> {
   const r = await fetch("/api/group/census", { headers: groupHeaders() });
   if (!r.ok) throw new Error(await failure(r));
-  return (await r.json()) as { enrolled: number; members: CensusMember[] };
+  return (await r.json()) as { enrolled: number; rows: CensusRow[] };
 }
 
 export function downloadCensusCsv(groupName: string): Promise<void> {

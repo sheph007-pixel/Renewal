@@ -1726,18 +1726,26 @@ app.post("/api/group/export", async (req, res) => {
  * `?format=csv` as a file. Read only: a correction goes through Kennion,
  * whose import is the source of truth.
  */
-const censusRows = (g) =>
-  (Array.isArray(g.members) ? g.members : [])
-    .map((m) => ({
-      name: [m.last, m.first].filter(Boolean).join(", ") || "(unnamed)",
-      age: Number.isFinite(Number(m.age)) ? Number(m.age) : null,
-      tier: tierKeyOfCensus(m.tier) || null,
-      tierLabel: m.tier || null,
-      plan: m.plan || null,
-      spouseAges: Array.isArray(m.spAges) ? m.spAges : [],
-      childAges: Array.isArray(m.chAges) ? m.chAges : [],
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+const CENSUS_TIER = { EE: "Employee", ES: "Employee+Spouse", EC: "Employee+Children", FAM: "Employee+Family" };
+/** One row per person, the employee then their dependants, in the Employee Navigator census's own columns. */
+const censusRows = (g) => {
+  const members = (Array.isArray(g.members) ? g.members : []).slice().sort((a, b) => String(a.last || "").localeCompare(String(b.last || "")) || String(a.first || "").localeCompare(String(b.first || "")));
+  const rows = [];
+  for (const m of members) {
+    const tierKey = tierKeyOfCensus(m.tier);
+    const tier = tierKey ? CENSUS_TIER[tierKey] : m.tier || null;
+    rows.push({ first: m.first || "", last: m.last || "", relationship: "employee", gender: m.gender || null, dob: m.dob || null, age: Number.isFinite(Number(m.age)) ? Number(m.age) : null, zip: m.zip || null, tier });
+    const deps = Array.isArray(m.deps) ? m.deps : null;
+    if (deps) {
+      for (const d of deps) rows.push({ first: d.first || "", last: d.last || m.last || "", relationship: String(d.rel || "dependent").toLowerCase(), gender: d.gender || null, dob: d.dob || null, age: null, zip: m.zip || null, tier });
+    } else {
+      // Imported before dependants were kept by name: ages only, until the stored export fills them in.
+      for (const a of Array.isArray(m.spAges) ? m.spAges : []) rows.push({ first: "", last: m.last || "", relationship: "spouse", gender: null, dob: null, age: a, zip: m.zip || null, tier });
+      for (const a of Array.isArray(m.chAges) ? m.chAges : []) rows.push({ first: "", last: m.last || "", relationship: "child", gender: null, dob: null, age: a, zip: m.zip || null, tier });
+    }
+  }
+  return rows;
+};
 app.get("/api/group/census", (req, res) => {
   const g = groupForPage(req);
   if (!g) return res.status(401).json({ error: "no session" });
@@ -1747,14 +1755,15 @@ app.get("/api/group/census", (req, res) => {
       const t = v == null ? "" : String(v);
       return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
     };
-    const head = ["Employee", "Age", "Coverage Tier", "Plan", "Spouse Age", "Child Ages"];
-    const lines = [head, ...rows.map((r) => [r.name, r.age, r.tierLabel || r.tier, r.plan, r.spouseAges.join(" / "), r.childAges.join(" / ")])].map((r) => r.map(cell).join(","));
+    const usDate = (iso) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : "");
+    const head = ["First Name", "Last Name", "Relationship", "Gender", "Date of Birth", "Zip Code", "Tier"];
+    const lines = [head, ...rows.map((r) => [r.first, r.last, r.relationship, r.gender, usDate(r.dob), r.zip, r.tier])].map((r) => r.map(cell).join(","));
     const safe = String(g.name || "group").replace(/[^A-Za-z0-9 _-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${safe} - Census.csv"`);
     return res.send("\ufeff" + lines.join("\r\n"));
   }
-  res.json({ enrolled: rows.length, members: rows });
+  res.json({ enrolled: rows.filter((r) => r.relationship === "employee").length, rows });
 });
 
 /** What the assistant remembers about the group; the client can drop any line. */
@@ -2411,23 +2420,46 @@ async function readStoredExport() {
  * name (`enName`). Runs in the background at boot; the payload is updated
  * in place, keeping when and by whom the group was imported.
  */
+const membersWantCensus = (g) => (g.members || []).some((m) => m.dob === undefined || m.deps === undefined);
 async function backfillFromStoredExport() {
   if (!db) return;
-  const wanting = groups.filter((g) => (g.plans || []).some((p) => !p.enName));
+  const wanting = groups.filter((g) => (g.plans || []).some((p) => !p.enName) || membersWantCensus(g));
   if (!wanting.length) return;
   const { companies } = await readStoredExport();
   let filled = 0;
+  let census = 0;
   for (const c of companies) {
     const g = matchExisting(c.group.name);
-    if (!g || !(g.plans || []).some((p) => !p.enName)) continue;
-    const names = new Map((c.group.plans || []).map((p) => [p.plan, p.enName]));
+    if (!g) continue;
     let changed = false;
-    for (const p of g.plans || []) {
-      const full = names.get(p.plan);
-      if (full && !p.enName) {
-        p.enName = full;
+    if ((g.plans || []).some((p) => !p.enName)) {
+      const names = new Map((c.group.plans || []).map((p) => [p.plan, p.enName]));
+      for (const p of g.plans || []) {
+        const full = names.get(p.plan);
+        if (full && !p.enName) {
+          p.enName = full;
+          changed = true;
+        }
+      }
+    }
+    // The census fields (date of birth, dependants by name): matched by
+    // name and age, since that is what both sides hold.
+    if (membersWantCensus(g)) {
+      const key = (m) => `${String(m.last || "").trim().toLowerCase()}|${String(m.first || "").trim().toLowerCase()}|${m.age ?? ""}`;
+      const fresh = new Map((c.group.members || []).map((m) => [key(m), m]));
+      for (const m of g.members || []) {
+        const f = fresh.get(key(m));
+        if (!f) continue;
+        if (m.dob === undefined) m.dob = f.dob ?? null;
+        if (m.deps === undefined) m.deps = Array.isArray(f.deps) ? f.deps : [];
         changed = true;
       }
+      // Members the export no longer names still get the fields, so the page does not keep asking.
+      for (const m of g.members || []) {
+        if (m.dob === undefined) m.dob = null;
+        if (m.deps === undefined) m.deps = [];
+      }
+      census++;
     }
     if (!changed) continue;
     await db.updateGroupPayload(g.name, g);
@@ -2435,7 +2467,7 @@ async function backfillFromStoredExport() {
   }
   if (filled) {
     rebuild();
-    console.log(`stored export: filled in full plan names for ${filled} group(s)`);
+    console.log(`stored export: filled in ${filled} group(s)${census ? `, census fields for ${census}` : ""}`);
   }
 }
 

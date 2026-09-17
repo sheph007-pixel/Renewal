@@ -79,6 +79,14 @@ function isCurrent(en, asOf) {
 }
 
 /** Whole years between a date of birth and an as-of date. */
+/** A date of birth as YYYY-MM-DD, whatever the export's spelling; null when unreadable. */
+function isoDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d)) return null;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 function ageAt(dob, asOf) {
   if (!dob) return null;
   const d = new Date(dob);
@@ -418,10 +426,15 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
     const medical = current.filter((en) => text(en, "Benefit") === "Medical");
     if (!medical.length) continue;
 
-    // Dependents are nested in the employee record; only their ages are used.
+    // Dependents are nested in the employee record: their ages feed the
+    // tiers and the census profile; name, gender, relationship and date of
+    // birth are kept for the Census page (one row per person).
     const deps = blocks(emp, "Dependent").map((d) => ({
+      first: text(d, "FirstName") || "",
+      last: text(d, "LastName") || "",
+      gender: text(d, "Gender") || null,
       rel: text(d, "Relationship"),
-      dob: text(d, "DOB"),
+      dob: isoDate(text(d, "DOB")),
     }));
 
     for (const en of medical) {
@@ -473,6 +486,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
         first: text(emp, "FirstName") || "",
         last: text(emp, "LastName") || "",
         gender: text(emp, "Gender") || null,
+        dob: isoDate(text(emp, "DOB")),
         age: ageAt(text(emp, "DOB"), asOf),
         zip: (text(emp, "ZIP") || "").split("-")[0] || null,
         tier,
@@ -484,6 +498,7 @@ const companyBlock = wholeCompany.slice(0, headEnd > 0 ? headEnd : 8000);
         employerCost: num("EmployerCost"),
         spAges: deps.filter((d) => d.rel === "Spouse").map((d) => ageAt(d.dob, asOf)).filter((a) => a != null),
         chAges: deps.filter((d) => d.rel === "Child").map((d) => ageAt(d.dob, asOf)).filter((a) => a != null),
+        deps: deps.map((d) => ({ first: d.first, last: d.last, gender: d.gender, rel: d.rel || null, dob: d.dob })),
       });
     }
   }
