@@ -839,7 +839,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                     {h}
                     {k === "er" && (
-                      <InfoTip text={`What your company pays per month across your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: the monthly contribution you set, applied to each plan. Your company decides this first; employees pay the rest.`} color="rgba(255,255,255,0.85)" place="below" />
+                      <InfoTip text="You define your budget per plan in the setup process with Kennion. You control this amount. Employees pay the rest, pre-tax, through payroll deduction." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                     {k === "total" && (
                       <InfoTip text={`The full monthly premium for your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: what your company pays plus what employees pay.`} color="rgba(255,255,255,0.85)" place="below" />
