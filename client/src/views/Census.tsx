@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
-import { TIERS, type AccountManager, type Group, type TierKey } from "@/lib/model";
+import { type Group } from "@/lib/model";
+import { NAVIGATOR_URL } from "@/views/NavigatorCard";
 import { downloadCensusCsv, loadCensus, type CensusMember } from "@/lib/chat";
 import { C, chip, panel } from "@/lib/ui";
 import { TIER_NAMES } from "@/views/PlanCard";
 
 /**
- * Census: who is enrolled, from the enrollment data on file - the people
- * every rate on the site is priced on. Name, age, coverage tier, plan and
- * dependants' ages; nothing else about anyone. Read only: a correction goes
- * to the Kennion team, whose import is the source of truth, and the final
- * rates are set by the Carrier/TPA on the final census at enrollment.
+ * Census: who is enrolled, from the Employee Navigator data on file - the
+ * people every rate on the site is priced on. Name, age, coverage tier, plan
+ * and dependants' ages; nothing else about anyone. Just the table, a CSV of
+ * it and the link to Employee Navigator, where the census itself lives.
  */
-export default function Census({ g, manager }: { g: Group; manager: AccountManager | null }) {
+export default function Census({ g }: { g: Group }) {
   const [rows, setRows] = useState<CensusMember[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,12 +24,6 @@ export default function Census({ g, manager }: { g: Group; manager: AccountManag
       live = false;
     };
   }, [g.name]);
-  const counts: Record<TierKey, number> = { EE: 0, ES: 0, EC: 0, FAM: 0 };
-  for (const r of rows || []) if (r.tier) counts[r.tier]++;
-  const ages = (rows || []).map((r) => r.age).filter((a): a is number => a != null);
-  const avg = ages.length ? Math.round(ages.reduce((s, a) => s + a, 0) / ages.length) : null;
-  const spouses = (rows || []).filter((r) => r.spouseAges.length).length;
-  const children = (rows || []).reduce((n, r) => n + r.childAges.length, 0);
   const download = async () => {
     setBusy(true);
     setError("");
@@ -45,38 +39,20 @@ export default function Census({ g, manager }: { g: Group; manager: AccountManag
   const td = { padding: "9px 12px", fontSize: 13, color: C.ink, borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" as const };
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div className="panel" style={{ ...panel, padding: "16px 20px", marginBottom: 14, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <div style={{ fontSize: 13.5, color: C.body, lineHeight: 1.55, flex: "1 1 420px" }}>
-          The people every rate on BenSync is priced on, from the enrollment data on file: name, age, coverage tier, plan and dependants&apos; ages, nothing more. Rates are illustrative until the Carrier/TPA sets final rates on the final census at enrollment. If something here is off, tell {manager?.name ? manager.name : "your Kennion team"}
-          {manager?.email ? (
-            <>
-              {" "}
-              (<a href={`mailto:${manager.email}`} style={{ color: C.blue, textDecoration: "none" }}>{manager.email}</a>)
-            </>
-          ) : null}
-          ; Kennion corrects the record and every figure follows.
+      {/* One line: what this is and where it came from; the file; the source. The table says the rest. */}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, color: C.muted }}>
+          Illustrative only, from the Employee Navigator data on file{rows ? ` · ${rows.length} enrolled` : ""}. Final rates are set by the Carrier/TPA on the final census at enrollment.
         </div>
-        <button onClick={() => void download()} disabled={busy || !rows?.length} style={{ ...chip(false), fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
-          {busy ? "Building…" : "Download CSV"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={{ ...chip(false), fontWeight: 600, textDecoration: "none" }}>
+            Employee Navigator ↗
+          </a>
+          <button onClick={() => void download()} disabled={busy || !rows?.length} style={{ ...chip(false), fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
+            {busy ? "Building…" : "Download CSV"}
+          </button>
+        </div>
       </div>
-
-      {rows && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-          {[
-            ["Enrolled", String(rows.length)],
-            ...TIERS.map((t) => [TIER_NAMES[t.key], String(counts[t.key])] as [string, string]),
-            ["Average age", avg == null ? "-" : String(avg)],
-            ["Spouses", String(spouses)],
-            ["Children", String(children)],
-          ].map(([label, value]) => (
-            <div key={label} style={{ ...panel, padding: "8px 12px", minWidth: 110 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>{label}</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.navy }}>{value}</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {error && (
         <div role="alert" style={{ marginBottom: 12, fontSize: 13, color: C.red }}>

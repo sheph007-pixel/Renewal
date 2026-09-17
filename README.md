@@ -663,13 +663,11 @@ tip both say, with the Carrier/TPA confirming at enrollment.
 **Census: who is enrolled.** Every "N enrolled" on the client pages (the
 Employer Contribution band, the Current tab's strip) links to
 `/:slug/census`: each employee's name, age, coverage tier, plan and
-dependants' ages from the enrollment data on file, with counts by tier,
-average age, spouses and children, and a CSV download (`GET
-/api/group/census`, `?format=csv`). Nothing else about anyone: no dates of
-birth, gender, ZIP or costs. Read only: a correction goes to the Kennion
-team, whose import is the source of truth; the page says so and names the
-account manager. Rates are illustrative until the Carrier/TPA sets final
-rates on the final census.
+dependants' ages from the Employee Navigator data on file, a CSV download
+(`GET /api/group/census`, `?format=csv`) and the link to Employee
+Navigator, under one line saying it is illustrative and where it came
+from. Nothing else about anyone: no dates of birth, gender, ZIP or costs,
+and no editing here; the census lives in Employee Navigator.
 
 **Illustrative quotes, and the notice.** Every rate the site shows is an
 "Illustrative Quote" (`basisOf`), never a proposal, an offer or a guarantee,
