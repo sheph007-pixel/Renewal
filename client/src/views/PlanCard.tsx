@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
 import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
-import CarrierMark from "@/views/CarrierMark";
+import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
 
 /**
@@ -138,6 +138,13 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
           <CarrierMark name={m.carrier} size={20} fontSize={12.5} color={C.muted} />
           <span style={{ fontSize: 11, fontWeight: 600, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 10, padding: "1px 8px" }}>{m.funding}</span>
           {m.type && !compact && <span style={{ fontSize: 11, color: C.faint }}>{m.type}</span>}
+          {/* The card is the one place the carrier's website is linked: the
+              grid rows open this card and carry no link of their own. */}
+          {!compact && (
+            <span style={{ marginLeft: "auto" }}>
+              <CarrierSiteLink name={m.carrier} fontSize={13} />
+            </span>
+          )}
         </div>
         {/* The one way a plan is named everywhere: Carrier/TPA, Option, ID - in bold; the carrier's long name under it. */}
         <div style={{ fontSize: compact ? 15 : 17, fontWeight: 700, color: C.ink, lineHeight: 1.3, marginTop: 4, ...num }}>{m.optionId ? `${m.carrier} Option ${m.optionId}` : m.plan}</div>

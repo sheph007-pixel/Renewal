@@ -1,8 +1,9 @@
 /**
- * Each carrier's and TPA's main website, so the Carrier/TPA name is a link
- * wherever it is shown - a plan card's header, a grid row, the Today page.
- * One row per name the system uses; a name not listed here simply shows
- * without a link. Edit here to add a carrier or partner.
+ * Each carrier's and TPA's main website. The plan card links to it in words
+ * ("Visit Angle Health's Website"), and the CSV export carries the address;
+ * grid rows do not link, because a row's click opens the card. One row per
+ * name the system uses; a name not listed here simply shows without a link.
+ * Edit here to add a carrier or partner.
  */
 const SITES: Record<string, string> = {
   unitedhealthcare: "https://www.uhc.com/",
