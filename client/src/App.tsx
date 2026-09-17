@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
+  ACA_ALE_NOTE,
   groupSizeLabel,
   marketPlans,
   minimumContribution,
@@ -864,7 +865,7 @@ export default function App() {
                   <PeopleIcon />
                   <div>
                     <div style={{ fontSize: 10.5, fontWeight: 600, color: C.faint, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
+                    <div title={g.sizeCategory === "51+" ? ACA_ALE_NOTE : undefined} style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
                   </div>
                 </div>
               )}

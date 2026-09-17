@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { ACA_ALE_NOTE, NETWORK_TYPES, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, num, panel, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
@@ -576,6 +576,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
               Employer Contribution
               <InfoTip text="You set the budget: what to spend each month, as a dollar amount or a percentage. That amount goes toward whichever plan each employee picks; if they choose a plan that costs more, they pay the difference, so your budget never moves. It starts at 50% of the lowest employee-only rate on every tier; raise any tier from there." color={C.blue} />
+              {/* A large group: the employer mandate, as a note beside the title. General information with the judgment left to Kennion; never "you are compliant". */}
+              {g.sizeCategory === "51+" && (
+                <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: C.muted, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "1px 4px 1px 8px", letterSpacing: "0.2px", cursor: "default" }}>
+                  ACA · ALE 50+
+                  <InfoTip text={ACA_ALE_NOTE} color={C.muted} />
+                </span>
+              )}
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
