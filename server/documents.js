@@ -915,7 +915,7 @@ export async function renderDocument({ format, title, markdown, group: g }) {
   return { filename: `${safeName(g.name)} - ${safeName(name)} ${stamp}.pdf`, mime: "application/pdf", data };
 }
 
-// ------------------------------------------------ What's Changing For 2027
+// ------------------------------------------------ 2027 Program Overview
 
 /** The network a slot's plans run on, the way the pages say it; a fixed rule for the carriers on one network, the quote's own word otherwise. */
 const slotNetwork = (slot, network) => {
@@ -980,7 +980,7 @@ function optionRows(g, proposals) {
 }
 
 /**
- * What's Changing For 2027: the one document a client downloads from
+ * The 2027 Program Overview: the one document a client downloads from
  * Welcome and passes around the office. Two pages, high level and all good
  * news: the group's current medical plan runs through December 31 as it
  * does every year, and for January 1 the Kennion Program has expanded to
@@ -1111,7 +1111,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       });
     };
 
-    pdfHeader(doc, { title: `What's Changing For ${renewalYear}`, groupName: g.name, subtitle: `Your ${planYear} To ${renewalYear} Renewal Summary` });
+    pdfHeader(doc, { title: `${renewalYear} Program Overview`, groupName: g.name, subtitle: `Your ${planYear} To ${renewalYear} Renewal Summary` });
 
     // Page 1: the good news, in order.
     para("Good news: the Kennion Program is growing.", { font: "Helvetica-Bold", size: 12, color: NAVY, after: 0.35 });
@@ -1178,10 +1178,11 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     steps([
       ["Review Medical Options", `See your ${renewalYear} medical plans on BenSync, side by side, priced for your group.`],
       ["Review Supplemental Benefits", "Confirm your dental, vision, life and other supplemental lines. Nothing changes here unless you want it to."],
-      ["Build Your Strategy", "Set the company's contribution, compare plans and work with Kennion and the AI Assistant to decide what to offer employees."],
-      ["Sign Up", submittedOn ? `You submitted your plan choices on ${submittedOn}. You can send an update any time.` : `Tell Kennion which plans you want to offer for ${renewalYear}. The Sign Up page on BenSync takes about a minute.`],
+      ["Build Your Strategy", "Work with Kennion and the AI Assistant to compare plans, model contributions and narrow the options that make the most sense for your group."],
+      ["Sign Up", submittedOn ? `You submitted your plan choices on ${submittedOn}. You can send an update any time.` : `Once your strategy is set, confirm the plans and benefits you want to offer for ${renewalYear}. The Sign Up page on BenSync takes about a minute.`],
     ]);
-    para("You make the decisions. We handle the rest: Employee Navigator setup, carrier implementation, employee communications, open enrollment support, employee enrollment assistance, final carrier enrollment and first-month payment.", { font: "Helvetica-Bold", after: 0.3 });
+    para("Once your selections are finalized, Kennion coordinates Employee Navigator setup, carrier implementation, employee communications, open enrollment, enrollment support, final enrollment and first-month premium setup.", { after: 0.3 });
+    para("We help you build the right strategy. Then we handle the rest.", { font: "Helvetica-Bold", after: 0.3 });
 
     heading("Questions We Hear Most", 100);
     faqs([
@@ -1221,5 +1222,5 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
 
     pdfFooter(doc, { caption: "Prepared for your group by Kennion Benefit Advisors. Plan details and rates are on BenSync." });
   });
-  return { filename: `${safeName(g.name)} - What's Changing For ${renewalYear} ${stamp}.pdf`, mime: "application/pdf", data };
+  return { filename: `${safeName(g.name)} - ${renewalYear} Program Overview ${stamp}.pdf`, mime: "application/pdf", data };
 }
