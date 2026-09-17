@@ -95,6 +95,25 @@ CREATE TABLE IF NOT EXISTS kennion.plan_designs (
   updated_at  timestamptz NOT NULL DEFAULT now(),
   updated_by  text
 );
+-- A carrier's standard plan designs for the renewal year - the catalogue every
+-- group's quote from that carrier draws on (Angle Health quotes the same
+-- designs to every group; only the rates differ). One row per carrier and
+-- plan code; the design (in- and out-of-network figures, every service line)
+-- is the JSON. Seeded at boot from the workbooks in server/data/plan-docs
+-- where a carrier has no rows yet; a workbook uploaded by staff adds to or
+-- replaces rows by plan code. Rows in the database win over the file.
+CREATE TABLE IF NOT EXISTS kennion.carrier_plan_designs (
+  carrier     text NOT NULL,
+  plan_year   integer NOT NULL DEFAULT 2027,
+  plan_code   text NOT NULL,
+  plan_id     text,
+  family      text,
+  design      jsonb NOT NULL,
+  source      text,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  text,
+  PRIMARY KEY (carrier, plan_year, plan_code)
+);
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -583,6 +602,27 @@ export function createDb(url) {
              plan_year = EXCLUDED.plan_year, tpa = COALESCE(EXCLUDED.tpa, kennion.plan_designs.tpa), benefits = EXCLUDED.benefits,
              source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
           [d.planName, d.planYear || 2026, d.tpa || null, JSON.stringify(d.benefits || {}), d.source || null, by || null],
+        );
+      }
+      return list.length;
+    },
+
+    /** Every carrier's standard plan designs, as stored. */
+    async listCarrierDesigns() {
+      const { rows } = await pool.query("SELECT carrier, plan_year, plan_code, plan_id, family, design, source, updated_at, updated_by FROM kennion.carrier_plan_designs ORDER BY carrier, plan_year, plan_code");
+      return rows.map((r) => ({ ...r.design, carrier: r.carrier, planYear: r.plan_year, planCode: r.plan_code, planId: r.plan_id, family: r.family, source: r.source, updatedAt: r.updated_at, updatedBy: r.updated_by }));
+    },
+    /** Write designs in, replacing a design when its carrier, year and code are already there. */
+    async upsertCarrierDesigns(list, by) {
+      for (const d of list) {
+        const { updatedAt, updatedBy, ...design } = d;
+        await pool.query(
+          `INSERT INTO kennion.carrier_plan_designs (carrier, plan_year, plan_code, plan_id, family, design, source, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, now(), $8)
+           ON CONFLICT (carrier, plan_year, plan_code) DO UPDATE SET
+             plan_id = COALESCE(EXCLUDED.plan_id, kennion.carrier_plan_designs.plan_id), family = EXCLUDED.family, design = EXCLUDED.design,
+             source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+          [d.carrier, d.planYear || 2027, d.planCode, d.planId || null, d.family || null, JSON.stringify(design), d.source || null, by || null],
         );
       }
       return list.length;

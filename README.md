@@ -906,6 +906,34 @@ carry each current plan's design beside its rates and the whole catalogue
 in one line each, so it can compare what a group has today with the 2027
 options. Test: `node scripts/test-plan-designs.mjs`.
 
+**Standard plan designs (the plan catalogue).** A carrier quotes the same
+standard designs to every group; only the rates differ. Angle Health's 19
+designs - ANG TRAD 5000 7000, ANG HDHP 3500 3500, ANG VALUE 9200 and the
+rest - are on file as a catalogue
+(`server/data/plan-docs/AngleHealthStandardPlanBenefits.xlsx`: a Plans sheet
+with one row per design and its in- and out-of-network deductibles and
+out-of-pocket maximums, and a Benefits sheet with one row per service line,
+20 per design, exactly as printed on the carrier's plan pages). At boot the
+server reads the workbook, seeds `kennion.carrier_plan_designs` where the
+carrier has no rows yet (one row per carrier, plan year and plan code; rows
+in the database win over the file), and keeps the catalogue in memory keyed
+by carrier and plan code (`server/plan-catalogue.js`). Every quoted plan
+whose printed name or code is a catalogue code then carries the catalogue's
+figures wherever the plan appears - its card, the printed proposal, the
+comparison, the assistant's figures - in place of what the reader made of
+the carrier's PDF: the deductible and OOP max, the design family as its type,
+the six benefit rows plus the emergency room, and the whole design (family
+figures, out-of-network cover, whether the family deductible is embedded,
+all 20 lines) under `design`. The group's own rates are never touched. A plan
+that is not a catalogue design is left as read. On the Import tab, **Plan
+Design Catalogue** lists each carrier's designs and takes a catalogue
+workbook for a carrier (`POST /api/admin/plan-catalogue/:carrier`, the same
+two-sheet shape), adding or replacing designs by plan code; the rest of the
+carrier's catalogue stays, and every group's proposals from that carrier
+carry the designs at once. `GET /api/admin/plan-catalogue` lists it.
+UnitedHealthcare's and Gravie's catalogues load the same way once they are in
+that shape. Test: `node scripts/test-plan-catalogue.mjs`.
+
 **Research.** The assistant can search the web (Anthropic's server-side
 `web_search` tool, up to five searches a turn) for what the group's figures
 do not cover — an ACA affordability percentage, an IRS limit, a carrier's
@@ -1241,6 +1269,7 @@ node scripts/test-chat.mjs            # boots the server on 5078 and walks the a
 node scripts/test-proposal-audit.mjs  # boots the server on 5086: read, two-model audit, client view, document
 node scripts/test-option-ids.mjs      # boots the server on 5089: UH1/GR1 numbering, re-reads, newer quotes, sign-up
 node scripts/test-plan-designs.mjs    # the 15 current plan designs in the assistant's figures and the staff routes (5091)
+node scripts/test-plan-catalogue.mjs  # Angle Health's 19 standard designs: parsed, matched by code, listed and loaded by staff, on the group's page (5093)
 node scripts/test-totp.mjs && node scripts/test-2fa.mjs   # two-factor, against the RFC vectors and a live server
 node --experimental-strip-types scripts/test-market-plans.mts
 ```

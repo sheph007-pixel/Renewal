@@ -27,6 +27,7 @@ import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
+import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue } from "./plan-catalogue.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -227,6 +228,68 @@ let invoiceByGroup = {};
  * is what a group's 2027 Options page prices from; no file bytes, no flags.
  */
 let currentProposals = {};
+/**
+ * Every carrier's standard plan designs - the catalogue a carrier quotes the
+ * same designs from to every group - and the same keyed by carrier and plan
+ * code. Loaded at boot from the workbooks in server/data/plan-docs and the
+ * database; a quoted plan whose name is a catalogue code takes its benefits
+ * from here. See server/plan-catalogue.js.
+ */
+let planCatalogue = [];
+let planCatalogueIndex = new Map();
+/** Designs staff uploaded while no database is connected: kept for the process's life only. */
+let uploadedCatalogue = [];
+/** The catalogues shipped with the code: file, carrier, plan year. Seeded into the database once. */
+const CATALOGUE_FILES = [{ file: "AngleHealthStandardPlanBenefits.xlsx", carrier: "Angle Health", planYear: 2027 }];
+
+/** The shipped catalogues, read from disk; a file that fails to read is logged and skipped. */
+function shippedCatalogue() {
+  const out = [];
+  for (const f of CATALOGUE_FILES) {
+    try {
+      out.push(...parseCatalogueWorkbook(fs.readFileSync(path.join(__dirname, "data", "plan-docs", f.file)), { carrier: f.carrier, planYear: f.planYear, source: f.file }));
+    } catch (e) {
+      console.error(`plan catalogue: ${f.file}:`, e.message);
+    }
+  }
+  return out;
+}
+
+/**
+ * Load the catalogue: the shipped workbooks, then the database's rows on top
+ * (a carrier with no rows yet is seeded from its workbook). Rebuilds the
+ * index; the proposals pick the designs up on their next rebuild.
+ */
+async function loadPlanCatalogue() {
+  const shipped = shippedCatalogue();
+  let designs = shipped;
+  if (!db) {
+    const byKey = new Map(shipped.map((d) => [`${d.carrier}|${d.planYear}|${d.planCode}`, d]));
+    for (const d of uploadedCatalogue) byKey.set(`${d.carrier}|${d.planYear}|${d.planCode}`, d);
+    designs = [...byKey.values()];
+  } else {
+    try {
+      let stored = await db.listCarrierDesigns();
+      const have = new Set(stored.map((d) => `${d.carrier}|${d.planYear}`));
+      const seed = shipped.filter((d) => !have.has(`${d.carrier}|${d.planYear}`));
+      if (seed.length) {
+        await db.upsertCarrierDesigns(seed, "system");
+        console.log(`plan catalogue: seeded ${seed.length} design(s) from ${[...new Set(seed.map((d) => d.source))].join(", ")}`);
+        stored = await db.listCarrierDesigns();
+      }
+      const byKey = new Map(shipped.map((d) => [`${d.carrier}|${d.planYear}|${d.planCode}`, d]));
+      for (const d of stored) byKey.set(`${d.carrier}|${d.planYear}|${d.planCode}`, d);
+      designs = [...byKey.values()];
+    } catch (e) {
+      console.error("plan catalogue:", e.message);
+    }
+  }
+  planCatalogue = designs;
+  planCatalogueIndex = catalogueIndex(designs);
+  const per = {};
+  for (const d of designs) per[d.carrier] = (per[d.carrier] || 0) + 1;
+  console.log(`plan catalogue: ${designs.length} standard design(s) - ${Object.entries(per).map(([c, n]) => `${c} ${n}`).join(", ") || "none"}`);
+}
 /** group -> { slot: true } for slots that already hold a proposal, so a slot in use is never hidden. */
 let proposalSlotsByGroup = {};
 /** The latest Employee Navigator carrier stats report, for reconciliation. */
@@ -3392,6 +3455,50 @@ app.post("/api/admin/plan-designs/:name", requireStaff, express.json({ limit: "3
   res.json({ planName, benefits: clean });
 });
 
+/** Every carrier's standard plan designs: one summary per carrier and year, and every design. */
+app.get("/api/admin/plan-catalogue", requireStaff, (_req, res) => {
+  const carriers = new Map();
+  for (const d of planCatalogue) {
+    const k = `${d.carrier}|${d.planYear}`;
+    const c = carriers.get(k) || { carrier: d.carrier, planYear: d.planYear, count: 0, sources: new Set(), updatedAt: null };
+    c.count++;
+    if (d.source) c.sources.add(d.source);
+    if (d.updatedAt && (!c.updatedAt || d.updatedAt > c.updatedAt)) c.updatedAt = d.updatedAt;
+    carriers.set(k, c);
+  }
+  res.json({
+    carriers: [...carriers.values()].map((c) => ({ ...c, sources: [...c.sources] })),
+    designs: planCatalogue,
+    durable: !!db,
+  });
+});
+
+/**
+ * Load a carrier's catalogue workbook (the two-sheet shape in
+ * server/plan-catalogue.js). Designs are added by plan code, replacing any
+ * already there under the same code; the rest of the carrier's catalogue
+ * stays. Every group's proposals from that carrier carry the designs at once.
+ */
+app.post("/api/admin/plan-catalogue/:slug", requireStaff, express.raw({ type: () => true, limit: "10mb" }), async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  if (!carrier) return res.status(404).json({ error: "No such carrier." });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const planYear = Number(req.query.year) || 2027;
+  const source = String(req.query.filename || "").slice(0, 200) || null;
+  try {
+    const designs = parseCatalogueWorkbook(req.body, { carrier, planYear, source });
+    if (db) await db.upsertCarrierDesigns(designs, req.staffEmail || "staff");
+    else uploadedCatalogue.push(...designs);
+    await loadPlanCatalogue();
+    await proposalsChanged();
+    const total = planCatalogue.filter((d) => d.carrier === carrier && d.planYear === planYear).length;
+    console.log(`plan catalogue: ${designs.length} ${carrier} design(s) loaded by ${req.staffEmail || "staff"}; ${total} on file`);
+    res.json({ carrier, planYear, loaded: designs.length, total, codes: designs.map((d) => d.planCode) });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });
@@ -4002,7 +4109,10 @@ async function proposalsChanged() {
     for (const list of bySlot.values()) {
       const r = list[0];
       const x = r.extracted || {};
-      (current[r.group_name] = current[r.group_name] || []).push({
+      // A plan that is one of the carrier's standard designs takes its
+      // benefits from the catalogue, the same for every group.
+      const carrierName = (SLOT_BASIS[r.slot] && SLOT_BASIS[r.slot][0]) || r.carrier || x.carrier || null;
+      (current[r.group_name] = current[r.group_name] || []).push(applyCatalogue({
         id: r.id,
         slot: r.slot,
         carrier: r.carrier || x.carrier || null,
@@ -4029,7 +4139,7 @@ async function proposalsChanged() {
         filename: r.filename,
         uploadedAt: r.uploaded_at,
         audit: auditForClient(r.audit),
-      });
+      }, planCatalogueIndex, carrierName));
     }
     currentProposals = current;
     proposalSlotsByGroup = Object.fromEntries(
@@ -4874,6 +4984,8 @@ async function boot() {
     await archiveLeavers(new Set(Object.keys(imported.groups || {})));
     rebuild();
   }
+  // The carriers' standard designs first, so the proposals built next carry them.
+  await loadPlanCatalogue();
   await proposalsChanged();
   await refreshAudit();
   // Gravie workbooks already on file, re-read with the current parser and

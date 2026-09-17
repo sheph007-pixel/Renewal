@@ -242,6 +242,8 @@ export interface ProposalPlan {
   oopMax: string | null;
   /** In-network member cost per service, as printed; null until the reader has seen the document. */
   benefits?: PlanBenefits | null;
+  /** The carrier's standard design this plan is, from the plan catalogue; absent when the plan is not a catalogue design. */
+  design?: PlanDesign | null;
   rates: Record<TierKey, number | null>;
   monthlyTotal: number | null;
 }
@@ -253,6 +255,33 @@ export interface PlanBenefits {
   urgentCare: string | null;
   hospital: string | null;
   rx: string | null;
+  /** Emergency room; only the plan catalogue gives it. */
+  er?: string | null;
+}
+
+/** In- and out-of-network figures for one design. */
+export interface DesignLimits {
+  deductibleIndividual: number | null;
+  deductibleFamily: number | null;
+  oopMaxIndividual: number | null;
+  oopMaxFamily: number | null;
+  coinsurance?: number | null;
+}
+
+/**
+ * A carrier's standard plan design, the same for every group it quotes:
+ * the catalogue row the server matched the quoted plan to by its code.
+ */
+export interface PlanDesign {
+  planCode: string;
+  planId: string | null;
+  family: string | null;
+  planYear: number;
+  inNetwork: DesignLimits;
+  outOfNetwork: DesignLimits;
+  deductibleEmbedded: boolean | null;
+  /** Every service line the carrier lists, in its order, with the member cost as the card reads it. */
+  services: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
 }
 
 /** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
@@ -677,6 +706,8 @@ export interface MarketPlan {
   indicative: boolean;
   /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
   optionId?: string | null;
+  /** The carrier's standard design, from the plan catalogue, where the quoted plan is one. */
+  design?: PlanDesign | null;
   /** Read off a proposal the carrier sent for this group. */
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
 }
@@ -857,13 +888,14 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
         specialist: gb ? gb.specialist : pb?.specialist ?? null,
         uc: gb ? gb.uc : pb?.urgentCare ?? null,
-        er: gb ? gb.er : null,
+        er: gb ? gb.er : pb?.er ?? null,
         imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
         hospital: gb ? gb.hospital : pb?.hospital ?? null,
         network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : networkLabel(pl.network) || show.network,
         rates,
         monthly,
         indicative: false,
+        design: pl.design ?? null,
         quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id, audit: pr.audit || null },
       });
     }
