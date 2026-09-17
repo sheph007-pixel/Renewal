@@ -859,7 +859,6 @@ export default function App() {
               {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
                 <div
-                  title={groupSizeNote(g) ?? undefined}
                   style={{
                     ...panel,
                     flex: "0 0 auto",

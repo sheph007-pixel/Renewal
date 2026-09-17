@@ -481,7 +481,7 @@ button,
   place-items: center;
   width: 16px;
   height: 16px;
-  cursor: help;
+  cursor: default;
   outline: none;
   opacity: 0.75;
 }
