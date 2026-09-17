@@ -121,7 +121,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        <ProgramStory optionsHref={optionsHref} />
+        <ProgramStory />
         <div style={{ ...panel, padding: "28px 34px 24px" }}>
           <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
           <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
