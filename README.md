@@ -732,7 +732,9 @@ assistant's documents. The assistant's instructions say the same. BenSync is
 a proposal platform; the notice is what makes that safe.
 
 **Group size, as a note.** The Group Size badge (2-50 or 51+, from the
-enrollment data on file) carries an info tip per category (`groupSizeNote`):
+enrollment data on file) sits beside the Medical Plans title on the 2027
+options and current plans tabs, and nowhere else: the Welcome page opens
+without it. It carries an info tip per category (`groupSizeNote`):
 where the size comes from, what applies at that size (the ACA employer
 mandate at 50 or more full-time equivalents; not under 50), that the 50%
 starting contribution is the Carrier/TPA's minimum contribution requirement and not an

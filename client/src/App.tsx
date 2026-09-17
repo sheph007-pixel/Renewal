@@ -863,7 +863,8 @@ export default function App() {
                   </div>
                 )}
               </div>
-              {(tab === "home" || tab === "current" || tab === "options") && groupSizeLabel(g) && (
+              {/* On the Medical Plans tabs only: Welcome opens without it. */}
+              {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
                 // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
                 <div
                   style={{
