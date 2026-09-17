@@ -580,7 +580,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           >
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
               Employer Contribution
-              <InfoTip text="Starts at the Carrier/TPA minimum: 50% of the lowest-cost plan's Employee Only rate, on every tier, because the rule is per employee whatever their tier. Raise any tier from there, as a dollar amount or a percentage. Your amount goes toward whichever plan each employee picks; a costlier plan is a buy-up the employee pays. If you offer only one richer plan, the minimum is half that plan's Employee Only rate; confirm with the Carrier/TPA. Not an ACA affordability determination; see the Group Size note." color={C.blue} />
+              <InfoTip text="Your monthly amount toward each employee's coverage, by tier. Starts at the Carrier/TPA minimum: 50% of the lowest Employee Only rate, on every tier. Raise any tier from there; employees pay the rest. Details under Disclaimers." color={C.blue} />
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
