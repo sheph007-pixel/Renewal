@@ -380,11 +380,6 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
       {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}
       {!compact && (
         <div className="noprint" style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.45, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
-          {(() => {
-            // The rule is about the Employee Only premium, not the group's total bill.
-            const ee = m.tiers.find((t) => t.key === "EE");
-            return ee && ee.rate && ee.er != null ? `Your contribution is ${Math.round((ee.er / ee.rate) * 100)}% of this plan's Employee Only rate. ` : "";
-          })()}
           *Plans require an employer contribution of at least 50% of the employee premium; with several plans offered, 50% of the lowest-cost plan's Employee Only rate.
           {disclaimersHref && (
             <>
