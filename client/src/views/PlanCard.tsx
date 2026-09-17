@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
+import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE } from "@/lib/model";
 import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
@@ -231,8 +231,8 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                 </td>
                 <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "-" : money(per(t.rate)!)}</td>
                 {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.green, fontWeight: 600, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.red, fontWeight: 600, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
               </tr>
             ))}
           </tbody>
@@ -247,8 +247,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
               [`Total ${freq.label} Bill`, per(m.premium), false],
             ] as [string, number | null, boolean][]
           ).map(([label, v, strong]) => {
-            const total = per(m.premium);
-            const pct = strong && v != null && total ? Math.round((v / total) * 100) : null;
+            const pct = null as number | null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
@@ -346,8 +345,8 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                 </td>
                 <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.ink, ...num }}>{t.rate == null ? "-" : money(per(t.rate)!)}</td>
                 {/* A tier nobody is in has no split to show: the contribution for it is a default, not a decision. */}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
-                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.body, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.green, fontWeight: 600, ...num }}>{t.er == null || !t.count ? "-" : money(per(t.er)!)}</td>}
+                {!compact && <td style={{ padding: "3px 0 3px 8px", textAlign: "right", color: C.red, fontWeight: 600, ...num }}>{t.ee == null || !t.count ? "-" : money(per(t.ee)!)}</td>}
               </tr>
             ))}
           </tbody>
@@ -362,8 +361,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
               [`Total ${freq.label} Bill`, per(m.premium), false],
             ] as [string, number | null, boolean][]
           ).map(([label, v, strong]) => {
-            const total = per(m.premium);
-            const pct = strong && v != null && total ? Math.round((v / total) * 100) : null;
+            const pct = null as number | null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: strong ? C.ink : C.muted, fontWeight: strong ? 600 : 400 }}>{label}</td>
@@ -382,7 +380,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
       {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}
       {!compact && (
         <div className="noprint" style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.45, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
-          {RATE_NOTICE_SHORT}
+          Minimum contributions of 50% of the employee cost.
           {disclaimersHref && (
             <>
               {" "}

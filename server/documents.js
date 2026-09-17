@@ -450,10 +450,13 @@ export async function renderPlanCardPdf({ group: g, card }) {
     doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Monthly Composite Rates", rx, top, { width: colW });
     let ry = top + 16;
     const cw = [colW - 3 * 50, 50, 50, 50];
+    // Employer share green, employee share red, as on the card.
+    const SPLIT = [null, null, GREEN, "#a3241c"];
     const rowText = (cells, bold = false, color = INK) => {
       let cx = rx;
       cells.forEach((c, i) => {
-        doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8).fillColor(color).text(c, cx, ry, { width: cw[i] - 4, align: i ? "right" : "left", lineBreak: false, height: 10, ellipsis: true });
+        const tone = color === INK && SPLIT[i] ? SPLIT[i] : color;
+        doc.font(bold || (color === INK && SPLIT[i]) ? "Helvetica-Bold" : "Helvetica").fontSize(8).fillColor(tone).text(c, cx, ry, { width: cw[i] - 4, align: i ? "right" : "left", lineBreak: false, height: 10, ellipsis: true });
         cx += cw[i];
       });
       ry += 14;
@@ -464,7 +467,7 @@ export async function renderPlanCardPdf({ group: g, card }) {
     doc.moveTo(rx, ry).lineTo(rx + colW, ry).lineWidth(0.5).strokeColor(RULE).stroke();
     ry += 6;
     const tot = card.totals || {};
-    const pct = (v) => (v != null && tot.premium ? ` (${Math.round((v / tot.premium) * 100)}%)` : "");
+    const pct = () => "";
     const totalRow = (label, v, strong) => {
       doc.font(strong ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(INK).text(label, rx, ry, { width: colW - 120, lineBreak: false });
       doc.text(`${v == null ? "-" : money(v)}${strong ? pct(v) : ""}`, rx + colW - 120, ry, { width: 120, align: "right", lineBreak: false });
@@ -476,7 +479,7 @@ export async function renderPlanCardPdf({ group: g, card }) {
     doc.x = x0;
     doc.y = Math.max(leftEnd, ry) + 14;
     doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
-    if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page. Employees pay the rest of their tier's rate.`, { width });
+    if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page. Employees pay the rest of their tier's rate. Minimum contributions of 50% of the employee cost.`, { width });
     if (card.audit) doc.text(card.audit, { width });
     pdfFooter(doc);
   });
