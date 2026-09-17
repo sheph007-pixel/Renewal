@@ -280,13 +280,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // rate of the least expensive plan. Off this group's own quotes, so it is a
   // different figure for every group; whole dollars, rounded up.
   const floorEE = useMemo(() => contributionFloor(plans), [plans]);
-  const belowFloor = floorEE > 0 && parsed.EE < floorEE;
-  // A default under the floor is not a contribution a carrier would accept:
-  // lift it, so the first Employer Cost the page shows is a lawful one.
+  // Every tier: the rule is per employee, whatever tier they are in, so the
+  // Employee + Family amount must be at least half the Employee Only rate too.
+  const belowFloorOn = (k: TierKey) => floorEE > 0 && parsed[k] < floorEE;
+  const belowFloor = TIERS.some((t) => belowFloorOn(t.key));
+  // A default under the floor on any tier is not a contribution a carrier
+  // would accept: lift it, so the first Employer Cost the page shows is one.
   useEffect(() => {
-    if (floorEE > 0 && (applied.EE || 0) < floorEE) onApply({ ...applied, EE: floorEE });
+    if (floorEE > 0 && TIERS.some((t) => (applied[t.key] || 0) < floorEE)) onApply(TIERS.reduce((acc, t) => ({ ...acc, [t.key]: Math.max(applied[t.key] || 0, floorEE) }), {} as Record<TierKey, number>));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [floorEE, applied.EE]);
+  }, [floorEE, applied.EE, applied.ES, applied.EC, applied.FAM]);
   // Percentage mode: a share of the least expensive plan, turned into dollars
   // per tier, so the contribution is still one fixed amount on every plan.
   // Employees % applies to the employee-only rate; Dependents % to what each
@@ -577,7 +580,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           >
             <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 700, color: C.ink }}>
               Employer Contribution
-              <InfoTip text="Starts at the Carrier/TPA minimum: 50% of the lowest Employee Only rate, on every tier. Raise any tier from there, as a dollar amount or a percentage. Your amount goes toward whichever plan each employee picks; if they choose a costlier plan they pay the difference, so your budget never moves. The minimum is the Carrier/TPA's, not an ACA affordability determination; see the Group Size note for what applies at your size." color={C.blue} />
+              <InfoTip text="Starts at the Carrier/TPA minimum: 50% of the lowest-cost plan's Employee Only rate, on every tier, because the rule is per employee whatever their tier. Raise any tier from there, as a dollar amount or a percentage. Your amount goes toward whichever plan each employee picks; a costlier plan is a buy-up the employee pays. If you offer only one richer plan, the minimum is half that plan's Employee Only rate; confirm with the Carrier/TPA. Not an ACA affordability determination; see the Group Size note." color={C.blue} />
             </span>
             <span style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 13, color: C.body }}>
               <span style={{ ...num }}>
@@ -636,8 +639,8 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <label key={t.key} style={{ display: "block", flex: "1 1 150px", minWidth: 150 }}>
                     <div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>
                       {TIER_NAMES[t.key]} <span style={{ fontWeight: 400, color: C.faint }}>({counts[t.key] || 0})</span>
-                      {t.key === "EE" && belowFloor && (
-                        <span style={{ fontWeight: 400, color: C.red, marginLeft: 8 }} title="Carriers require the employer to pay at least half the employee-only rate of the least expensive plan">
+                      {belowFloorOn(t.key) && (
+                        <span style={{ fontWeight: 400, color: C.red, marginLeft: 8 }} title="The Carrier/TPA minimum: at least half the Employee Only rate of the lowest-cost plan quoted, toward every employee, whatever their tier">
                           At least {money0(floorEE)}
                         </span>
                       )}

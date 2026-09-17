@@ -649,6 +649,17 @@ the full view — every conversation down the left, grouped by day, with rename,
 delete and search, and the open one on the right with room for a comparison
 table.
 
+**The contribution floor, on every tier.** The Carrier/TPA rule is per
+employee, whatever their tier: at least half the Employee Only rate toward
+each one. So `contributionFloor` (half the lowest-cost quoted plan's
+Employee Only rate, whole dollars, rounded up) holds on all four tiers: a
+tier edited below it shows "At least $X" and Apply stays off, and a saved
+contribution under it on any tier is lifted on load. Computing it on the
+lowest-cost plan is how the rule is met with several plans offered and buy-ups
+paid by the employee; a group offering only one richer plan owes half that
+plan's Employee Only rate, which the Disclaimers page and the contribution
+tip both say, with the Carrier/TPA confirming at enrollment.
+
 **Census: who is enrolled.** Every "N enrolled" on the client pages (the
 Employer Contribution band, the Current tab's strip) links to
 `/:slug/census`: each employee's name, age, coverage tier, plan and
