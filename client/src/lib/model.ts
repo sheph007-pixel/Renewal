@@ -175,6 +175,10 @@ export function groupSizeNote(g: Group): string | null {
   return null;
 }
 
+/** The badge's hover: short. Kennion is the broker working from the data on file; the employer is responsible for what applies at its size; help is at hand. The full text is on the Disclaimers page. */
+export const GROUP_SIZE_TIP =
+  "Based on the enrollment data on file. Kennion is your broker, working from the information we have; what applies to your group at its size is your responsibility. Your Kennion team and the AI Assistant can help. See Disclaimers.";
+
 export function groupSizeLabel(g: Group): string | null {
   if (g.sizeCategory === "51+") return "Large Group 51+";
   if (g.sizeCategory === "2-50") return "Small Group 2-50";
