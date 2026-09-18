@@ -1372,12 +1372,21 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
   }
 
   if (s.rbp.length) {
-    const parts: MarketSegment[] = [];
-    s.rbp.forEach((r, i) => {
-      if (i > 0) parts.push(T(i === s.rbp.length - 1 ? " and " : ", "));
-      parts.push(V(r.name), T(", offering "), V(plural(r.plans, "reference-based pricing plan")));
-    });
-    out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
+    if (s.rbp.length === s.partners.length) {
+      // Every partner on offer already prices this way: "we also included"
+      // (nothing else was) and "an alternative to traditional network-based
+      // coverage" (there is none among the options to contrast with) would
+      // both invent a second kind of option that is not there.
+      const one = s.rbp.length === 1;
+      out.push([...listValues(s.rbp.map((r) => r.name)), T(` price${one ? "s" : ""} ${one ? "its" : "their"} plans with reference-based pricing (RBP), not a traditional provider network.`)]);
+    } else {
+      const parts: MarketSegment[] = [];
+      s.rbp.forEach((r, i) => {
+        if (i > 0) parts.push(T(i === s.rbp.length - 1 ? " and " : ", "));
+        parts.push(V(r.name), T(", offering "), V(plural(r.plans, "reference-based pricing plan")));
+      });
+      out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
+    }
   }
   // What happens next, in one sentence.
   out.push([T("Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.")]);

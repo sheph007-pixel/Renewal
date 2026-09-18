@@ -79,16 +79,30 @@ r = marketResults([...mixed, plan("Nationwide", "NW RBP", "Reference Based Prici
 assert.deepEqual(r.rbp, [{ name: "Cobalt", plans: 2 }, { name: "Nationwide", plans: 1 }]);
 assert.equal(sentences(r).at(-1), "We also included Cobalt, offering 2 reference-based pricing plans and Nationwide, offering 1 reference-based pricing plan, as an alternative to traditional network-based coverage.");
 
-// 3. RBP only: no network clause at all, and no empty list.
+// 3. RBP only, a single partner: no network clause, and no "we also
+// included ... as an alternative" - there is no other kind of option among
+// the choices to be additional to or an alternative to.
 r = marketResults([plan("Cobalt", "Cobalt RBP 2000", "RBP", 500, { type: "RBP" }), plan("Cobalt", "Cobalt RBP 4000", "RBP", 450, { type: "RBP" })])!;
 assert.deepEqual(r.networks, []);
 text = sentences(r);
 assert.deepEqual(text, [
   "Kennion took your group to market and received 2 plan options from Cobalt (2 plans).",
   "Cobalt's 2 plans average $238/month for employee-only coverage, assuming a 50% employer contribution.",
-  "We also included Cobalt, offering 2 reference-based pricing plans, as an alternative to traditional network-based coverage.",
+  "Cobalt prices its plans with reference-based pricing (RBP), not a traditional provider network.",
 ]);
-assert.ok(!text.join(" ").includes("including"), "no network list when there is no network");
+assert.ok(!text.join(" ").match(/also included|alternative|including/i), "no network list, and no false plurality, when every partner is RBP");
+
+// 3b. RBP only, two partners: same rule, plural wording, still no network clause.
+r = marketResults([plan("Cobalt", "Cobalt RBP 2000", "RBP", 500, { type: "RBP" }), plan("Nationwide", "NW RBP", "RBP", 480, { type: "RBP" })])!;
+assert.deepEqual(r.networks, []);
+text = sentences(r);
+assert.deepEqual(text, [
+  "Kennion took your group to market and received 2 plan options from Cobalt (1 plan) and Nationwide (1 plan).",
+  "Nationwide offered the lowest average employee-only cost at $240/month, assuming a 50% employer contribution.",
+  "Each partner offered 1 plan.",
+  "Cobalt and Nationwide price their plans with reference-based pricing (RBP), not a traditional provider network.",
+]);
+assert.ok(!text.join(" ").match(/also included|alternative/i));
 
 // 4. A single partner: its average and count, no superlatives.
 r = marketResults(networkOnly.filter((p) => p.carrier === "UnitedHealthcare"))!;
