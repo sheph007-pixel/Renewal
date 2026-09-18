@@ -3776,6 +3776,21 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
 const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN", Optimyl: "OP" };
 
 /**
+ * Optimyl is the one carrier whose plan code already is its number - every
+ * proposal prints the same 4 plans, numbered 1-4 in a "Plan Number" row, and
+ * server/ai.js records that as plan_code "OPTIMYL PLAN <n>". So its option
+ * id is read straight off that number rather than handed out by the
+ * sequence below: re-reading the same 4 plans, any number of times, always
+ * comes back OP1-OP4 - never OP5, OP9, growing with every re-read - with no
+ * donor-matching needed because there is nothing to match, only to read.
+ */
+function fixedOptionNumber(prefix, planCode) {
+  if (prefix !== "OP") return null;
+  const m = /OPTIMYL\s*PLAN\s*(\d+)/i.exec(String(planCode || ""));
+  return m ? Number(m[1]) : null;
+}
+
+/**
  * One proposal per slot per group: when a newer proposal replaces an older
  * one, the older one is deleted rather than kept as "superseded". The
  * numbers its plans held are remembered here - {group: {prefix: [n…]}} - 
@@ -3970,6 +3985,15 @@ async function assignOptionIds(rows, bySlot) {
       // different slot by staff) is renumbered.
       for (const pl of offered) if (pl.option_id && !String(pl.option_id).startsWith(prefix)) pl.option_id = null;
       for (const pl of offered) if (pl.option_id) used.add(pl.option_id);
+      // Optimyl's plans are numbered, not matched: read straight off plan_code.
+      for (const pl of offered) {
+        if (pl.option_id) continue;
+        const fixed = fixedOptionNumber(prefix, pl.plan_code);
+        if (fixed == null) continue;
+        pl.option_id = `${prefix}${fixed}`;
+        used.add(pl.option_id);
+        held.add(pl.option_id);
+      }
       const claim = (pl, match) => {
         const d = donors.find((c) => !used.has(c.option_id) && !held.has(c.option_id) && !isEpoPlan(c) && match(c));
         if (!d) return;
