@@ -170,14 +170,14 @@ export default function Login({
 
         <div style={{ maxWidth: 460 }}>
           <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.5px", color: C.teal, textTransform: "uppercase", marginBottom: 14 }}>
-            {mode === "group" ? "Benefits, Made Simple" : "Internal Access"}
+            {mode === "group" ? "Modern Benefits Brokerage" : "Internal Access"}
           </div>
           <h1 style={{ margin: "0 0 14px", fontSize: 34, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px", lineHeight: 1.15, textWrap: "balance" }}>
-            {mode === "group" ? "Your renewal, finally clear." : "The Kennion staff portal."}
+            {mode === "group" ? "Smarter benefits. Lower costs." : "The Kennion staff portal."}
           </h1>
           <div style={{ fontSize: 14.5, color: C.railInk, lineHeight: 1.6, textWrap: "balance" }}>
             {mode === "group"
-              ? "See what's changing, get instant answers, and keep every decision moving—backed by the Kennion Benefit Advisors team and BenSync's tools."
+              ? "Kennion Benefit Advisors pairs technology with benefits innovation to help you take on rising healthcare costs. BenSync keeps every renewal moving and every question answered."
               : "Manage groups, renewals, and client access from one place."}
           </div>
         </div>
@@ -185,8 +185,8 @@ export default function Login({
         {mode === "group" && (
           <div className="login-features" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
             <Feature icon={<RenewIcon />} title="Renewals" text="Keep every decision moving." />
-            <Feature icon={<AskIcon />} title="Ask BenSync" text="Find trusted answers faster." />
-            <Feature icon={<ClarityIcon />} title="Clarity" text="See costs and tradeoffs clearly." />
+            <Feature icon={<AskIcon />} title="Ask BenSync" text="Get trusted answers instantly." />
+            <Feature icon={<ClarityIcon />} title="Savings" text="See real savings, clearly shown." />
           </div>
         )}
       </div>
