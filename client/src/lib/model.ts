@@ -712,8 +712,8 @@ export interface MarketPlan {
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
 }
 
-/** The four proposal slots a group's 2027 options are built from, in the order they are shown. */
-export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle"];
+/** The proposal slots a group's 2027 options are built from, in the order they are shown. */
+export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Optimyl"];
 
 /** "$1,500" / "1500.00" / "$1,500 individual" → 1500; anything unreadable → null. */
 export function moneyNum(v: string | number | null | undefined): number | null {
@@ -740,6 +740,7 @@ function slotPresentation(slot: string, carrier: string | null): { carrier: stri
   if (slot === "Nationwide") return { carrier: "Nationwide", label: "Level Funded", network: "Nationwide" };
   if (slot === "Angle") return { carrier: "Angle Health", label: "Level Funded", network: CIGNA_NETWORK };
   if (slot === "Cobalt") return { carrier: "Cobalt", label: "Self Funded", network: "On the proposal" };
+  if (slot === "Optimyl") return { carrier: "Optimyl Health", label: "Self Funded", network: "RBP Full" };
   return { carrier: carrier || "Other", label: "Level Funded", network: "On the proposal" };
 }
 

@@ -26,7 +26,7 @@ interface Catalogue {
 }
 
 /** The carriers a catalogue can be loaded for: the 2027 lineup. */
-const CARRIERS = ["Angle Health", "UnitedHealthcare", "Gravie", "Nationwide"];
+const CARRIERS = ["Angle Health", "UnitedHealthcare", "Gravie", "Nationwide", "Optimyl Health"];
 
 const svc = (d: CatalogueDesign, re: RegExp) => d.services.find((s) => re.test(s.label))?.costShare ?? "-";
 

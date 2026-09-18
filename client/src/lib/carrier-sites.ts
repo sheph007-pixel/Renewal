@@ -15,6 +15,8 @@ const SITES: Record<string, string> = {
   angle: "https://www.anglehealth.com/",
   cobalt: "https://www.cobaltbenefitsgroup.com/",
   "cobalt-benefits-group": "https://www.cobaltbenefitsgroup.com/",
+  "optimyl-health": "https://www.optimyl.com/",
+  optimyl: "https://www.optimyl.com/",
   healthez: "https://healthez.com/",
   ebpa: "https://www.ebpabenefits.com/",
   "bcbs-of-alabama": "https://www.bcbsal.org/",

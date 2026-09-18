@@ -63,6 +63,57 @@ const ANGLE: Section = {
   ],
 };
 
+const OPTIMYL: Section = {
+  title: "Optimyl Health Quotes",
+  blocks: [
+    { p: "Optimyl Benefits' quotes carry the following terms, as Optimyl states them." },
+    {
+      h: "Plan Information",
+      list: [
+        "This is not an insured medical plan - it is a self-funded program in which the employer is the plan sponsor, plan administrator and fiduciary.",
+        "Stop Loss coverage is underwritten by The North River Insurance Company or Gerber Life Insurance Company, and may vary or be unavailable in some states.",
+        "Prescription drugs run on a closed formulary through CVS, prioritizing generics; a non-formulary brand is not covered, and filling a brand when a generic could be substituted may carry a penalty.",
+        "The program includes utilization management: certain services require prior authorization, and accessing them without it when required carries a penalty.",
+      ],
+    },
+    {
+      h: "Summary Plan Document Limitations",
+      list: [
+        "Inpatient Rehabilitation, Skilled Nursing Facility and Subacute Rehab: 30-day limit, combined.",
+        "Outpatient Rehabilitation and Habilitative Services: 30-visit limit, combined.",
+        "Home Health: 45-day limit.",
+        "Hospice Care: 180-day limit.",
+        "Mental Health / Substance Abuse: 30-day inpatient limit, 30-visit outpatient limit, 50% coinsurance.",
+      ],
+    },
+    {
+      h: "Summary Plan Document Exclusions",
+      list: [
+        "Infertility treatment and specialty drugs.",
+        "Care that is experimental, investigative, cosmetic, or otherwise not medically necessary.",
+        "Routine dental, vision or hearing care, unless specifically elected.",
+        "Care to address quality-of-life or lifestyle concerns, and alternative medicine.",
+        "Injuries caused by acts of war, commission of a felony, or under the influence of illegal substances.",
+        "Care covered by another payer, such as Medicare or Workers' Compensation.",
+      ],
+    },
+    {
+      h: "Other Requirements, Terms And Conditions",
+      list: [
+        "This proposal does not include certain federal or state mandated fees, including the PCORI assessment.",
+        "Benefits, rates and the effective date are not guaranteed until the census is finalized and Optimyl approves the Stop Loss policy; existing coverage should stay in force until written notice is received.",
+        "Pharmacy rebates and any Delayed Admin Fee refund detailed on the proposal are forfeited in full if the group terminates mid-year, and may require renewing for a subsequent plan year to remain eligible.",
+        "Monthly payments and the aggregate deductible adjust over time with changes in the enrollment's composition, per the proposal's tiered rates, fees and factors.",
+        "The quote must be presented by a broker licensed in the state where the Stop Loss policy will be issued.",
+      ],
+    },
+    {
+      h: "Important",
+      p: "Underwriting information provided by or on behalf of the employer, including any employee medical questionnaires, is relied on as truthful; an inaccuracy or a failure to disclose - including claims the employer or its employees should reasonably know about - can result in rejection of the application, a change to terms, conditions, rates, fees or factors, or void coverage. Fraudulent statements or misrepresentation of material facts may result in retroactive termination of coverage. Full fee disclosures are in the Program Management Services Agreement.",
+    },
+  ],
+};
+
 export default function Disclaimers({ g }: { g: Group }) {
   const sections: Section[] = [
     { title: "Rates And Benefits", blocks: [{ p: RATE_DISCLAIMER }] },
@@ -71,6 +122,7 @@ export default function Disclaimers({ g }: { g: Group }) {
     { title: "Group Size And The Employer Mandate", blocks: [{ p: groupSizeNote(g) || GROUP_SIZE_FALLBACK }, { p: "BenSync does not determine whether a contribution or a plan is affordable or compliant under the Affordable Care Act. That determination is yours to make, with your Kennion team and your own advisors." }] },
     { title: "The AI Assistant And AI Picks", blocks: [{ p: "The AI Assistant and AI Picks work from the quotes, enrollment and census on file for your group. They can make mistakes. Their answers, picks and reasons are for discussion with your Kennion team, not advice, and nothing they say is an offer, a guarantee of coverage, or a legal, tax or compliance determination. Verify important information before you act on it." }] },
     ANGLE,
+    OPTIMYL,
     { title: "Kennion Benefit Advisors", blocks: [{ p: "Kennion Benefit Advisors is your broker. BenSync is the platform Kennion built to present the market's options for your renewal; coverage is issued by the Carrier/TPA you enroll with, on that Carrier/TPA's terms. Your Kennion account manager is the person to call with any question about what is shown here." }] },
   ];
   const section = { ...panel, padding: "18px 22px", marginBottom: 14 } as const;
