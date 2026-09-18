@@ -138,7 +138,7 @@ const isProposal = (p: Proposal) => p.status !== "container";
  * proposal; an ancillary-only document fills no slot. A newer proposal in a
  * slot replaces the older one, which is kept for the record.
  */
-export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt"] as const;
+export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt", "Optimyl"] as const;
 const TRACKED = SLOTS;
 const isCurrent = (p: Proposal) => p.status === "assigned" && !p.superseded_by;
 
@@ -434,7 +434,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
   // Read, but not one of the four medical proposals: an ancillary-only
   // document, or a carrier the portal does not track. Kept, never in a slot.
   const ancillary = isAncillary(p);
-  const untracked = !!x && !p.slot && (ancillary || !/united|uhc|surest|optum|gravie|nationwide|angle|cobalt/i.test(p.carrier || x.carrier || ""));
+  const untracked = !!x && !p.slot && (ancillary || !/united|uhc|surest|optum|gravie|nationwide|angle|cobalt|optimyl/i.test(p.carrier || x.carrier || ""));
 
   // An email wrapper: the subject, who sent it, what came out of it.
   if (p.status === "container") {

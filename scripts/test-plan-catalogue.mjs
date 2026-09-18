@@ -119,8 +119,11 @@ const staff = await (await fetch(`${base}/api/signin`, { method: "POST", headers
 const auth = { Authorization: `Bearer ${staff.token}` };
 assert.equal((await fetch(`${base}/api/admin/plan-catalogue`)).status, 401);
 let cat = await (await fetch(`${base}/api/admin/plan-catalogue`, { headers: auth })).json();
-assert.deepEqual(cat.carriers.map((c) => [c.carrier, c.planYear, c.count, c.sources]), [["Angle Health", 2027, 19, ["AngleHealthStandardPlanBenefits.xlsx"]]]);
-assert.equal(cat.designs.length, 19);
+assert.deepEqual(cat.carriers.map((c) => [c.carrier, c.planYear, c.count, c.sources]), [
+  ["Angle Health", 2027, 19, ["AngleHealthStandardPlanBenefits.xlsx"]],
+  ["Optimyl Health", 2027, 4, ["OptimylHealthStandardPlanBenefits.xlsx"]],
+]);
+assert.equal(cat.designs.length, 23);
 assert.equal(cat.durable, false);
 
 // Upload the same workbook again as Angle Health: every code is already there, so still 19.
@@ -131,7 +134,7 @@ const upj = JSON.parse(upText);
 assert.equal(upj.loaded, 19);
 assert.equal(upj.total, 19);
 cat = await (await fetch(`${base}/api/admin/plan-catalogue`, { headers: auth })).json();
-assert.equal(cat.designs.length, 19);
+assert.equal(cat.designs.length, 23);
 assert.equal(cat.carriers[0].sources.join(), "again.xlsx", "the upload's designs replaced the shipped ones by code");
 assert.equal((await fetch(`${base}/api/admin/plan-catalogue/no-such-carrier`, { method: "POST", headers: auth, body: workbook })).status, 404);
 assert.equal((await fetch(`${base}/api/admin/plan-catalogue/gravie`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: Buffer.from("nope") })).status, 400);

@@ -20,6 +20,7 @@ const BRAND: Record<string, { bg: string; fg: string; short: string }> = {
   nationwide: { bg: "#1C57A5", fg: "#ffffff", short: "N" },
   "angle-health": { bg: "#5B3DF5", fg: "#ffffff", short: "A" },
   cobalt: { bg: "#0047AB", fg: "#ffffff", short: "C" },
+  "optimyl-health": { bg: "#00A388", fg: "#ffffff", short: "O" },
   healthez: { bg: "#00A3A1", fg: "#ffffff", short: "EZ" },
   ebpa: { bg: "#2E7D32", fg: "#ffffff", short: "EB" },
   "bcbs-of-alabama": { bg: "#005EB8", fg: "#ffffff", short: "BC" },

@@ -240,7 +240,10 @@ let planCatalogueIndex = new Map();
 /** Designs staff uploaded while no database is connected: kept for the process's life only. */
 let uploadedCatalogue = [];
 /** The catalogues shipped with the code: file, carrier, plan year. Seeded into the database once. */
-const CATALOGUE_FILES = [{ file: "AngleHealthStandardPlanBenefits.xlsx", carrier: "Angle Health", planYear: 2027 }];
+const CATALOGUE_FILES = [
+  { file: "AngleHealthStandardPlanBenefits.xlsx", carrier: "Angle Health", planYear: 2027 },
+  { file: "OptimylHealthStandardPlanBenefits.xlsx", carrier: "Optimyl Health", planYear: 2027 },
+];
 
 /** The shipped catalogues, read from disk; a file that fails to read is logged and skipped. */
 function shippedCatalogue() {
@@ -1278,7 +1281,7 @@ app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res)
  * funding pairs are returned when there is more than one, else null. A
  * plan that cannot be placed does not count against the shortlist.
  */
-const SLOT_BASIS = { "UHC Fully Insured": ["UnitedHealthcare", "Fully Insured"], "UHC Level Funded": ["UnitedHealthcare", "Level Funded"], Gravie: ["Gravie", "Level Funded"], Nationwide: ["Nationwide", "Level Funded"], Angle: ["Angle Health", "Level Funded"] };
+const SLOT_BASIS = { "UHC Fully Insured": ["UnitedHealthcare", "Fully Insured"], "UHC Level Funded": ["UnitedHealthcare", "Level Funded"], Gravie: ["Gravie", "Level Funded"], Nationwide: ["Nationwide", "Level Funded"], Angle: ["Angle Health", "Level Funded"], Optimyl: ["Optimyl Health", "Self Funded"] };
 function signupMix(g, plans) {
   const key = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const byName = new Map();
@@ -3380,7 +3383,7 @@ const isEpoMenu = (m) => String(m.type || "").toUpperCase() === "EPO";
  * named, and a carrier without one gets a lettered badge instead. The
  * images are branding, so they are served without a session.
  */
-const CARRIERS = ["UnitedHealthcare", "Gravie", "Nationwide", "Angle Health", "Cobalt", "HealthEZ", "EBPA", "BCBS of Alabama", "Guardian", "VSP"];
+const CARRIERS = ["UnitedHealthcare", "Gravie", "Nationwide", "Angle Health", "Cobalt", "Optimyl Health", "HealthEZ", "EBPA", "BCBS of Alabama", "Guardian", "VSP"];
 const carrierSlug = (name) => String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const carrierFromSlug = (slug) => CARRIERS.find((c) => carrierSlug(c) === slug) || null;
 const memCarrierLogos = new Map();
@@ -3752,7 +3755,7 @@ const proposalStore = db
  * UnitedHealthcare product, so a Surest quote is that group's UHC proposal;
  * an ancillary-only document (dental, vision, life) fills no slot at all.
  */
-const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt"];
+const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt", "Optimyl"];
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
@@ -3770,7 +3773,7 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
  * twice in a group (the two UnitedHealthcare slots once restarted at UH1
  * separately) is repaired the same way: the whole prefix, renumbered once.
  */
-const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN" };
+const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN", Optimyl: "OP" };
 
 /**
  * One proposal per slot per group: when a newer proposal replaces an older
@@ -3807,7 +3810,7 @@ async function releaseRetired(group, prefix) {
     if (db) await db.setSetting(RETIRED_KEY, all, "system");
   }
 }
-const OPTION_ID = /^(UH|GR|NW|AN)(\d+)$/;
+const OPTION_ID = /^(UH|GR|NW|AN|OP)(\d+)$/;
 
 /**
  * For one day UnitedHealthcare's menu was numbered too (optionIds.menu in
@@ -4010,6 +4013,7 @@ function slotFor(carrier, funding, quotesMedical) {
   if (/nationwide/.test(c)) return "Nationwide";
   if (/angle/.test(c)) return "Angle";
   if (/cobalt/.test(c)) return "Cobalt";
+  if (/optimyl/.test(c)) return "Optimyl";
   return null; // not a tracked carrier: kept on file, but it fills no slot
 }
 
