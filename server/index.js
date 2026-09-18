@@ -245,6 +245,63 @@ const CATALOGUE_FILES = [
   { file: "OptimylHealthStandardPlanBenefits.xlsx", carrier: "Optimyl Health", planYear: 2027 },
 ];
 
+/**
+ * How many plans a Carrier/TPA lets a group offer its employees, by
+ * enrolled headcount. Seeded into `kennion.carrier_plan_limits` once; a row
+ * there always wins, so a limit can be corrected without a deploy. Kept in
+ * sync with the CARRIER_PLAN_LIMITS constant in client/src/lib/model.ts,
+ * which shows the same limits on the group's own pages and the disclaimers
+ * page without a round trip.
+ */
+const CARRIER_PLAN_LIMIT_SEED = [
+  {
+    carrier: "Optimyl Health",
+    tiers: [
+      { min: 2, max: 24, maxPlans: 2 },
+      { min: 25, max: 50, maxPlans: 3 },
+      { min: 51, max: null, maxPlans: 4 },
+    ],
+  },
+  {
+    carrier: "UnitedHealthcare",
+    tiers: [
+      { min: 2, max: 50, maxPlans: 2 },
+      { min: 51, max: null, maxPlans: 3, maxWithUnderwriting: 4 },
+    ],
+  },
+];
+/** carrier -> its tiers, loaded at boot (the database's rows, once seeded, win over the seed above). */
+let carrierPlanLimits = new Map(CARRIER_PLAN_LIMIT_SEED.map((d) => [d.carrier, d.tiers]));
+
+/** Seed `kennion.carrier_plan_limits` from CARRIER_PLAN_LIMIT_SEED where a carrier has no row yet, then load every carrier's tiers into memory. */
+async function loadCarrierPlanLimits() {
+  const byCarrier = new Map(CARRIER_PLAN_LIMIT_SEED.map((d) => [d.carrier, d.tiers]));
+  if (db) {
+    try {
+      let stored = await db.listCarrierPlanLimits();
+      const have = new Set(stored.map((d) => d.carrier));
+      const seed = CARRIER_PLAN_LIMIT_SEED.filter((d) => !have.has(d.carrier));
+      if (seed.length) {
+        await db.upsertCarrierPlanLimits(seed, "system");
+        stored = await db.listCarrierPlanLimits();
+      }
+      for (const d of stored) byCarrier.set(d.carrier, d.tiers);
+    } catch (e) {
+      console.error("carrier plan limits:", e.message);
+    }
+  }
+  carrierPlanLimits = byCarrier;
+  console.log(`carrier plan limits: ${byCarrier.size} carrier(s) - ${[...byCarrier.keys()].join(", ")}`);
+}
+
+/** The tier covering this many enrolled, for a carrier with a limit on file; null for a carrier with none, or a count none of its tiers cover. */
+function planLimitFor(carrier, enrolled) {
+  const tiers = carrierPlanLimits.get(carrier);
+  if (!tiers) return null;
+  const n = Number(enrolled);
+  return tiers.find((t) => n >= t.min && (t.max == null || n <= t.max)) || null;
+}
+
 /** The shipped catalogues, read from disk; a file that fails to read is logged and skipped. */
 function shippedCatalogue() {
   const out = [];
@@ -1282,7 +1339,8 @@ app.post("/api/group/support", express.json({ limit: "12mb" }), async (req, res)
  * plan that cannot be placed does not count against the shortlist.
  */
 const SLOT_BASIS = { "UHC Fully Insured": ["UnitedHealthcare", "Fully Insured"], "UHC Level Funded": ["UnitedHealthcare", "Level Funded"], Gravie: ["Gravie", "Level Funded"], Nationwide: ["Nationwide", "Level Funded"], Angle: ["Angle Health", "Level Funded"], Optimyl: ["Optimyl Health", "Self Funded"] };
-function signupMix(g, plans) {
+/** Every distinct [carrier, funding] a shortlist resolves to, so signupMix can flag a mix and the plan-count limit below can read off the one carrier. */
+function planBases(g, plans) {
   const key = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const byName = new Map();
   for (const pr of currentProposals[g.name] || []) {
@@ -1290,19 +1348,23 @@ function signupMix(g, plans) {
     if (!basis) continue;
     for (const pl of pr.plans || []) {
       const funding = /fully/i.test(pl.planType || "") ? "Fully Insured" : /self/i.test(pl.planType || "") ? "Self Funded" : basis[1];
-      byName.set(key(pl.name), `${basis[0]} ${funding}`);
-      if (pl.optionId) byName.set(key(pl.optionId), `${basis[0]} ${funding}`);
+      byName.set(key(pl.name), [basis[0], funding]);
+      if (pl.optionId) byName.set(key(pl.optionId), [basis[0], funding]);
     }
   }
-  for (const m of (data.uhc || {}).menu || []) if (!byName.has(key(m.plan))) byName.set(key(m.plan), "UnitedHealthcare Level Funded");
-  byName.set(key("Surest Copay Plan"), "UnitedHealthcare Level Funded");
-  const bases = new Set();
+  for (const m of (data.uhc || {}).menu || []) if (!byName.has(key(m.plan))) byName.set(key(m.plan), ["UnitedHealthcare", "Level Funded"]);
+  byName.set(key("Surest Copay Plan"), ["UnitedHealthcare", "Level Funded"]);
+  const bases = new Map();
   for (const raw of plans) {
     const m = /^([A-Z]{2}\d+)\s*·\s*(.+)$/.exec(raw);
     const basis = (m && (byName.get(key(m[1])) || byName.get(key(m[2])))) || byName.get(key(raw));
-    if (basis) bases.add(basis);
+    if (basis) bases.set(`${basis[0]} ${basis[1]}`, basis);
   }
-  return bases.size > 1 ? [...bases] : null;
+  return [...bases.values()];
+}
+function signupMix(g, plans) {
+  const bases = planBases(g, plans);
+  return bases.length > 1 ? bases.map(([c, f]) => `${c} ${f}`) : null;
 }
 
 app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) => {
@@ -1325,6 +1387,15 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
   if (!plans.length) return res.status(400).json({ error: "Select at least one plan." });
   const mixed = signupMix(g, plans);
   if (mixed) return res.status(400).json({ error: `One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes ${mixed.join(" and ")}.` });
+  const [basis] = planBases(g, plans);
+  const tier = basis && planLimitFor(basis[0], g.enrolled);
+  if (tier) {
+    const cap = tier.maxWithUnderwriting ?? tier.maxPlans;
+    if (plans.length > cap) {
+      const uw = tier.maxWithUnderwriting ? ", even with underwriting approval" : "";
+      return res.status(400).json({ error: `${basis[0]} allows up to ${cap} plan${cap === 1 ? "" : "s"} for a group this size (${g.enrolled} enrolled)${uw}. This shortlist has ${plans.length} - remove ${plans.length - cap} to send it.` });
+    }
+  }
   const note = String(body.note || "").trim().slice(0, 4000) || null;
 
   let record;
@@ -5038,6 +5109,7 @@ async function boot() {
   }
   // The carriers' standard designs first, so the proposals built next carry them.
   await loadPlanCatalogue();
+  await loadCarrierPlanLimits();
   await proposalsChanged();
   await refreshAudit();
   // Gravie workbooks already on file, re-read with the current parser and

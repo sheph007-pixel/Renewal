@@ -1,4 +1,4 @@
-import { RATE_DISCLAIMER, groupSizeNote, type Group } from "@/lib/model";
+import { PLAN_LIMIT_CARRIERS, RATE_DISCLAIMER, groupSizeNote, planLimitSummary, type Group } from "@/lib/model";
 import { C, h2, h3, panel } from "@/lib/ui";
 
 /**
@@ -119,6 +119,14 @@ export default function Disclaimers({ g }: { g: Group }) {
     { title: "Rates And Benefits", blocks: [{ p: RATE_DISCLAIMER }] },
     { title: "Illustrative Quotes", blocks: [{ p: "Every 2027 rate shown on BenSync, on a plan card, in the grid, in a comparison or in a downloaded file, is an illustrative quote read from the Carrier/TPA's document or built from it. It is not a proposal, an offer or a guarantee of coverage. Benefits are shown as printed on the Carrier/TPA's quote; the plan documents issued at enrollment govern." }] },
     { title: "Employer Contribution", blocks: [{ p: "BenSync models a defined contribution: the employer sets a fixed monthly amount per coverage tier, and that amount goes toward whichever plan and tier each employee chooses. That is how the employer controls its spend, regardless of what plan or tier an employee picks; an employee who chooses a costlier plan pays the difference." }, { p: "Carriers and TPAs require minimum contributions of 50% of the employee cost. When more than one plan is offered, that requirement applies to the lowest-cost plan offered, and a richer plan is a buy-up the employee pays. If only one plan is offered, it applies to that plan. The Medical Plans page therefore starts every tier at 50% of the lowest-cost quoted plan's Employee Only rate and holds every tier to at least that; contributions toward spouses and children are the employer's choice. The Carrier/TPA applies its own rule at enrollment; confirm the contribution with your Kennion team before you decide." }] },
+    {
+      title: "How Many Plans A Group Can Offer",
+      blocks: [
+        { p: "Some Carriers/TPAs limit how many plans a group may offer its employees, based on enrolled headcount:" },
+        { list: PLAN_LIMIT_CARRIERS.map((c) => planLimitSummary(c)).filter((s): s is string => !!s) },
+        { p: "A Carrier/TPA not named here has no plan-count limit on file. Confirm your group's own limit, and whether asking underwriting for an additional plan is worth pursuing, with your Kennion team." },
+      ],
+    },
     { title: "Group Size And The Employer Mandate", blocks: [{ p: groupSizeNote(g) || GROUP_SIZE_FALLBACK }, { p: "BenSync does not determine whether a contribution or a plan is affordable or compliant under the Affordable Care Act. That determination is yours to make, with your Kennion team and your own advisors." }] },
     { title: "The AI Assistant And AI Picks", blocks: [{ p: "The AI Assistant and AI Picks work from the quotes, enrollment and census on file for your group. They can make mistakes. Their answers, picks and reasons are for discussion with your Kennion team, not advice, and nothing they say is an offer, a guarantee of coverage, or a legal, tax or compliance determination. Verify important information before you act on it." }] },
     ANGLE,

@@ -114,6 +114,20 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_plan_designs (
   updated_by  text,
   PRIMARY KEY (carrier, plan_year, plan_code)
 );
+-- How many plans a Carrier/TPA lets a group offer its employees, by enrolled
+-- headcount - Optimyl caps this at 2/3/4 plans by tier; UnitedHealthcare
+-- caps it at 2/3, with a 4th plan possible only if its underwriting approves
+-- one for a 51+ group. One row per carrier; tiers is a JSON list
+-- ({min, max, maxPlans, maxWithUnderwriting?}) so a tier can be added or
+-- changed without a migration. Seeded once from CARRIER_PLAN_LIMIT_SEED in
+-- server/index.js; a row here always wins over the seed.
+CREATE TABLE IF NOT EXISTS kennion.carrier_plan_limits (
+  carrier     text PRIMARY KEY,
+  tiers       jsonb NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  text
+);
+
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -623,6 +637,25 @@ export function createDb(url) {
              plan_id = COALESCE(EXCLUDED.plan_id, kennion.carrier_plan_designs.plan_id), family = EXCLUDED.family, design = EXCLUDED.design,
              source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
           [d.carrier, d.planYear || 2027, d.planCode, d.planId || null, d.family || null, JSON.stringify(design), d.source || null, by || null],
+        );
+      }
+      return list.length;
+    },
+
+    /** Every carrier's plan-count limit, as stored. */
+    async listCarrierPlanLimits() {
+      const { rows } = await pool.query("SELECT carrier, tiers, updated_at, updated_by FROM kennion.carrier_plan_limits ORDER BY carrier");
+      return rows.map((r) => ({ carrier: r.carrier, tiers: r.tiers, updatedAt: r.updated_at, updatedBy: r.updated_by }));
+    },
+    /** Write a carrier's plan-count limit in, replacing its tiers when the carrier is already there. */
+    async upsertCarrierPlanLimits(list, by) {
+      for (const d of list) {
+        await pool.query(
+          `INSERT INTO kennion.carrier_plan_limits (carrier, tiers, updated_at, updated_by)
+           VALUES ($1, $2::jsonb, now(), $3)
+           ON CONFLICT (carrier) DO UPDATE SET
+             tiers = EXCLUDED.tiers, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+          [d.carrier, JSON.stringify(d.tiers), by || null],
         );
       }
       return list.length;

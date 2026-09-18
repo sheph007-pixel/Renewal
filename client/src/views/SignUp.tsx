@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   marketPlans,
   money0,
+  planLimitFor,
   type AccountManager,
   type Group,
   type GroupSignup,
@@ -60,6 +61,12 @@ export default function SignUp({
   // carrier, and with UnitedHealthcare all fully insured or all level funded.
   const bases = Array.from(new Set(short.map((p) => `${carrierOf(p)} ${fundingOf(p)}`)));
   const mixed = bases.length > 1;
+  // How many plans the one carrier here lets a group this size offer - null
+  // for a carrier with no limit on file, or while the shortlist is mixed
+  // (signupMix already flags that; carrierOf(short[0]) would not be reliable).
+  const tier = !mixed && short.length ? planLimitFor(carrierOf(short[0]), g.enrolled) : null;
+  const cap = tier ? tier.maxWithUnderwriting ?? tier.maxPlans : null;
+  const overLimit = cap != null && short.length > cap;
   const managerFirst = manager?.name ? manager.name.split(" ")[0] : "your account manager";
 
   return (
@@ -151,6 +158,16 @@ export default function SignUp({
                 One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This shortlist mixes {bases.join(" and ")} - remove plans until one remains.
               </div>
             )}
+            {overLimit && tier && (
+              <div role="alert" style={{ margin: "6px 0 8px", padding: "9px 12px", borderRadius: 4, background: C.redTint, color: C.red, fontSize: 13, lineHeight: 1.5 }}>
+                {carrierOf(short[0])} allows up to {cap} plan{cap === 1 ? "" : "s"} for a group this size ({g.enrolled} enrolled){tier.maxWithUnderwriting ? ", even with underwriting approval" : ""}. This shortlist has {short.length} - remove {short.length - (cap as number)} to send it.
+              </div>
+            )}
+            {!overLimit && tier && short.length > tier.maxPlans && (
+              <div style={{ margin: "6px 0 8px", padding: "9px 12px", borderRadius: 4, background: C.amberTint, color: C.amber, fontSize: 13, lineHeight: 1.5 }}>
+                {carrierOf(short[0])}'s standard limit for a group this size is {tier.maxPlans} plan{tier.maxPlans === 1 ? "" : "s"}; the plan{short.length - tier.maxPlans === 1 ? "" : "s"} beyond that need{short.length - tier.maxPlans === 1 ? "s" : ""} its underwriting's approval.
+              </div>
+            )}
             {short.map((s) => (
               <div
                 key={s.plan}
@@ -206,9 +223,9 @@ export default function SignUp({
             <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
               <button
                 onClick={onSubmit}
-                disabled={submitting || mixed}
+                disabled={submitting || mixed || overLimit}
                 className="noprint"
-                title={mixed ? "Keep one carrier and one funding type first" : undefined}
+                title={mixed ? "Keep one carrier and one funding type first" : overLimit ? "Remove plans to get under this carrier's limit for a group this size" : undefined}
                 style={{
                   padding: "9px 18px",
                   fontSize: 13.5,
@@ -217,8 +234,8 @@ export default function SignUp({
                   background: C.blue,
                   border: `1px solid ${C.blue}`,
                   borderRadius: 4,
-                  cursor: submitting || mixed ? "default" : "pointer",
-                  opacity: submitting || mixed ? 0.6 : 1,
+                  cursor: submitting || mixed || overLimit ? "default" : "pointer",
+                  opacity: submitting || mixed || overLimit ? 0.6 : 1,
                 }}
               >
                 {submitting ? "Sending…" : "Send to " + managerFirst}

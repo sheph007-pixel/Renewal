@@ -763,6 +763,50 @@ export const OPTIMYL_UNDERWRITING_NOTE =
   "This rate is preliminary. Optimyl requires underwriting to firm it up for a group this size (2-50 enrolled): either an Individual Health Questionnaire (IHQ) for every enrolling employee, or ExpressScreen underwriting on the census and renewal followed by Optimyl's Short-Form IHQ.";
 
 /**
+ * How many plans a Carrier/TPA lets a group offer its employees, by enrolled
+ * headcount. Kennion's own rule, not something every quote states, so it is
+ * kept here and in the matching `CARRIER_PLAN_LIMIT_SEED` in server/index.js
+ * (which seeds `kennion.carrier_plan_limits` - a row there wins once one
+ * exists, so a limit can be corrected without a deploy). A carrier with no
+ * entry has no limit on file.
+ */
+export type PlanLimitTier = { min: number; max: number | null; maxPlans: number; maxWithUnderwriting?: number };
+const CARRIER_PLAN_LIMITS: Record<string, PlanLimitTier[]> = {
+  "Optimyl Health": [
+    { min: 2, max: 24, maxPlans: 2 },
+    { min: 25, max: 50, maxPlans: 3 },
+    { min: 51, max: null, maxPlans: 4 },
+  ],
+  UnitedHealthcare: [
+    { min: 2, max: 50, maxPlans: 2 },
+    { min: 51, max: null, maxPlans: 3, maxWithUnderwriting: 4 },
+  ],
+};
+/** Every carrier with a plan-count limit on file, for listing them (the disclaimers page). */
+export const PLAN_LIMIT_CARRIERS: string[] = Object.keys(CARRIER_PLAN_LIMITS);
+
+/** The tier covering this many enrolled, for a carrier with a limit on file; null for a carrier with none, or an enrolled count none of its tiers cover. */
+export function planLimitFor(carrier: string, enrolled: number): PlanLimitTier | null {
+  const tiers = CARRIER_PLAN_LIMITS[carrier];
+  if (!tiers) return null;
+  return tiers.find((t) => enrolled >= t.min && (t.max == null || enrolled <= t.max)) || null;
+}
+
+const tierRangeLabel = (t: PlanLimitTier) => (t.max == null ? `${t.min}+ enrolled` : `${t.min}-${t.max} enrolled`);
+
+/** Every tier of a carrier's plan-count limit, in one sentence, for the disclaimers page; null for a carrier with no limit on file. */
+export function planLimitSummary(carrier: string): string | null {
+  const tiers = CARRIER_PLAN_LIMITS[carrier];
+  if (!tiers) return null;
+  const parts = tiers.map((t) => `${plural(t.maxPlans, "plan")} for a group with ${tierRangeLabel(t)}`);
+  const joined = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+  let text = `${carrier} allows ${joined}.`;
+  const uw = tiers.find((t) => t.maxWithUnderwriting != null);
+  if (uw) text += ` A group with ${tierRangeLabel(uw)} may ask ${carrier}'s underwriting to raise that to ${uw.maxWithUnderwriting} plans.`;
+  return text;
+}
+
+/**
  * Gravie and Angle Health both run on Cigna's network, and every
  * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
  * United Choice Plus network - a fixed rule, not something a carrier's own
