@@ -877,7 +877,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {p.underwritingNote && (
                       <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), display: "inline-flex", alignItems: "center", gap: 4, marginTop: 3 }}>
                         ⚑ Underwriting Required
-                        <InfoTip text={p.underwritingNote} color={C.amber} />
+                        <InfoTip text={p.underwritingNote} color={C.amber} place="below" />
                       </span>
                     )}
                   </td>

@@ -160,7 +160,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
               grid rows open this card and carry no link of their own. */}
           {!compact && (
             <span style={{ marginLeft: "auto" }}>
-              <CarrierSiteLink name={m.carrier} size={26} />
+              <CarrierSiteLink name={m.carrier} fontSize={12.5} />
             </span>
           )}
         </div>
