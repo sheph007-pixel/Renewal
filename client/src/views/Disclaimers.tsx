@@ -124,7 +124,6 @@ export default function Disclaimers({ g }: { g: Group }) {
       blocks: [
         { p: "Some Carriers/TPAs limit how many plans a group may offer its employees, based on enrolled headcount:" },
         { list: PLAN_LIMIT_CARRIERS.map((c) => planLimitSummary(c)).filter((s): s is string => !!s) },
-        { p: "A Carrier/TPA not named here has no plan-count limit on file. Confirm your group's own limit, and whether asking underwriting for an additional plan is worth pursuing, with your Kennion team." },
       ],
     },
     { title: "Group Size And The Employer Mandate", blocks: [{ p: groupSizeNote(g) || GROUP_SIZE_FALLBACK }, { p: "BenSync does not determine whether a contribution or a plan is affordable or compliant under the Affordable Care Act. That determination is yours to make, with your Kennion team and your own advisors." }] },
