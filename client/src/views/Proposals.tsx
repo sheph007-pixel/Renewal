@@ -535,6 +535,11 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
               Audit
             </button>
           )}
+          {!!x?.plans?.length && p.slot && (
+            <button onClick={() => void post(`/api/admin/proposals/${p.id}`, { renumber: true })} style={linkBtn} disabled={p.status === "analyzing"} title="Reset this slot's option IDs to a clean sequence starting at 1, releasing any numbers it held before - for when a re-read drifted (OP5, OP6…) instead of landing back on the same plans">
+              Fix Numbering
+            </button>
+          )}
           {confirmDelete ? (
             <>
               <button onClick={() => void post(`/api/admin/proposals/${p.id}`, undefined, "DELETE")} style={{ ...linkBtn, color: C.red, fontWeight: 600 }}>

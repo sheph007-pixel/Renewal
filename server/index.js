@@ -4824,8 +4824,18 @@ app.post("/api/admin/proposals/reanalyze", requireStaff, express.json({ limit: "
 
 app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
   const id = Number(req.params.id);
-  const { group, carrier, confirm, slot } = req.body || {};
+  const { group, carrier, confirm, slot, renumber } = req.body || {};
   const fields = {};
+  // A slot's option IDs drifted out of the clean 1.. sequence - repeated
+  // re-reads that never matched a prior plan, most often - so staff can ask
+  // for a fresh, compact renumber: the whole prefix in this group is
+  // released and handed out again from 1, the same repair an EPO twin's
+  // numbers already get automatically.
+  if (renumber === true) {
+    const current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    if (!current) return res.status(404).json({ error: "No such proposal." });
+    fields.extracted = { ...(current.extracted || {}), renumber: true };
+  }
   if (slot !== undefined) {
     if (slot != null && slot !== "" && !SLOTS.includes(slot)) {
       return res.status(400).json({ error: `Slot must be one of: ${SLOTS.join(", ")}.` });

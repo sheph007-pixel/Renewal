@@ -17,7 +17,7 @@ export interface CardModel {
   /** UH3, GR1 - the handle the client, Kennion and the assistant all use for this plan. */
   optionId: string | null;
   carrier: string;
-  links: { directory: { name: string; url: string } | null; formulary: { name: string; url: string } | null };
+  links: { directory: { name: string; url: string } | null; formulary: { name: string; url?: string } | null };
   plan: string;
   funding: string;
   type: string | null;
@@ -33,6 +33,8 @@ export interface CardModel {
   enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
   source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
+  /** Set only for an Optimyl plan on a 2-50 enrolled group: this rate is preliminary until Optimyl underwrites it. */
+  underwritingNote?: string | null;
 }
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
@@ -92,6 +94,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     premium: sp?.total ?? p.monthly,
     enrolled: TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0),
     source: p.quoted ? { proposalId: p.quoted.proposalId, audit: p.quoted.audit || null } : null,
+    underwritingNote: p.underwritingNote ?? null,
   };
 }
 
@@ -121,6 +124,21 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   );
 }
 
+/**
+ * A flag for an Optimyl plan on a 2-50 enrolled group only: the rate above is
+ * preliminary, not firm, until Optimyl underwrites it. Nothing on a plan
+ * that needs no such flag - Optimyl on a 51+ group, or any other carrier.
+ */
+function UnderwritingFoot({ note }: { note: string }) {
+  const foot = { display: "flex", flexWrap: "wrap" as const, alignItems: "center", gap: "2px 6px", fontSize: 11.5, color: C.amber, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 };
+  return (
+    <div className="noprint" style={foot}>
+      <span style={{ fontWeight: 600 }}>⚑ Underwriting Required</span>
+      <InfoTip text={note} color={C.amber} />
+    </div>
+  );
+}
+
 export default function PlanCard({ m, actions, compact, wide, disclaimersHref }: { m: CardModel; actions?: React.ReactNode; compact?: boolean; wide?: boolean; disclaimersHref?: string }) {
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
   // The pay cycle the rates and totals are shown per: monthly as quoted, or
@@ -142,7 +160,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
               grid rows open this card and carry no link of their own. */}
           {!compact && (
             <span style={{ marginLeft: "auto" }}>
-              <CarrierSiteLink name={m.carrier} fontSize={13} />
+              <CarrierSiteLink name={m.carrier} size={26} />
             </span>
           )}
         </div>
@@ -182,7 +200,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
                 <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
                   {value}
-                  {link && value !== "-" && (
+                  {link && link.url && value !== "-" && (
                     <>
                       {" · "}
                       <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -298,7 +316,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
                 <td style={{ padding: "4px 0", color: C.ink, textAlign: "right", fontWeight: 500 }}>
                   {value}
-                  {link && value !== "-" && (
+                  {link && link.url && value !== "-" && (
                     <>
                       {" · "}
                       <a href={link.url} target="_blank" rel="noreferrer" title={link.name} onClick={(e) => e.stopPropagation()} style={{ color: C.blue, fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -385,6 +403,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
         </>
       )}
       {m.source && <AuditFoot source={m.source} />}
+      {m.underwritingNote && <UnderwritingFoot note={m.underwritingNote} />}
       {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}
       {!compact && (
         <div className="noprint" style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.45, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>

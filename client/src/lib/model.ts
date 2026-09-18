@@ -710,6 +710,13 @@ export interface MarketPlan {
   design?: PlanDesign | null;
   /** Read off a proposal the carrier sent for this group. */
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
+  /**
+   * Set only for an Optimyl plan on a 2-50 enrolled group: the rate shown is
+   * preliminary, and firm rates need underwriting Optimyl has not done yet
+   * (an IHQ, or ExpressScreen then Optimyl's Short-Form IHQ). Null everywhere
+   * else, including Optimyl on a 51+ group, which needs none of this.
+   */
+  underwritingNote?: string | null;
 }
 
 /** The proposal slots a group's 2027 options are built from, in the order they are shown. */
@@ -743,6 +750,17 @@ function slotPresentation(slot: string, carrier: string | null): { carrier: stri
   if (slot === "Optimyl") return { carrier: "Optimyl Health", label: "Self Funded", network: "RBP Full" };
   return { carrier: carrier || "Other", label: "Level Funded", network: "On the proposal" };
 }
+
+/**
+ * Optimyl's rate is preliminary, not firm, for a 2-50 enrolled group: per
+ * Optimyl's RFP Guidelines for 2-50 Enrolled Groups, a firm offer needs
+ * either an Individual Health Questionnaire (IHQ) for every enrolling
+ * employee, or ExpressScreen underwriting on the census and renewal
+ * followed by Optimyl's Short-Form IHQ. Neither has happened yet at
+ * proposal stage, so every card and grid row for such a group flags it.
+ */
+export const OPTIMYL_UNDERWRITING_NOTE =
+  "This rate is preliminary. Optimyl requires underwriting to firm it up for a group this size (2-50 enrolled): either an Individual Health Questionnaire (IHQ) for every enrolling employee, or ExpressScreen underwriting on the census and renewal followed by Optimyl's Short-Form IHQ.";
 
 /**
  * Gravie and Angle Health both run on Cigna's network, and every
@@ -796,14 +814,17 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
 
 /**
  * The pharmacy benefit manager behind a carrier's plans, with its public
- * formulary, so a client can check a drug the way they check a doctor. One
- * row per carrier as the links come in: Gravie's PBM is Express Scripts.
- * Null for a carrier with no PBM on file yet - the card still shows the
- * row, blank, so every card reads the same.
+ * formulary where Kennion has a link a client can open (Gravie's PBM,
+ * Express Scripts, has one); the name shows with no "Formulary" link when it
+ * does not (Optimyl's PBM, CVS, runs a closed formulary specific to the
+ * program - no public page to send a client to). Null for a carrier with no
+ * PBM on file yet - the card still shows the row, blank, so every card reads
+ * the same.
  */
-export function pbmOf(carrier: string | null | undefined): { name: string; url: string } | null {
+export function pbmOf(carrier: string | null | undefined): { name: string; url?: string } | null {
   const c = String(carrier || "");
   if (/gravie/i.test(c)) return { name: "Express Scripts", url: "https://www.express-scripts.com/frontend/open-enrollment/gravie" };
+  if (/optimyl/i.test(c)) return { name: "CVS" };
   return null;
 }
 
@@ -875,6 +896,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       const dupKey = `${pr.slot}|${planName.toLowerCase()}|${TIERS.map((t) => rates[t.key] ?? "").join(",")}`;
       if (seen.has(dupKey)) continue;
       seen.add(dupKey);
+      const underwritingNote = pr.slot === "Optimyl" && g.sizeCategory === "2-50" ? OPTIMYL_UNDERWRITING_NOTE : null;
       out.push({
         optionId: pl.optionId ?? null,
         carrier: show.carrier,
@@ -898,6 +920,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         indicative: false,
         design: pl.design ?? null,
         quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id, audit: pr.audit || null },
+        underwritingNote,
       });
     }
   }

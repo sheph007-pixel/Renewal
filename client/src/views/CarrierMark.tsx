@@ -32,10 +32,12 @@ export function GlobeIcon({ size = 12 }: { size?: number }) {
 
 /**
  * The one place a client leaves BenSync for the carrier's or TPA's own
- * website: a clear link on the plan card, in words, that opens a new tab.
- * Nothing when no site is on file for the name.
+ * website: a small round icon button on the plan card that opens a new tab,
+ * the name in a tooltip rather than spelled out (the header row it sits in
+ * is tight, and a modal's own close button shares that corner). Nothing when
+ * no site is on file for the name.
  */
-export function CarrierSiteLink({ name, fontSize = 13 }: { name: string; fontSize?: number }) {
+export function CarrierSiteLink({ name, size = 26 }: { name: string; size?: number }) {
   const site = websiteOf(name);
   if (!site) return null;
   return (
@@ -44,12 +46,23 @@ export function CarrierSiteLink({ name, fontSize = 13 }: { name: string; fontSiz
       target="_blank"
       rel="noopener noreferrer"
       className="noprint"
+      title={`Visit ${name}'s website`}
       aria-label={`Visit ${name}'s website (opens in a new tab)`}
       onClick={(e) => e.stopPropagation()}
-      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize, fontWeight: 600, color: C.blue, textDecoration: "none", whiteSpace: "nowrap" }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flex: "none",
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        border: `1px solid ${C.border}`,
+        color: C.blue,
+        textDecoration: "none",
+      }}
     >
-      <GlobeIcon size={Math.round(fontSize * 1.05)} />
-      Visit {name}&rsquo;s Website
+      <GlobeIcon size={Math.round(size * 0.55)} />
     </a>
   );
 }

@@ -73,7 +73,7 @@ export function downloadOptions(
       // The lookups ride along in a third column, so the sheet has the addresses too.
       for (const [label, value] of m.benefits) {
         const link = label === "Network" ? m.links.directory : label === "Pharmacy (PBM)" ? m.links.formulary : null;
-        rows.push(link && value !== "-" ? [label, value, link.url] : [label, value]);
+        rows.push(link && link.url && value !== "-" ? [label, value, link.url] : [label, value]);
       }
       rows.push(["Monthly Composite Rates", "Rate", "Employer", "Employee"]);
       for (const t of m.tiers) rows.push([`${t.label} (${t.count})`, t.rate ?? "", t.er ?? "", t.ee ?? ""]);
