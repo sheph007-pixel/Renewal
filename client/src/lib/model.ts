@@ -824,7 +824,7 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
 export function pbmOf(carrier: string | null | undefined): { name: string; url?: string } | null {
   const c = String(carrier || "");
   if (/gravie/i.test(c)) return { name: "Express Scripts", url: "https://www.express-scripts.com/frontend/open-enrollment/gravie" };
-  if (/optimyl/i.test(c)) return { name: "CVS" };
+  if (/optimyl/i.test(c)) return { name: "CVS Caremark", url: "https://app.kennion.com/assets/optimyl/cvs-caremark-value-formulary.pdf" };
   return null;
 }
 
@@ -1388,8 +1388,13 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
       out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
     }
   }
-  // What happens next, in one sentence.
-  out.push([T("Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.")]);
+  // What happens next, in one sentence. With only one Carrier/TPA on the
+  // table there is no Carrier/TPA to pick between, only its plans.
+  out.push(
+    s.partners.length === 1
+      ? [T("Your group will select the health plans you want to offer your employees.")]
+      : [T("Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.")],
+  );
   return out;
 }
 

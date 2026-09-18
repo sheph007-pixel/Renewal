@@ -40,8 +40,13 @@ assert.deepEqual(r.widest.map((p) => p.name), ["UnitedHealthcare"]);
 assert.deepEqual(r.networks, ["Cigna", "United Choice Plus"], "networks, not RBP, alphabetical, distinct");
 assert.deepEqual(r.rbp, []);
 const CLOSING = "Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.";
-/** Every non-empty result ends with the closing sentence; the checks below read the sentences before it. */
-const sentences = (x: ReturnType<typeof marketResults>) => { const t = marketResultsText(x); assert.equal(t.at(-1), CLOSING, "closing sentence last"); return t.slice(0, -1); };
+const CLOSING_ONE = "Your group will select the health plans you want to offer your employees.";
+/** Every non-empty result ends with the closing sentence (a one-partner result has no Carrier/TPA to pick between); the checks below read the sentences before it. */
+const sentences = (x: ReturnType<typeof marketResults>) => {
+  const t = marketResultsText(x);
+  assert.equal(t.at(-1), x!.partners.length === 1 ? CLOSING_ONE : CLOSING, "closing sentence last");
+  return t.slice(0, -1);
+};
 let text = sentences(r);
 assert.deepEqual(text, [
   "Kennion took your group to market and received 6 plan options from UnitedHealthcare (3 plans), Gravie (2 plans) and Angle Health (1 plan).",
@@ -113,6 +118,7 @@ assert.deepEqual(text, [
   "Network options: UnitedHealthcare plans are on the United Choice Plus network.",
 ]);
 assert.ok(!text.join(" ").match(/lowest|widest/), "one partner: no competition");
+assert.equal(marketResultsText(r).at(-1), CLOSING_ONE, "one partner: nothing to pick between, only its plans to select");
 
 // 5. Incomplete rates: a partner missing an employee-only rate voids the price claim; selection and networks still stand.
 r = marketResults([...networkOnly, plan("Angle Health", "Trad 1500", "Cigna", null)])!;
