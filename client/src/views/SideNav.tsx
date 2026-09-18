@@ -4,6 +4,7 @@ import Link from "@/lib/Link";
 import type { GroupTab } from "@/lib/router";
 import type { AccountManager } from "@/lib/model";
 import { NAVIGATOR_URL } from "@/views/NavigatorCard";
+import { useNarrow } from "@/lib/narrow";
 import SupportTicket from "@/views/SupportTicket";
 import SyncMark from "@/views/SyncMark";
 
@@ -183,6 +184,13 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
 function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // Below the rail breakpoint the sidebar is never the icon-only collapsed
+  // rail (App.tsx forces `shut` false there) - it is the horizontal footer
+  // row instead, which needs the same compact avatar-only button so it
+  // stays one line, but its popup opens downward from a row near the top of
+  // the page rather than rightward from a narrow vertical rail.
+  const narrow = useNarrow();
+  const isCompact = compact || narrow;
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent) => {
@@ -199,28 +207,28 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
   const avatar = (
     <span
       aria-hidden
-      style={{ display: "grid", placeItems: "center", flex: "none", width: compact ? 30 : 28, height: compact ? 30 : 28, borderRadius: "50%", background: C.blue, color: "#fff", fontSize: 11, fontWeight: 700 }}
+      style={{ display: "grid", placeItems: "center", flex: "none", width: isCompact ? 30 : 28, height: isCompact ? 30 : 28, borderRadius: "50%", background: C.blue, color: "#fff", fontSize: 11, fontWeight: 700 }}
     >
       {monogram(manager.name)}
     </span>
   );
   return (
-    <div ref={box} className="rail-manager" style={{ position: "relative", margin: compact ? 0 : "0 8px 6px" }}>
+    <div ref={box} className="rail-manager" style={{ position: "relative", margin: isCompact ? 0 : "0 8px 6px" }}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={compact ? `${manager.name} · Your Account Manager` : undefined}
+        title={isCompact ? `${manager.name} · Your Account Manager` : undefined}
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: compact ? "center" : "flex-start",
+          justifyContent: isCompact ? "center" : "flex-start",
           gap: 10,
           width: "100%",
-          padding: compact ? 0 : "8px 10px",
+          padding: isCompact ? (narrow ? 6 : 0) : "8px 10px",
           borderRadius: 8,
-          background: open ? C.railActive : compact ? "none" : "rgba(255,255,255,0.05)",
-          border: compact ? "none" : `1px solid ${open ? C.teal : C.railLine}`,
+          background: open ? C.railActive : isCompact ? "none" : "rgba(255,255,255,0.05)",
+          border: isCompact ? "none" : `1px solid ${open ? C.teal : C.railLine}`,
           color: C.railInk,
           cursor: "pointer",
           textAlign: "left",
@@ -228,7 +236,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
         }}
       >
         {avatar}
-        {!compact && (
+        {!isCompact && (
           <>
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
@@ -246,9 +254,11 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
           aria-label={`Contact ${manager.name}`}
           style={{
             position: "absolute",
-            left: compact ? "calc(100% + 10px)" : 0,
-            bottom: compact ? 0 : "calc(100% + 6px)",
+            left: narrow ? 0 : compact ? "calc(100% + 10px)" : 0,
+            top: narrow ? "calc(100% + 6px)" : undefined,
+            bottom: narrow ? undefined : compact ? 0 : "calc(100% + 6px)",
             width: 232,
+            maxWidth: "calc(100vw - 24px)",
             padding: "12px 14px",
             borderRadius: 10,
             background: "#fff",

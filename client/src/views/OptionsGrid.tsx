@@ -768,7 +768,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   {exporting ? "Exporting…" : "Export ▾"}
                 </button>
                 {exportOpen && (
-                  <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 5, minWidth: 250, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(15,42,71,0.14)", padding: 4 }}>
+                  <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", zIndex: 5, minWidth: 250, maxWidth: "calc(100vw - 24px)", background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, boxShadow: "0 8px 24px rgba(15,42,71,0.14)", padding: 4 }}>
                     {exportSets().map((set) => {
                       const empty = !set.plans.length;
                       return (
@@ -831,7 +831,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // alike, on one margin; the digits stay tabular so the
                     // dollar columns still line up under each other.
                     textAlign: "left",
-                    width: i === 8 ? (picks.size ? 58 : 40) : i > 8 ? 40 : i === 0 ? 72 : undefined,
+                    // On a phone the table already scrolls sideways (it is
+                    // floored at 860px wide below), so a few extra pixels on
+                    // the icon columns buys a better tap target there
+                    // without touching the desktop layout at all.
+                    width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -894,7 +898,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {(() => {
                       const pk = picks.get(p.plan);
                       return (
-                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} - ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, width: "auto", minWidth: 30, height: "auto", minHeight: 30, padding: pk ? "2px 2px" : 0, gap: 1, fontSize: 9.5, lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.1, color: pk ? C.blueInk : C.hairline, cursor: pk ? "pointer" : "default" }}>
+                        <button className="grid-icon" onClick={() => setOpen(p.plan)} disabled={!pk} aria-label={pk ? `AI pick: ${TIER_LABEL[pk.tier]}` : "Not an AI pick"} title={pk ? `AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} - ${pk.reason}` : assistantOn ? "Not one of the assistant's picks" : undefined} style={{ ...iconBtn, width: "auto", minWidth: narrow ? 38 : 30, height: "auto", minHeight: narrow ? 38 : 30, padding: pk ? "2px 2px" : 0, gap: 1, fontSize: 9.5, lineHeight: 1.05, fontWeight: 700, letterSpacing: 0.1, color: pk ? C.blueInk : C.hairline, cursor: pk ? "pointer" : "default" }}>
                           <svg width={pk ? 16 : 20} height={pk ? 16 : 20} viewBox="0 0 24 24" fill={pk ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
                           </svg>
@@ -904,14 +908,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     })()}
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, color: heart ? C.red : C.ghost }}>
+                    <button className="grid-icon" onClick={() => toggleHeart(p.plan)} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, width: narrow ? 38 : 30, height: narrow ? 38 : 30, color: heart ? C.red : C.ghost }}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
                         <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
                       </svg>
                     </button>
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side - remove one first` : "Add To Compare"} style={{ ...iconBtn, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
+                    <button className="grid-icon" onClick={() => toggleProposal(p.plan)} disabled={!added && compareFull} aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`} title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side - remove one first` : "Add To Compare"} style={{ ...iconBtn, width: narrow ? 38 : 30, height: narrow ? 38 : 30, color: added ? "#fff" : compareFull ? C.hairline : C.blue, background: added ? C.green : "transparent", borderRadius: 8 }}>
                       {added ? (
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -947,7 +951,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       </div>
 
       {opened && (
-        <div role="dialog" aria-modal="true" aria-label={`${opened.plan} details`} onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,24,28,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 }}>
+        <div role="dialog" aria-modal="true" aria-label={`${opened.plan} details`} onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,24,28,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: narrow ? 8 : 16, zIndex: 50 }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "94vh", overflow: "auto", position: "relative", paddingTop: 34 }}>
             {/* The card's own header (carrier mark, badges, its website link)
                 sits flush to its top-right corner, so Close gets a strip of

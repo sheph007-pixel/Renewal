@@ -1,6 +1,7 @@
 import { brandOf } from "@/lib/carrier-logos";
 import { websiteOf } from "@/lib/carrier-sites";
 import { C } from "@/lib/ui";
+import { useNarrow } from "@/lib/narrow";
 
 interface Props {
   name: string;
@@ -40,6 +41,7 @@ export function GlobeIcon({ size = 12 }: { size?: number }) {
  * without the two overlapping. Nothing when no site is on file for the name.
  */
 export function CarrierSiteLink({ name, fontSize = 12.5 }: { name: string; fontSize?: number }) {
+  const narrow = useNarrow();
   const site = websiteOf(name);
   if (!site) return null;
   return (
@@ -56,7 +58,7 @@ export function CarrierSiteLink({ name, fontSize = 12.5 }: { name: string; fontS
         alignItems: "center",
         gap: 5,
         flex: "none",
-        padding: "5px 11px",
+        padding: narrow ? "10px 13px" : "5px 11px",
         borderRadius: 999,
         border: `1px solid ${C.blueEdge}`,
         background: C.blueTint,

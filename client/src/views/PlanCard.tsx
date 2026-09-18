@@ -4,6 +4,7 @@ import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
 import InfoTip from "@/views/InfoTip";
+import { useNarrow } from "@/lib/narrow";
 
 /**
  * One plan, the way a broker's comparison card reads: the carrier and plan,
@@ -140,6 +141,7 @@ function UnderwritingFoot({ note }: { note: string }) {
 }
 
 export default function PlanCard({ m, actions, compact, wide, disclaimersHref }: { m: CardModel; actions?: React.ReactNode; compact?: boolean; wide?: boolean; disclaimersHref?: string }) {
+  const narrow = useNarrow();
   const tiers = compact ? m.tiers.filter((t) => t.count > 0) : m.tiers;
   // The pay cycle the rates and totals are shown per: monthly as quoted, or
   // divided down to what comes out of a paycheck. Local to the card; the
@@ -150,7 +152,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
   const ratesTitle = freq.key === "M" ? "Monthly Composite Rates" : `${freq.label} Paycheck Deductions`;
   const benefits = compact ? m.benefits.filter(([label]) => ["Deductible", "Out-of-pocket max", "Network type", "Network", "Pharmacy (PBM)"].includes(label)) : m.benefits;
   return (
-    <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div className="card panel" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: narrow ? "14px 12px 12px" : "16px 18px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <CarrierMark name={m.carrier} size={20} fontSize={12.5} color={C.muted} />
@@ -230,7 +232,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                     e.stopPropagation();
                     setFreqKey(f.key);
                   }}
-                  style={{ flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+                  style={{ flex: 1, padding: narrow ? "12px 4px" : "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
                 >
                   {f.label}
                 </button>
@@ -344,7 +346,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
                     e.stopPropagation();
                     setFreqKey(f.key);
                   }}
-                  style={{ flex: 1, padding: "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
+                  style={{ flex: 1, padding: narrow ? "12px 4px" : "6px 4px", fontSize: 12, fontWeight: 600, color: on ? "#fff" : C.body, background: on ? C.blue : "transparent", border: "none", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" }}
                 >
                   {f.label}
                 </button>
