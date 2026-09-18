@@ -5,6 +5,7 @@ import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import type { AccountManager, GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
 import ProgramStory from "@/views/ProgramStory";
+import { useNarrow } from "@/lib/narrow";
 
 /** The licensed broker on every client's team, used when the server sends no broker contact. */
 const HUNTER: AccountManager = {
@@ -96,6 +97,7 @@ function DownloadChanges({ groupName }: { groupName: string }) {
  * people and the AI Assistant reachable without making a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
+  const narrow = useNarrow();
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   const head = { ...h2, marginBottom: 10, fontSize: 18, letterSpacing: "-0.2px" } as const;
@@ -122,7 +124,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <ProgramStory />
-        <div style={{ ...panel, padding: "28px 34px 24px" }}>
+        <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
           <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
           <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
           <p style={p}>
@@ -141,7 +143,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
         </div>
 
 
-        <div style={{ ...panel, padding: "24px 34px 22px" }}>
+        <div style={{ ...panel, padding: narrow ? "18px 18px 16px" : "24px 34px 22px" }}>
           <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
           <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 14 }}>
             {steps.map((s, i) => (

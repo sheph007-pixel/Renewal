@@ -277,6 +277,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
                 aria-label="Company ID"
                 style={{
                   width: 180,
+                  maxWidth: "100%",
                   padding: "7px 9px",
                   fontSize: 13,
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -472,6 +473,9 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
       {!!group.plans?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
           <h3 style={h3}>Plans In Force</h3>
+          {/* A narrow screen scrolls the table sideways rather than
+              squeezing its columns unreadable or overflowing the page. */}
+          <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
             <thead>
               <tr>
@@ -508,6 +512,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
               ))}
             </tbody>
           </table>
+          </div>
           <div style={{ marginTop: 10, fontSize: 12.5, color: C.faint }}>
             Tier rates for these plans are on{" "}
             <Link href={PATHS.rates} onClick={() => onOpenRates(group.name)}>
@@ -524,6 +529,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
           <h3 style={h3}>Other Lines In Force</h3>
           {group.lines?.length ? (
+            <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
               <thead>
                 <tr>
@@ -561,6 +567,7 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
                 ))}
               </tbody>
             </table>
+            </div>
           ) : group.linesLoaded ? (
             <div style={{ marginTop: 8, fontSize: 13, color: C.muted }}>
               No dental, vision, life or disability enrollment in this group's export.

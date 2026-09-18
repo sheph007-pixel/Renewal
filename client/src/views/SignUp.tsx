@@ -11,6 +11,7 @@ import {
 import { C, h2, num, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { carrierOf, fundingOf } from "@/views/PlanCard";
+import { useNarrow } from "@/lib/narrow";
 
 interface Props {
   data: KennionData;
@@ -55,6 +56,7 @@ export default function SignUp({
   onSubmit,
 }: Props) {
   const [confirmClear, setConfirmClear] = useState(false);
+  const narrow = useNarrow();
   const plans = marketPlans(data, g);
   const short = plans.filter((p) => selected[p.plan]);
   // One carrier, one funding type: a group's 2027 plans all come from one
@@ -173,6 +175,7 @@ export default function SignUp({
                 key={s.plan}
                 style={{
                   display: "flex",
+                  flexWrap: "wrap",
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: 14,
@@ -192,7 +195,7 @@ export default function SignUp({
                   <button
                     onClick={() => onToggleSelected(s.plan)}
                     className="noprint"
-                    style={{ background: "none", border: "none", color: C.blue, fontSize: 13, cursor: "pointer", padding: 0 }}
+                    style={{ background: "none", border: "none", color: C.blue, fontSize: 13, cursor: "pointer", padding: narrow ? "12px 4px" : 0 }}
                   >
                     Remove
                   </button>
@@ -227,7 +230,7 @@ export default function SignUp({
                 className="noprint"
                 title={mixed ? "Keep one carrier and one funding type first" : overLimit ? "Remove plans to get under this carrier's limit for a group this size" : undefined}
                 style={{
-                  padding: "9px 18px",
+                  padding: narrow ? "13px 18px" : "9px 18px",
                   fontSize: 13.5,
                   fontWeight: 500,
                   color: "#fff",

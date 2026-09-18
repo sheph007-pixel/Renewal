@@ -151,10 +151,10 @@ export default function ProgramStory() {
           {i + 1} of {FRAMES.length}
         </span>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <button type="button" aria-label="Previous frame" onClick={() => step(-1)} style={arrow}>
+          <button type="button" className="story-arrow" aria-label="Previous frame" onClick={() => step(-1)} style={arrow}>
             &lsaquo;
           </button>
-          <button type="button" aria-label="Next frame" onClick={() => step(1)} style={arrow}>
+          <button type="button" className="story-arrow" aria-label="Next frame" onClick={() => step(1)} style={arrow}>
             &rsaquo;
           </button>
         </div>

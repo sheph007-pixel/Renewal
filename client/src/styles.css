@@ -180,6 +180,10 @@ button,
   }
   .shell > .sidebar > .rail-nav > a {
     flex: 1 1 200px;
+    /* A comfortable tap target: box-sizing is border-box site-wide, so this
+       is the row's full height regardless of its own padding, and the
+       row's existing flex + align-items: center keeps the label centred. */
+    min-height: 44px;
   }
   .shell > .sidebar > .brand {
     border-bottom: 0 !important;
@@ -219,8 +223,17 @@ button,
   .shell > .sidebar .rail-manager {
     margin: 0 !important;
   }
+  .shell > .sidebar .rail-manager > button {
+    min-height: 44px;
+    min-width: 44px;
+  }
   .shell > .main {
     margin-left: 0;
+  }
+  .shell > .main > .inner {
+    /* The chat launcher is fixed in this same corner (bottom: 22px, 50px
+       tall); give the last panel room so it never sits behind it. */
+    padding: 14px 14px 88px;
   }
 }
 
@@ -656,6 +669,30 @@ button,
   }
 }
 
+/* On a phone, grow the dots' and arrows' actual tap area well past their
+   small visible size, with an invisible layer rather than bigger visuals -
+   the dot strip and the arrows are a deliberately light-touch design, and
+   this keeps that while still giving a thumb something like 44px to land on. */
+@media (max-width: 640px) {
+  .story-dot,
+  .story-arrow {
+    position: relative;
+    /* .story-dot's overflow: hidden (desktop) exists only to round the fill
+       bar's corners to the pill shape; do that on the bar itself instead so
+       the hit-area layer below is not clipped along with it. */
+    overflow: visible;
+  }
+  .story-dot > i {
+    border-radius: inherit;
+  }
+  .story-dot::before,
+  .story-arrow::before {
+    content: "";
+    position: absolute;
+    inset: -14px;
+  }
+}
+
 /* Login: a brand panel beside the sign-in card. Narrow screens stack them;
    the feature row itself only stacks to one column once it's too tight. */
 .login-split {
@@ -676,5 +713,18 @@ button,
   .login-split .login-features {
     grid-template-columns: 1fr !important;
     gap: 18px !important;
+  }
+}
+
+/* Mobile only, every screen the app has: iOS Safari zooms the whole page in
+   on focus when a text field's own font-size is under 16px. Every input,
+   select and textarea in the app sets its own (often smaller) size inline;
+   this beats that inline size without changing how any of them look above
+   the phone breakpoint, where the zoom does not happen. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
