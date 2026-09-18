@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
-import { C, chip, h3, num, panel, textInput } from "@/lib/ui";
+import { C, chip, h3, num, panel, pill, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
 import { useNarrow } from "@/lib/narrow";
@@ -874,6 +874,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                       {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
 
                     </div>
+                    {p.underwritingNote && (
+                      <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), display: "inline-flex", alignItems: "center", gap: 4, marginTop: 3 }}>
+                        ⚑ Underwriting Required
+                        <InfoTip text={p.underwritingNote} color={C.amber} />
+                      </span>
+                    )}
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
                   <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
@@ -942,8 +948,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
 
       {opened && (
         <div role="dialog" aria-modal="true" aria-label={`${opened.plan} details`} onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(20,24,28,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "94vh", overflow: "auto", position: "relative" }}>
-            <button onClick={() => setOpen(null)} aria-label="Close" style={{ ...iconBtn, position: "absolute", top: 8, right: 10, fontSize: 22, color: C.muted, zIndex: 1 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "min(860px, 100%)", maxHeight: "94vh", overflow: "auto", position: "relative", paddingTop: 34 }}>
+            {/* The card's own header (carrier mark, badges, its website link)
+                sits flush to its top-right corner, so Close gets a strip of
+                its own above the card rather than sharing that corner. */}
+            <button onClick={() => setOpen(null)} aria-label="Close" style={{ ...iconBtn, position: "absolute", top: 4, right: 10, fontSize: 22, color: C.muted, zIndex: 1 }}>
               ×
             </button>
             {picks.get(opened.plan) && (
