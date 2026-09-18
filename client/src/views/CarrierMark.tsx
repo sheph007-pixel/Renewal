@@ -32,12 +32,14 @@ export function GlobeIcon({ size = 12 }: { size?: number }) {
 
 /**
  * The one place a client leaves BenSync for the carrier's or TPA's own
- * website: a small round icon button on the plan card that opens a new tab,
- * the name in a tooltip rather than spelled out (the header row it sits in
- * is tight, and a modal's own close button shares that corner). Nothing when
- * no site is on file for the name.
+ * website: a small labelled button on the plan card that opens a new tab -
+ * an icon alone does not read as clickable, so it keeps a short "Website"
+ * label rather than spelling out the carrier's name (the header row it sits
+ * in is tight). The options modal gives its own close button a clear strip
+ * above the card, so this can sit flush in the card's top-right corner
+ * without the two overlapping. Nothing when no site is on file for the name.
  */
-export function CarrierSiteLink({ name, size = 26 }: { name: string; size?: number }) {
+export function CarrierSiteLink({ name, fontSize = 12.5 }: { name: string; fontSize?: number }) {
   const site = websiteOf(name);
   if (!site) return null;
   return (
@@ -52,17 +54,21 @@ export function CarrierSiteLink({ name, size = 26 }: { name: string; size?: numb
       style={{
         display: "inline-flex",
         alignItems: "center",
-        justifyContent: "center",
+        gap: 5,
         flex: "none",
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        border: `1px solid ${C.border}`,
-        color: C.blue,
+        padding: "5px 11px",
+        borderRadius: 999,
+        border: `1px solid ${C.blueEdge}`,
+        background: C.blueTint,
+        fontSize,
+        fontWeight: 600,
+        color: C.blueInk,
         textDecoration: "none",
+        whiteSpace: "nowrap",
       }}
     >
-      <GlobeIcon size={Math.round(size * 0.55)} />
+      <GlobeIcon size={Math.round(fontSize * 1.1)} />
+      Website
     </a>
   );
 }
