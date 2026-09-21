@@ -136,9 +136,12 @@ const isProposal = (p: Proposal) => p.status !== "container";
  * The medical proposals a group can hold, one per slot, and nothing else.
  * Surest is a UnitedHealthcare product, so a Surest quote is that group's UHC
  * proposal; an ancillary-only document fills no slot. A newer proposal in a
- * slot replaces the older one, which is kept for the record.
+ * slot replaces the older one, which is kept for the record. Angle Scorecard
+ * is Angle Health's companion document, not a rate quote - it never counts
+ * toward "every quote in" (the server leaves it out of a group's `slots`),
+ * but it is still assignable here and shows in SlotChips like any other.
  */
-export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt", "Optimyl"] as const;
+export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Cobalt", "Optimyl"] as const;
 const TRACKED = SLOTS;
 const isCurrent = (p: Proposal) => p.status === "assigned" && !p.superseded_by;
 

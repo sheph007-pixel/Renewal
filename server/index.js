@@ -188,12 +188,15 @@ function cobaltApplies(name) {
 }
 
 /**
- * The slots that apply to one group. Cobalt is no longer offered as a 2027
- * option, so its slot is not shown anywhere; a Cobalt document already on
- * file stays stored and is simply not served.
+ * The slots that apply to one group, in the "carrier this group is being
+ * shopped at" sense the Welcome page and the Proposals admin grid use to
+ * say a review is complete: Cobalt is no longer offered as a 2027 option,
+ * and Angle Scorecard is never a quote to wait on (see SLOTS above), so
+ * neither counts toward what a group is still missing - the underlying
+ * document, if one is on file, stays stored and is simply not counted.
  */
 function slotsForGroup(_name) {
-  return SLOTS.filter((sl) => sl !== "Cobalt");
+  return SLOTS.filter((sl) => sl !== "Cobalt" && sl !== "Angle Scorecard");
 }
 
 /**
@@ -2323,9 +2326,9 @@ function clientUhc(g) {
   };
 }
 
-/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt. */
+/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt or Angle Scorecard - both stay admin-only. */
 function clientProposals(name) {
-  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt");
+  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard");
   if (!ppoOnly()) return list;
   return list.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
 }
@@ -3920,8 +3923,16 @@ const proposalStore = db
  * newer one in a slot replaces the older, which is kept. Surest is a
  * UnitedHealthcare product, so a Surest quote is that group's UHC proposal;
  * an ancillary-only document (dental, vision, life) fills no slot at all.
+ *
+ * "Angle Scorecard" is not a rate quote - Angle Health sends a Health
+ * Scorecard alongside its actual proposal for a group, a second document
+ * that would otherwise collide with (and delete) the real proposal if both
+ * landed in the "Angle" slot. It gets its own slot instead, with no rate
+ * plans of its own, so it is excluded everywhere a slot means "a carrier
+ * this group is shopped at" - slotsForGroup, clientProposals - rather than
+ * "a document on file"; see the comments there.
  */
-const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt", "Optimyl"];
+const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Cobalt", "Optimyl"];
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
@@ -4190,9 +4201,15 @@ async function assignOptionIds(rows, bySlot) {
     if (db) await db.setSetting(MENU_KEY, {}, "system");
   }
 }
-function slotFor(carrier, funding, quotesMedical) {
-  if (quotesMedical === false) return null;
+function slotFor(carrier, funding, quotesMedical, filename) {
   const c = String(carrier || "").toLowerCase();
+  // Angle Health's Health Scorecard is not a rate quote and must never land
+  // in the "Angle" slot, where a newer upload replaces (and deletes) the
+  // older one: a scorecard there would delete the group's real proposal, or
+  // vice versa. Its filename says what it is even when the reader does not
+  // mark it ancillary, so this is checked before quotesMedical can return null.
+  if (/scorecard/i.test(filename || "") && /angle/.test(c)) return "Angle Scorecard";
+  if (quotesMedical === false) return null;
   const f = String(funding || "").toLowerCase();
   if (/united|uhc|surest|optum/.test(c)) {
     if (/level/.test(f)) return "UHC Level Funded";
@@ -4245,7 +4262,7 @@ async function proposalsChanged() {
       }
       if (!r.slot || SLOTS.includes(r.slot)) continue;
       const x = r.extracted || {};
-      const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical);
+      const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
       await proposalStore.updateProposal(r.id, { slot });
       remapped = true;
     }
@@ -4531,7 +4548,7 @@ async function runAnalysis(id, file, keepAssignment) {
       error: null,
     };
     // The slot comes from what was read, unless staff already set one.
-    if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical);
+    if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical, file.filename);
     // Staff may assign a group while the read is still running; that choice stands.
     const staffAssigned = !!(current && current.group_name && current.assigned_by && current.assigned_by !== "ai" && current.assigned_by !== "filename");
     if (keepAssignment || staffAssigned) {
