@@ -369,8 +369,10 @@ export interface KennionData {
 /** What the guided Sign Up wizard posts once every step is answered and signed. */
 export interface RenewalElectionFields {
   plans: string[];
-  dental: string;
-  vision: string;
+  /** Up to 3 dental plans, or ["Waive Dental Coverage"]. */
+  dental: string[];
+  /** Up to 3 vision plans, or ["Waive Vision Coverage"]. */
+  vision: string[];
   employerLife: string;
   signerName: string;
   signerTitle: string;
@@ -387,8 +389,8 @@ export interface GroupSignup {
   submittedAt: string;
   kind: "shortlist" | "renewal";
   carrier: string | null;
-  dental: string | null;
-  vision: string | null;
+  dental: string[];
+  vision: string[];
   employerLife: string | null;
   signerName: string | null;
   signerTitle: string | null;

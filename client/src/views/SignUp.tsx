@@ -1,19 +1,20 @@
 import { useMemo, useState } from "react";
 import {
   marketPlans,
-  money0,
   planLimitFor,
   type AccountManager,
   type Group,
   type GroupSignup,
   type KennionData,
   type RenewalElectionFields,
+  type SupplementalLine,
 } from "@/lib/model";
-import { SUPPLEMENTAL_SECTIONS, EMPLOYER_PAID_LIFE } from "@/lib/supplemental";
-import { C, h2, h3, num, panel, sectionHead } from "@/lib/ui";
+import { SUPPLEMENTAL_SECTIONS, EMPLOYER_PAID_LIFE, type SupplementalRow } from "@/lib/supplemental";
+import { C, h2, h3, panel, sectionHead } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { carrierOf, fundingOf } from "@/views/PlanCard";
 import { useNarrow } from "@/lib/narrow";
+import { money0 } from "@/lib/model";
 
 interface Props {
   data: KennionData;
@@ -35,8 +36,42 @@ const fmtDate = (iso: string) =>
 
 const STEP_LABELS = ["Carrier", "Medical Plans", "Dental", "Vision", "Supplemental", "Employer Life", "Confirm & Sign"];
 const letters = "ABCDEFGH";
+const DENTAL_VISION_MAX = 3;
 
-/** A big selectable card - the carrier, and every lettered option (dental, vision, employer life). One shape, everywhere in the wizard. */
+/** A name close enough to what the group already has to flag with the "Current Plan" star - loose on purpose, since the current export rarely spells a plan the way the 2027 catalogue does. */
+function isCurrentPlan(planName: string, lines: SupplementalLine[]): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+  const key = norm(planName);
+  if (!key) return false;
+  return lines.some((l) => {
+    const lk = norm(l.plan);
+    return !!lk && (lk.includes(key) || key.includes(lk));
+  });
+}
+
+/** The company name, front and center - every step of the way, so it never reads like a generic form. */
+function CompanyBanner({ g }: { g: Group }) {
+  return (
+    <div style={{ ...panel, padding: "16px 20px", marginBottom: 18, display: "flex", alignItems: "center", gap: 14 }}>
+      <span aria-hidden style={{ flex: "none", display: "grid", placeItems: "center", width: 42, height: 42, borderRadius: 10, background: C.navy, color: "#fff", fontSize: 16, fontWeight: 700 }}>
+        {g.name
+          .replace(/[^A-Za-z0-9 ]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w && !/^(inc|llc|co|corp|corporation|company|the|of|and)$/i.test(w))
+          .slice(0, 2)
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase()}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{g.name}</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>2027 Benefits Election · Effective January 1, 2027</div>
+      </div>
+    </div>
+  );
+}
+
+/** A big selectable card - the carrier, and every lettered option (employer life). One shape, everywhere it's a single choice. */
 function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; title: string; sub?: string; on: boolean; onClick: () => void }) {
   return (
     <button
@@ -46,13 +81,13 @@ function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; titl
       style={{
         display: "flex",
         alignItems: "flex-start",
-        gap: 12,
+        gap: 14,
         width: "100%",
         textAlign: "left",
-        padding: "13px 16px",
-        borderRadius: 8,
+        padding: "16px 18px",
+        borderRadius: 10,
         cursor: "pointer",
-        border: `1.5px solid ${on ? C.blue : C.border}`,
+        border: `2px solid ${on ? C.blue : C.border}`,
         background: on ? C.blueTint : C.card,
       }}
     >
@@ -63,10 +98,10 @@ function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; titl
             flex: "none",
             display: "grid",
             placeItems: "center",
-            width: 24,
-            height: 24,
+            width: 30,
+            height: 30,
             borderRadius: "50%",
-            fontSize: 12,
+            fontSize: 13.5,
             fontWeight: 700,
             color: on ? "#fff" : C.faint,
             background: on ? C.blue : C.zebra,
@@ -77,12 +112,12 @@ function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; titl
         </span>
       )}
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: C.ink }}>{title}</span>
-        {sub && <span style={{ display: "block", marginTop: 2, fontSize: 12.5, color: C.muted }}>{sub}</span>}
+        <span style={{ display: "block", fontSize: 15.5, fontWeight: 600, color: C.ink }}>{title}</span>
+        {sub && <span style={{ display: "block", marginTop: 2, fontSize: 13, color: C.muted }}>{sub}</span>}
       </span>
       {on && (
         <span aria-hidden style={{ marginLeft: "auto", flex: "none", color: C.blue }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20 6 9 17l-5-5" />
           </svg>
         </span>
@@ -91,16 +126,45 @@ function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; titl
   );
 }
 
+/** A checkbox row - medical plans, and dental/vision's up-to-3 picks. `current` stars the plan the group already has. */
+function CheckOption({ title, current, checked, disabled, onClick }: { title: string; current?: boolean; checked: boolean; disabled?: boolean; onClick: () => void }) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "15px 18px",
+        borderRadius: 10,
+        border: `2px solid ${checked ? C.blue : current ? C.amber : C.border}`,
+        background: checked ? C.blueTint : current ? C.amberTint : C.card,
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onClick} style={{ accentColor: C.blue, width: 19, height: 19, flex: "none" }} />
+      <span style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 600, color: C.ink }}>{title}</span>
+      {current && (
+        <span
+          aria-hidden
+          style={{ flex: "none", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: C.amber, background: "#fff", border: `1px solid ${C.amberEdge}`, borderRadius: 12, padding: "3px 10px" }}
+        >
+          ★ Current Plan
+        </span>
+      )}
+    </label>
+  );
+}
+
 /** Back / Continue at the foot of every step; Continue can be disabled with a reason. */
 function StepNav({ onBack, onContinue, continueLabel = "Continue", disabled, hint }: { onBack?: () => void; onContinue: () => void; continueLabel?: string; disabled?: boolean; hint?: string }) {
-  const narrow = useNarrow();
   return (
-    <div style={{ marginTop: 18, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+    <div style={{ marginTop: 20, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
       {onBack && (
         <button
           type="button"
           onClick={onBack}
-          style={{ padding: narrow ? "12px 16px" : "9px 16px", fontSize: 13.5, fontWeight: 500, color: C.body, background: "none", border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer" }}
+          style={{ padding: "14px 20px", fontSize: 14.5, fontWeight: 500, color: C.body, background: "none", border: `1px solid ${C.border}`, borderRadius: 6, cursor: "pointer" }}
         >
           Back
         </button>
@@ -110,31 +174,41 @@ function StepNav({ onBack, onContinue, continueLabel = "Continue", disabled, hin
         onClick={onContinue}
         disabled={disabled}
         style={{
-          padding: narrow ? "13px 20px" : "9px 20px",
-          fontSize: 13.5,
-          fontWeight: 500,
+          padding: "14px 24px",
+          fontSize: 14.5,
+          fontWeight: 600,
           color: "#fff",
           background: C.blue,
           border: `1px solid ${C.blue}`,
-          borderRadius: 4,
+          borderRadius: 6,
           cursor: disabled ? "default" : "pointer",
           opacity: disabled ? 0.5 : 1,
         }}
       >
         {continueLabel}
       </button>
-      {hint && <span style={{ fontSize: 12.5, color: C.muted }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 13, color: C.muted }}>{hint}</span>}
     </div>
   );
 }
 
+/** Toggle a value in an up-to-`max` list; picking "Waive…" clears the rest and stands alone. */
+function toggleCapped(list: string[], value: string, max: number): string[] {
+  if (/^Waive/.test(value)) return list.includes(value) ? [] : [value];
+  const rest = list.filter((v) => !/^Waive/.test(v));
+  if (rest.includes(value)) return rest.filter((v) => v !== value);
+  return rest.length < max ? [...rest, value] : rest;
+}
+
 /**
- * Sign Up: a guided, six-question wizard that ends in one signed election -
+ * Sign Up: a guided, seven-question wizard that ends in one signed election -
  * carrier, medical plans, dental, vision, a look at what's automatically
  * included, the employer-paid life tier, then a name and an e-mail to sign
  * with. One click at a time, so a first-time HR admin never has to guess
  * what's expected of them. Submitting marks the group Renewed and emails
- * Kennion immediately; nothing here pretends to send.
+ * Kennion immediately; nothing here pretends to send. No rate or premium
+ * figure appears anywhere on this form - that is a conversation with the
+ * account manager, not a checkbox here.
  */
 export default function SignUp({ data, g, selected, sent, submitting, submitError, lastSignup, optionsHref, manager, onToggleSelected, onSubmit }: Props) {
   const narrow = useNarrow();
@@ -160,8 +234,8 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
   const [carrier, setCarrier] = useState<string | null>(bases.length === 1 ? bases[0].key : null);
-  const [dental, setDental] = useState("");
-  const [vision, setVision] = useState("");
+  const [dental, setDental] = useState<string[]>([]);
+  const [vision, setVision] = useState<string[]>([]);
   const [employerLife, setEmployerLife] = useState("");
   const [signerName, setSignerName] = useState("");
   const [signerTitle, setSignerTitle] = useState("");
@@ -178,10 +252,8 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const overLimit = cap != null && short.length > cap;
 
   const linesFor = (re: RegExp) => (g.lines || []).filter((l) => re.test(l.benefit) && !/medical|health\s*plan/i.test(l.benefit));
-  const currentText = (re: RegExp) => {
-    const names = [...new Set(linesFor(re).map((l) => l.plan))];
-    return names.length ? names.join(", ") : "Nothing on file";
-  };
+  const currentDentalLines = linesFor(/dental/i);
+  const currentVisionLines = linesFor(/vision/i);
 
   const dentalSection = SUPPLEMENTAL_SECTIONS.find((s) => s.id === "dental")!;
   const visionSection = SUPPLEMENTAL_SECTIONS.find((s) => s.id === "vision")!;
@@ -227,6 +299,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
         <div className="anchor" style={sectionHead}>
           <h2 style={h2}>Sign Up</h2>
         </div>
+        <CompanyBanner g={g} />
         <div style={{ ...panel, padding: "20px 22px", background: C.greenTint, borderColor: C.greenEdge }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 700, color: C.ink }}>
             <span aria-hidden style={{ display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: "50%", background: C.green, color: "#fff", flex: "none" }}>
@@ -245,10 +318,10 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
               <strong>Medical:</strong> {lastSignup.carrier || "-"} - {lastSignup.plans.join(", ")}
             </li>
             <li>
-              <strong>Dental:</strong> {lastSignup.dental}
+              <strong>Dental:</strong> {lastSignup.dental.join(", ")}
             </li>
             <li>
-              <strong>Vision:</strong> {lastSignup.vision}
+              <strong>Vision:</strong> {lastSignup.vision.join(", ")}
             </li>
             <li>
               <strong>Employer Paid Life:</strong> {lastSignup.employerLife}
@@ -294,38 +367,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
         <h2 style={h2}>Sign Up</h2>
       </div>
 
-      {manager?.calendly && (
-        <div
-          style={{
-            ...panel,
-            padding: "16px 18px",
-            marginBottom: 18,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 14,
-            background: C.greenTint,
-            borderColor: C.greenEdge,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>Get Your Kickoff Call On The Calendar</div>
-            <div style={{ marginTop: 3, fontSize: 12.5, color: C.body, lineHeight: 1.5 }}>
-              Talk through contributions and timing with {managerFirst} - no need to wait until you've signed up below.
-            </div>
-          </div>
-          <a
-            className="cta"
-            href={manager.calendly}
-            target="_blank"
-            rel="noreferrer"
-            style={{ flex: "none", padding: "9px 16px", fontSize: 13.5, fontWeight: 600, color: "#fff", background: C.green, border: `1px solid ${C.green}`, borderRadius: 4, textDecoration: "none", whiteSpace: "nowrap" }}
-          >
-            Book Your Kickoff Call &#8599;
-          </a>
-        </div>
-      )}
+      <CompanyBanner g={g} />
 
       {noBasesYet ? (
         <div style={{ ...panel, padding: "18px 20px" }}>
@@ -364,12 +406,12 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             ))}
           </div>
 
-          <div style={{ ...panel, padding: narrow ? "18px 16px" : "20px 24px" }}>
+          <div style={{ ...panel, padding: narrow ? "20px 18px" : "26px 30px" }}>
             {step === 0 && (
               <>
                 <h3 style={h3}>Which Carrier/TPA Are You Choosing For Medical?</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>Only carriers with a 2027 quote on file for your group are shown.</p>
-                <div style={{ display: "grid", gap: 8 }}>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Only carriers with a 2027 quote on file for your group are shown.</p>
+                <div style={{ display: "grid", gap: 10 }}>
                   {bases.map((b, i) => (
                     <OptionCard key={b.key} letter={letters[i]} title={`${b.carrier} - ${b.funding}`} sub={`${b.count} plan${b.count === 1 ? "" : "s"} available`} on={carrier === b.key} onClick={() => pickCarrier(b.key)} />
                   ))}
@@ -381,31 +423,15 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 1 && (
               <>
                 <h3 style={h3}>Which {carrierOf(carrierPlans[0]) || "Medical"} Plans Do You Want To Offer?</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>Check every plan you want available to employees during Open Enrollment.</p>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Check every plan you want available to employees during Open Enrollment.</p>
                 {overLimit && tier && (
-                  <div role="alert" style={{ margin: "0 0 10px", padding: "9px 12px", borderRadius: 4, background: C.redTint, color: C.red, fontSize: 13, lineHeight: 1.5 }}>
+                  <div role="alert" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 6, background: C.redTint, color: C.red, fontSize: 13.5, lineHeight: 1.5 }}>
                     {carrierOf(carrierPlans[0])} allows up to {cap} plan{cap === 1 ? "" : "s"} for a group this size ({g.enrolled} enrolled){tier.maxWithUnderwriting ? ", even with underwriting approval" : ""}. Uncheck {short.length - (cap as number)} to continue.
                   </div>
                 )}
-                <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ display: "grid", gap: 8 }}>
                   {carrierPlans.map((p) => (
-                    <label
-                      key={p.plan}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "10px 14px",
-                        borderRadius: 8,
-                        border: `1.5px solid ${selected[p.plan] ? C.blue : C.border}`,
-                        background: selected[p.plan] ? C.blueTint : C.card,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <input type="checkbox" checked={!!selected[p.plan]} onChange={() => onToggleSelected(p.plan)} style={{ accentColor: C.blue, width: 16, height: 16, flex: "none" }} />
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: C.ink }}>{p.plan}</span>
-                      <span style={{ flex: "none", fontSize: 13, fontWeight: 600, color: C.ink, ...num }}>{p.monthly == null ? "quote pending" : `${money0(p.monthly)} / mo`}</span>
-                    </label>
+                    <CheckOption key={p.plan} title={p.plan} checked={!!selected[p.plan]} onClick={() => onToggleSelected(p.plan)} />
                   ))}
                 </div>
                 <StepNav onBack={back} onContinue={next} disabled={!short.length || overLimit} hint={!short.length ? "Select at least one plan" : undefined} />
@@ -415,50 +441,64 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 2 && (
               <>
                 <h3 style={h3}>Dental</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>
-                  You currently have: <strong>{currentText(/dental/i)}</strong>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>
+                  Choose up to {DENTAL_VISION_MAX} plans to offer. <span style={{ color: C.amber, fontWeight: 600 }}>★ Current Plan</span> is what you have today.
                 </p>
-                <div style={{ display: "grid", gap: 6 }}>
-                  {dentalSection.rows.map((r) => (
-                    <OptionCard key={r.plan} title={r.plan} sub={`${dentalSection.carrier} · from ${money0(r.ee)}/mo Employee`} on={dental === r.plan} onClick={() => setDental(r.plan)} />
+                <div style={{ display: "grid", gap: 8 }}>
+                  {dentalSection.rows.map((r: SupplementalRow) => (
+                    <CheckOption
+                      key={r.plan}
+                      title={r.plan}
+                      current={isCurrentPlan(r.plan, currentDentalLines)}
+                      checked={dental.includes(r.plan)}
+                      disabled={!dental.includes(r.plan) && (dental.length >= DENTAL_VISION_MAX || dental.includes("Waive Dental Coverage"))}
+                      onClick={() => setDental((d) => toggleCapped(d, r.plan, DENTAL_VISION_MAX))}
+                    />
                   ))}
-                  <OptionCard title="Waive Dental Coverage" on={dental === "Waive Dental Coverage"} onClick={() => setDental("Waive Dental Coverage")} />
+                  <CheckOption title="Waive Dental Coverage" checked={dental.includes("Waive Dental Coverage")} onClick={() => setDental((d) => toggleCapped(d, "Waive Dental Coverage", DENTAL_VISION_MAX))} />
                 </div>
-                <StepNav onBack={back} onContinue={next} disabled={!dental} />
+                <StepNav onBack={back} onContinue={next} disabled={!dental.length} hint={dental.length ? `${dental.length} of ${DENTAL_VISION_MAX} selected` : undefined} />
               </>
             )}
 
             {step === 3 && (
               <>
                 <h3 style={h3}>Vision</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>
-                  You currently have: <strong>{currentText(/vision/i)}</strong>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>
+                  Choose up to {DENTAL_VISION_MAX} plans to offer. <span style={{ color: C.amber, fontWeight: 600 }}>★ Current Plan</span> is what you have today.
                 </p>
-                <div style={{ display: "grid", gap: 6 }}>
-                  {visionSection.rows.map((r) => (
-                    <OptionCard key={r.plan} title={r.plan} sub={`${visionSection.carrier} · from ${money0(r.ee)}/mo Employee`} on={vision === r.plan} onClick={() => setVision(r.plan)} />
+                <div style={{ display: "grid", gap: 8 }}>
+                  {visionSection.rows.map((r: SupplementalRow) => (
+                    <CheckOption
+                      key={r.plan}
+                      title={r.plan}
+                      current={isCurrentPlan(r.plan, currentVisionLines)}
+                      checked={vision.includes(r.plan)}
+                      disabled={!vision.includes(r.plan) && (vision.length >= DENTAL_VISION_MAX || vision.includes("Waive Vision Coverage"))}
+                      onClick={() => setVision((v) => toggleCapped(v, r.plan, DENTAL_VISION_MAX))}
+                    />
                   ))}
-                  <OptionCard title="Waive Vision Coverage" on={vision === "Waive Vision Coverage"} onClick={() => setVision("Waive Vision Coverage")} />
+                  <CheckOption title="Waive Vision Coverage" checked={vision.includes("Waive Vision Coverage")} onClick={() => setVision((v) => toggleCapped(v, "Waive Vision Coverage", DENTAL_VISION_MAX))} />
                 </div>
-                <StepNav onBack={back} onContinue={next} disabled={!vision} />
+                <StepNav onBack={back} onContinue={next} disabled={!vision.length} hint={vision.length ? `${vision.length} of ${DENTAL_VISION_MAX} selected` : undefined} />
               </>
             )}
 
             {step === 4 && (
               <>
                 <h3 style={h3}>Included With Your Package</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>
                   These are automatically part of what Kennion offers - <strong>no direct cost to you</strong>. Employees may elect and pay for any of them voluntarily during Open Enrollment.
                 </p>
-                <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ display: "grid", gap: 8 }}>
                   {autoIncluded.map((s) => (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 18px", borderRadius: 10, border: `1px solid ${C.border}` }}>
                       <span aria-hidden style={{ flex: "none", color: C.green }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
                       </span>
-                      <span style={{ fontSize: 13.5, color: C.ink }}>
+                      <span style={{ fontSize: 14.5, color: C.ink }}>
                         {s.product} <span style={{ color: C.faint }}>· {s.carrier}</span>
                       </span>
                     </div>
@@ -471,8 +511,8 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 5 && (
               <>
                 <h3 style={h3}>100% Employer Paid Life Insurance - Guardian</h3>
-                <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.muted }}>This is an optional employer-paid benefit. Prices are monthly, per employee.</p>
-                <div style={{ display: "grid", gap: 8, gridTemplateColumns: narrow ? "1fr" : "repeat(2, 1fr)" }}>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>This is an optional employer-paid benefit.</p>
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: narrow ? "1fr" : "repeat(2, 1fr)" }}>
                   {EMPLOYER_PAID_LIFE.map((o, i) => {
                     const label = o.pepm != null ? `${o.label} (${money0(o.pepm)} Per Employee)` : o.label;
                     return <OptionCard key={o.key} letter={letters[i]} title={label} on={employerLife === label} onClick={() => setEmployerLife(label)} />;
@@ -485,35 +525,36 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 6 && (
               <>
                 <h3 style={h3}>Confirm &amp; Sign</h3>
-                <div style={{ margin: "8px 0 16px", padding: "12px 14px", borderRadius: 8, background: C.zebra, fontSize: 13, color: C.body, lineHeight: 2 }}>
+                <div style={{ margin: "8px 0 18px", padding: "16px 18px", borderRadius: 10, background: C.zebra, fontSize: 13.5, color: C.body, lineHeight: 2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase", marginBottom: 4 }}>Election Summary · {g.name}</div>
                   <div>
                     <strong style={{ color: C.ink }}>Medical:</strong> {carrierOf(carrierPlans[0]) || "-"} - {short.map((s) => s.plan).join(", ")}
                   </div>
                   <div>
-                    <strong style={{ color: C.ink }}>Dental:</strong> {dental}
+                    <strong style={{ color: C.ink }}>Dental:</strong> {dental.join(", ")}
                   </div>
                   <div>
-                    <strong style={{ color: C.ink }}>Vision:</strong> {vision}
+                    <strong style={{ color: C.ink }}>Vision:</strong> {vision.join(", ")}
                   </div>
                   <div>
                     <strong style={{ color: C.ink }}>Employer Paid Life:</strong> {employerLife}
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: narrow ? "1fr" : "1fr 1fr" }}>
-                  <label style={{ fontSize: 12.5, color: C.muted }}>
+                <div style={{ display: "grid", gap: 12, gridTemplateColumns: narrow ? "1fr" : "1fr 1fr" }}>
+                  <label style={{ fontSize: 13, color: C.muted }}>
                     Your Name *
                     <input value={signerName} onChange={(e) => setSignerName(e.target.value)} style={inputStyle} />
                   </label>
-                  <label style={{ fontSize: 12.5, color: C.muted }}>
+                  <label style={{ fontSize: 13, color: C.muted }}>
                     Your Title
                     <input value={signerTitle} onChange={(e) => setSignerTitle(e.target.value)} style={inputStyle} />
                   </label>
-                  <label style={{ fontSize: 12.5, color: C.muted }}>
+                  <label style={{ fontSize: 13, color: C.muted }}>
                     Email *
                     <input type="email" value={signerEmail} onChange={(e) => setSignerEmail(e.target.value)} style={inputStyle} />
                   </label>
-                  <label style={{ fontSize: 12.5, color: C.muted }}>
+                  <label style={{ fontSize: 13, color: C.muted }}>
                     Phone
                     <input type="tel" value={signerPhone} onChange={(e) => setSignerPhone(e.target.value)} style={inputStyle} />
                   </label>
@@ -524,11 +565,11 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                   onChange={(e) => setNote(e.target.value)}
                   aria-label="Questions for your account manager"
                   placeholder="Anything else for your account manager - contribution changes, timing, questions - optional"
-                  style={{ marginTop: 12, width: "100%", minHeight: 70, padding: "10px 12px", fontSize: 13.5, lineHeight: 1.55, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 4, outline: "none", resize: "vertical" }}
+                  style={{ marginTop: 14, width: "100%", minHeight: 74, padding: "11px 13px", fontSize: 14, lineHeight: 1.55, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 6, outline: "none", resize: "vertical", boxSizing: "border-box" }}
                 />
 
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 14, fontSize: 12.5, color: C.body, cursor: "pointer" }}>
-                  <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 2, accentColor: C.blue, width: 16, height: 16, flex: "none" }} />
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, fontSize: 13, color: C.body, cursor: "pointer" }}>
+                  <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 2, accentColor: C.blue, width: 17, height: 17, flex: "none" }} />
                   I confirm I am authorized to make these elections on behalf of {g.name}, and that typing my name above is my electronic signature confirming this 2027 benefits election.
                 </label>
 
@@ -550,12 +591,12 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
 const inputStyle = {
   display: "block",
   width: "100%",
-  marginTop: 4,
-  padding: "8px 10px",
-  fontSize: 13.5,
+  marginTop: 5,
+  padding: "10px 12px",
+  fontSize: 14,
   color: C.ink,
   border: `1px solid ${C.inputEdge}`,
-  borderRadius: 4,
+  borderRadius: 6,
   outline: "none",
   boxSizing: "border-box" as const,
 };

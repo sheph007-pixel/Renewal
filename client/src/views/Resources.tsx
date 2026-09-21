@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { C, h3, panel } from "@/lib/ui";
-import CarrierMark from "@/views/CarrierMark";
+import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
 
 /** One piece of marketing material, as the server lists it - metadata only, the file is fetched separately when opened. */
 interface Resource {
@@ -24,23 +24,10 @@ const fileBadge = (mime: string, filename: string) => {
 
 const fmtSize = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`);
 
-/** One resource card: title, a one-line summary where Claude gave one, and a download link. */
+/** One resource card: title, a one-line summary where Claude gave one, and links to download the file or visit the carrier's own website. Two separate links, so the card itself is a plain panel rather than one big anchor. */
 function ResourceCard({ r }: { r: Resource }) {
   return (
-    <a
-      href={`/api/resources/${r.id}/file`}
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        ...panel,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        padding: "14px 16px",
-        textDecoration: "none",
-        color: "inherit",
-      }}
-    >
+    <div style={{ ...panel, display: "flex", flexDirection: "column", gap: 8, padding: "14px 16px" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, lineHeight: 1.35 }}>{r.title}</div>
         <span
@@ -51,15 +38,23 @@ function ResourceCard({ r }: { r: Resource }) {
         </span>
       </div>
       {r.summary && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>{r.summary}</div>}
-      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.blue }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M12 3v13m0 0-4-4m4 4 4-4" />
-          <path d="M4 17v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
-        </svg>
-        Download
-        <span style={{ marginLeft: "auto", fontWeight: 400, color: C.faint }}>{fmtSize(r.size)}</span>
+      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <a
+          href={`/api/resources/${r.id}/file`}
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.blue, textDecoration: "none" }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 3v13m0 0-4-4m4 4 4-4" />
+            <path d="M4 17v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+          Download
+        </a>
+        <CarrierSiteLink name={r.carrier} fontSize={12} />
+        <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 400, color: C.faint }}>{fmtSize(r.size)}</span>
       </div>
-    </a>
+    </div>
   );
 }
 
