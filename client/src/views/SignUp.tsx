@@ -39,6 +39,14 @@ const STEP_LABELS = ["Carrier/TPA", "Medical Plans", "Dental", "Vision", "Supple
 const letters = "ABCDEFGH";
 const DENTAL_VISION_MAX = 3;
 
+/** The first dollar figure in a plan name - its deductible, almost always. Plans with no figure (a "Comfort" tier, say) sort last. */
+const planAmount = (s: string): number => {
+  const m = s.match(/\$([\d,]+)/);
+  return m ? Number(m[1].replace(/,/g, "")) : Infinity;
+};
+
+type PlanSortKey = "option" | "network" | "plan";
+
 /** A name close enough to what the group already has to flag with the "Current Plan" star - loose on purpose, since the current export rarely spells a plan the way the 2027 catalogue does. */
 function isCurrentPlan(planName: string, lines: SupplementalLine[]): boolean {
   const norm = (s: string) => s.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
@@ -236,6 +244,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const [maxStep, setMaxStep] = useState(0);
   const [carrier, setCarrier] = useState<string | null>(bases.length === 1 ? bases[0].key : null);
   const [planSearch, setPlanSearch] = useState("");
+  const [planSort, setPlanSort] = useState<{ key: PlanSortKey; dir: 1 | -1 }>({ key: "plan", dir: 1 });
   const [dental, setDental] = useState<string[]>([]);
   const [vision, setVision] = useState<string[]>([]);
   const [employerLife, setEmployerLife] = useState("");
@@ -248,16 +257,19 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const [editing, setEditing] = useState(false);
 
   const carrierPlans = plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === carrier);
-  // Lowest deductible first, so a long carrier list reads richest-to-leanest
-  // rather than in raw catalogue order; ties and figure-less names fall back
-  // to alphabetical.
+  // Defaults to lowest deductible first, so a long carrier list reads
+  // richest-to-leanest rather than in raw catalogue order; every column
+  // header can also be clicked to sort by it, same as the real grid.
   const carrierPlansSorted = [...carrierPlans].sort((a, b) => {
-    const amt = (s: string) => {
-      const m = s.match(/\$([\d,]+)/);
-      return m ? Number(m[1].replace(/,/g, "")) : Infinity;
-    };
-    return amt(a.plan) - amt(b.plan) || a.plan.localeCompare(b.plan);
+    const cmp =
+      planSort.key === "option"
+        ? (a.optionId || "").localeCompare(b.optionId || "", undefined, { numeric: true })
+        : planSort.key === "network"
+          ? (networkTypeOf(a) || "").localeCompare(networkTypeOf(b) || "")
+          : planAmount(a.plan) - planAmount(b.plan) || a.plan.localeCompare(b.plan);
+    return cmp * planSort.dir;
   });
+  const sortOnPlan = (key: PlanSortKey) => setPlanSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
   const planQuery = planSearch.trim().toLowerCase();
   const visiblePlans = planQuery ? carrierPlansSorted.filter((p) => p.plan.toLowerCase().includes(planQuery)) : carrierPlansSorted;
   const short = carrierPlans.filter((p) => selected[p.plan]);
@@ -283,6 +295,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const pickCarrier = (key: string) => {
     setCarrier(key);
     setPlanSearch("");
+    setPlanSort({ key: "plan", dir: 1 });
     // A plan checked earlier from the Options grid, under a different
     // carrier, cannot ride along - one carrier, one election.
     const keep = new Set(plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === key).map((p) => p.plan));
@@ -459,9 +472,33 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                   <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Option", "Carrier/TPA", "Network Type", "Plan"].map((h) => (
-                          <th key={h} style={{ padding: "12px 10px 11px", fontSize: 13, color: C.onColor, background: C.headerBg, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>
+                        {(
+                          [
+                            ["option", "Option"],
+                            [null, "Carrier/TPA"],
+                            ["network", "Network Type"],
+                            ["plan", "Plan"],
+                          ] as [PlanSortKey | null, string][]
+                        ).map(([k, h]) => (
+                          <th
+                            key={h}
+                            onClick={k ? () => sortOnPlan(k) : undefined}
+                            title={k ? "Sort by this column" : undefined}
+                            aria-sort={k && planSort.key === k ? (planSort.dir > 0 ? "ascending" : "descending") : undefined}
+                            style={{
+                              padding: "12px 10px 11px",
+                              fontSize: 13,
+                              color: C.onColor,
+                              background: C.headerBg,
+                              fontWeight: 700,
+                              textAlign: "left",
+                              whiteSpace: "nowrap",
+                              cursor: k ? "pointer" : undefined,
+                              userSelect: "none",
+                            }}
+                          >
                             {h}
+                            {k && planSort.key === k ? (planSort.dir > 0 ? " ▲" : " ▼") : ""}
                           </th>
                         ))}
                       </tr>
