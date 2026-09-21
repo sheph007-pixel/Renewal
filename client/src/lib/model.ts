@@ -807,6 +807,17 @@ export function planLimitSummary(carrier: string): string | null {
 }
 
 /**
+ * Angle Health confirmed it sets no limit on how many plans a group may
+ * offer, at any headcount - which is also why it carries no entry in
+ * `CARRIER_PLAN_LIMITS` above: a carrier with no entry has no limit
+ * enforced anywhere a plan-count cap is checked (Sign Up's `overLimit`
+ * included). Stated here so the disclaimers page says so explicitly
+ * instead of just omitting Angle Health from the capped-carrier list.
+ */
+export const ANGLE_HEALTH_NO_PLAN_CAP =
+  "Angle Health has confirmed it places no limit on how many plans a group may offer its employees - a group may select as many Angle Health plans as fit its needs.";
+
+/**
  * Gravie and Angle Health both run on Cigna's network, and every
  * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
  * United Choice Plus network - a fixed rule, not something a carrier's own

@@ -43,7 +43,9 @@ export const DEFAULT_PLAYBOOK = {
     item("A quote on file is the carrier's number; anything not quoted is unknown - say so plainly."),
     item("Kennion binds coverage, not the assistant. Only when the client says they are ready to move, point them to Sign Up."),
   ],
-  facts: [],
+  facts: [
+    item("Angle Health has confirmed it places no limit on how many plans a group may offer its employees; a group may select as many Angle Health plans as fit its needs. Other Carriers/TPAs do cap the number of plans by enrolled headcount - see the figures on file for the group before stating a limit."),
+  ],
   faq: [],
 };
 

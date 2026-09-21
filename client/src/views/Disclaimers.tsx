@@ -1,4 +1,4 @@
-import { PLAN_LIMIT_CARRIERS, RATE_DISCLAIMER, groupSizeNote, planLimitSummary, type Group } from "@/lib/model";
+import { ANGLE_HEALTH_NO_PLAN_CAP, PLAN_LIMIT_CARRIERS, RATE_DISCLAIMER, groupSizeNote, planLimitSummary, type Group } from "@/lib/model";
 import { C, h2, h3, panel } from "@/lib/ui";
 
 /**
@@ -124,6 +124,7 @@ export default function Disclaimers({ g }: { g: Group }) {
       blocks: [
         { p: "Some Carriers/TPAs limit how many plans a group may offer its employees, based on enrolled headcount:" },
         { list: PLAN_LIMIT_CARRIERS.map((c) => planLimitSummary(c)).filter((s): s is string => !!s) },
+        { p: ANGLE_HEALTH_NO_PLAN_CAP },
       ],
     },
     { title: "Group Size And The Employer Mandate", blocks: [{ p: groupSizeNote(g) || GROUP_SIZE_FALLBACK }, { p: "BenSync does not determine whether a contribution or a plan is affordable or compliant under the Affordable Care Act. That determination is yours to make, with your Kennion team and your own advisors." }] },
