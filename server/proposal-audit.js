@@ -9,8 +9,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prepareForModel } from "./intake.js";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
-/** The API refuses a PDF over this many pages outright. */
-const MAX_PDF_PAGES = 100;
+/** The API's page ceiling for the 1M-context model this audits with. */
+const MAX_PDF_PAGES = 600;
 
 const apiKey = () => process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";

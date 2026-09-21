@@ -11,8 +11,29 @@ import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { PDFDocument } from "pdf-lib";
 
-/** The API refuses a PDF over this many pages outright, whatever the model. */
-const MAX_PDF_PAGES = 100;
+/**
+ * Which model reads a proposal depends on how long it is.
+ *
+ * Haiku is the cheapest and reads a normal quote perfectly well, but its
+ * context holds 200K tokens and the API will not take a PDF over 100 pages
+ * from a model that size. A carrier's full book runs past both: 100 pages of
+ * rate grids weighed 255K tokens in practice. Those go to Sonnet, whose 1M
+ * context swallows the whole document in one reading - still a fraction of
+ * Opus, and no splitting to get the plans back in order.
+ */
+const PROPOSAL_MODEL = "claude-haiku-4-5";
+const LONG_PROPOSAL_MODEL = "claude-sonnet-5";
+
+/** Pages past which a quote is too dense for Haiku's context, measured above. */
+const HAIKU_MAX_PAGES = 30;
+
+/**
+ * Pages per reading on the long model. The API would take 600, but context
+ * runs out first: at the ~2.5K tokens a page of rate grids weighs, 600 pages
+ * is about 1.5M tokens against a 1M window. 300 leaves room for the output
+ * and for a document denser than the one this was measured on.
+ */
+const MAX_PDF_PAGES = 300;
 
 /** Cut a long PDF into readable parts, each at most MAX_PDF_PAGES. */
 async function splitPdf(buffer) {
@@ -113,9 +134,6 @@ function fakeReading(file) {
 }
 
 const MODEL = "claude-opus-5";
-
-// Proposal reading is pure structured extraction into a JSON schema — Haiku is sufficient and ~20x cheaper.
-const PROPOSAL_MODEL = "claude-haiku-4-5";
 
 const nullable = (t) => ({ anyOf: [{ type: t }, { type: "null" }] });
 
@@ -288,16 +306,22 @@ export async function analyzeProposal(file, roster) {
 
   const p = file.prepared;
 
-  // A quote longer than the API's page ceiling is read in parts and folded back
-  // into one result, rather than handed back to staff to split by hand.
+  // How long the quote is decides which model reads it, and whether it can be
+  // read in one go at all.
+  let model = PROPOSAL_MODEL;
   if (p.kind === "pdf") {
     const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
+    if (numpages > HAIKU_MAX_PAGES) model = LONG_PROPOSAL_MODEL;
+
+    // Past what one reading on the long model holds, the document is read in
+    // parts and folded back into one result rather than handed to staff to
+    // split by hand.
     if (numpages > MAX_PDF_PAGES) {
       const parts = await splitPdf(p.buffer);
       const readings = [];
       for (const part of parts) {
         readings.push(
-          await readOnce(client, [
+          await readOnce(client, model, [
             {
               type: "document",
               source: { type: "base64", media_type: "application/pdf", data: part.buffer.toString("base64") },
@@ -318,12 +342,6 @@ export async function analyzeProposal(file, roster) {
 
   const content = [];
   if (p.kind === "pdf") {
-    const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
-    if (numpages > MAX_PDF_PAGES) {
-      throw new Error(
-        `This proposal is ${numpages} pages - the model can only read a PDF up to ${MAX_PDF_PAGES} pages. Split it and upload the parts separately.`,
-      );
-    }
     content.push({
       type: "document",
       source: { type: "base64", media_type: "application/pdf", data: p.buffer.toString("base64") },
@@ -343,21 +361,23 @@ export async function analyzeProposal(file, roster) {
     });
   }
   content.push({ type: "text", text: ask() });
-  return readOnce(client, content);
+  return readOnce(client, model, content);
 }
 
 /** One reading: the model call, and the structured result out of it. */
-async function readOnce(client, content) {
+async function readOnce(client, model, content) {
   const params = {
-    model: PROPOSAL_MODEL,
+    model,
     // A carrier quote can list dozens of plans over many pages, and every one
     // of them is written out here: 16k of output truncated the long ones.
     max_tokens: 64000,
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    // Haiku doesn't support effort parameter; only Opus models do.
-    output_config: PROPOSAL_MODEL === "claude-haiku-4-5"
-      ? { format: jsonSchemaOutputFormat(SCHEMA) }
-      : { effort: "high", format: jsonSchemaOutputFormat(SCHEMA) },
+    // Haiku takes no effort setting; reading rate grids off scanned pages is
+    // the intelligence-sensitive part everywhere it is accepted.
+    output_config:
+      model === PROPOSAL_MODEL
+        ? { format: jsonSchemaOutputFormat(SCHEMA) }
+        : { effort: "high", format: jsonSchemaOutputFormat(SCHEMA) },
     messages: [{ role: "user", content }],
   };
 
