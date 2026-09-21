@@ -28,7 +28,7 @@ import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
-import { loadPlanDocumentFiles } from "./plan-documents.js";
+import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -361,8 +361,21 @@ async function loadPlanCatalogue() {
   console.log(`plan catalogue: ${designs.length} standard design(s) - ${Object.entries(per).map(([c, n]) => `${c} ${n}`).join(", ") || "none"}`);
 }
 
-/** The shipped SBC/SOB PDFs, by carrier: the actual documents behind each standard design in CATALOGUE_FILES above. */
-const PLAN_DOCUMENT_DIRS = [{ dir: path.join(__dirname, "data", "plan-docs", "angle-health-sbc-sob"), carrier: "Angle Health", planYear: 2027 }];
+/**
+ * The shipped SBC/SOB PDFs, by carrier: the actual documents behind each
+ * standard design in CATALOGUE_FILES above for Angle Health, and Gravie's
+ * SBC library - Gravie has no catalogue of its own (its designs come off
+ * each group's own proposal, not a shared workbook), so these are stored the
+ * same way but never gain a `documents` flag on a catalogue design the way
+ * Angle Health's do. Gravie's set was deduplicated once by year (2027
+ * preferred, 2026 kept only where no 2027 SBC exists for that plan) and
+ * renamed to carry no id token, so it reads with parseSimpleDocFilename
+ * rather than Angle Health's id-bearing parseDocFilename.
+ */
+const PLAN_DOCUMENT_DIRS = [
+  { dir: path.join(__dirname, "data", "plan-docs", "angle-health-sbc-sob"), carrier: "Angle Health", planYear: 2027 },
+  { dir: path.join(__dirname, "data", "plan-docs", "gravie-sbc"), carrier: "Gravie", planYear: 2027, parse: parseSimpleDocFilename },
+];
 const planDocKey = (carrier, planYear, planCode, docType) => `${carrier}|${planYear}|${catalogueKey(planCode)}|${docType}`;
 /** plan doc key -> metadata (no bytes): what loadPlanCatalogue checks to flag a design's documents. */
 let planDocuments = new Map();
