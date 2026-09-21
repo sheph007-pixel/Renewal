@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { C, h2, h3, panel, sectionHead } from "@/lib/ui";
+import { C, h3, panel } from "@/lib/ui";
 import CarrierMark from "@/views/CarrierMark";
 
 /** One piece of marketing material, as the server lists it - metadata only, the file is fetched separately when opened. */
@@ -65,10 +65,12 @@ function ResourceCard({ r }: { r: Resource }) {
 
 /**
  * Resources: marketing material from each Carrier/TPA Kennion works with -
- * broker decks, one-pagers, FAQs - grouped by vendor. Staff upload a file in
- * the admin and Claude files it under the right vendor immediately; this
- * page just reads what is on file, so it takes no group data and reads the
- * same for every group.
+ * broker decks, one-pagers, FAQs - grouped by vendor, alphabetically, cards
+ * alphabetical within a vendor too. Staff upload a file in the admin and
+ * Claude files it under the right vendor immediately; this page just reads
+ * what is on file, so it takes no group data and reads the same for every
+ * group. The title and one-line description are the shared page header
+ * (App.tsx) - nothing here repeats them.
  */
 export default function Resources() {
   const [resources, setResources] = useState<Resource[] | null>(null);
@@ -91,19 +93,12 @@ export default function Resources() {
 
   const groups = new Map<string, Resource[]>();
   for (const r of resources || []) groups.set(r.carrier, [...(groups.get(r.carrier) || []), r]);
+  for (const list of groups.values()) list.sort((a, b) => a.title.localeCompare(b.title));
   // Vendors with material first, alphabetically; "Other" (material about no one carrier) last.
   const carriers = [...groups.keys()].sort((a, b) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)));
 
   return (
     <div>
-      <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>Resources</h2>
-      </div>
-      <p style={{ maxWidth: 720, marginTop: -6, marginBottom: 20, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
-        Broker decks, one-page overviews and FAQs from the Carriers/TPAs Kennion works with - here to help you learn more
-        about a partner, not to replace the figures on your Medical Plans page.
-      </p>
-
       {error && <div style={{ ...panel, padding: "14px 18px", fontSize: 13.5, color: C.muted }}>Resources could not be loaded. Try again in a moment.</div>}
       {!error && resources == null && <div style={{ fontSize: 13.5, color: C.muted }}>Loading…</div>}
       {!error && resources != null && !resources.length && (
