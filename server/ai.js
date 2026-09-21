@@ -54,6 +54,9 @@ function fakeReading(file) {
 
 const MODEL = "claude-opus-5";
 
+// Proposal reading is pure structured extraction into a JSON schema — Haiku is sufficient and ~20x cheaper.
+const PROPOSAL_MODEL = "claude-haiku-4-5";
+
 const nullable = (t) => ({ anyOf: [{ type: t }, { type: "null" }] });
 
 const SCHEMA = {
@@ -248,7 +251,7 @@ export async function analyzeProposal(file, roster) {
   });
 
   const params = {
-    model: MODEL,
+    model: PROPOSAL_MODEL,
     // A carrier quote can list dozens of plans over many pages, and every one
     // of them is written out here: 16k of output truncated the long ones.
     max_tokens: 64000,
