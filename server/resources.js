@@ -12,7 +12,7 @@ const apiKey = () =>
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
 export const resourceReaderEnabled = () => !!(apiKey() || process.env.ANTHROPIC_AUTH_TOKEN || fakeAi());
 
-const MODEL = "claude-opus-5";
+const MODEL = "claude-haiku-4-5";
 
 const SCHEMA = {
   type: "object",
