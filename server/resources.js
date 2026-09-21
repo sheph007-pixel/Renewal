@@ -67,7 +67,10 @@ export async function categorizeResource(file) {
     model: MODEL,
     max_tokens: 1024,
     system: [{ type: "text", text: SYSTEM }],
-    output_config: { effort: "low", format: jsonSchemaOutputFormat(SCHEMA) },
+    // Haiku doesn't support effort parameter; only Opus models do.
+    output_config: MODEL === "claude-haiku-4-5"
+      ? { format: jsonSchemaOutputFormat(SCHEMA) }
+      : { effort: "low", format: jsonSchemaOutputFormat(SCHEMA) },
     messages: [{ role: "user", content }],
   };
   const response = await client.messages.stream(params).finalMessage();
