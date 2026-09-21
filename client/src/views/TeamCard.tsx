@@ -52,7 +52,7 @@ export default function TeamCard({ people, assistant, note }: Props) {
     <div className="noprint" style={{ ...panel, overflow: "hidden", borderColor: C.navy }}>
       <div style={{ padding: "14px 20px 13px", background: C.navy }}>
         <div style={{ ...kicker, color: C.teal }}>Your Kennion Team</div>
-        <div style={{ marginTop: 3, fontSize: 15.5, fontWeight: 600, color: C.onColor, letterSpacing: "-0.1px" }}>Here Throughout Your Renewal</div>
+        <div style={{ marginTop: 3, fontSize: 15.5, fontWeight: 600, color: C.onColor, letterSpacing: "-0.1px" }}>Here Every Step Of The Way</div>
       </div>
 
       {list.map((m, i) => (

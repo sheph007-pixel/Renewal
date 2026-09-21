@@ -592,7 +592,7 @@ export default function App() {
       >
         <div style={{ ...panel, padding: "26px 30px", maxWidth: 460 }}>
           <div style={{ fontSize: 17, fontWeight: 600, color: C.ink }}>
-            We couldn't load your renewal data
+            We couldn't load your group's data
           </div>
           <p style={{ fontSize: 13.5, lineHeight: 1.6, color: C.body }}>
             Please refresh the page. If it keeps happening, call Hunter Shepherd at 205-641-0469 or

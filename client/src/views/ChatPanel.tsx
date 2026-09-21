@@ -190,7 +190,7 @@ export default function ChatPanel({ threadId, page, onThread, suggestions = [], 
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <Mark size={compact ? 24 : 28} />
               <div style={{ fontSize: fs, lineHeight: 1.55, color: C.body, maxWidth: 560 }}>
-                {welcome || "Ask about your plans today, your options, what a contribution change would cost, or anything else about your renewal."}
+                {welcome || "Ask about your plans today, your options, what a contribution change would cost, or anything else about your benefits."}
               </div>
             </div>
             {suggestions.length > 0 && (

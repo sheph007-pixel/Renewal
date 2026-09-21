@@ -86,7 +86,7 @@ export default function ChatWidget({ page, assistantHref }: Props) {
               onThread={(id) => setThreadId(id)}
               compact
               autoFocus
-              welcome="Hi - I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your options, or your renewal."
+              welcome="Hi - I'm the BenSync Assistant, part of your Kennion team. Ask me anything about your plans, your options, or your benefits."
             />
           </div>
         </div>
