@@ -842,6 +842,8 @@ const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "S
 export const CIGNA_NETWORK = "Cigna";
 /** Cigna's public provider search: the lookup for every plan on a Cigna network, Gravie's and Angle Health's alike. */
 export const CIGNA_DIRECTORY = "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001";
+/** Gravie's own SBC library, covering every plan and network it quotes; the disclaimers page links here rather than picking one SBC to attach. */
+export const GRAVIE_SBC_URL = "https://www.gravie.com/sbc/";
 
 /** A network name as shown: any Cigna network - OAP, Open Access Plus, "Angle / Cigna PPO" - is "Cigna". */
 export function networkLabel(network: string | null | undefined): string | null {

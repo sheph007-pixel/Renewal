@@ -1,4 +1,4 @@
-import { ANGLE_HEALTH_NO_PLAN_CAP, PLAN_LIMIT_CARRIERS, RATE_DISCLAIMER, groupSizeNote, planLimitSummary, type Group } from "@/lib/model";
+import { ANGLE_HEALTH_NO_PLAN_CAP, CIGNA_DIRECTORY, GRAVIE_SBC_URL, PLAN_LIMIT_CARRIERS, RATE_DISCLAIMER, groupSizeNote, planLimitSummary, type Group } from "@/lib/model";
 import { C, h2, h3, panel } from "@/lib/ui";
 
 /**
@@ -7,8 +7,22 @@ import { C, h2, h3, panel } from "@/lib/ui";
  * at one size. Kennion is the broker; nothing here is legal, tax or coverage
  * advice. A Carrier/TPA's own terms are quoted as it wrote them.
  */
-type Block = { h?: string; p?: string; list?: string[] };
+/** Plain text, or text followed by one outbound link - "Network: Cigna OAP. [Cigna Provider Search]". */
+type TextWithLink = string | { text: string; linkLabel: string; linkUrl: string };
+type Block = { h?: string; p?: TextWithLink; list?: TextWithLink[] };
 type Section = { title: string; blocks: Block[] };
+
+function Text({ t }: { t: TextWithLink }) {
+  if (typeof t === "string") return <>{t}</>;
+  return (
+    <>
+      {t.text}{" "}
+      <a href={t.linkUrl} target="_blank" rel="noreferrer" style={{ color: C.blue, fontWeight: 600, whiteSpace: "nowrap" }}>
+        {t.linkLabel}
+      </a>
+    </>
+  );
+}
 
 const GROUP_SIZE_FALLBACK =
   "Group size is based on the enrollment data on file for your group; tell us if your full-time equivalent count differs. At 50 or more full-time equivalent employees, the Affordable Care Act's employer mandate applies; under 50 it does not. The 50% starting point on the Medical Plans page is the Carrier/TPA's minimum contribution requirement, not an ACA affordability determination. The AI Assistant and your Kennion team can help you work through what applies before you decide.";
@@ -114,6 +128,31 @@ const OPTIMYL: Section = {
   ],
 };
 
+const GRAVIE: Section = {
+  title: "Gravie Quotes",
+  blocks: [
+    { p: "Gravie's quotes carry the following terms, as Gravie states them." },
+    {
+      h: "Quote Details",
+      list: [
+        "Effective date: January 1, 2027.",
+        "Contract terms: Kennion's standard 12/24 (12 months incurred claims, 24 months run-out), with a 50% surplus return.",
+        "Broker compensation: $35 PEPM.",
+        { text: "Network: Cigna OAP.", linkLabel: "Cigna Provider Search", linkUrl: CIGNA_DIRECTORY },
+        "Pharmacy benefit manager (PBM): ESI (Express Scripts).",
+        "Every plan offered includes Teladoc, Sword Health and Gravie Pay.",
+      ],
+    },
+    {
+      h: "Contingencies",
+      p: "Rates and plan designs are contingent on enrolled participation; Gravie may revisit them if actual participation differs from the quoted census by more than 10%.",
+    },
+    {
+      p: { text: "Additional plan SBCs, for every network Gravie quotes, are on file with Gravie directly; be sure to open the one matching this group's network.", linkLabel: "View Gravie's SBCs", linkUrl: GRAVIE_SBC_URL },
+    },
+  ],
+};
+
 export default function Disclaimers({ g }: { g: Group }) {
   const sections: Section[] = [
     { title: "Rates And Benefits", blocks: [{ p: RATE_DISCLAIMER }] },
@@ -131,6 +170,7 @@ export default function Disclaimers({ g }: { g: Group }) {
     { title: "The AI Assistant And AI Picks", blocks: [{ p: "The AI Assistant and AI Picks work from the quotes, enrollment and census on file for your group. They can make mistakes. Their answers, picks and reasons are for discussion with your Kennion team, not advice, and nothing they say is an offer, a guarantee of coverage, or a legal, tax or compliance determination. Verify important information before you act on it." }] },
     ANGLE,
     OPTIMYL,
+    GRAVIE,
     { title: "Kennion Benefit Advisors", blocks: [{ p: "Kennion Benefit Advisors is your broker. BenSync is the platform Kennion built to present the market's options for your renewal; coverage is issued by the Carrier/TPA you enroll with, on that Carrier/TPA's terms. Your Kennion account manager is the person to call with any question about what is shown here." }] },
   ];
   const section = { ...panel, padding: "18px 22px", marginBottom: 14 } as const;
@@ -143,11 +183,17 @@ export default function Disclaimers({ g }: { g: Group }) {
           {s.blocks.map((b, i) => (
             <div key={i}>
               {b.h && <h3 style={{ ...h3, marginTop: 12, fontSize: 13.5 }}>{b.h}</h3>}
-              {b.p && <p style={{ ...text, margin: "6px 0 0" }}>{b.p}</p>}
+              {b.p && (
+                <p style={{ ...text, margin: "6px 0 0" }}>
+                  <Text t={b.p} />
+                </p>
+              )}
               {b.list && (
                 <ul style={{ ...text, margin: "6px 0 0", paddingLeft: 20 }}>
                   {b.list.map((item) => (
-                    <li key={item}>{item}</li>
+                    <li key={typeof item === "string" ? item : item.text}>
+                      <Text t={item} />
+                    </li>
                   ))}
                 </ul>
               )}
