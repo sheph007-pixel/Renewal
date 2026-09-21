@@ -35,7 +35,7 @@ interface Props {
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-const STEP_LABELS = ["Carrier", "Medical Plans", "Dental", "Vision", "Supplemental", "Employer Life", "Confirm & Sign"];
+const STEP_LABELS = ["Carrier/TPA", "Medical Plans", "Dental", "Vision", "Supplemental", "Employer Life", "Confirm & Sign"];
 const letters = "ABCDEFGH";
 const DENTAL_VISION_MAX = 3;
 
