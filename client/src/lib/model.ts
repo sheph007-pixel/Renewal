@@ -894,6 +894,9 @@ export function pbmOf(carrier: string | null | undefined): { name: string; url?:
   const c = String(carrier || "");
   if (/gravie/i.test(c)) return { name: "Express Scripts", url: "https://www.express-scripts.com/frontend/open-enrollment/gravie" };
   if (/optimyl/i.test(c)) return { name: "CVS Caremark", url: "https://app.kennion.com/assets/optimyl/cvs-caremark-value-formulary.pdf" };
+  // Angle Health's own drug list, not a named third-party PBM - nothing on its
+  // SBCs names one, so the card names the plan rather than a vendor.
+  if (/angle/i.test(c)) return { name: "Angle Health Formulary", url: "https://formulary.anglehealth.com/?hsCtaAttrib=195574382245" };
   return null;
 }
 

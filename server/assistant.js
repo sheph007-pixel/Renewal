@@ -45,6 +45,7 @@ export const DEFAULT_PLAYBOOK = {
   ],
   facts: [
     item("Angle Health has confirmed it places no limit on how many plans a group may offer its employees; a group may select as many Angle Health plans as fit its needs. Other Carriers/TPAs do cap the number of plans by enrolled headcount - see the figures on file for the group before stating a limit."),
+    item("Every plan card offers two lookups next to its Network and Pharmacy (PBM) rows: a provider directory to check a doctor, and a Formulary link for the drug list, standardized the same way for every carrier. Angle Health and Gravie plans run on the Cigna network; UnitedHealthcare plans run on the Choice Plus network. Angle Health links to its own formulary; Gravie's PBM, Express Scripts, has a public formulary; Optimyl's PBM, CVS Caremark, runs a closed formulary specific to the program with no public page. Point a client to the plan card's own links rather than reciting a URL from memory."),
   ],
   faq: [],
 };
