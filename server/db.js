@@ -163,6 +163,22 @@ CREATE TABLE IF NOT EXISTS kennion.group_signups (
   submitted_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS group_signups_group_idx ON kennion.group_signups (group_name);
+-- The guided Sign Up wizard's full election, on the same row shape as the
+-- older plan-shortlist submission above (kind tells them apart): the medical
+-- carrier and plans, the dental and vision plan chosen (or waived), the
+-- employer-paid life tier chosen (or declined), and who signed for the
+-- group. A "renewal" row is what marks the group Renewed; a "shortlist" row
+-- (kind's default) is the earlier, lighter "send me a shortlist" flow.
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'shortlist' CHECK (kind IN ('shortlist','renewal'));
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS carrier text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS dental text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS vision text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS employer_life text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_name text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_title text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_email text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_phone text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_ip text;
 
 -- A support ticket a client sends from the portal; emailed to Kennion and
 -- kept here so nothing is lost if the email does not go out.
@@ -592,6 +608,17 @@ export function createDb(url) {
       return rows[0];
     },
 
+    /** The guided wizard's full election: what marks a group Renewed. */
+    async addRenewalElection(groupName, e) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.group_signups (group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, signer_ip)
+         VALUES ($1, $2::jsonb, $3, 'renewal', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING id, group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, submitted_at`,
+        [groupName, JSON.stringify(e.plans || []), e.note || null, e.carrier || null, e.dental || null, e.vision || null, e.employerLife || null, e.signerName || null, e.signerTitle || null, e.signerEmail || null, e.signerPhone || null, e.signerIp || null],
+      );
+      return rows[0];
+    },
+
     async addSupportTicket(t) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.support_tickets (group_name, priority, requester, subject, description, attachment)
@@ -611,7 +638,7 @@ export function createDb(url) {
     /** Every submission a group has made, newest first. */
     async listSignups(groupName) {
       const { rows } = await pool.query(
-        `SELECT id, group_name, plans, note, submitted_at FROM kennion.group_signups
+        `SELECT id, group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, submitted_at FROM kennion.group_signups
          WHERE group_name = $1 ORDER BY submitted_at DESC, id DESC`,
         [groupName],
       );

@@ -127,6 +127,27 @@ export const SUPPLEMENTAL_SECTIONS: SupplementalSection[] = [
   },
 ];
 
+/**
+ * 100% employer-paid life insurance, Guardian: a flat per-employee monthly
+ * rate by benefit amount, no dependent tiers (this is the employer's own
+ * cost, not an employee election). Offered on Sign Up alongside the
+ * voluntary lines above, which are the employee's own cost and need no
+ * employer election.
+ */
+export interface EmployerLifeOption {
+  key: string;
+  label: string;
+  amount: number | null;
+  pepm: number | null;
+}
+export const EMPLOYER_PAID_LIFE: EmployerLifeOption[] = [
+  { key: "10000", label: "$10,000 Life", amount: 10000, pepm: 2.4 },
+  { key: "25000", label: "$25,000 Life", amount: 25000, pepm: 6.0 },
+  { key: "50000", label: "$50,000 Life", amount: 50000, pepm: 12.0 },
+  { key: "100000", label: "$100,000 Life", amount: 100000, pepm: 24.0 },
+  { key: "none", label: "I don't want Employer Paid Life", amount: null, pepm: null },
+];
+
 /** The carrier's own footnote - keep verbatim. */
 export const SUPPLEMENTAL_FOOTNOTE =
   "Rates shown for: Vol. Life $100K EE / $50K Spouse / $10K Child(ren). Critical Illness $10K EE / $5K Spouse / $2.5K Child(ren). Vol. Disability $500 weekly benefit (Vol. Disability is not available for all groups). Additional rates for age 60+ available in platform.";

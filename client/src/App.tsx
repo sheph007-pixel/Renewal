@@ -8,6 +8,7 @@ import {
   planRows,
   type KennionData,
   type Overrides,
+  type RenewalElectionFields,
   type TierKey,
 } from "@/lib/model";
 import { BenSync, C, h1, panel } from "@/lib/ui";
@@ -142,7 +143,6 @@ export default function App() {
   const [durable, setDurable] = useState(false);
 
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [note, setNote] = useState("");
   const [sent, setSent] = useState(false);
   const [signupBusy, setSignupBusy] = useState(false);
   const [signupError, setSignupError] = useState("");
@@ -545,38 +545,31 @@ export default function App() {
   };
 
   /**
-   * Send the shortlist and note to Kennion. This used to just flip a flag in
-   * the browser; it now actually reaches the server, which is what makes
-   * Sign Up worth its own page rather than a promise at the bottom of one.
+   * The guided Sign Up wizard's final step: every election, signed. Reaches
+   * the server, which marks the group Renewed and emails Kennion - there is
+   * no pretend-submit here, this is what "wow, that was easy" has to earn.
    */
-  const submitSignup = async () => {
+  const submitSignup = async (fields: RenewalElectionFields) => {
     // Each plan goes over with its option ID in front (UH3 · P4000i8021B),
     // the handle Kennion and the client both use for it.
     const known = data && g ? marketPlans(data, g) : [];
-    const plans = Object.keys(selected)
-      .filter((p) => selected[p])
-      .map((name) => {
-        const id = known.find((mp) => mp.plan === name)?.optionId;
-        return id ? `${id} · ${name}` : name;
-      });
-    if (!plans.length || signupBusy) return;
+    const plans = fields.plans.map((name) => {
+      const id = known.find((mp) => mp.plan === name)?.optionId;
+      return id ? `${id} · ${name}` : name;
+    });
+    if (signupBusy) return;
     setSignupBusy(true);
     setSignupError("");
     try {
-      const r = await fetch("/api/group/signup", {
+      const r = await fetch("/api/group/renew", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, plans, note: note.trim() }),
+        body: JSON.stringify({ code, ...fields, plans }),
       });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        throw new Error(body.error || "Could not send that. Try again.");
-      }
-      const p = await r.json();
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(p.error || "Could not send that. Try again.");
       setSent(true);
-      setData((d) =>
-        d ? ({ ...d, signup: { plans, note: note.trim() || null, submittedAt: p.submittedAt } } as KennionData) : d,
-      );
+      setData((d) => (d ? ({ ...d, signup: p.signup } as KennionData) : d));
     } catch (e) {
       setSignupError((e as Error).message || "Could not send that. Try again.");
     } finally {
@@ -993,7 +986,6 @@ export default function App() {
                 data={data}
                 g={g}
                 selected={selected}
-                note={note}
                 sent={sent}
                 submitting={signupBusy}
                 submitError={signupError}
@@ -1001,11 +993,7 @@ export default function App() {
                 optionsHref={hrefFor("options")}
                 manager={manager}
                 onToggleSelected={toggleSelected}
-                onNote={(v) => {
-                  setNote(v);
-                  setSent(false);
-                }}
-                onSubmit={() => void submitSignup()}
+                onSubmit={(fields) => void submitSignup(fields)}
               />
             )}
 

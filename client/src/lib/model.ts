@@ -366,11 +366,32 @@ export interface KennionData {
   signup?: GroupSignup | null;
 }
 
-/** What a group most recently submitted on its own Sign Up page. */
+/** What the guided Sign Up wizard posts once every step is answered and signed. */
+export interface RenewalElectionFields {
+  plans: string[];
+  dental: string;
+  vision: string;
+  employerLife: string;
+  signerName: string;
+  signerTitle: string;
+  signerEmail: string;
+  signerPhone: string;
+  note: string;
+  attest: boolean;
+}
+
+/** What a group most recently submitted on its own Sign Up page: a plain shortlist send, or the guided wizard's full renewal election. */
 export interface GroupSignup {
   plans: string[];
   note: string | null;
   submittedAt: string;
+  kind: "shortlist" | "renewal";
+  carrier: string | null;
+  dental: string | null;
+  vision: string | null;
+  employerLife: string | null;
+  signerName: string | null;
+  signerTitle: string | null;
 }
 
 /** The Kennion contact shown on a client's pages. */

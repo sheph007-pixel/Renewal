@@ -658,6 +658,23 @@ async function latestSignup(name) {
   return signups.find((s) => s.group_name === name) || null;
 }
 
+/** A signup row as the client reads it - a plain shortlist send, or the guided wizard's full renewal election. */
+function shapeSignup(signup) {
+  if (!signup) return null;
+  return {
+    plans: signup.plans,
+    note: signup.note,
+    submittedAt: signup.submitted_at,
+    kind: signup.kind === "renewal" ? "renewal" : "shortlist",
+    carrier: signup.carrier || null,
+    dental: signup.dental || null,
+    vision: signup.vision || null,
+    employerLife: signup.employer_life || null,
+    signerName: signup.signer_name || null,
+    signerTitle: signup.signer_title || null,
+  };
+}
+
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toLowerCase();
 
 /**
@@ -1218,7 +1235,7 @@ app.post("/api/signin", async (req, res) => {
     broker: brokerContact(),
     // The group's most recent submission, if it has ever sent one, so the
     // Sign Up page can say so instead of showing a blank form again.
-    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+    signup: shapeSignup(signup),
   });
 });
 
@@ -1336,6 +1353,49 @@ async function sendSupportEmail(t, g) {
     // delivers to the account owner: the ticket reaches Hunter either way.
     if (!/not verified/i.test(e.message)) throw e;
     console.error("support email: kennion.com is not verified in Resend; sending from onboarding@resend.dev to", SUPPORT_TO[0]);
+    await send({ ...body, from: "BenSync Support <onboarding@resend.dev>", to: [SUPPORT_TO[0]] });
+  }
+}
+
+/**
+ * The guided Sign Up wizard's completed election, emailed to Kennion the
+ * moment a group renews - same Resend path and recipients as a support
+ * ticket, so the whole team sees it land without anyone checking a screen.
+ */
+async function sendRenewalEmail(e, g) {
+  if (!RESEND_KEY) throw new Error("no Resend key on the service");
+  const lines = [
+    ["Group", g.name],
+    ["Carrier/TPA", e.carrier || "-"],
+    ["Medical plan(s)", e.plans.join(", ") || "-"],
+    ["Dental", e.dental || "-"],
+    ["Vision", e.vision || "-"],
+    ["Employer Paid Life", e.employerLife || "-"],
+    ["Signed by", `${e.signerName}${e.signerTitle ? `, ${e.signerTitle}` : ""}`],
+    ["Signer email", e.signerEmail || "-"],
+    ["Signer phone", e.signerPhone || "-"],
+  ];
+  const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
+    <h2 style="margin:0 0 12px;font-size:17px">${escapeHtml(g.name)} has renewed for 2027</h2>
+    <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
+    ${e.note ? `<div style="font-weight:600;margin-bottom:4px">Note from the group</div><div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(e.note)}</div>` : ""}
+    <p style="margin-top:18px;color:#888;font-size:12px">Submitted from the BenSync client portal · ${new Date(e.submittedAt).toLocaleString("en-US")}</p>
+  </div>`;
+  const text = `${g.name} has renewed for 2027\n\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}${e.note ? `\n\nNote from the group:\n${e.note}` : ""}`;
+  const body = { from: SUPPORT_FROM, to: SUPPORT_TO, reply_to: e.signerEmail || undefined, subject: `${g.name} has renewed for 2027`, html, text };
+  const send = async (b) => {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(b),
+    });
+    const t = await r.text();
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${t.slice(0, 300)}`);
+  };
+  try {
+    await send(body);
+  } catch (e2) {
+    if (!/not verified/i.test(e2.message)) throw e2;
     await send({ ...body, from: "BenSync Support <onboarding@resend.dev>", to: [SUPPORT_TO[0]] });
   }
 }
@@ -1486,6 +1546,110 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
 
   console.log(`sign-up received: ${g.name} - ${plans.length} plan(s)`);
   res.json({ ok: true, submittedAt: record.submitted_at });
+});
+
+/**
+ * The guided Sign Up wizard's full election: medical carrier/plans, dental,
+ * vision, the employer-paid life tier, and who signed for the group. Marks
+ * the group Renewed outright (a shortlist send only ever reaches "sent" -
+ * this is a completed election with a name and email attached to it) and
+ * emails Kennion the same way a support ticket does.
+ */
+app.post("/api/group/renew", express.json({ limit: "16kb" }), async (req, res) => {
+  const body = req.body || {};
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
+  const { g, guessed } = groupFromRequest(req);
+  if (!g) {
+    if (!guessed) return res.status(401).json({ error: "no session" });
+    noteFail(caller);
+    return res.status(404).json({ error: "no such group" });
+  }
+  clearFails(caller);
+
+  const plans = Array.isArray(body.plans)
+    ? [...new Set(body.plans.map((p) => String(p || "").trim()).filter(Boolean))].slice(0, 50).map((p) => p.slice(0, 200))
+    : [];
+  if (!plans.length) return res.status(400).json({ error: "Select at least one medical plan." });
+  const mixed = signupMix(g, plans);
+  if (mixed) return res.status(400).json({ error: `One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This selection mixes ${mixed.join(" and ")}.` });
+  const [basis] = planBases(g, plans);
+  const tier = basis && planLimitFor(basis[0], g.enrolled);
+  if (tier) {
+    const cap = tier.maxWithUnderwriting ?? tier.maxPlans;
+    if (plans.length > cap) {
+      const uw = tier.maxWithUnderwriting ? ", even with underwriting approval" : "";
+      return res.status(400).json({ error: `${basis[0]} allows up to ${cap} plan${cap === 1 ? "" : "s"} for a group this size (${g.enrolled} enrolled)${uw}. This selection has ${plans.length} - remove ${plans.length - cap}.` });
+    }
+  }
+  const str = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+  const dental = str(body.dental, 200);
+  const vision = str(body.vision, 200);
+  const employerLife = str(body.employerLife, 100);
+  const signerName = str(body.signerName, 200);
+  const signerTitle = str(body.signerTitle, 200);
+  const signerEmail = str(body.signerEmail, 200);
+  const signerPhone = str(body.signerPhone, 60);
+  const note = str(body.note, 4000);
+  if (!dental) return res.status(400).json({ error: "Choose a dental option, or waive it." });
+  if (!vision) return res.status(400).json({ error: "Choose a vision option, or waive it." });
+  if (!employerLife) return res.status(400).json({ error: "Choose an Employer Paid Life option, or decline it." });
+  if (!signerName) return res.status(400).json({ error: "Enter your name." });
+  if (!signerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (!body.attest) return res.status(400).json({ error: "Confirm you're authorized to make these elections for the group." });
+
+  const carrier = basis ? basis[0] : null;
+  const election = { plans, note, carrier, dental, vision, employerLife, signerName, signerTitle, signerEmail, signerPhone, signerIp: caller };
+
+  let record;
+  try {
+    if (db) {
+      record = await db.addRenewalElection(g.name, election);
+    } else {
+      record = {
+        id: signups.length + 1,
+        group_name: g.name,
+        kind: "renewal",
+        plans,
+        note,
+        carrier,
+        dental,
+        vision,
+        employer_life: employerLife,
+        signer_name: signerName,
+        signer_title: signerTitle,
+        signer_email: signerEmail,
+        signer_phone: signerPhone,
+        submitted_at: new Date().toISOString(),
+      };
+      signups = [record, ...signups];
+      saveSignups();
+    }
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+
+  // A renewal election marks the group Renewed outright, whatever it was before.
+  meta[g.name] = { ...(meta[g.name] || {}), renewal: "renewed" };
+  try {
+    if (db) await db.setMeta(g.name, "renewal", "renewed", `${g.name} (client sign-up)`);
+  } catch (e) {
+    console.error("could not record renewal status from sign-up:", e.message);
+  }
+  rebuild();
+
+  let emailed = true;
+  try {
+    await sendRenewalEmail({ ...election, submittedAt: record.submitted_at }, g);
+  } catch (e) {
+    emailed = false;
+    console.error(`renewal election for ${g.name} stored but not emailed:`, e.message);
+  }
+
+  console.log(`renewal election received: ${g.name} - ${carrier || "?"} - ${plans.length} plan(s), dental: ${dental}, vision: ${vision}, employer life: ${employerLife}, signed by ${signerName}${emailed ? "" : " (email failed)"}`);
+  res.json({ ok: true, emailed, signup: shapeSignup(record) });
 });
 
 /**
@@ -1714,7 +1878,7 @@ async function assistantData(g) {
     funding: fundingSnapshot(g.name),
     manager: managerContact(g.manager),
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
-    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+    signup: shapeSignup(signup),
     renewal: g.renewal,
     planDesigns: data.planDesigns,
     census: censusProfile(g),
