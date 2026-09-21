@@ -29,6 +29,7 @@ import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./i
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
 import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
+import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -3684,6 +3685,139 @@ app.post("/api/admin/plan-documents/:slug/:planSlug/:docType", requireStaff, exp
   res.json({ ok: true, carrier, planCode, docType });
 });
 
+/**
+ * Marketing material for the Resources page - broker decks, one-pagers,
+ * FAQs - not a plan document or a proposal. Staff upload a file; Claude
+ * reads it and files it under a vendor immediately, no review step, so it
+ * is live on the shared Resources page (the same page every group sees) as
+ * soon as it is read. Staff can still fix a wrong guess, or take it down.
+ */
+const memResources = [];
+let memResourceNextId = 1;
+const resourceStore = {
+  async list() {
+    if (db) return db.listMarketingResources();
+    return memResources.map(({ data: _d, ...r }) => r);
+  },
+  async get(id) {
+    if (db) return db.getMarketingResource(id);
+    return memResources.find((r) => r.id === id) || null;
+  },
+  async add({ carrier, title, summary, filename, mime, size, data, uploadedBy }) {
+    if (db) return db.addMarketingResource({ carrier, title, summary, filename, mime, size, data, uploadedBy });
+    const id = memResourceNextId++;
+    const uploadedAt = new Date().toISOString();
+    memResources.unshift({ id, carrier, title, summary, filename, mime, size, data, uploadedBy, uploadedAt, updatedBy: null, updatedAt: uploadedAt });
+    return { id, uploadedAt };
+  },
+  async update(id, fields, by) {
+    if (db) return db.updateMarketingResource(id, fields, by);
+    const r = memResources.find((x) => x.id === id);
+    if (!r) return false;
+    if (fields.carrier) r.carrier = fields.carrier;
+    if (fields.title) r.title = fields.title;
+    r.updatedBy = by || null;
+    r.updatedAt = new Date().toISOString();
+    return true;
+  },
+  async remove(id) {
+    if (db) return db.deleteMarketingResource(id);
+    const i = memResources.findIndex((x) => x.id === id);
+    if (i === -1) return false;
+    memResources.splice(i, 1);
+    return true;
+  },
+};
+
+/**
+ * Marketing material shipped with the code, read once by hand rather than
+ * through the AI upload route (there is no admin session to upload through
+ * at boot). Seeded into kennion.marketing_resources where a resource of
+ * that carrier and filename is not already on file - staff editing a title,
+ * moving a resource to another vendor, or removing one outright all stick,
+ * since the seed only ever fills a gap, never overwrites.
+ */
+const RESOURCE_SEED = [
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Pay_Member_FAQ.pdf", title: "Gravie Pay Member FAQ", summary: "How Gravie Pay lets a member split a medical expense into no-interest monthly payments through Paytient." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Mobile_App_Flyer.pdf", title: "The Gravie Mobile App", summary: "What members and their dependents can do in the Gravie app to find and manage care." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Level_Funded_Health_Plans_Flyer.pdf", title: "Gravie Level-Funded Health Plans", summary: "Predictable costs, flexible plan designs and national coverage on Gravie's level-funded plans." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Member_Testimonials.pdf", title: "What Members Love About Gravie", summary: "Member testimonials and satisfaction highlights from Gravie's health plans." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Provider_Guidance_Cigna.pdf", title: "Talking To Providers About Your Gravie Plan", summary: "How to explain a Gravie/Cigna plan to a provider's office, and where to get help if a provider has questions." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Level_Funded_Broker_Ebook.pdf", title: "Level-Funded eBook", summary: "Gravie's broker-facing overview of level-funded health plans and its approach to small and midsize business benefits." },
+  { carrier: "Gravie", dir: "gravie", file: "Who_Is_Gravie_Overview.pdf", title: "Who Is Gravie?", summary: "An overview of Gravie's approach to group health plans and ICHRAs for small and midsize employers." },
+];
+async function loadMarketingResources() {
+  const have = new Set((await resourceStore.list()).map((r) => `${r.carrier}|${r.filename}`));
+  let seeded = 0;
+  for (const r of RESOURCE_SEED) {
+    if (have.has(`${r.carrier}|${r.file}`)) continue;
+    let data;
+    try {
+      data = fs.readFileSync(path.join(__dirname, "data", "resources", r.dir, r.file));
+    } catch (e) {
+      console.error(`resource seed: ${r.file}:`, e.message);
+      continue;
+    }
+    await resourceStore.add({ carrier: r.carrier, title: r.title, summary: r.summary || null, filename: r.file, mime: "application/pdf", size: data.length, data, uploadedBy: "system" });
+    seeded++;
+  }
+  if (seeded) console.log(`resources: seeded ${seeded} marketing resource(s)`);
+}
+
+/** Every resource on file, metadata only - the Resources page groups these by carrier itself. Public: this page is the same for every group, no session needed. */
+app.get("/api/resources", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.json({ resources: await resourceStore.list() });
+});
+
+/** One resource's actual file. */
+app.get("/api/resources/:id/file", async (req, res) => {
+  const id = Number(req.params.id);
+  const r = id && (await resourceStore.get(id));
+  if (!r) return res.status(404).json({ error: "No such resource." });
+  res.setHeader("Content-Type", r.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${String(r.filename || "resource").replace(/[\r\n"]/g, "")}"`);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(r.data);
+});
+
+/** Staff uploads one piece of marketing material; Claude reads it and files it under a vendor immediately. */
+app.post("/api/admin/resources", requireStaff, express.raw({ type: () => true, limit: "20mb" }), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const filename = String(req.query.filename || "resource").slice(0, 200);
+  const mime = String(req.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  try {
+    const prepared = await prepareForModel({ buffer: req.body, mime, filename });
+    const read = await categorizeResource({ filename, prepared });
+    const carrier = CARRIERS.find((c) => c.toLowerCase() === String(read.carrier || "").toLowerCase()) || "Other";
+    const title = String(read.title || filename).slice(0, 200);
+    const summary = read.summary ? String(read.summary).slice(0, 400) : null;
+    const { id, uploadedAt } = await resourceStore.add({ carrier, title, summary, filename, mime, size: req.body.length, data: req.body, uploadedBy: req.staffEmail || null });
+    console.log(`resource ${id}: "${title}" filed under ${carrier} by ${req.staffEmail || "staff"}`);
+    res.json({ id, carrier, title, summary, filename, mime, size: req.body.length, uploadedAt });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/** Staff corrects a wrong AI guess: carrier and/or title. The file itself is not replaceable here - delete and re-upload for that. */
+app.patch("/api/admin/resources/:id", requireStaff, express.json({ limit: "8kb" }), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(404).json({ error: "No such resource." });
+  const carrier = req.body && typeof req.body.carrier === "string" ? req.body.carrier.trim().slice(0, 80) : null;
+  const title = req.body && typeof req.body.title === "string" ? req.body.title.trim().slice(0, 200) : null;
+  if (!carrier && !title) return res.status(400).json({ error: "Nothing to change." });
+  const ok = await resourceStore.update(id, { carrier, title }, req.staffEmail || null);
+  if (!ok) return res.status(404).json({ error: "No such resource." });
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/resources/:id", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id || !(await resourceStore.remove(id))) return res.status(404).json({ error: "No such resource." });
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });
@@ -5238,6 +5372,7 @@ async function boot() {
   await loadPlanDocuments();
   await loadPlanCatalogue();
   await loadCarrierPlanLimits();
+  await loadMarketingResources();
   await proposalsChanged();
   await refreshAudit();
   // Gravie workbooks already on file, re-read with the current parser and

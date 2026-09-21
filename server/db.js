@@ -326,6 +326,27 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_logos (
   updated_by   text
 );
 
+-- Marketing material for the Resources page: broker decks, one-pagers, FAQs
+-- - anything a vendor sends that is not a plan document. Staff upload a file
+-- and Claude reads it to say which vendor it is for and give it a title; it
+-- goes live immediately under that vendor's section, the same page every
+-- group sees. Staff can still fix a wrong guess (updated_by then reads who).
+CREATE TABLE IF NOT EXISTS kennion.marketing_resources (
+  id            bigserial PRIMARY KEY,
+  carrier       text NOT NULL,
+  title         text NOT NULL,
+  summary       text,
+  filename      text NOT NULL,
+  mime          text NOT NULL,
+  size          integer NOT NULL,
+  data          bytea NOT NULL,
+  uploaded_by   text,
+  uploaded_at   timestamptz NOT NULL DEFAULT now(),
+  updated_by    text,
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS marketing_resources_carrier_idx ON kennion.marketing_resources (carrier);
+
 CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   group_name   text NOT NULL,
   plan         text NOT NULL,
@@ -1302,6 +1323,40 @@ export function createDb(url) {
     },
     async deleteCarrierLogo(carrier) {
       const { rowCount } = await pool.query("DELETE FROM kennion.carrier_logos WHERE carrier = $1", [carrier]);
+      return rowCount > 0;
+    },
+
+    /** Every marketing resource, metadata only - no bytes - newest first for the admin list. */
+    async listMarketingResources() {
+      const { rows } = await pool.query(
+        "SELECT id, carrier, title, summary, filename, mime, size, uploaded_by, uploaded_at, updated_by, updated_at FROM kennion.marketing_resources ORDER BY uploaded_at DESC",
+      );
+      return rows.map((r) => ({ id: r.id, carrier: r.carrier, title: r.title, summary: r.summary, filename: r.filename, mime: r.mime, size: r.size, uploadedBy: r.uploaded_by, uploadedAt: r.uploaded_at, updatedBy: r.updated_by, updatedAt: r.updated_at }));
+    },
+    /** One resource with its bytes, or null. */
+    async getMarketingResource(id) {
+      const { rows } = await pool.query("SELECT id, carrier, title, filename, mime, data FROM kennion.marketing_resources WHERE id = $1", [id]);
+      const r = rows[0];
+      return r ? { id: r.id, carrier: r.carrier, title: r.title, filename: r.filename, mime: r.mime, data: r.data } : null;
+    },
+    async addMarketingResource({ carrier, title, summary, filename, mime, size, data, uploadedBy }) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.marketing_resources (carrier, title, summary, filename, mime, size, data, uploaded_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, uploaded_at`,
+        [carrier, title, summary || null, filename, mime, size, data, uploadedBy || null],
+      );
+      return { id: rows[0].id, uploadedAt: rows[0].uploaded_at };
+    },
+    /** Staff correcting a wrong AI guess: carrier and/or title, never the file itself - re-upload for that. */
+    async updateMarketingResource(id, { carrier, title }, by) {
+      const { rowCount } = await pool.query(
+        `UPDATE kennion.marketing_resources SET carrier = COALESCE($2, carrier), title = COALESCE($3, title), updated_at = now(), updated_by = $4 WHERE id = $1`,
+        [id, carrier || null, title || null, by || null],
+      );
+      return rowCount > 0;
+    },
+    async deleteMarketingResource(id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.marketing_resources WHERE id = $1", [id]);
       return rowCount > 0;
     },
 

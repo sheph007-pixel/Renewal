@@ -13,6 +13,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /:slug/current       …Your 2026 Medical Plans
  *   /:slug/options       …New 2027 Medical Options
  *   /:slug/supplemental  …Supplemental Package
+ *   /:slug/resources     …Resources (vendor marketing material, one page for every group)
  *   /:slug/disclaimers   …Disclaimers (the full text behind every "View Disclaimers" link)
  *   /:slug/census        …Census (who is enrolled: the link behind every "N enrolled")
  *   /:slug/signup        …Sign Up
@@ -28,6 +29,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /admin/import        Rate Administration - Import
  *   /admin/assistant     Rate Administration - Assistant (conversations, playbook)
  *   /admin/data          Rate Administration - Data Check (every group's figures, checked)
+ *   /admin/resources     Rate Administration - Resources (upload vendor marketing material)
  *
  * The slug in a group address is the company and its plan-year code - say
  * `johnson-storage-moving-jsmh2027` - so the address says whose page it is.
@@ -45,12 +47,12 @@ export interface Route {
 }
 
 /** The pages a signed-in group has, in the order the side navigation lists them. */
-export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemental" | "signup" | "disclaimers" | "census";
+export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemental" | "resources" | "signup" | "disclaimers" | "census";
 
 export type Page =
   | { kind: "signin"; staff: boolean }
   | { kind: "group"; tab: GroupTab; token?: string; slug?: string; thread?: number }
-  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data"; group: string | null }
+  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources"; group: string | null }
   | { kind: "unknown" };
 
 export const PATHS = {
@@ -64,13 +66,14 @@ export const PATHS = {
   import: "/admin/import",
   assistantAdmin: "/admin/assistant",
   data: "/admin/data",
+  resourcesAdmin: "/admin/resources",
 } as const;
 
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
 
 /** First path segments that are pages of their own, never a group's slug. */
 const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz"]);
-const TABS = "assistant|changes|current|options|supplemental|signup|disclaimers|census";
+const TABS = "assistant|changes|current|options|supplemental|resources|signup|disclaimers|census";
 /** The Assistant page may name one conversation: `/:slug/assistant/:id`. */
 const TAB_TAIL = `(?:\\/(${TABS})(?:\\/(\\d{1,12}))?)?`;
 
@@ -151,9 +154,9 @@ export function parsePath(path: string): Page {
   // The short address: the slug alone, the session being a cookie.
   const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})${TAB_TAIL}$`));
   if (g && !RESERVED.has(g[1])) return { kind: "group", tab: tabOf(g[2]), slug: g[1], thread: thread(g[3]) };
-  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data)(?:\/(.+))?$/);
+  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data|resources)(?:\/(.+))?$/);
   if (m) {
-    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data";
+    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources";
     return { kind: "admin", tab, group: tab === "groups" && m[2] ? safeDecode(m[2]) : null };
   }
   return { kind: "unknown" };

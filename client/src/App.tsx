@@ -35,6 +35,7 @@ import Options from "@/views/Options";
 import Home from "@/views/Home";
 import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
+import Resources from "@/views/Resources";
 import SignUp from "@/views/SignUp";
 import SyncMark from "@/views/SyncMark";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
@@ -60,6 +61,7 @@ const TAB_LABEL: Record<GroupTab, string> = {
   current: "Your 2026 Medical Plans",
   options: "New 2027 Medical Options",
   supplemental: "Supplemental Package",
+  resources: "Resources",
   signup: "Sign Up",
   disclaimers: "Disclaimers",
   census: "Census",
@@ -739,6 +741,8 @@ export default function App() {
         ? "Employee Navigator census on file."
       : tab === "assistant"
           ? "Ask anything about employee benefits and get the answer in seconds."
+      : tab === "resources"
+          ? "Marketing material from each Carrier/TPA, in one place."
           : `Calendar Year (January 1 - December 31, ${planYear})`;
 
   const printLine =
@@ -767,7 +771,7 @@ export default function App() {
   };
   // Medical Plans in the rail opens on the 2027 options - the page the
   // renewal is about - with today's plans a tab away.
-  const navItems: NavItem[] = (["home", "assistant", "options", "supplemental", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "assistant", "options", "supplemental", "resources", "signup"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
@@ -982,6 +986,8 @@ export default function App() {
               <Disclaimers g={g} />
             ) : tab === "supplemental" ? (
               <SupplementalPackage />
+            ) : tab === "resources" ? (
+              <Resources />
             ) : (
               <SignUp
                 data={data}
