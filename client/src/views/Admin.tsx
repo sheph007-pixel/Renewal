@@ -27,6 +27,7 @@ import AuditPanel from "@/views/AuditPanel";
 import RatesAudit from "@/views/RatesAudit";
 import AdminAssistant from "@/views/AdminAssistant";
 import DataAudit from "@/views/DataAudit";
+import AdminResources from "@/views/AdminResources";
 
 interface Props {
   data: KennionData;
@@ -73,7 +74,7 @@ const cellBase = {
 };
 
 
-export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant" | "data";
+export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources";
 
 const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "groups", label: "Groups", href: PATHS.groups },
@@ -82,6 +83,7 @@ const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "import", label: "Import", href: PATHS.import },
   { key: "assistant", label: "Assistant", href: PATHS.assistantAdmin },
   { key: "data", label: "Data Check", href: PATHS.data },
+  { key: "resources", label: "Resources", href: PATHS.resourcesAdmin },
 ];
 
 export interface ImportRecord {
@@ -557,6 +559,8 @@ export default function Admin({
         )}
 
         {tab === "data" && <DataAudit token={token} ai={ai} />}
+
+        {tab === "resources" && <AdminResources token={token} />}
 
         {tab === "proposals" && (
           <Proposals

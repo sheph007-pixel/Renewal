@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
+import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, planDocumentUrl, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
 import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
@@ -36,6 +36,8 @@ export interface CardModel {
   source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
   /** Set only for an Optimyl plan on a 2-50 enrolled group: this rate is preliminary until Optimyl underwrites it. */
   underwritingNote?: string | null;
+  /** Where to open the carrier's actual SBC and SOB for this design; null where it is not a catalogue design or the document is not on file. */
+  documents: { sbc: string | null; sob: string | null };
 }
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
@@ -96,6 +98,9 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     enrolled: TIERS.reduce((n, t) => n + (counts[t.key] || 0), 0),
     source: p.quoted ? { proposalId: p.quoted.proposalId, audit: p.quoted.audit || null } : null,
     underwritingNote: p.underwritingNote ?? null,
+    documents: p.design
+      ? { sbc: planDocumentUrl(carrierOf(p), p.design, "sbc"), sob: planDocumentUrl(carrierOf(p), p.design, "sob") }
+      : { sbc: null, sob: null },
   };
 }
 
@@ -136,6 +141,26 @@ function UnderwritingFoot({ note }: { note: string }) {
     <div className="noprint" style={foot}>
       <span style={{ fontWeight: 600 }}>⚑ Underwriting Required</span>
       <InfoTip text={note} color={C.amber} />
+    </div>
+  );
+}
+
+/** Links to the carrier's own Summary of Benefits and Coverage and Summary of Benefits for this design, where they are on file. */
+function DocumentLinks({ documents }: { documents: CardModel["documents"] }) {
+  if (!documents.sbc && !documents.sob) return null;
+  const link = { color: C.blue, fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" as const };
+  return (
+    <div className="noprint" style={{ display: "flex", gap: 14, fontSize: 12, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+      {documents.sbc && (
+        <a href={documents.sbc} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={link}>
+          View SBC
+        </a>
+      )}
+      {documents.sob && (
+        <a href={documents.sob} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={link}>
+          View SOB
+        </a>
+      )}
     </div>
   );
 }
@@ -404,6 +429,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
       </table>
         </>
       )}
+      {!compact && <DocumentLinks documents={m.documents} />}
       {m.source && <AuditFoot source={m.source} />}
       {m.underwritingNote && <UnderwritingFoot note={m.underwritingNote} />}
       {/* The notice, on the card itself: the card is what gets screenshotted and passed around. */}

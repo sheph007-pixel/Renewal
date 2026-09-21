@@ -196,6 +196,10 @@ export function applyCatalogue(proposal, index, carrier) {
         outOfNetwork: d.outOfNetwork,
         deductibleEmbedded: d.deductibleEmbedded,
         services: d.services.map((s) => ({ label: s.label, costShare: s.costShare, deductibleApplies: s.deductibleApplies, text: serviceText(s) })),
+        // Whether the carrier's actual SBC/SOB PDF is on file for this design
+        // (server/plan-documents.js), so a plan card can offer "View SBC"/"View
+        // SOB" only where there is something to open.
+        documents: d.documents || null,
       },
     };
   });

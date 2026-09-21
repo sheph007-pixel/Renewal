@@ -282,6 +282,18 @@ export interface PlanDesign {
   deductibleEmbedded: boolean | null;
   /** Every service line the carrier lists, in its order, with the member cost as the card reads it. */
   services: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
+  /** Whether the carrier's actual Summary of Benefits and Coverage / Summary of Benefits PDF is on file for this design. */
+  documents?: { sbc: boolean; sob: boolean } | null;
+}
+
+/** "ANG TRAD 5000 7000" -> "ang-trad-5000-7000", matching the server's planCodeSlug. */
+const planCodeSlug = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+const carrierDocSlug = (carrier: string) => carrier.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** The URL for a design's SBC or SOB PDF; null when it is not on file. */
+export function planDocumentUrl(carrier: string, d: PlanDesign, kind: "sbc" | "sob"): string | null {
+  if (!d.documents || !d.documents[kind]) return null;
+  return `/api/carriers/${carrierDocSlug(carrier)}/plan-documents/${planCodeSlug(d.planCode)}/${kind}?year=${d.planYear}`;
 }
 
 /** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
@@ -354,11 +366,32 @@ export interface KennionData {
   signup?: GroupSignup | null;
 }
 
-/** What a group most recently submitted on its own Sign Up page. */
+/** What the guided Sign Up wizard posts once every step is answered and signed. */
+export interface RenewalElectionFields {
+  plans: string[];
+  dental: string;
+  vision: string;
+  employerLife: string;
+  signerName: string;
+  signerTitle: string;
+  signerEmail: string;
+  signerPhone: string;
+  note: string;
+  attest: boolean;
+}
+
+/** What a group most recently submitted on its own Sign Up page: a plain shortlist send, or the guided wizard's full renewal election. */
 export interface GroupSignup {
   plans: string[];
   note: string | null;
   submittedAt: string;
+  kind: "shortlist" | "renewal";
+  carrier: string | null;
+  dental: string | null;
+  vision: string | null;
+  employerLife: string | null;
+  signerName: string | null;
+  signerTitle: string | null;
 }
 
 /** The Kennion contact shown on a client's pages. */
@@ -807,6 +840,17 @@ export function planLimitSummary(carrier: string): string | null {
 }
 
 /**
+ * Angle Health confirmed it sets no limit on how many plans a group may
+ * offer, at any headcount - which is also why it carries no entry in
+ * `CARRIER_PLAN_LIMITS` above: a carrier with no entry has no limit
+ * enforced anywhere a plan-count cap is checked (Sign Up's `overLimit`
+ * included). Stated here so the disclaimers page says so explicitly
+ * instead of just omitting Angle Health from the capped-carrier list.
+ */
+export const ANGLE_HEALTH_NO_PLAN_CAP =
+  "Angle Health has confirmed it places no limit on how many plans a group may offer its employees - a group may select as many Angle Health plans as fit its needs.";
+
+/**
  * Gravie and Angle Health both run on Cigna's network, and every
  * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
  * United Choice Plus network - a fixed rule, not something a carrier's own
@@ -819,6 +863,8 @@ const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "S
 export const CIGNA_NETWORK = "Cigna";
 /** Cigna's public provider search: the lookup for every plan on a Cigna network, Gravie's and Angle Health's alike. */
 export const CIGNA_DIRECTORY = "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001";
+/** Gravie's own SBC library, covering every plan and network it quotes; the disclaimers page links here rather than picking one SBC to attach. */
+export const GRAVIE_SBC_URL = "https://www.gravie.com/sbc/";
 
 /** A network name as shown: any Cigna network - OAP, Open Access Plus, "Angle / Cigna PPO" - is "Cigna". */
 export function networkLabel(network: string | null | undefined): string | null {
@@ -869,6 +915,9 @@ export function pbmOf(carrier: string | null | undefined): { name: string; url?:
   const c = String(carrier || "");
   if (/gravie/i.test(c)) return { name: "Express Scripts", url: "https://www.express-scripts.com/frontend/open-enrollment/gravie" };
   if (/optimyl/i.test(c)) return { name: "CVS Caremark", url: "https://app.kennion.com/assets/optimyl/cvs-caremark-value-formulary.pdf" };
+  // Angle Health's own drug list, not a named third-party PBM - nothing on its
+  // SBCs names one, so the card names the plan rather than a vendor.
+  if (/angle/i.test(c)) return { name: "Angle Health Formulary", url: "https://formulary.anglehealth.com/?hsCtaAttrib=195574382245" };
   return null;
 }
 

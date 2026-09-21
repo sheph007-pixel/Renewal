@@ -27,7 +27,9 @@ import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
-import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue } from "./plan-catalogue.js";
+import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
+import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
+import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -187,12 +189,15 @@ function cobaltApplies(name) {
 }
 
 /**
- * The slots that apply to one group. Cobalt is no longer offered as a 2027
- * option, so its slot is not shown anywhere; a Cobalt document already on
- * file stays stored and is simply not served.
+ * The slots that apply to one group, in the "carrier this group is being
+ * shopped at" sense the Welcome page and the Proposals admin grid use to
+ * say a review is complete: Cobalt is no longer offered as a 2027 option,
+ * and Angle Scorecard is never a quote to wait on (see SLOTS above), so
+ * neither counts toward what a group is still missing - the underlying
+ * document, if one is on file, stays stored and is simply not counted.
  */
 function slotsForGroup(_name) {
-  return SLOTS.filter((sl) => sl !== "Cobalt");
+  return SLOTS.filter((sl) => sl !== "Cobalt" && sl !== "Angle Scorecard");
 }
 
 /**
@@ -344,11 +349,67 @@ async function loadPlanCatalogue() {
       console.error("plan catalogue:", e.message);
     }
   }
+  for (const d of designs) {
+    d.documents = {
+      sbc: planDocuments.has(planDocKey(d.carrier, d.planYear, d.planCode, "SBC")),
+      sob: planDocuments.has(planDocKey(d.carrier, d.planYear, d.planCode, "SOB")),
+    };
+  }
   planCatalogue = designs;
   planCatalogueIndex = catalogueIndex(designs);
   const per = {};
   for (const d of designs) per[d.carrier] = (per[d.carrier] || 0) + 1;
   console.log(`plan catalogue: ${designs.length} standard design(s) - ${Object.entries(per).map(([c, n]) => `${c} ${n}`).join(", ") || "none"}`);
+}
+
+/**
+ * The shipped SBC/SOB PDFs, by carrier: the actual documents behind each
+ * standard design in CATALOGUE_FILES above for Angle Health, and Gravie's
+ * SBC library - Gravie has no catalogue of its own (its designs come off
+ * each group's own proposal, not a shared workbook), so these are stored the
+ * same way but never gain a `documents` flag on a catalogue design the way
+ * Angle Health's do. Gravie's set was deduplicated once by year (2027
+ * preferred, 2026 kept only where no 2027 SBC exists for that plan) and
+ * renamed to carry no id token, so it reads with parseSimpleDocFilename
+ * rather than Angle Health's id-bearing parseDocFilename.
+ */
+const PLAN_DOCUMENT_DIRS = [
+  { dir: path.join(__dirname, "data", "plan-docs", "angle-health-sbc-sob"), carrier: "Angle Health", planYear: 2027 },
+  { dir: path.join(__dirname, "data", "plan-docs", "gravie-sbc"), carrier: "Gravie", planYear: 2027, parse: parseSimpleDocFilename },
+];
+const planDocKey = (carrier, planYear, planCode, docType) => `${carrier}|${planYear}|${catalogueKey(planCode)}|${docType}`;
+/** plan doc key -> metadata (no bytes): what loadPlanCatalogue checks to flag a design's documents. */
+let planDocuments = new Map();
+/** plan doc key -> { mime, data, filename }: shipped copies, served when there is no database or no row there yet. */
+let planDocumentFallback = new Map();
+
+/**
+ * Load every carrier's SBC/SOB PDFs: the shipped files, then the database's
+ * rows on top (a design with no rows yet is seeded from its shipped file).
+ * Run before loadPlanCatalogue so a design's `documents` flag is accurate as
+ * soon as the catalogue loads.
+ */
+async function loadPlanDocuments() {
+  const shipped = PLAN_DOCUMENT_DIRS.flatMap((d) => loadPlanDocumentFiles(d.dir, d));
+  planDocumentFallback = new Map(shipped.map((d) => [planDocKey(d.carrier, d.planYear, d.planCode, d.docType), { mime: d.mime, data: d.data, filename: d.filename }]));
+  let meta = shipped.map(({ data: _d, ...m }) => ({ ...m, updatedAt: null, updatedBy: null }));
+  if (db) {
+    try {
+      let stored = await db.listPlanDocuments();
+      const have = new Set(stored.map((d) => planDocKey(d.carrier, d.planYear, d.planCode, d.docType)));
+      const seed = shipped.filter((d) => !have.has(planDocKey(d.carrier, d.planYear, d.planCode, d.docType)));
+      if (seed.length) {
+        await db.upsertPlanDocuments(seed, "system");
+        console.log(`plan documents: seeded ${seed.length} document(s) from ${[...new Set(seed.map((d) => d.source))].join(", ")}`);
+        stored = await db.listPlanDocuments();
+      }
+      meta = stored;
+    } catch (e) {
+      console.error("plan documents:", e.message);
+    }
+  }
+  planDocuments = new Map(meta.map((d) => [planDocKey(d.carrier, d.planYear, d.planCode, d.docType), d]));
+  console.log(`plan documents: ${planDocuments.size} on file (${shipped.length} shipped)`);
 }
 /** group -> { slot: true } for slots that already hold a proposal, so a slot in use is never hidden. */
 let proposalSlotsByGroup = {};
@@ -595,6 +656,23 @@ async function latestSignup(name) {
     return rows[0] || null;
   }
   return signups.find((s) => s.group_name === name) || null;
+}
+
+/** A signup row as the client reads it - a plain shortlist send, or the guided wizard's full renewal election. */
+function shapeSignup(signup) {
+  if (!signup) return null;
+  return {
+    plans: signup.plans,
+    note: signup.note,
+    submittedAt: signup.submitted_at,
+    kind: signup.kind === "renewal" ? "renewal" : "shortlist",
+    carrier: signup.carrier || null,
+    dental: signup.dental || null,
+    vision: signup.vision || null,
+    employerLife: signup.employer_life || null,
+    signerName: signup.signer_name || null,
+    signerTitle: signup.signer_title || null,
+  };
 }
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "hunter@kennion.com").trim().toLowerCase();
@@ -1157,7 +1235,7 @@ app.post("/api/signin", async (req, res) => {
     broker: brokerContact(),
     // The group's most recent submission, if it has ever sent one, so the
     // Sign Up page can say so instead of showing a blank form again.
-    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+    signup: shapeSignup(signup),
   });
 });
 
@@ -1275,6 +1353,49 @@ async function sendSupportEmail(t, g) {
     // delivers to the account owner: the ticket reaches Hunter either way.
     if (!/not verified/i.test(e.message)) throw e;
     console.error("support email: kennion.com is not verified in Resend; sending from onboarding@resend.dev to", SUPPORT_TO[0]);
+    await send({ ...body, from: "BenSync Support <onboarding@resend.dev>", to: [SUPPORT_TO[0]] });
+  }
+}
+
+/**
+ * The guided Sign Up wizard's completed election, emailed to Kennion the
+ * moment a group renews - same Resend path and recipients as a support
+ * ticket, so the whole team sees it land without anyone checking a screen.
+ */
+async function sendRenewalEmail(e, g) {
+  if (!RESEND_KEY) throw new Error("no Resend key on the service");
+  const lines = [
+    ["Group", g.name],
+    ["Carrier/TPA", e.carrier || "-"],
+    ["Medical plan(s)", e.plans.join(", ") || "-"],
+    ["Dental", e.dental || "-"],
+    ["Vision", e.vision || "-"],
+    ["Employer Paid Life", e.employerLife || "-"],
+    ["Signed by", `${e.signerName}${e.signerTitle ? `, ${e.signerTitle}` : ""}`],
+    ["Signer email", e.signerEmail || "-"],
+    ["Signer phone", e.signerPhone || "-"],
+  ];
+  const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
+    <h2 style="margin:0 0 12px;font-size:17px">${escapeHtml(g.name)} has renewed for 2027</h2>
+    <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
+    ${e.note ? `<div style="font-weight:600;margin-bottom:4px">Note from the group</div><div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(e.note)}</div>` : ""}
+    <p style="margin-top:18px;color:#888;font-size:12px">Submitted from the BenSync client portal · ${new Date(e.submittedAt).toLocaleString("en-US")}</p>
+  </div>`;
+  const text = `${g.name} has renewed for 2027\n\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}${e.note ? `\n\nNote from the group:\n${e.note}` : ""}`;
+  const body = { from: SUPPORT_FROM, to: SUPPORT_TO, reply_to: e.signerEmail || undefined, subject: `${g.name} has renewed for 2027`, html, text };
+  const send = async (b) => {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(b),
+    });
+    const t = await r.text();
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${t.slice(0, 300)}`);
+  };
+  try {
+    await send(body);
+  } catch (e2) {
+    if (!/not verified/i.test(e2.message)) throw e2;
     await send({ ...body, from: "BenSync Support <onboarding@resend.dev>", to: [SUPPORT_TO[0]] });
   }
 }
@@ -1425,6 +1546,110 @@ app.post("/api/group/signup", express.json({ limit: "16kb" }), async (req, res) 
 
   console.log(`sign-up received: ${g.name} - ${plans.length} plan(s)`);
   res.json({ ok: true, submittedAt: record.submitted_at });
+});
+
+/**
+ * The guided Sign Up wizard's full election: medical carrier/plans, dental,
+ * vision, the employer-paid life tier, and who signed for the group. Marks
+ * the group Renewed outright (a shortlist send only ever reaches "sent" -
+ * this is a completed election with a name and email attached to it) and
+ * emails Kennion the same way a support ticket does.
+ */
+app.post("/api/group/renew", express.json({ limit: "16kb" }), async (req, res) => {
+  const body = req.body || {};
+  const caller = signinKey(req);
+  if (throttled(caller)) {
+    return res.status(429).json({ error: "Too many attempts. Wait a few minutes and try again." });
+  }
+  const { g, guessed } = groupFromRequest(req);
+  if (!g) {
+    if (!guessed) return res.status(401).json({ error: "no session" });
+    noteFail(caller);
+    return res.status(404).json({ error: "no such group" });
+  }
+  clearFails(caller);
+
+  const plans = Array.isArray(body.plans)
+    ? [...new Set(body.plans.map((p) => String(p || "").trim()).filter(Boolean))].slice(0, 50).map((p) => p.slice(0, 200))
+    : [];
+  if (!plans.length) return res.status(400).json({ error: "Select at least one medical plan." });
+  const mixed = signupMix(g, plans);
+  if (mixed) return res.status(400).json({ error: `One carrier, one funding type: a group's 2027 plans all come from one carrier, and with UnitedHealthcare all fully insured or all level funded. This selection mixes ${mixed.join(" and ")}.` });
+  const [basis] = planBases(g, plans);
+  const tier = basis && planLimitFor(basis[0], g.enrolled);
+  if (tier) {
+    const cap = tier.maxWithUnderwriting ?? tier.maxPlans;
+    if (plans.length > cap) {
+      const uw = tier.maxWithUnderwriting ? ", even with underwriting approval" : "";
+      return res.status(400).json({ error: `${basis[0]} allows up to ${cap} plan${cap === 1 ? "" : "s"} for a group this size (${g.enrolled} enrolled)${uw}. This selection has ${plans.length} - remove ${plans.length - cap}.` });
+    }
+  }
+  const str = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
+  const dental = str(body.dental, 200);
+  const vision = str(body.vision, 200);
+  const employerLife = str(body.employerLife, 100);
+  const signerName = str(body.signerName, 200);
+  const signerTitle = str(body.signerTitle, 200);
+  const signerEmail = str(body.signerEmail, 200);
+  const signerPhone = str(body.signerPhone, 60);
+  const note = str(body.note, 4000);
+  if (!dental) return res.status(400).json({ error: "Choose a dental option, or waive it." });
+  if (!vision) return res.status(400).json({ error: "Choose a vision option, or waive it." });
+  if (!employerLife) return res.status(400).json({ error: "Choose an Employer Paid Life option, or decline it." });
+  if (!signerName) return res.status(400).json({ error: "Enter your name." });
+  if (!signerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (!body.attest) return res.status(400).json({ error: "Confirm you're authorized to make these elections for the group." });
+
+  const carrier = basis ? basis[0] : null;
+  const election = { plans, note, carrier, dental, vision, employerLife, signerName, signerTitle, signerEmail, signerPhone, signerIp: caller };
+
+  let record;
+  try {
+    if (db) {
+      record = await db.addRenewalElection(g.name, election);
+    } else {
+      record = {
+        id: signups.length + 1,
+        group_name: g.name,
+        kind: "renewal",
+        plans,
+        note,
+        carrier,
+        dental,
+        vision,
+        employer_life: employerLife,
+        signer_name: signerName,
+        signer_title: signerTitle,
+        signer_email: signerEmail,
+        signer_phone: signerPhone,
+        submitted_at: new Date().toISOString(),
+      };
+      signups = [record, ...signups];
+      saveSignups();
+    }
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+
+  // A renewal election marks the group Renewed outright, whatever it was before.
+  meta[g.name] = { ...(meta[g.name] || {}), renewal: "renewed" };
+  try {
+    if (db) await db.setMeta(g.name, "renewal", "renewed", `${g.name} (client sign-up)`);
+  } catch (e) {
+    console.error("could not record renewal status from sign-up:", e.message);
+  }
+  rebuild();
+
+  let emailed = true;
+  try {
+    await sendRenewalEmail({ ...election, submittedAt: record.submitted_at }, g);
+  } catch (e) {
+    emailed = false;
+    console.error(`renewal election for ${g.name} stored but not emailed:`, e.message);
+  }
+
+  console.log(`renewal election received: ${g.name} - ${carrier || "?"} - ${plans.length} plan(s), dental: ${dental}, vision: ${vision}, employer life: ${employerLife}, signed by ${signerName}${emailed ? "" : " (email failed)"}`);
+  res.json({ ok: true, emailed, signup: shapeSignup(record) });
 });
 
 /**
@@ -1653,7 +1878,7 @@ async function assistantData(g) {
     funding: fundingSnapshot(g.name),
     manager: managerContact(g.manager),
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
-    signup: signup ? { plans: signup.plans, note: signup.note, submittedAt: signup.submitted_at } : null,
+    signup: shapeSignup(signup),
     renewal: g.renewal,
     planDesigns: data.planDesigns,
     census: censusProfile(g),
@@ -2279,9 +2504,9 @@ function clientUhc(g) {
   };
 }
 
-/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt. */
+/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt or Angle Scorecard - both stay admin-only. */
 function clientProposals(name) {
-  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt");
+  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard");
   if (!ppoOnly()) return list;
   return list.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
 }
@@ -3573,6 +3798,190 @@ app.post("/api/admin/plan-catalogue/:slug", requireStaff, express.raw({ type: ()
   }
 });
 
+/** A plan code as it appears in a URL: "ANG TRAD 5000 7000" -> "ang-trad-5000-7000", and back. */
+const planCodeSlug = (code) => String(code || "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+const planCodeFromSlug = (slug) => String(slug || "").toUpperCase().replace(/-/g, " ").trim();
+
+/**
+ * A carrier's SBC or SOB for one standard design - the actual PDF, not the
+ * figures read off it. Served without a session, like the plan catalogue's
+ * figures themselves: the same document for every group quoted that design.
+ */
+app.get("/api/carriers/:slug/plan-documents/:planSlug/:docType", async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  const docType = String(req.params.docType || "").toUpperCase();
+  if (!carrier || (docType !== "SBC" && docType !== "SOB")) return res.status(404).json({ error: "No such document." });
+  const planYear = Number(req.query.year) || 2027;
+  const planCode = planCodeFromSlug(req.params.planSlug);
+  const key = planDocKey(carrier, planYear, planCode, docType);
+  let doc = db ? await db.getPlanDocument(carrier, planYear, planCode, docType).catch(() => null) : null;
+  if (!doc) {
+    const fb = planDocumentFallback.get(key);
+    if (fb) doc = fb;
+  }
+  if (!doc) return res.status(404).json({ error: "No document on file for that plan." });
+  res.setHeader("Content-Type", doc.mime || "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${String(doc.filename || `${planCode} ${docType}.pdf`).replace(/[\r\n"]/g, "")}"`);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(doc.data);
+});
+
+/** Every plan document on file, metadata only, for staff to review what is loaded. */
+app.get("/api/admin/plan-documents", requireStaff, async (_req, res) => {
+  res.json({ documents: [...planDocuments.values()], durable: !!db });
+});
+
+/** Staff replaces or adds one design's SBC or SOB by hand, without a deploy; a row in the database always wins over the shipped file. */
+app.post("/api/admin/plan-documents/:slug/:planSlug/:docType", requireStaff, express.raw({ type: () => true, limit: "10mb" }), async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  const docType = String(req.params.docType || "").toUpperCase();
+  if (!carrier || (docType !== "SBC" && docType !== "SOB")) return res.status(404).json({ error: "No such document." });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const contentType = String(req.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (contentType && contentType !== "application/pdf") return res.status(400).json({ error: "Upload a PDF." });
+  const planYear = Number(req.query.year) || 2027;
+  const planCode = planCodeFromSlug(req.params.planSlug);
+  const filename = String(req.query.filename || `${planCode} ${docType}.pdf`).slice(0, 200);
+  if (!db) return res.status(400).json({ error: "No database is configured, so an uploaded document cannot be kept." });
+  await db.upsertPlanDocuments([{ carrier, planYear, planCode, docType, filename, mime: "application/pdf", data: req.body, source: "uploaded by staff" }], req.staffEmail || "staff");
+  await loadPlanDocuments();
+  await loadPlanCatalogue();
+  res.json({ ok: true, carrier, planCode, docType });
+});
+
+/**
+ * Marketing material for the Resources page - broker decks, one-pagers,
+ * FAQs - not a plan document or a proposal. Staff upload a file; Claude
+ * reads it and files it under a vendor immediately, no review step, so it
+ * is live on the shared Resources page (the same page every group sees) as
+ * soon as it is read. Staff can still fix a wrong guess, or take it down.
+ */
+const memResources = [];
+let memResourceNextId = 1;
+const resourceStore = {
+  async list() {
+    if (db) return db.listMarketingResources();
+    return memResources.map(({ data: _d, ...r }) => r);
+  },
+  async get(id) {
+    if (db) return db.getMarketingResource(id);
+    return memResources.find((r) => r.id === id) || null;
+  },
+  async add({ carrier, title, summary, filename, mime, size, data, uploadedBy }) {
+    if (db) return db.addMarketingResource({ carrier, title, summary, filename, mime, size, data, uploadedBy });
+    const id = memResourceNextId++;
+    const uploadedAt = new Date().toISOString();
+    memResources.unshift({ id, carrier, title, summary, filename, mime, size, data, uploadedBy, uploadedAt, updatedBy: null, updatedAt: uploadedAt });
+    return { id, uploadedAt };
+  },
+  async update(id, fields, by) {
+    if (db) return db.updateMarketingResource(id, fields, by);
+    const r = memResources.find((x) => x.id === id);
+    if (!r) return false;
+    if (fields.carrier) r.carrier = fields.carrier;
+    if (fields.title) r.title = fields.title;
+    r.updatedBy = by || null;
+    r.updatedAt = new Date().toISOString();
+    return true;
+  },
+  async remove(id) {
+    if (db) return db.deleteMarketingResource(id);
+    const i = memResources.findIndex((x) => x.id === id);
+    if (i === -1) return false;
+    memResources.splice(i, 1);
+    return true;
+  },
+};
+
+/**
+ * Marketing material shipped with the code, read once by hand rather than
+ * through the AI upload route (there is no admin session to upload through
+ * at boot). Seeded into kennion.marketing_resources where a resource of
+ * that carrier and filename is not already on file - staff editing a title,
+ * moving a resource to another vendor, or removing one outright all stick,
+ * since the seed only ever fills a gap, never overwrites.
+ */
+const RESOURCE_SEED = [
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Pay_Member_FAQ.pdf", title: "Gravie Pay Member FAQ", summary: "How Gravie Pay lets a member split a medical expense into no-interest monthly payments through Paytient." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Mobile_App_Flyer.pdf", title: "The Gravie Mobile App", summary: "What members and their dependents can do in the Gravie app to find and manage care." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Level_Funded_Health_Plans_Flyer.pdf", title: "Gravie Level-Funded Health Plans", summary: "Predictable costs, flexible plan designs and national coverage on Gravie's level-funded plans." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Member_Testimonials.pdf", title: "What Members Love About Gravie", summary: "Member testimonials and satisfaction highlights from Gravie's health plans." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Provider_Guidance_Cigna.pdf", title: "Talking To Providers About Your Gravie Plan", summary: "How to explain a Gravie/Cigna plan to a provider's office, and where to get help if a provider has questions." },
+  { carrier: "Gravie", dir: "gravie", file: "Gravie_Level_Funded_Broker_Ebook.pdf", title: "Level-Funded eBook", summary: "Gravie's broker-facing overview of level-funded health plans and its approach to small and midsize business benefits." },
+  { carrier: "Gravie", dir: "gravie", file: "Who_Is_Gravie_Overview.pdf", title: "Who Is Gravie?", summary: "An overview of Gravie's approach to group health plans and ICHRAs for small and midsize employers." },
+];
+async function loadMarketingResources() {
+  const have = new Set((await resourceStore.list()).map((r) => `${r.carrier}|${r.filename}`));
+  let seeded = 0;
+  for (const r of RESOURCE_SEED) {
+    if (have.has(`${r.carrier}|${r.file}`)) continue;
+    let data;
+    try {
+      data = fs.readFileSync(path.join(__dirname, "data", "resources", r.dir, r.file));
+    } catch (e) {
+      console.error(`resource seed: ${r.file}:`, e.message);
+      continue;
+    }
+    await resourceStore.add({ carrier: r.carrier, title: r.title, summary: r.summary || null, filename: r.file, mime: "application/pdf", size: data.length, data, uploadedBy: "system" });
+    seeded++;
+  }
+  if (seeded) console.log(`resources: seeded ${seeded} marketing resource(s)`);
+}
+
+/** Every resource on file, metadata only - the Resources page groups these by carrier itself. Public: this page is the same for every group, no session needed. */
+app.get("/api/resources", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.json({ resources: await resourceStore.list() });
+});
+
+/** One resource's actual file. */
+app.get("/api/resources/:id/file", async (req, res) => {
+  const id = Number(req.params.id);
+  const r = id && (await resourceStore.get(id));
+  if (!r) return res.status(404).json({ error: "No such resource." });
+  res.setHeader("Content-Type", r.mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${String(r.filename || "resource").replace(/[\r\n"]/g, "")}"`);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(r.data);
+});
+
+/** Staff uploads one piece of marketing material; Claude reads it and files it under a vendor immediately. */
+app.post("/api/admin/resources", requireStaff, express.raw({ type: () => true, limit: "20mb" }), async (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const filename = String(req.query.filename || "resource").slice(0, 200);
+  const mime = String(req.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  try {
+    const prepared = await prepareForModel({ buffer: req.body, mime, filename });
+    const read = await categorizeResource({ filename, prepared });
+    const carrier = CARRIERS.find((c) => c.toLowerCase() === String(read.carrier || "").toLowerCase()) || "Other";
+    const title = String(read.title || filename).slice(0, 200);
+    const summary = read.summary ? String(read.summary).slice(0, 400) : null;
+    const { id, uploadedAt } = await resourceStore.add({ carrier, title, summary, filename, mime, size: req.body.length, data: req.body, uploadedBy: req.staffEmail || null });
+    console.log(`resource ${id}: "${title}" filed under ${carrier} by ${req.staffEmail || "staff"}`);
+    res.json({ id, carrier, title, summary, filename, mime, size: req.body.length, uploadedAt });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+/** Staff corrects a wrong AI guess: carrier and/or title. The file itself is not replaceable here - delete and re-upload for that. */
+app.patch("/api/admin/resources/:id", requireStaff, express.json({ limit: "8kb" }), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(404).json({ error: "No such resource." });
+  const carrier = req.body && typeof req.body.carrier === "string" ? req.body.carrier.trim().slice(0, 80) : null;
+  const title = req.body && typeof req.body.title === "string" ? req.body.title.trim().slice(0, 200) : null;
+  if (!carrier && !title) return res.status(400).json({ error: "Nothing to change." });
+  const ok = await resourceStore.update(id, { carrier, title }, req.staffEmail || null);
+  if (!ok) return res.status(404).json({ error: "No such resource." });
+  res.json({ ok: true });
+});
+
+app.delete("/api/admin/resources/:id", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id || !(await resourceStore.remove(id))) return res.status(404).json({ error: "No such resource." });
+  res.json({ ok: true });
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });
@@ -3825,8 +4234,16 @@ const proposalStore = db
  * newer one in a slot replaces the older, which is kept. Surest is a
  * UnitedHealthcare product, so a Surest quote is that group's UHC proposal;
  * an ancillary-only document (dental, vision, life) fills no slot at all.
+ *
+ * "Angle Scorecard" is not a rate quote - Angle Health sends a Health
+ * Scorecard alongside its actual proposal for a group, a second document
+ * that would otherwise collide with (and delete) the real proposal if both
+ * landed in the "Angle" slot. It gets its own slot instead, with no rate
+ * plans of its own, so it is excluded everywhere a slot means "a carrier
+ * this group is shopped at" - slotsForGroup, clientProposals - rather than
+ * "a document on file"; see the comments there.
  */
-const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Cobalt", "Optimyl"];
+const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Cobalt", "Optimyl"];
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
@@ -4095,9 +4512,15 @@ async function assignOptionIds(rows, bySlot) {
     if (db) await db.setSetting(MENU_KEY, {}, "system");
   }
 }
-function slotFor(carrier, funding, quotesMedical) {
-  if (quotesMedical === false) return null;
+function slotFor(carrier, funding, quotesMedical, filename) {
   const c = String(carrier || "").toLowerCase();
+  // Angle Health's Health Scorecard is not a rate quote and must never land
+  // in the "Angle" slot, where a newer upload replaces (and deletes) the
+  // older one: a scorecard there would delete the group's real proposal, or
+  // vice versa. Its filename says what it is even when the reader does not
+  // mark it ancillary, so this is checked before quotesMedical can return null.
+  if (/scorecard/i.test(filename || "") && /angle/.test(c)) return "Angle Scorecard";
+  if (quotesMedical === false) return null;
   const f = String(funding || "").toLowerCase();
   if (/united|uhc|surest|optum/.test(c)) {
     if (/level/.test(f)) return "UHC Level Funded";
@@ -4150,7 +4573,7 @@ async function proposalsChanged() {
       }
       if (!r.slot || SLOTS.includes(r.slot)) continue;
       const x = r.extracted || {};
-      const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical);
+      const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
       await proposalStore.updateProposal(r.id, { slot });
       remapped = true;
     }
@@ -4436,7 +4859,7 @@ async function runAnalysis(id, file, keepAssignment) {
       error: null,
     };
     // The slot comes from what was read, unless staff already set one.
-    if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical);
+    if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical, file.filename);
     // Staff may assign a group while the read is still running; that choice stands.
     const staffAssigned = !!(current && current.group_name && current.assigned_by && current.assigned_by !== "ai" && current.assigned_by !== "filename");
     if (keepAssignment || staffAssigned) {
@@ -5108,8 +5531,12 @@ async function boot() {
     rebuild();
   }
   // The carriers' standard designs first, so the proposals built next carry them.
+  // Documents before the catalogue, so each design's documents flag is right
+  // from its first load rather than only after a second loadPlanCatalogue().
+  await loadPlanDocuments();
   await loadPlanCatalogue();
   await loadCarrierPlanLimits();
+  await loadMarketingResources();
   await proposalsChanged();
   await refreshAudit();
   // Gravie workbooks already on file, re-read with the current parser and

@@ -128,6 +128,27 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_plan_limits (
   updated_by  text
 );
 
+-- Each standard design's actual carrier documents - the Summary of Benefits
+-- and Coverage (SBC) and Summary of Benefits (SOB) PDFs, not just the
+-- figures read off them in carrier_plan_designs. One row per carrier, plan
+-- year, plan code and document type; the PDF itself is the blob, same
+-- reasoning as carrier_logos below. Seeded at boot from
+-- server/data/plan-docs where a design has no rows yet; a row here always
+-- wins over the seed, so staff can replace a document without a deploy.
+CREATE TABLE IF NOT EXISTS kennion.plan_documents (
+  carrier     text NOT NULL,
+  plan_year   integer NOT NULL DEFAULT 2027,
+  plan_code   text NOT NULL,
+  doc_type    text NOT NULL CHECK (doc_type IN ('SBC','SOB')),
+  filename    text NOT NULL,
+  mime        text NOT NULL DEFAULT 'application/pdf',
+  data        bytea NOT NULL,
+  source      text,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  text,
+  PRIMARY KEY (carrier, plan_year, plan_code, doc_type)
+);
+
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -142,6 +163,22 @@ CREATE TABLE IF NOT EXISTS kennion.group_signups (
   submitted_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS group_signups_group_idx ON kennion.group_signups (group_name);
+-- The guided Sign Up wizard's full election, on the same row shape as the
+-- older plan-shortlist submission above (kind tells them apart): the medical
+-- carrier and plans, the dental and vision plan chosen (or waived), the
+-- employer-paid life tier chosen (or declined), and who signed for the
+-- group. A "renewal" row is what marks the group Renewed; a "shortlist" row
+-- (kind's default) is the earlier, lighter "send me a shortlist" flow.
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'shortlist' CHECK (kind IN ('shortlist','renewal'));
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS carrier text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS dental text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS vision text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS employer_life text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_name text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_title text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_email text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_phone text;
+ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_ip text;
 
 -- A support ticket a client sends from the portal; emailed to Kennion and
 -- kept here so nothing is lost if the email does not go out.
@@ -304,6 +341,27 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_logos (
   updated_at   timestamptz NOT NULL DEFAULT now(),
   updated_by   text
 );
+
+-- Marketing material for the Resources page: broker decks, one-pagers, FAQs
+-- - anything a vendor sends that is not a plan document. Staff upload a file
+-- and Claude reads it to say which vendor it is for and give it a title; it
+-- goes live immediately under that vendor's section, the same page every
+-- group sees. Staff can still fix a wrong guess (updated_by then reads who).
+CREATE TABLE IF NOT EXISTS kennion.marketing_resources (
+  id            bigserial PRIMARY KEY,
+  carrier       text NOT NULL,
+  title         text NOT NULL,
+  summary       text,
+  filename      text NOT NULL,
+  mime          text NOT NULL,
+  size          integer NOT NULL,
+  data          bytea NOT NULL,
+  uploaded_by   text,
+  uploaded_at   timestamptz NOT NULL DEFAULT now(),
+  updated_by    text,
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS marketing_resources_carrier_idx ON kennion.marketing_resources (carrier);
 
 CREATE TABLE IF NOT EXISTS kennion.rate_overrides (
   group_name   text NOT NULL,
@@ -550,6 +608,17 @@ export function createDb(url) {
       return rows[0];
     },
 
+    /** The guided wizard's full election: what marks a group Renewed. */
+    async addRenewalElection(groupName, e) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.group_signups (group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, signer_ip)
+         VALUES ($1, $2::jsonb, $3, 'renewal', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING id, group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, submitted_at`,
+        [groupName, JSON.stringify(e.plans || []), e.note || null, e.carrier || null, e.dental || null, e.vision || null, e.employerLife || null, e.signerName || null, e.signerTitle || null, e.signerEmail || null, e.signerPhone || null, e.signerIp || null],
+      );
+      return rows[0];
+    },
+
     async addSupportTicket(t) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.support_tickets (group_name, priority, requester, subject, description, attachment)
@@ -569,7 +638,7 @@ export function createDb(url) {
     /** Every submission a group has made, newest first. */
     async listSignups(groupName) {
       const { rows } = await pool.query(
-        `SELECT id, group_name, plans, note, submitted_at FROM kennion.group_signups
+        `SELECT id, group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, submitted_at FROM kennion.group_signups
          WHERE group_name = $1 ORDER BY submitted_at DESC, id DESC`,
         [groupName],
       );
@@ -656,6 +725,36 @@ export function createDb(url) {
            ON CONFLICT (carrier) DO UPDATE SET
              tiers = EXCLUDED.tiers, updated_at = now(), updated_by = EXCLUDED.updated_by`,
           [d.carrier, JSON.stringify(d.tiers), by || null],
+        );
+      }
+      return list.length;
+    },
+
+    /** Every plan document on file, metadata only - no bytes - for the admin list and for flagging which designs have one. */
+    async listPlanDocuments() {
+      const { rows } = await pool.query(
+        "SELECT carrier, plan_year, plan_code, doc_type, filename, mime, source, updated_at, updated_by FROM kennion.plan_documents ORDER BY carrier, plan_year, plan_code, doc_type",
+      );
+      return rows.map((r) => ({ carrier: r.carrier, planYear: r.plan_year, planCode: r.plan_code, docType: r.doc_type, filename: r.filename, mime: r.mime, source: r.source, updatedAt: r.updated_at, updatedBy: r.updated_by }));
+    },
+    /** One document with its bytes, or null. */
+    async getPlanDocument(carrier, planYear, planCode, docType) {
+      const { rows } = await pool.query(
+        "SELECT carrier, plan_year, plan_code, doc_type, filename, mime, data, updated_at FROM kennion.plan_documents WHERE carrier = $1 AND plan_year = $2 AND plan_code = $3 AND doc_type = $4",
+        [carrier, planYear, planCode, docType],
+      );
+      const r = rows[0];
+      return r ? { carrier: r.carrier, planYear: r.plan_year, planCode: r.plan_code, docType: r.doc_type, filename: r.filename, mime: r.mime, data: r.data, updatedAt: r.updated_at } : null;
+    },
+    /** Write documents in, replacing one when its carrier, year, plan code and type are already there. */
+    async upsertPlanDocuments(list, by) {
+      for (const d of list) {
+        await pool.query(
+          `INSERT INTO kennion.plan_documents (carrier, plan_year, plan_code, doc_type, filename, mime, data, source, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
+           ON CONFLICT (carrier, plan_year, plan_code, doc_type) DO UPDATE SET
+             filename = EXCLUDED.filename, mime = EXCLUDED.mime, data = EXCLUDED.data, source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+          [d.carrier, d.planYear || 2027, d.planCode, d.docType, d.filename, d.mime || "application/pdf", d.data, d.source || null, by || null],
         );
       }
       return list.length;
@@ -1251,6 +1350,40 @@ export function createDb(url) {
     },
     async deleteCarrierLogo(carrier) {
       const { rowCount } = await pool.query("DELETE FROM kennion.carrier_logos WHERE carrier = $1", [carrier]);
+      return rowCount > 0;
+    },
+
+    /** Every marketing resource, metadata only - no bytes - newest first for the admin list. */
+    async listMarketingResources() {
+      const { rows } = await pool.query(
+        "SELECT id, carrier, title, summary, filename, mime, size, uploaded_by, uploaded_at, updated_by, updated_at FROM kennion.marketing_resources ORDER BY uploaded_at DESC",
+      );
+      return rows.map((r) => ({ id: r.id, carrier: r.carrier, title: r.title, summary: r.summary, filename: r.filename, mime: r.mime, size: r.size, uploadedBy: r.uploaded_by, uploadedAt: r.uploaded_at, updatedBy: r.updated_by, updatedAt: r.updated_at }));
+    },
+    /** One resource with its bytes, or null. */
+    async getMarketingResource(id) {
+      const { rows } = await pool.query("SELECT id, carrier, title, filename, mime, data FROM kennion.marketing_resources WHERE id = $1", [id]);
+      const r = rows[0];
+      return r ? { id: r.id, carrier: r.carrier, title: r.title, filename: r.filename, mime: r.mime, data: r.data } : null;
+    },
+    async addMarketingResource({ carrier, title, summary, filename, mime, size, data, uploadedBy }) {
+      const { rows } = await pool.query(
+        `INSERT INTO kennion.marketing_resources (carrier, title, summary, filename, mime, size, data, uploaded_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, uploaded_at`,
+        [carrier, title, summary || null, filename, mime, size, data, uploadedBy || null],
+      );
+      return { id: rows[0].id, uploadedAt: rows[0].uploaded_at };
+    },
+    /** Staff correcting a wrong AI guess: carrier and/or title, never the file itself - re-upload for that. */
+    async updateMarketingResource(id, { carrier, title }, by) {
+      const { rowCount } = await pool.query(
+        `UPDATE kennion.marketing_resources SET carrier = COALESCE($2, carrier), title = COALESCE($3, title), updated_at = now(), updated_by = $4 WHERE id = $1`,
+        [id, carrier || null, title || null, by || null],
+      );
+      return rowCount > 0;
+    },
+    async deleteMarketingResource(id) {
+      const { rowCount } = await pool.query("DELETE FROM kennion.marketing_resources WHERE id = $1", [id]);
       return rowCount > 0;
     },
 
