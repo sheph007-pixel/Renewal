@@ -318,6 +318,12 @@ export async function analyzeProposal(file, roster) {
 
   const content = [];
   if (p.kind === "pdf") {
+    const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
+    if (numpages > MAX_PDF_PAGES) {
+      throw new Error(
+        `This proposal is ${numpages} pages - the model can only read a PDF up to ${MAX_PDF_PAGES} pages. Split it and upload the parts separately.`,
+      );
+    }
     content.push({
       type: "document",
       source: { type: "base64", media_type: "application/pdf", data: p.buffer.toString("base64") },
