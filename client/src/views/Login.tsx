@@ -177,14 +177,14 @@ export default function Login({
           </h1>
           <div style={{ fontSize: 14.5, color: C.railInk, lineHeight: 1.6, textWrap: "balance" }}>
             {mode === "group"
-              ? "Kennion Benefit Advisors pairs technology with benefits innovation to help you take on rising healthcare costs. BenSync keeps every renewal moving and every question answered."
-              : "Manage groups, renewals, and client access from one place."}
+              ? "Kennion Benefit Advisors pairs technology with benefits innovation to help you take on rising healthcare costs. BenSync keeps every election moving and every question answered."
+              : "Manage groups, elections, and client access from one place."}
           </div>
         </div>
 
         {mode === "group" && (
           <div className="login-features" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
-            <Feature icon={<RenewIcon />} title="Renewals" text="Keep every decision moving." />
+            <Feature icon={<RenewIcon />} title="Elections" text="Keep every decision moving." />
             <Feature icon={<AskIcon />} title="Ask BenSync" text="Get trusted answers instantly." />
             <Feature icon={<ClarityIcon />} title="Savings" text="See real savings, clearly shown." />
           </div>

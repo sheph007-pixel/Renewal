@@ -181,7 +181,7 @@ export default function Disclaimers({ g }: { g: Group }) {
     ANGLE,
     OPTIMYL,
     GRAVIE,
-    { title: "Kennion Benefit Advisors", blocks: [{ p: "Kennion Benefit Advisors is your broker. BenSync is the platform Kennion built to present the market's options for your renewal; coverage is issued by the Carrier/TPA you enroll with, on that Carrier/TPA's terms. Your Kennion account manager is the person to call with any question about what is shown here." }] },
+    { title: "Kennion Benefit Advisors", blocks: [{ p: "Kennion Benefit Advisors is your broker. BenSync is the platform Kennion built to present the market's options for your group; coverage is issued by the Carrier/TPA you enroll with, on that Carrier/TPA's terms. Your Kennion account manager is the person to call with any question about what is shown here." }] },
   ];
   const section = { ...panel, padding: "18px 22px", marginBottom: 14 } as const;
   const text = { fontSize: 13.5, lineHeight: 1.65, color: C.body } as const;

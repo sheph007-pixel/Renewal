@@ -43,7 +43,7 @@ const framesFor = (year: string): Frame[] => [
     kicker: "Meet BenSync",
     title: "Expert Brokerage Meets AI-Powered Technology",
     lead: "BenSync is Kennion's new benefits decision platform: one simple place to review, model and finalize your strategy.",
-    tiles: [{ title: "Easier Renewals" }, { title: "Faster Decisions" }, { title: "Total Clarity" }],
+    tiles: [{ title: "Easier Elections" }, { title: "Faster Decisions" }, { title: "Total Clarity" }],
   },
   {
     kicker: "Guided By AI. Backed By Your Team.",
