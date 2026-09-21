@@ -7,6 +7,10 @@
 // figures were checked and when; the document itself stays with staff.
 import Anthropic from "@anthropic-ai/sdk";
 import { prepareForModel } from "./intake.js";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
+
+/** The API refuses a PDF over this many pages outright. */
+const MAX_PDF_PAGES = 100;
 
 const apiKey = () => process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
@@ -70,7 +74,13 @@ const shape = (who, r) => ({
 async function claudeCheck({ filename, prepared, stored }) {
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
   const content = [];
-  if (prepared.kind === "pdf") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: prepared.buffer.toString("base64") }, title: filename });
+  if (prepared.kind === "pdf") {
+    const { numpages } = await pdfParse(prepared.buffer).catch(() => ({ numpages: 0 }));
+    if (numpages > MAX_PDF_PAGES) {
+      throw new Error(`This proposal is ${numpages} pages - too long for the model to audit (limit ${MAX_PDF_PAGES}).`);
+    }
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: prepared.buffer.toString("base64") }, title: filename });
+  }
   else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
   else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
   content.push({ type: "text", text: `The stored plans:\n${JSON.stringify(stored, null, 1)}\n\nCheck them against the document.` });
