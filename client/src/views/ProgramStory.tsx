@@ -15,12 +15,12 @@ interface Frame {
   tiles: Tile[];
 }
 
-/** The 2027 Kennion Program deck, one frame per slide, in its own words. */
-const FRAMES: Frame[] = [
+/** The Kennion Program deck, one frame per slide, in its own words. */
+const framesFor = (year: string): Frame[] => [
   {
-    kicker: "The 2027 Kennion Program",
+    kicker: `The ${year} Kennion Program`,
     title: "More Options. Smarter, Faster Decisions.",
-    lead: "Kennion has expanded its group health offering for 2027 with major national carriers, networks and program partners.",
+    lead: `Kennion has expanded its group health offering for ${year} with major national carriers, networks and program partners.`,
     tiles: [{ title: "Same Kennion Team" }, { title: "More Options" }, { title: "Better Technology" }],
   },
   {
@@ -30,7 +30,7 @@ const FRAMES: Frame[] = [
     tiles: [
       { title: "50+ Years", sub: "Serving employers with trusted, expert benefits advice." },
       { title: "2013", sub: "Launch of the Kennion Program." },
-      { title: "2027 And Beyond", sub: "Expanding to meet your requests for more choice." },
+      { title: `${year} And Beyond`, sub: "Expanding to meet your requests for more choice." },
     ],
   },
   {
@@ -60,20 +60,21 @@ const FRAMES: Frame[] = [
 ];
 
 /**
- * The 2027 Kennion Program, told in six frames that advance on their own
- * about every ten seconds: the story the program deck tells, on the page
- * instead of behind a download. It pauses while the pointer or keyboard is
- * on it and while the tab is hidden, never auto-plays for someone who asked
- * for reduced motion, and can be stepped by hand with the dots and arrows.
+ * The Kennion Program, told in six frames that advance on their own about
+ * every ten seconds: the story the program deck tells, on the page instead
+ * of behind a download. It pauses while the pointer or keyboard is on it
+ * and while the tab is hidden, never auto-plays for someone who asked for
+ * reduced motion, and can be stepped by hand with the dots and arrows.
  * Every tile is the same size on every frame, so the panel holds still as
  * the story moves.
  */
-export default function ProgramStory() {
+export default function ProgramStory({ year }: { year: string }) {
   const [i, setI] = useState(0);
   const [held, setHeld] = useState(false);
   const [hidden, setHidden] = useState(false);
   const reduce = useMemo(() => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const playing = !held && !hidden && !reduce;
+  const FRAMES = useMemo(() => framesFor(year), [year]);
 
   useEffect(() => {
     const on = () => setHidden(document.hidden);
@@ -85,7 +86,7 @@ export default function ProgramStory() {
     if (!playing) return;
     const t = setTimeout(() => setI((n) => (n + 1) % FRAMES.length), HOLD_MS);
     return () => clearTimeout(t);
-  }, [playing, i]);
+  }, [playing, i, FRAMES]);
 
   const f = FRAMES[i];
   const step = (d: number) => setI((n) => (n + d + FRAMES.length) % FRAMES.length);
@@ -107,7 +108,7 @@ export default function ProgramStory() {
     <section
       className="noprint story"
       aria-roledescription="carousel"
-      aria-label="The 2027 Kennion Program"
+      aria-label={`The ${year} Kennion Program`}
       style={{ ...panel, overflow: "hidden", borderColor: C.navy }}
       onMouseEnter={() => setHeld(true)}
       onMouseLeave={() => setHeld(false)}

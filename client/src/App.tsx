@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
+  effectiveDateLabel,
+  effectiveYear,
   groupSizeLabel,
   marketPlans,
   minimumContribution,
@@ -53,14 +55,14 @@ import type { AccountManager } from "@/lib/model";
 const EE_PCT = 80;
 const DEP_PCT = 32;
 
-const SITE = "BenSync - 2027 Renewal";
+const SITE = "BenSync";
 
 /** Every client page's name, said the same way everywhere it appears. */
 const TAB_LABEL: Record<GroupTab, string> = {
   home: "Welcome",
   assistant: "AI Assistant",
-  current: "Your 2026 Medical Plans",
-  options: "New 2027 Medical Options",
+  current: "Your Current Medical Plans",
+  options: "New Medical Options",
   supplemental: "Supplemental Package",
   resources: "Resources",
   signup: "Sign Up",
@@ -727,7 +729,7 @@ export default function App() {
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   const subline =
     tab === "signup" || tab === "supplemental"
-      ? "Effective January 1, 2027"
+      ? `Effective ${effectiveDateLabel(g)}`
       : tab === "disclaimers"
         ? "What every rate, benefit and recommendation here is, and is not."
       : tab === "census"
@@ -740,7 +742,7 @@ export default function App() {
 
   const printLine =
     (tab === "options" || tab === "signup"
-      ? "2027 renewal options, effective January 1, 2027"
+      ? `${effectiveYear(g)} options, effective ${effectiveDateLabel(g)}`
       : tab === "supplemental"
         ? "Supplemental benefits on file, besides medical"
         : `Current group health plans and cost, calendar year ${planYear}`) +
@@ -781,8 +783,9 @@ export default function App() {
    * decide - and today's plans sit beside them, muted, for reference.
    */
   const medicalTabs: { tab: GroupTab; label: string; lead: boolean }[] = [
-    { tab: "options", label: "New 2027 Medical Options", lead: true },
-    { tab: "current", label: "Current 2026 Medical Plans", lead: false },
+    { tab: "options", label: `New ${effectiveYear(g)} Medical Options`, lead: true },
+    // Nothing to show a group with no prior coverage on file.
+    ...(g.groupStatus === "new" ? [] : [{ tab: "current" as GroupTab, label: `Current ${planYear} Medical Plans`, lead: false }]),
   ];
 
   const shut = navCollapsed && !narrow;
@@ -941,11 +944,15 @@ export default function App() {
                   manager={manager}
                   broker={broker}
                   lastSignup={data.signup || null}
+                  effectiveDate={g.effectiveDate}
+                  groupStatus={g.groupStatus}
                 />
-                {/* What's New for 2027 sits under the welcome: where the market review stands, one page, less to click through. */}
-                <section id="changes" className="anchor" style={{ marginTop: 26 }}>
-                  <WhatsChanging data={data} g={g} optionsHref={hrefFor("options")} />
-                </section>
+                {/* What's New sits under the welcome: where the market review stands, one page, less to click through. Nothing to compare for a group with no prior coverage on file. */}
+                {g.groupStatus !== "new" && (
+                  <section id="changes" className="anchor" style={{ marginTop: 26 }}>
+                    <WhatsChanging data={data} g={g} optionsHref={hrefFor("options")} />
+                  </section>
+                )}
               </>
             ) : tab === "current" ? (
               <Current

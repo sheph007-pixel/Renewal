@@ -3,7 +3,7 @@ import { C, money0, panel } from "@/lib/importui";
 import { h3 } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { PATHS, linkPath } from "@/lib/router";
-import { BROKER_LABEL, RENEWALS, RENEWAL_LABEL, RENEWAL_TONE, type AdminGroup } from "@/views/GroupsTable";
+import { BROKER_LABEL, GROUP_STATUSES, GROUP_STATUS_LABEL, GROUP_STATUS_TONE, RENEWALS, RENEWAL_LABEL, RENEWAL_TONE, type AdminGroup } from "@/views/GroupsTable";
 import { GroupProposals } from "@/views/Proposals";
 import { GroupBilling } from "@/views/Funding";
 
@@ -377,7 +377,67 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
 
             <div style={{ marginTop: 14 }}>
               <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
-                2027 renewal
+                Group status
+              </label>
+              <div style={{ display: "flex", gap: 4 }} role="group" aria-label="Group status">
+                {GROUP_STATUSES.map((s) => {
+                  const on = (group.groupStatus || "existing") === s;
+                  const [fg, bg, bd] = GROUP_STATUS_TONE[s];
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => void save("groupStatus", s)}
+                      aria-pressed={on}
+                      style={{
+                        padding: "7px 14px",
+                        fontSize: 13,
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        ...(on
+                          ? { color: "#fff", background: fg, border: `1px solid ${fg}`, fontWeight: 500 }
+                          : { color: fg, background: bg, border: `1px solid ${bd}` }),
+                      }}
+                    >
+                      {GROUP_STATUS_LABEL[s]}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11.5, color: C.ghost, marginTop: 4 }}>
+                Existing by default - every group on file came from an Employee Navigator import. Flip a
+                group to New if it has no prior coverage to renew.
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }} htmlFor="effective-date">
+                Effective date
+              </label>
+              <input
+                id="effective-date"
+                type="date"
+                value={val("effectiveDate")}
+                onChange={(e) => setDraft((p) => ({ ...p, effectiveDate: e.target.value }))}
+                onBlur={async () => {
+                  const current = group.effectiveDate || "";
+                  if (draft.effectiveDate == null || draft.effectiveDate === current) return;
+                  await save("effectiveDate", draft.effectiveDate);
+                  setDraft((p) => {
+                    const { effectiveDate: _drop, ...rest } = p;
+                    return rest;
+                  });
+                }}
+                style={{ padding: "7px 10px", fontSize: 13, borderRadius: 4, border: `1px solid ${C.inputEdge}`, color: C.ink }}
+              />
+              <div style={{ fontSize: 11.5, color: C.ghost, marginTop: 4 }}>
+                Leave blank to use the system's default effective date. Only set this to put one group on
+                its own cycle.
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
+                Renewal status
               </label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }} role="group" aria-label="Renewal">
                 {RENEWALS.map((r) => {

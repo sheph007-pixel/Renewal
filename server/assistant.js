@@ -275,6 +275,8 @@ const TOOLS = [
 
 const money = (n) => (n == null || !Number.isFinite(Number(n)) ? "-" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const money0 = (n) => (n == null || !Number.isFinite(Number(n)) ? "-" : "$" + Math.round(Number(n)).toLocaleString("en-US"));
+/** "2027-01-01" -> "January 1, 2027", parsed as UTC so the server's own timezone never shifts the day. */
+const fmtEffectiveDate = (iso) => (iso ? new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : "the new plan year");
 const TIER_KEYS = ["EE", "ES", "EC", "FAM"];
 const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
 
@@ -313,7 +315,8 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
     // staff on the Data Check and never told to a client.
     `Headcount: BenSync holds only who is enrolled. It has no verified count of the company's total or benefit-eligible employees. If asked how many employees the company has, say that figure is not on file here and the account manager can confirm it from the census; never quote or estimate one.`,
     g.tiers ? `Enrollment by tier: ${TIER_KEYS.map((k) => `${k} ${g.tiers[k] ?? 0}`).join(", ")}` : null,
-    g.pyStart || g.pyEnd ? `Current plan year: ${g.pyStart || "?"} to ${g.pyEnd || "?"}; the 2027 renewal is effective January 1, 2027` : null,
+    g.pyStart || g.pyEnd ? `Current plan year: ${g.pyStart || "?"} to ${g.pyEnd || "?"}; the new plan year is effective ${fmtEffectiveDate(g.effectiveDate)}` : null,
+    g.groupStatus === "new" ? `This group is enrolling with Kennion for the first time, not renewing prior coverage.` : null,
     g.monthly != null ? `Total medical premium today: ${money(g.monthly)} per month (${money0(g.annual ?? g.monthly * 12)} per year)` : null,
     g.supplementalMonthly ? `Supplemental (non-medical) premium today: ${money(g.supplementalMonthly)} per month` : null,
     renewal ? `Renewal status with Kennion: ${renewal}` : null,

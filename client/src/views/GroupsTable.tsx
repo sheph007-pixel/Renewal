@@ -20,6 +20,10 @@ export interface AdminGroup {
   linkToken?: string | null;
   /** Where the 2027 renewal stands, for tracking. */
   renewal?: Renewal;
+  /** Renewing prior coverage, or enrolling with Kennion for the first time. Existing when unset - every group on file today came from an EN import. */
+  groupStatus?: "new" | "existing";
+  /** The date this group's elections take effect, as "YYYY-MM-DD". Falls back to the system default when unset. */
+  effectiveDate?: string | null;
   /** Carrier proposals filed under this group. */
   proposals?: number;
   /** The newest client invoice filed under this group, if any. */
@@ -103,7 +107,16 @@ export const RENEWAL_TONE: Record<Renewal, [string, string, string]> = {
   "non-renewed": [C.red, C.redTint, C.redEdge],
 };
 
-type Field = "companyId" | "sizeCategory" | "broker" | "renewal" | "manager";
+export const GROUP_STATUSES = ["existing", "new"] as const;
+export type GroupStatus = (typeof GROUP_STATUSES)[number];
+export const GROUP_STATUS_LABEL: Record<GroupStatus, string> = { existing: "Existing", new: "New" };
+/** [text, background, border] for each group status. */
+export const GROUP_STATUS_TONE: Record<GroupStatus, [string, string, string]> = {
+  existing: [C.body, C.zebra, C.border],
+  new: [C.teal, C.tealTint, C.teal],
+};
+
+type Field = "companyId" | "sizeCategory" | "broker" | "renewal" | "manager" | "groupStatus";
 
 type SortKey = "name" | "location" | "contact" | "enrolled" | "share" | "sizeCategory" | "broker" | "manager" | "renewal" | "invoice";
 

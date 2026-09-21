@@ -468,6 +468,13 @@ function fundingTotals(f) {
   };
 }
 
+// The date almost every group's elections take effect. A group on its own
+// cycle gets its own `effectiveDate` in group_meta instead (see setMeta);
+// this is only the fallback everyone else reads.
+const DEFAULT_EFFECTIVE_DATE = "2027-01-01";
+/** "2027-01-01" -> "January 1, 2027", parsed as UTC so the server's own timezone never shifts the day. */
+const fmtEffectiveDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
 function rebuild() {
   const base = data.groups.filter((g) => (g.plans || []).length > 0);
   const merged = new Map(base.map((g) => [g.name, g]));
@@ -510,6 +517,10 @@ function rebuild() {
     g.slug = groupSlug(g.name, code);
     // Renewal tracking: every group starts Open.
     g.renewal = m.renewal || "open";
+    // Every group on file today came from an Employee Navigator import, so
+    // Existing is the safe default; staff flip a group to New by hand.
+    g.groupStatus = m.groupStatus || "existing";
+    g.effectiveDate = m.effectiveDate || DEFAULT_EFFECTIVE_DATE;
     // Archived, or not on a program carrier: the row stays for staff, but the
     // code is refused at sign-in.
     if (!g.archived && g.eligible) {
@@ -541,6 +552,8 @@ function rebuild() {
     /** The proposal slots this group has: Cobalt only where it is quoted. */
     slots: slotsForGroup(g.name),
     renewal: g.renewal,
+    groupStatus: g.groupStatus,
+    effectiveDate: g.effectiveDate,
     proposals: proposalCounts[g.name] || 0,
     invoice: invoiceByGroup[g.name] || null,
     address1: g.address1 || null,
@@ -1374,6 +1387,8 @@ async function sendSupportEmail(t, g) {
  */
 async function sendRenewalEmail(e, g) {
   if (!RESEND_KEY) throw new Error("no Resend key on the service");
+  const verb = g.groupStatus === "new" ? "enrolled" : "renewed";
+  const effective = fmtEffectiveDate(g.effectiveDate || DEFAULT_EFFECTIVE_DATE);
   const lines = [
     ["Group", g.name],
     ["Carrier/TPA", e.carrier || "-"],
@@ -1386,13 +1401,13 @@ async function sendRenewalEmail(e, g) {
     ["Signer phone", e.signerPhone || "-"],
   ];
   const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
-    <h2 style="margin:0 0 12px;font-size:17px">${escapeHtml(g.name)} has renewed for 2027</h2>
+    <h2 style="margin:0 0 12px;font-size:17px">${escapeHtml(g.name)} has ${verb} - effective ${effective}</h2>
     <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
     ${e.note ? `<div style="font-weight:600;margin-bottom:4px">Note from the group</div><div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(e.note)}</div>` : ""}
     <p style="margin-top:18px;color:#888;font-size:12px">Submitted from the BenSync client portal · ${new Date(e.submittedAt).toLocaleString("en-US")}</p>
   </div>`;
-  const text = `${g.name} has renewed for 2027\n\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}${e.note ? `\n\nNote from the group:\n${e.note}` : ""}`;
-  const body = { from: SUPPORT_FROM, to: SUPPORT_TO, reply_to: e.signerEmail || undefined, subject: `${g.name} has renewed for 2027`, html, text };
+  const text = `${g.name} has ${verb} - effective ${effective}\n\n${lines.map(([k, v]) => `${k}: ${v}`).join("\n")}${e.note ? `\n\nNote from the group:\n${e.note}` : ""}`;
+  const body = { from: SUPPORT_FROM, to: SUPPORT_TO, reply_to: e.signerEmail || undefined, subject: `${g.name} has ${verb} - effective ${effective}`, html, text };
   const send = async (b) => {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -2430,6 +2445,12 @@ const CLIENT_GROUP_FIELDS = [
   "rates",
   "pyStart",
   "pyEnd",
+  // Whether the group is renewing prior coverage or enrolling for the first
+  // time, and the date its elections take effect - the two things that vary
+  // group to group around Sign Up, everything else there (the AI, the plan
+  // grid, dental/vision/supplemental) reads the same regardless.
+  "groupStatus",
+  "effectiveDate",
   // Dental, vision, life, disability … - the same shape the Groups page
   // shows staff, with no member detail: benefit, carrier, plan, enrolled,
   // monthly. Present only once an Employee Navigator export has been read
@@ -3574,7 +3595,7 @@ const EDITABLE_FIELDS = new Set([
 app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
   const { group, field, value } = req.body || {};
   const isCompanyField = EDITABLE_FIELDS.has(field);
-  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager"].includes(field) || isCompanyField)) {
+  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager", "groupStatus", "effectiveDate"].includes(field) || isCompanyField)) {
     return res.status(400).json({ error: "group and a valid field are required" });
   }
   if (!groups.some((g) => g.name === group)) {
@@ -3625,6 +3646,12 @@ app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }),
   }
   if (field === "renewal" && clean && !["open", "sent", "renewed", "non-renewed"].includes(clean)) {
     return res.status(400).json({ error: "Renewal must be open, sent, renewed or non-renewed." });
+  }
+  if (field === "groupStatus" && clean && !["new", "existing"].includes(clean)) {
+    return res.status(400).json({ error: "Group status must be new or existing." });
+  }
+  if (field === "effectiveDate" && clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
+    return res.status(400).json({ error: "Effective date must be YYYY-MM-DD." });
   }
 
   meta[group] = { ...(meta[group] || {}), [field]: clean };

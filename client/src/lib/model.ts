@@ -106,6 +106,10 @@ export interface Group {
   state?: string;
   pyStart?: string;
   pyEnd?: string;
+  /** Whether the group is renewing prior coverage or enrolling for the first time. Defaults to "existing" when unset. */
+  groupStatus?: "new" | "existing";
+  /** The date this group's elections take effect, as "YYYY-MM-DD"; falls back to the system default when unset. */
+  effectiveDate?: string;
   tpa: string;
   enrolled: number;
   /**
@@ -444,6 +448,20 @@ export function fmtDate(s: string | undefined): string {
     day: "2-digit",
     year: "numeric",
   });
+}
+
+/** The date almost every group's elections take effect, when a group has none of its own on file. Matches the server's own fallback. */
+export const DEFAULT_EFFECTIVE_DATE = "2027-01-01";
+
+/** A group's effective date, as "2027-01-01" -> "January 1, 2027" - parsed as UTC so the browser's own timezone never shifts the day. */
+export function effectiveDateLabel(g: Pick<Group, "effectiveDate">): string {
+  const iso = g.effectiveDate || DEFAULT_EFFECTIVE_DATE;
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** Just the year of a group's effective date - "2027". */
+export function effectiveYear(g: Pick<Group, "effectiveDate">): string {
+  return (g.effectiveDate || DEFAULT_EFFECTIVE_DATE).slice(0, 4);
 }
 
 export const tierByKey = (key: TierKey): Tier => TIERS.find((t) => t.key === key)!;
