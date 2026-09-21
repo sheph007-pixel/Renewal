@@ -10,11 +10,12 @@ import {
   type SupplementalLine,
 } from "@/lib/model";
 import { SUPPLEMENTAL_SECTIONS, EMPLOYER_PAID_LIFE, type SupplementalRow } from "@/lib/supplemental";
-import { C, h2, h3, panel, sectionHead } from "@/lib/ui";
+import { C, h2, h3, panel, sectionHead, textInput } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { carrierOf, fundingOf } from "@/views/PlanCard";
 import { useNarrow } from "@/lib/narrow";
-import { money0 } from "@/lib/model";
+import { money0, networkTypeOf } from "@/lib/model";
+import CarrierMark from "@/views/CarrierMark";
 
 interface Props {
   data: KennionData;
@@ -234,6 +235,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const [step, setStep] = useState(0);
   const [maxStep, setMaxStep] = useState(0);
   const [carrier, setCarrier] = useState<string | null>(bases.length === 1 ? bases[0].key : null);
+  const [planSearch, setPlanSearch] = useState("");
   const [dental, setDental] = useState<string[]>([]);
   const [vision, setVision] = useState<string[]>([]);
   const [employerLife, setEmployerLife] = useState("");
@@ -246,6 +248,18 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const [editing, setEditing] = useState(false);
 
   const carrierPlans = plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === carrier);
+  // Lowest deductible first, so a long carrier list reads richest-to-leanest
+  // rather than in raw catalogue order; ties and figure-less names fall back
+  // to alphabetical.
+  const carrierPlansSorted = [...carrierPlans].sort((a, b) => {
+    const amt = (s: string) => {
+      const m = s.match(/\$([\d,]+)/);
+      return m ? Number(m[1].replace(/,/g, "")) : Infinity;
+    };
+    return amt(a.plan) - amt(b.plan) || a.plan.localeCompare(b.plan);
+  });
+  const planQuery = planSearch.trim().toLowerCase();
+  const visiblePlans = planQuery ? carrierPlansSorted.filter((p) => p.plan.toLowerCase().includes(planQuery)) : carrierPlansSorted;
   const short = carrierPlans.filter((p) => selected[p.plan]);
   const tier = carrier && short.length ? planLimitFor(short[0].carrier, g.enrolled) : null;
   const cap = tier ? tier.maxWithUnderwriting ?? tier.maxPlans : null;
@@ -268,6 +282,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
 
   const pickCarrier = (key: string) => {
     setCarrier(key);
+    setPlanSearch("");
     // A plan checked earlier from the Options grid, under a different
     // carrier, cannot ride along - one carrier, one election.
     const keep = new Set(plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === key).map((p) => p.plan));
@@ -290,6 +305,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   };
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail.trim());
+  const phoneOk = signerPhone.replace(/\D/g, "").length >= 10;
 
   // Already renewed, and not mid-edit or freshly submitted: a plain summary,
   // with a way to open the wizard again if something needs to change.
@@ -423,16 +439,70 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 1 && (
               <>
                 <h3 style={h3}>Which {carrierOf(carrierPlans[0]) || "Medical"} Plans Do You Want To Offer?</h3>
-                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Check every plan you want available to employees during Open Enrollment.</p>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Click a plan to add or remove it - the same grid you've already seen, sorted lowest deductible first.</p>
                 {overLimit && tier && (
                   <div role="alert" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 6, background: C.redTint, color: C.red, fontSize: 13.5, lineHeight: 1.5 }}>
                     {carrierOf(carrierPlans[0])} allows up to {cap} plan{cap === 1 ? "" : "s"} for a group this size ({g.enrolled} enrolled){tier.maxWithUnderwriting ? ", even with underwriting approval" : ""}. Uncheck {short.length - (cap as number)} to continue.
                   </div>
                 )}
-                <div style={{ display: "grid", gap: 8 }}>
-                  {carrierPlans.map((p) => (
-                    <CheckOption key={p.plan} title={p.plan} checked={!!selected[p.plan]} onClick={() => onToggleSelected(p.plan)} />
-                  ))}
+                {carrierPlans.length > 6 && (
+                  <input
+                    type="search"
+                    value={planSearch}
+                    onChange={(e) => setPlanSearch(e.target.value)}
+                    placeholder={`Search ${carrierPlans.length} plans…`}
+                    aria-label="Search plans"
+                    style={{ ...textInput, width: "100%", marginBottom: 12, boxSizing: "border-box" }}
+                  />
+                )}
+                <div style={{ overflow: "auto", border: `1px solid ${C.hairline}`, borderRadius: 8 }}>
+                  <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {["Option", "Carrier/TPA", "Network Type", "Plan"].map((h) => (
+                          <th key={h} style={{ padding: "12px 10px 11px", fontSize: 13, color: C.onColor, background: C.headerBg, fontWeight: 700, textAlign: "left", whiteSpace: "nowrap" }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!visiblePlans.length && (
+                        <tr>
+                          <td colSpan={4} style={{ padding: "14px 10px", fontSize: 13.5, color: C.muted }}>
+                            No plans match "{planSearch}".
+                          </td>
+                        </tr>
+                      )}
+                      {visiblePlans.map((p, i) => {
+                        const on = !!selected[p.plan];
+                        const cell = { padding: "10px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
+                        return (
+                          <tr
+                            key={p.plan}
+                            onClick={() => onToggleSelected(p.plan)}
+                            style={{ background: on ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }}
+                          >
+                            <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint }}>{p.optionId ?? "-"}</td>
+                            <td style={{ ...cell, whiteSpace: "nowrap" }}>
+                              <CarrierMark name={carrierOf(p)} size={20} fontSize={12.5} color={C.body} />
+                            </td>
+                            <td style={{ ...cell, whiteSpace: "nowrap" }}>{networkTypeOf(p) || "-"}</td>
+                            <td style={{ ...cell, fontWeight: on ? 700 : 500 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                                {on && (
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flex: "none" }}>
+                                    <path d="M20 6 9 17l-5-5" />
+                                  </svg>
+                                )}
+                                {p.plan}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
                 <StepNav onBack={back} onContinue={next} disabled={!short.length || overLimit} hint={!short.length ? "Select at least one plan" : undefined} />
               </>
@@ -544,36 +614,44 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                 <div style={{ display: "grid", gap: 12, gridTemplateColumns: narrow ? "1fr" : "1fr 1fr" }}>
                   <label style={{ fontSize: 13, color: C.muted }}>
                     Your Name *
-                    <input value={signerName} onChange={(e) => setSignerName(e.target.value)} style={inputStyle} />
+                    <input required value={signerName} onChange={(e) => setSignerName(e.target.value)} style={inputStyle} />
                   </label>
                   <label style={{ fontSize: 13, color: C.muted }}>
-                    Your Title
-                    <input value={signerTitle} onChange={(e) => setSignerTitle(e.target.value)} style={inputStyle} />
+                    Your Title *
+                    <input required value={signerTitle} onChange={(e) => setSignerTitle(e.target.value)} style={inputStyle} />
                   </label>
                   <label style={{ fontSize: 13, color: C.muted }}>
                     Email *
-                    <input type="email" value={signerEmail} onChange={(e) => setSignerEmail(e.target.value)} style={inputStyle} />
+                    <input required type="email" value={signerEmail} onChange={(e) => setSignerEmail(e.target.value)} style={inputStyle} />
                   </label>
                   <label style={{ fontSize: 13, color: C.muted }}>
-                    Phone
-                    <input type="tel" value={signerPhone} onChange={(e) => setSignerPhone(e.target.value)} style={inputStyle} />
+                    Phone *
+                    <input required type="tel" value={signerPhone} onChange={(e) => setSignerPhone(e.target.value)} style={inputStyle} />
                   </label>
                 </div>
 
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  aria-label="Questions for your account manager"
-                  placeholder="Anything else for your account manager - contribution changes, timing, questions - optional"
-                  style={{ marginTop: 14, width: "100%", minHeight: 74, padding: "11px 13px", fontSize: 14, lineHeight: 1.55, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 6, outline: "none", resize: "vertical", boxSizing: "border-box" }}
-                />
+                <label style={{ display: "block", marginTop: 14, fontSize: 13, color: C.muted }}>
+                  Questions For Your Account Manager *
+                  <textarea
+                    required
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Contribution changes, timing, anything else before we finalize 2027"
+                    style={{ display: "block", marginTop: 5, width: "100%", minHeight: 74, padding: "11px 13px", fontSize: 14, lineHeight: 1.55, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 6, outline: "none", resize: "vertical", boxSizing: "border-box" }}
+                  />
+                </label>
 
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, fontSize: 13, color: C.body, cursor: "pointer" }}>
                   <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 2, accentColor: C.blue, width: 17, height: 17, flex: "none" }} />
                   I confirm I am authorized to make these elections on behalf of {g.name}, and that typing my name above is my electronic signature confirming this 2027 benefits election.
                 </label>
 
-                <StepNav onBack={back} onContinue={submit} continueLabel={submitting ? "Submitting…" : "Confirm & Renew For 2027"} disabled={submitting || !signerName.trim() || !emailOk || !attest} />
+                <StepNav
+                  onBack={back}
+                  onContinue={submit}
+                  continueLabel={submitting ? "Submitting…" : "Confirm & Renew For 2027"}
+                  disabled={submitting || !signerName.trim() || !signerTitle.trim() || !emailOk || !phoneOk || !note.trim() || !attest}
+                />
                 {submitError && (
                   <div role="alert" style={{ marginTop: 10, fontSize: 13, color: C.red }}>
                     {submitError}
