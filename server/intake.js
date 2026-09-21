@@ -29,6 +29,7 @@ const BY_EXT = {
   ".docx": ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   ".eml": ["email", "message/rfc822"],
   ".msg": ["msg", "application/vnd.ms-outlook"],
+  ".zip": ["zip", "application/zip"],
 };
 const BY_MIME = {
   "application/pdf": "pdf",
@@ -43,6 +44,9 @@ const BY_MIME = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "sheet",
   "application/vnd.ms-excel": "sheet",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/zip": "zip",
+  "application/x-zip-compressed": "zip",
+  "application/x-zip": "zip",
 };
 
 /** What a file is, from its name first and its declared type second. */
@@ -55,7 +59,7 @@ export function classify(filename, mime) {
 }
 
 export const SUPPORTED =
-  "PDF, email (.eml or .msg), Excel, Word, CSV, text, or an image (PNG, JPG)";
+  "PDF, email (.eml or .msg), a .zip of any of these, Excel, Word, CSV, text, or an image (PNG, JPG)";
 
 /** Images under this size are logos and signatures, not rate sheets. */
 const MIN_IMAGE_BYTES = 30 * 1024;
@@ -64,6 +68,35 @@ const excerpt = (s, n = 4000) => {
   const t = String(s || "").replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   return t.length > n ? t.slice(0, n) + " …" : t;
 };
+
+/**
+ * Open a .zip into the files worth reading. Folders, macOS junk
+ * (__MACOSX, .DS_Store) and anything unsupported (a nested .zip included -
+ * one level is enough) are left out and listed in `skipped`, the same as an
+ * email attachment this does not read.
+ */
+async function openZip(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const items = [];
+  const skipped = [];
+  for (const entry of Object.values(zip.files)) {
+    if (entry.dir) continue;
+    const base = entry.name.split("/").pop();
+    if (!base || entry.name.includes("__MACOSX/") || base.startsWith(".")) continue;
+    const c = classify(base, "");
+    if (c.type === "unsupported" || c.type === "zip") {
+      skipped.push(`${base} (not a type this reads)`);
+      continue;
+    }
+    const buf = await entry.async("nodebuffer");
+    if (c.type === "image" && buf.length < MIN_IMAGE_BYTES) {
+      skipped.push(`${base} (small image, likely a logo)`);
+      continue;
+    }
+    items.push({ filename: base, mime: c.mime, buffer: buf });
+  }
+  return { items, skipped };
+}
 
 /** Open an .eml or .msg into { context, attachments }. */
 async function openEmail(buffer, type) {
@@ -132,6 +165,11 @@ export async function expandUpload({ buffer, mime, filename }) {
   if (c.type === "unsupported") {
     throw new Error(`"${filename}" is not a type this reads yet. Upload ${SUPPORTED}.`);
   }
+  if (c.type === "zip") {
+    const { items, skipped } = await openZip(buffer);
+    if (!items.length) throw new Error(`"${filename}" has nothing this reads. Upload ${SUPPORTED}.`);
+    return { email: null, items: items.map((it) => ({ ...it, kind: "attachment" })), skipped };
+  }
   if (c.type !== "email" && c.type !== "msg") {
     return { email: null, items: [{ filename, mime: c.mime, buffer, kind: "file" }], skipped: [] };
   }
@@ -142,6 +180,12 @@ export async function expandUpload({ buffer, mime, filename }) {
   const skipped = [];
   for (const a of opened.attachments) {
     const ac = classify(a.filename, a.mime);
+    if (ac.type === "zip") {
+      const nested = await openZip(a.buffer);
+      for (const it of nested.items) items.push({ filename: it.filename, mime: it.mime, buffer: it.buffer, kind: "attachment", context });
+      skipped.push(...nested.skipped);
+      continue;
+    }
     if (ac.type === "unsupported" || ac.type === "email" || ac.type === "msg") {
       skipped.push(`${a.filename} (not a type this reads)`);
       continue;

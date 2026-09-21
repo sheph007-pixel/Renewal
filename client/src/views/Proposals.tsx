@@ -126,7 +126,7 @@ interface Extraction {
 }
 
 const ACCEPT =
-  ".pdf,.eml,.msg,.xlsx,.xlsm,.xls,.csv,.txt,.docx,.png,.jpg,.jpeg,.gif,.webp,application/pdf,message/rfc822,application/vnd.ms-outlook,text/csv,text/plain,image/*";
+  ".pdf,.eml,.msg,.zip,.xlsx,.xlsm,.xls,.csv,.txt,.docx,.png,.jpg,.jpeg,.gif,.webp,application/pdf,message/rfc822,application/vnd.ms-outlook,application/zip,application/x-zip-compressed,text/csv,text/plain,image/*";
 
 /** Rows that are proposals in their own right - not an email wrapper. */
 const isProposal = (p: Proposal) => p.status !== "container";
