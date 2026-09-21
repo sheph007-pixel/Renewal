@@ -27,7 +27,8 @@ import { expandUpload, prepareForModel, classify } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
-import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue } from "./plan-catalogue.js";
+import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
+import { loadPlanDocumentFiles } from "./plan-documents.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -344,11 +345,54 @@ async function loadPlanCatalogue() {
       console.error("plan catalogue:", e.message);
     }
   }
+  for (const d of designs) {
+    d.documents = {
+      sbc: planDocuments.has(planDocKey(d.carrier, d.planYear, d.planCode, "SBC")),
+      sob: planDocuments.has(planDocKey(d.carrier, d.planYear, d.planCode, "SOB")),
+    };
+  }
   planCatalogue = designs;
   planCatalogueIndex = catalogueIndex(designs);
   const per = {};
   for (const d of designs) per[d.carrier] = (per[d.carrier] || 0) + 1;
   console.log(`plan catalogue: ${designs.length} standard design(s) - ${Object.entries(per).map(([c, n]) => `${c} ${n}`).join(", ") || "none"}`);
+}
+
+/** The shipped SBC/SOB PDFs, by carrier: the actual documents behind each standard design in CATALOGUE_FILES above. */
+const PLAN_DOCUMENT_DIRS = [{ dir: path.join(__dirname, "data", "plan-docs", "angle-health-sbc-sob"), carrier: "Angle Health", planYear: 2027 }];
+const planDocKey = (carrier, planYear, planCode, docType) => `${carrier}|${planYear}|${catalogueKey(planCode)}|${docType}`;
+/** plan doc key -> metadata (no bytes): what loadPlanCatalogue checks to flag a design's documents. */
+let planDocuments = new Map();
+/** plan doc key -> { mime, data, filename }: shipped copies, served when there is no database or no row there yet. */
+let planDocumentFallback = new Map();
+
+/**
+ * Load every carrier's SBC/SOB PDFs: the shipped files, then the database's
+ * rows on top (a design with no rows yet is seeded from its shipped file).
+ * Run before loadPlanCatalogue so a design's `documents` flag is accurate as
+ * soon as the catalogue loads.
+ */
+async function loadPlanDocuments() {
+  const shipped = PLAN_DOCUMENT_DIRS.flatMap((d) => loadPlanDocumentFiles(d.dir, d));
+  planDocumentFallback = new Map(shipped.map((d) => [planDocKey(d.carrier, d.planYear, d.planCode, d.docType), { mime: d.mime, data: d.data, filename: d.filename }]));
+  let meta = shipped.map(({ data: _d, ...m }) => ({ ...m, updatedAt: null, updatedBy: null }));
+  if (db) {
+    try {
+      let stored = await db.listPlanDocuments();
+      const have = new Set(stored.map((d) => planDocKey(d.carrier, d.planYear, d.planCode, d.docType)));
+      const seed = shipped.filter((d) => !have.has(planDocKey(d.carrier, d.planYear, d.planCode, d.docType)));
+      if (seed.length) {
+        await db.upsertPlanDocuments(seed, "system");
+        console.log(`plan documents: seeded ${seed.length} document(s) from ${[...new Set(seed.map((d) => d.source))].join(", ")}`);
+        stored = await db.listPlanDocuments();
+      }
+      meta = stored;
+    } catch (e) {
+      console.error("plan documents:", e.message);
+    }
+  }
+  planDocuments = new Map(meta.map((d) => [planDocKey(d.carrier, d.planYear, d.planCode, d.docType), d]));
+  console.log(`plan documents: ${planDocuments.size} on file (${shipped.length} shipped)`);
 }
 /** group -> { slot: true } for slots that already hold a proposal, so a slot in use is never hidden. */
 let proposalSlotsByGroup = {};
@@ -3573,6 +3617,57 @@ app.post("/api/admin/plan-catalogue/:slug", requireStaff, express.raw({ type: ()
   }
 });
 
+/** A plan code as it appears in a URL: "ANG TRAD 5000 7000" -> "ang-trad-5000-7000", and back. */
+const planCodeSlug = (code) => String(code || "").toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+const planCodeFromSlug = (slug) => String(slug || "").toUpperCase().replace(/-/g, " ").trim();
+
+/**
+ * A carrier's SBC or SOB for one standard design - the actual PDF, not the
+ * figures read off it. Served without a session, like the plan catalogue's
+ * figures themselves: the same document for every group quoted that design.
+ */
+app.get("/api/carriers/:slug/plan-documents/:planSlug/:docType", async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  const docType = String(req.params.docType || "").toUpperCase();
+  if (!carrier || (docType !== "SBC" && docType !== "SOB")) return res.status(404).json({ error: "No such document." });
+  const planYear = Number(req.query.year) || 2027;
+  const planCode = planCodeFromSlug(req.params.planSlug);
+  const key = planDocKey(carrier, planYear, planCode, docType);
+  let doc = db ? await db.getPlanDocument(carrier, planYear, planCode, docType).catch(() => null) : null;
+  if (!doc) {
+    const fb = planDocumentFallback.get(key);
+    if (fb) doc = fb;
+  }
+  if (!doc) return res.status(404).json({ error: "No document on file for that plan." });
+  res.setHeader("Content-Type", doc.mime || "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${String(doc.filename || `${planCode} ${docType}.pdf`).replace(/[\r\n"]/g, "")}"`);
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.send(doc.data);
+});
+
+/** Every plan document on file, metadata only, for staff to review what is loaded. */
+app.get("/api/admin/plan-documents", requireStaff, async (_req, res) => {
+  res.json({ documents: [...planDocuments.values()], durable: !!db });
+});
+
+/** Staff replaces or adds one design's SBC or SOB by hand, without a deploy; a row in the database always wins over the shipped file. */
+app.post("/api/admin/plan-documents/:slug/:planSlug/:docType", requireStaff, express.raw({ type: () => true, limit: "10mb" }), async (req, res) => {
+  const carrier = carrierFromSlug(req.params.slug);
+  const docType = String(req.params.docType || "").toUpperCase();
+  if (!carrier || (docType !== "SBC" && docType !== "SOB")) return res.status(404).json({ error: "No such document." });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
+  const contentType = String(req.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (contentType && contentType !== "application/pdf") return res.status(400).json({ error: "Upload a PDF." });
+  const planYear = Number(req.query.year) || 2027;
+  const planCode = planCodeFromSlug(req.params.planSlug);
+  const filename = String(req.query.filename || `${planCode} ${docType}.pdf`).slice(0, 200);
+  if (!db) return res.status(400).json({ error: "No database is configured, so an uploaded document cannot be kept." });
+  await db.upsertPlanDocuments([{ carrier, planYear, planCode, docType, filename, mime: "application/pdf", data: req.body, source: "uploaded by staff" }], req.staffEmail || "staff");
+  await loadPlanDocuments();
+  await loadPlanCatalogue();
+  res.json({ ok: true, carrier, planCode, docType });
+});
+
 app.get("/api/admin/market-rules", requireStaff, (req, res) => {
   res.json(marketRules);
 });
@@ -5108,6 +5203,9 @@ async function boot() {
     rebuild();
   }
   // The carriers' standard designs first, so the proposals built next carry them.
+  // Documents before the catalogue, so each design's documents flag is right
+  // from its first load rather than only after a second loadPlanCatalogue().
+  await loadPlanDocuments();
   await loadPlanCatalogue();
   await loadCarrierPlanLimits();
   await proposalsChanged();

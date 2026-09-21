@@ -128,6 +128,27 @@ CREATE TABLE IF NOT EXISTS kennion.carrier_plan_limits (
   updated_by  text
 );
 
+-- Each standard design's actual carrier documents - the Summary of Benefits
+-- and Coverage (SBC) and Summary of Benefits (SOB) PDFs, not just the
+-- figures read off them in carrier_plan_designs. One row per carrier, plan
+-- year, plan code and document type; the PDF itself is the blob, same
+-- reasoning as carrier_logos below. Seeded at boot from
+-- server/data/plan-docs where a design has no rows yet; a row here always
+-- wins over the seed, so staff can replace a document without a deploy.
+CREATE TABLE IF NOT EXISTS kennion.plan_documents (
+  carrier     text NOT NULL,
+  plan_year   integer NOT NULL DEFAULT 2027,
+  plan_code   text NOT NULL,
+  doc_type    text NOT NULL CHECK (doc_type IN ('SBC','SOB')),
+  filename    text NOT NULL,
+  mime        text NOT NULL DEFAULT 'application/pdf',
+  data        bytea NOT NULL,
+  source      text,
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  updated_by  text,
+  PRIMARY KEY (carrier, plan_year, plan_code, doc_type)
+);
+
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
 
@@ -656,6 +677,36 @@ export function createDb(url) {
            ON CONFLICT (carrier) DO UPDATE SET
              tiers = EXCLUDED.tiers, updated_at = now(), updated_by = EXCLUDED.updated_by`,
           [d.carrier, JSON.stringify(d.tiers), by || null],
+        );
+      }
+      return list.length;
+    },
+
+    /** Every plan document on file, metadata only - no bytes - for the admin list and for flagging which designs have one. */
+    async listPlanDocuments() {
+      const { rows } = await pool.query(
+        "SELECT carrier, plan_year, plan_code, doc_type, filename, mime, source, updated_at, updated_by FROM kennion.plan_documents ORDER BY carrier, plan_year, plan_code, doc_type",
+      );
+      return rows.map((r) => ({ carrier: r.carrier, planYear: r.plan_year, planCode: r.plan_code, docType: r.doc_type, filename: r.filename, mime: r.mime, source: r.source, updatedAt: r.updated_at, updatedBy: r.updated_by }));
+    },
+    /** One document with its bytes, or null. */
+    async getPlanDocument(carrier, planYear, planCode, docType) {
+      const { rows } = await pool.query(
+        "SELECT carrier, plan_year, plan_code, doc_type, filename, mime, data, updated_at FROM kennion.plan_documents WHERE carrier = $1 AND plan_year = $2 AND plan_code = $3 AND doc_type = $4",
+        [carrier, planYear, planCode, docType],
+      );
+      const r = rows[0];
+      return r ? { carrier: r.carrier, planYear: r.plan_year, planCode: r.plan_code, docType: r.doc_type, filename: r.filename, mime: r.mime, data: r.data, updatedAt: r.updated_at } : null;
+    },
+    /** Write documents in, replacing one when its carrier, year, plan code and type are already there. */
+    async upsertPlanDocuments(list, by) {
+      for (const d of list) {
+        await pool.query(
+          `INSERT INTO kennion.plan_documents (carrier, plan_year, plan_code, doc_type, filename, mime, data, source, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
+           ON CONFLICT (carrier, plan_year, plan_code, doc_type) DO UPDATE SET
+             filename = EXCLUDED.filename, mime = EXCLUDED.mime, data = EXCLUDED.data, source = EXCLUDED.source, updated_at = now(), updated_by = EXCLUDED.updated_by`,
+          [d.carrier, d.planYear || 2027, d.planCode, d.docType, d.filename, d.mime || "application/pdf", d.data, d.source || null, by || null],
         );
       }
       return list.length;

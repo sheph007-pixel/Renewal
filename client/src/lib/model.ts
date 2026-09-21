@@ -282,6 +282,18 @@ export interface PlanDesign {
   deductibleEmbedded: boolean | null;
   /** Every service line the carrier lists, in its order, with the member cost as the card reads it. */
   services: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
+  /** Whether the carrier's actual Summary of Benefits and Coverage / Summary of Benefits PDF is on file for this design. */
+  documents?: { sbc: boolean; sob: boolean } | null;
+}
+
+/** "ANG TRAD 5000 7000" -> "ang-trad-5000-7000", matching the server's planCodeSlug. */
+const planCodeSlug = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+const carrierDocSlug = (carrier: string) => carrier.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** The URL for a design's SBC or SOB PDF; null when it is not on file. */
+export function planDocumentUrl(carrier: string, d: PlanDesign, kind: "sbc" | "sob"): string | null {
+  if (!d.documents || !d.documents[kind]) return null;
+  return `/api/carriers/${carrierDocSlug(carrier)}/plan-documents/${planCodeSlug(d.planCode)}/${kind}?year=${d.planYear}`;
 }
 
 /** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
