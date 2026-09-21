@@ -2,7 +2,7 @@ import { useState } from "react";
 import { C, ctaLink, h2, h3, kicker, panel, primaryBtn } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
-import type { AccountManager, GroupSignup } from "@/lib/model";
+import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
 import ProgramStory from "@/views/ProgramStory";
 import { useNarrow } from "@/lib/narrow";
@@ -37,6 +37,10 @@ interface Props {
   /** The licensed broker, from the server; HUNTER when it sends none. */
   broker?: AccountManager | null;
   lastSignup: GroupSignup | null;
+  /** The date this group's elections take effect. Falls back to the system default when unset. */
+  effectiveDate?: string;
+  /** Renewing prior coverage, or enrolling with Kennion for the first time. */
+  groupStatus?: "new" | "existing";
 }
 
 /** A small arrow-down-into-tray icon for the download button. */
@@ -55,7 +59,7 @@ function DownloadIcon() {
  * each time, from the quotes on file at that moment, so it always says what
  * the pages say.
  */
-function DownloadChanges({ groupName }: { groupName: string }) {
+function DownloadChanges({ groupName, year }: { groupName: string; year: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -77,10 +81,10 @@ function DownloadChanges({ groupName }: { groupName: string }) {
         style={{ ...primaryBtn, display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
         <DownloadIcon />
-        {busy ? "Building Your Overview…" : "Download 2027 Program Overview"}
+        {busy ? "Building Your Overview…" : `Download ${year} Program Overview`}
       </button>
       <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || "A simple two-page overview of what's new for 2027, ready to share with your team."}
+        {error || `A simple two-page overview of what's new for ${year}, ready to share with your team.`}
       </span>
     </div>
   );
@@ -96,16 +100,19 @@ function DownloadChanges({ groupName }: { groupName: string }) {
  * first, at the top of the page, and the team card beside it keeps the
  * people and the AI Assistant reachable without making a call the next step.
  */
-export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup }: Props) {
+export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup, effectiveDate, groupStatus }: Props) {
   const narrow = useNarrow();
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   const head = { ...h2, marginBottom: 10, fontSize: 18, letterSpacing: "-0.2px" } as const;
   const assistant = assistantHref ? <Link href={assistantHref} style={link}>AI Assistant</Link> : "AI Assistant";
   const submitted = lastSignup ? new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
+  const isNew = groupStatus === "new";
+  const eff = { effectiveDate };
+  const year = effectiveYear(eff);
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your January 1 effective date.</> },
+    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your {effectiveDateLabel(eff)} effective date.</> },
     { title: "Review Supplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
     { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans, model contributions and narrow the options that make the most sense for your group.</> },
     {
@@ -113,7 +120,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
       href: signUpHref,
       body: (
         <>
-          Once your strategy is set, confirm the plans and benefits you want to offer for 2027.
+          Once your strategy is set, confirm the plans and benefits you want to offer for {year}.
           {submitted && <> You submitted on {submitted}; you can send an update any time.</>}
         </>
       ),
@@ -123,10 +130,12 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        <ProgramStory />
+        <ProgramStory year={year} />
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
-          <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your 2027 Renewal</h2>
-          <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for 2027.</p>
+          <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your {year} {isNew ? "Program" : "Renewal"}</h2>
+          <p style={{ ...p, fontWeight: 600, color: C.ink }}>
+            {isNew ? `You're joining the Kennion Program for ${year}.` : `The Kennion Program is expanding for ${year}.`}
+          </p>
           <p style={p}>
             Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
             since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
@@ -137,8 +146,8 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             by the same Kennion team you already know.
           </p>
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
-            <p style={{ ...kicker, marginBottom: 8 }}>2027 Program Overview</p>
-            <DownloadChanges groupName={groupName} />
+            <p style={{ ...kicker, marginBottom: 8 }}>{year} Program Overview</p>
+            <DownloadChanges groupName={groupName} year={year} />
           </div>
         </div>
 

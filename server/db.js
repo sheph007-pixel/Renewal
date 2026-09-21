@@ -151,6 +151,15 @@ CREATE TABLE IF NOT EXISTS kennion.plan_documents (
 
 -- Where the 2027 renewal stands, for tracking. Null means Open.
 ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS renewal text CHECK (renewal IN ('open','sent','renewed','non-renewed'));
+-- Whether the group has a prior plan on file to renew, or is enrolling for
+-- the first time. Null means Existing - every group on file today came from
+-- an Employee Navigator import, so that is the safe default.
+ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS group_status text CHECK (group_status IN ('new','existing'));
+-- The date this group's elections take effect. Null falls back to the
+-- system's default effective date (see DEFAULT_EFFECTIVE_DATE in
+-- server/index.js) - almost every group shares one date, so this is only
+-- set to override it for a group on its own cycle.
+ALTER TABLE kennion.group_meta ADD COLUMN IF NOT EXISTS effective_date date;
 
 -- What a group submitted on its own Sign Up page: the plans it shortlisted
 -- and any note, timestamped. One row per submission, so a second submission
@@ -534,7 +543,7 @@ export function createDb(url) {
 
       const meta = {};
       const mrows = await pool.query(
-        "SELECT group_name, company_id, size_category, archived, fields, broker, renewal, manager, link_token FROM kennion.group_meta",
+        "SELECT group_name, company_id, size_category, archived, fields, broker, renewal, manager, link_token, group_status, effective_date FROM kennion.group_meta",
       );
       for (const r of mrows.rows) {
         meta[r.group_name] = {
@@ -546,6 +555,8 @@ export function createDb(url) {
           manager: r.manager || null,
           linkToken: r.link_token || null,
           renewal: r.renewal || null,
+          groupStatus: r.group_status || null,
+          effectiveDate: day(r.effective_date),
         };
       }
 
@@ -586,7 +597,7 @@ export function createDb(url) {
       await pool.query("UPDATE kennion.groups SET payload = $2 WHERE name = $1", [name, payload]);
     },
 
-    /** Staff edit to a group's code, ALE bucket, broker label, renewal state, or archived state. */
+    /** Staff edit to a group's code, ALE bucket, broker label, renewal state, group status, effective date, or archived state. */
     async setMeta(groupName, field, value, by) {
       const col =
         field === "companyId"
@@ -601,7 +612,11 @@ export function createDb(url) {
                   ? "link_token"
               : field === "renewal"
                 ? "renewal"
-                : "size_category";
+                : field === "groupStatus"
+                  ? "group_status"
+                  : field === "effectiveDate"
+                    ? "effective_date"
+                    : "size_category";
       await pool.query(
         `INSERT INTO kennion.group_meta (group_name, ${col}, updated_by)
          VALUES ($1,$2,$3)
