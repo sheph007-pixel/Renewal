@@ -816,6 +816,10 @@ const CARRIER_PLAN_LIMITS: Record<string, PlanLimitTier[]> = {
     { min: 2, max: 50, maxPlans: 2 },
     { min: 51, max: null, maxPlans: 3, maxWithUnderwriting: 4 },
   ],
+  Gravie: [
+    { min: 2, max: 50, maxPlans: 3 },
+    { min: 51, max: null, maxPlans: 4 },
+  ],
 };
 /** Every carrier with a plan-count limit on file, for listing them (the disclaimers page). */
 export const PLAN_LIMIT_CARRIERS: string[] = Object.keys(CARRIER_PLAN_LIMITS);
@@ -829,16 +833,22 @@ export function planLimitFor(carrier: string, enrolled: number): PlanLimitTier |
 
 const tierRangeLabel = (t: PlanLimitTier) => (t.max == null ? `${t.min}+ enrolled` : `${t.min}-${t.max} enrolled`);
 
-/** Every tier of a carrier's plan-count limit, in one sentence, for the disclaimers page; null for a carrier with no limit on file. */
-export function planLimitSummary(carrier: string): string | null {
+/**
+ * Every tier of a carrier's plan-count limit, in one sentence, for the
+ * disclaimers page; null for a carrier with no limit on file. Split into
+ * the carrier's name and the rest of the sentence so the page can bold the
+ * name - the same standardized wording either way, generated from the one
+ * `CARRIER_PLAN_LIMITS` table that Sign Up's own logic reads.
+ */
+export function planLimitSummary(carrier: string): { carrier: string; rest: string } | null {
   const tiers = CARRIER_PLAN_LIMITS[carrier];
   if (!tiers) return null;
   const parts = tiers.map((t) => `${plural(t.maxPlans, "plan")} for a group with ${tierRangeLabel(t)}`);
   const joined = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
-  let text = `${carrier} allows ${joined}.`;
+  let rest = ` allows ${joined}.`;
   const uw = tiers.find((t) => t.maxWithUnderwriting != null);
-  if (uw) text += ` A group with ${tierRangeLabel(uw)} may ask ${carrier}'s underwriting to raise that to ${uw.maxWithUnderwriting} plans.`;
-  return text;
+  if (uw) rest += ` A group with ${tierRangeLabel(uw)} may ask ${carrier}'s underwriting to raise that to ${uw.maxWithUnderwriting} plans.`;
+  return { carrier, rest };
 }
 
 /**

@@ -7,13 +7,19 @@ import { C, h2, h3, panel } from "@/lib/ui";
  * at one size. Kennion is the broker; nothing here is legal, tax or coverage
  * advice. A Carrier/TPA's own terms are quoted as it wrote them.
  */
-/** Plain text, or text followed by one outbound link - "Network: Cigna OAP. [Cigna Provider Search]". */
-type TextWithLink = string | { text: string; linkLabel: string; linkUrl: string };
+/** Plain text, text with a bold lead - "Gravie allows..." with "Gravie" bold - or text followed by one outbound link - "Network: Cigna OAP. [Cigna Provider Search]". */
+type TextWithLink = string | { bold: string; text: string } | { text: string; linkLabel: string; linkUrl: string };
 type Block = { h?: string; p?: TextWithLink; list?: TextWithLink[] };
 type Section = { title: string; blocks: Block[] };
 
 function Text({ t }: { t: TextWithLink }) {
   if (typeof t === "string") return <>{t}</>;
+  if ("bold" in t) return (
+    <>
+      <strong style={{ color: C.ink }}>{t.bold}</strong>
+      {t.text}
+    </>
+  );
   return (
     <>
       {t.text}{" "}
@@ -162,7 +168,11 @@ export default function Disclaimers({ g }: { g: Group }) {
       title: "How Many Plans A Group Can Offer",
       blocks: [
         { p: "Some Carriers/TPAs limit how many plans a group may offer its employees, based on enrolled headcount:" },
-        { list: PLAN_LIMIT_CARRIERS.map((c) => planLimitSummary(c)).filter((s): s is string => !!s) },
+        {
+          list: PLAN_LIMIT_CARRIERS.map((c) => planLimitSummary(c))
+            .filter((s): s is { carrier: string; rest: string } => !!s)
+            .map((s) => ({ bold: s.carrier, text: s.rest })),
+        },
         { p: ANGLE_HEALTH_NO_PLAN_CAP },
       ],
     },

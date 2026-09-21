@@ -274,6 +274,13 @@ const CARRIER_PLAN_LIMIT_SEED = [
       { min: 51, max: null, maxPlans: 3, maxWithUnderwriting: 4 },
     ],
   },
+  {
+    carrier: "Gravie",
+    tiers: [
+      { min: 2, max: 50, maxPlans: 3 },
+      { min: 51, max: null, maxPlans: 4 },
+    ],
+  },
 ];
 /** carrier -> its tiers, loaded at boot (the database's rows, once seeded, win over the seed above). */
 let carrierPlanLimits = new Map(CARRIER_PLAN_LIMIT_SEED.map((d) => [d.carrier, d.tiers]));
