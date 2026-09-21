@@ -179,6 +179,20 @@ ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_title text;
 ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_email text;
 ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_phone text;
 ALTER TABLE kennion.group_signups ADD COLUMN IF NOT EXISTS signer_ip text;
+-- Dental and vision started as one plan per group; a group may now pick up
+-- to 3 of each, so both become an array. Idempotent - a no-op once already
+-- jsonb, so this runs safely on every boot rather than once.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'kennion' AND table_name = 'group_signups' AND column_name = 'dental' AND data_type <> 'jsonb') THEN
+    ALTER TABLE kennion.group_signups ALTER COLUMN dental TYPE jsonb USING (CASE WHEN dental IS NULL THEN '[]'::jsonb ELSE to_jsonb(ARRAY[dental]) END);
+    ALTER TABLE kennion.group_signups ALTER COLUMN dental SET DEFAULT '[]'::jsonb;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'kennion' AND table_name = 'group_signups' AND column_name = 'vision' AND data_type <> 'jsonb') THEN
+    ALTER TABLE kennion.group_signups ALTER COLUMN vision TYPE jsonb USING (CASE WHEN vision IS NULL THEN '[]'::jsonb ELSE to_jsonb(ARRAY[vision]) END);
+    ALTER TABLE kennion.group_signups ALTER COLUMN vision SET DEFAULT '[]'::jsonb;
+  END IF;
+END $$;
 
 -- A support ticket a client sends from the portal; emailed to Kennion and
 -- kept here so nothing is lost if the email does not go out.
@@ -608,13 +622,13 @@ export function createDb(url) {
       return rows[0];
     },
 
-    /** The guided wizard's full election: what marks a group Renewed. */
+    /** The guided wizard's full election: what marks a group Renewed. Dental and vision are each up to 3 plans, or a single waive line. */
     async addRenewalElection(groupName, e) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.group_signups (group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, signer_ip)
-         VALUES ($1, $2::jsonb, $3, 'renewal', $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         VALUES ($1, $2::jsonb, $3, 'renewal', $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11, $12)
          RETURNING id, group_name, plans, note, kind, carrier, dental, vision, employer_life, signer_name, signer_title, signer_email, signer_phone, submitted_at`,
-        [groupName, JSON.stringify(e.plans || []), e.note || null, e.carrier || null, e.dental || null, e.vision || null, e.employerLife || null, e.signerName || null, e.signerTitle || null, e.signerEmail || null, e.signerPhone || null, e.signerIp || null],
+        [groupName, JSON.stringify(e.plans || []), e.note || null, e.carrier || null, JSON.stringify(e.dental || []), JSON.stringify(e.vision || []), e.employerLife || null, e.signerName || null, e.signerTitle || null, e.signerEmail || null, e.signerPhone || null, e.signerIp || null],
       );
       return rows[0];
     },

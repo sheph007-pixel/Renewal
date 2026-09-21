@@ -667,8 +667,11 @@ function shapeSignup(signup) {
     submittedAt: signup.submitted_at,
     kind: signup.kind === "renewal" ? "renewal" : "shortlist",
     carrier: signup.carrier || null,
-    dental: signup.dental || null,
-    vision: signup.vision || null,
+    // Dental/vision started as one plan (a bare string); a jsonb array is
+    // what every row now holds, but this reads either so an old row - or
+    // the in-memory fallback's plain JSON file - still displays.
+    dental: Array.isArray(signup.dental) ? signup.dental : signup.dental ? [signup.dental] : [],
+    vision: Array.isArray(signup.vision) ? signup.vision : signup.vision ? [signup.vision] : [],
     employerLife: signup.employer_life || null,
     signerName: signup.signer_name || null,
     signerTitle: signup.signer_title || null,
@@ -1368,8 +1371,8 @@ async function sendRenewalEmail(e, g) {
     ["Group", g.name],
     ["Carrier/TPA", e.carrier || "-"],
     ["Medical plan(s)", e.plans.join(", ") || "-"],
-    ["Dental", e.dental || "-"],
-    ["Vision", e.vision || "-"],
+    ["Dental", e.dental.join(", ") || "-"],
+    ["Vision", e.vision.join(", ") || "-"],
     ["Employer Paid Life", e.employerLife || "-"],
     ["Signed by", `${e.signerName}${e.signerTitle ? `, ${e.signerTitle}` : ""}`],
     ["Signer email", e.signerEmail || "-"],
@@ -1585,16 +1588,20 @@ app.post("/api/group/renew", express.json({ limit: "16kb" }), async (req, res) =
     }
   }
   const str = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
-  const dental = str(body.dental, 200);
-  const vision = str(body.vision, 200);
+  // Up to 3 plans, or a single waive line - never both, the client already
+  // enforces that, this just refuses anything larger than what it could send.
+  const strList = (v, max) =>
+    Array.isArray(v) ? [...new Set(v.map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 3).map((x) => x.slice(0, max)) : [];
+  const dental = strList(body.dental, 200);
+  const vision = strList(body.vision, 200);
   const employerLife = str(body.employerLife, 100);
   const signerName = str(body.signerName, 200);
   const signerTitle = str(body.signerTitle, 200);
   const signerEmail = str(body.signerEmail, 200);
   const signerPhone = str(body.signerPhone, 60);
   const note = str(body.note, 4000);
-  if (!dental) return res.status(400).json({ error: "Choose a dental option, or waive it." });
-  if (!vision) return res.status(400).json({ error: "Choose a vision option, or waive it." });
+  if (!dental.length) return res.status(400).json({ error: "Choose up to 3 dental options, or waive it." });
+  if (!vision.length) return res.status(400).json({ error: "Choose up to 3 vision options, or waive it." });
   if (!employerLife) return res.status(400).json({ error: "Choose an Employer Paid Life option, or decline it." });
   if (!signerName) return res.status(400).json({ error: "Enter your name." });
   if (!signerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return res.status(400).json({ error: "Enter a valid email address." });
@@ -1648,7 +1655,7 @@ app.post("/api/group/renew", express.json({ limit: "16kb" }), async (req, res) =
     console.error(`renewal election for ${g.name} stored but not emailed:`, e.message);
   }
 
-  console.log(`renewal election received: ${g.name} - ${carrier || "?"} - ${plans.length} plan(s), dental: ${dental}, vision: ${vision}, employer life: ${employerLife}, signed by ${signerName}${emailed ? "" : " (email failed)"}`);
+  console.log(`renewal election received: ${g.name} - ${carrier || "?"} - ${plans.length} plan(s), dental: ${dental.join(", ")}, vision: ${vision.join(", ")}, employer life: ${employerLife}, signed by ${signerName}${emailed ? "" : " (email failed)"}`);
   res.json({ ok: true, emailed, signup: shapeSignup(record) });
 });
 
