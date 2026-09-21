@@ -469,6 +469,17 @@ export default function App() {
   }, [restoring, session, page.kind, g]);
 
   /**
+   * The bare address already reads as sign-in, but /login is the one meant
+   * to be typed or shared - so nobody signed in who lands on "/" stays
+   * there; the bar moves to /login outright, any ?code= riding along
+   * unchanged. `replace` so the back button is not trapped.
+   */
+  useEffect(() => {
+    if (restoring || session !== "none") return;
+    if (route.path === PATHS.signin) navigate(PATHS.login + window.location.search, { replace: true });
+  }, [restoring, session, route.path]);
+
+  /**
    * Rewrite a group address to its short, canonical form - the company and
    * its plan-year code, then the tab - once the group is known. A permanent
    * link (`/g/…/<token>`) that signed the browser in, one minted before the
