@@ -50,70 +50,6 @@ const fullBtn = {
   fontWeight: 600,
 } as const;
 
-/** A feature highlight in the brand panel: icon chip + title + one-liner. */
-function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <div>
-      <div
-        style={{
-          width: 34,
-          height: 34,
-          borderRadius: 9,
-          display: "grid",
-          placeItems: "center",
-          background: "rgba(127,214,168,0.14)",
-          color: C.teal,
-          marginBottom: 12,
-        }}
-      >
-        {icon}
-      </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "#fff", marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 12.5, color: C.railMuted, lineHeight: 1.5 }}>{text}</div>
-    </div>
-  );
-}
-
-const iconProps = {
-  width: 18,
-  height: 18,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-const RenewIcon = () => (
-  <svg {...iconProps}>
-    <path d="M21 3v6h-6" />
-    <path d="M3 21v-6h6" />
-    <path d="M3.5 9a8.5 8.5 0 0 1 14-3.5L21 9" />
-    <path d="M20.5 15a8.5 8.5 0 0 1-14 3.5L3 15" />
-  </svg>
-);
-
-const AskIcon = () => (
-  <svg {...iconProps}>
-    <path d="M20 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
-  </svg>
-);
-
-const ClarityIcon = () => (
-  <svg {...iconProps}>
-    <polyline points="22 6 13.5 15 8.5 10 2 17" />
-    <polyline points="16 6 22 6 22 12" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-    <rect x={4} y={11} width={16} height={10} rx={2} />
-    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-  </svg>
-);
-
 export default function Login({
   mode,
   codeInput,
@@ -169,33 +105,16 @@ export default function Login({
         </div>
 
         <div style={{ maxWidth: 460 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.5px", color: C.teal, textTransform: "uppercase", marginBottom: 14 }}>
-            {mode === "group" ? "Modern Benefits Brokerage" : "Internal Access"}
-          </div>
-          <h1 style={{ margin: "0 0 14px", fontSize: 34, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px", lineHeight: 1.15, textWrap: "balance" }}>
+          <h1 style={{ margin: "0 0 10px", fontSize: 30, fontWeight: 700, color: "#fff", letterSpacing: "-0.5px", lineHeight: 1.2, textWrap: "balance" }}>
             {mode === "group" ? "Smarter benefits. Lower costs." : "The Kennion staff portal."}
           </h1>
-          <div style={{ fontSize: 14.5, color: C.railInk, lineHeight: 1.6, textWrap: "balance" }}>
-            {mode === "group"
-              ? "Kennion Benefit Advisors pairs technology with benefits innovation to help you take on rising healthcare costs. BenSync keeps every election moving and every question answered."
-              : "Manage groups, elections, and client access from one place."}
+          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.4px", color: C.teal, textTransform: "uppercase" }}>
+            {mode === "group" ? "Modern Benefits Brokerage" : "Internal Access"}
           </div>
         </div>
-
-        {mode === "group" && (
-          <div className="login-features" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 22 }}>
-            <Feature icon={<RenewIcon />} title="Elections" text="Keep every decision moving." />
-            <Feature icon={<AskIcon />} title="Ask BenSync" text="Get trusted answers instantly." />
-            <Feature icon={<ClarityIcon />} title="Savings" text="See real savings, clearly shown." />
-          </div>
-        )}
       </div>
 
       <div style={{ background: C.page, display: "flex", flexDirection: "column" }}>
-        <div style={{ textAlign: "right", padding: "18px 28px 0" }}>
-          <span style={{ fontSize: 12, color: C.faint }}>Encrypted &amp; secure</span>
-        </div>
-
         <div style={{ flex: 1, display: "grid", placeItems: "center", padding: "24px 20px 46px" }}>
           <div style={{ width: "100%", maxWidth: 400 }}>
             {mode === "group" ? (
@@ -249,10 +168,7 @@ export default function Login({
                   </div>
                 </div>
 
-                <div style={{ marginTop: 16, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
-                    <LockIcon /> Bank-level encryption
-                  </span>
+                <div style={{ marginTop: 16, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <button
                     onClick={() => onMode("staff")}
                     style={{
