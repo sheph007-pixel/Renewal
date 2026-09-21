@@ -8,6 +8,10 @@
 // extracted figures are stored for review, not pushed into the rate tables.
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
+
+/** The API refuses a PDF over this many pages outright. */
+const MAX_PDF_PAGES = 100;
 
 /**
  * The API key. The SDK reads ANTHROPIC_API_KEY on its own; CLAUDE and
@@ -222,6 +226,12 @@ export async function analyzeProposal(file, roster) {
   const content = [];
   const p = file.prepared;
   if (p.kind === "pdf") {
+    const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
+    if (numpages > MAX_PDF_PAGES) {
+      throw new Error(
+        `This proposal is ${numpages} pages - the model can only read a PDF up to ${MAX_PDF_PAGES} pages. Split it and upload the parts separately.`,
+      );
+    }
     content.push({
       type: "document",
       source: { type: "base64", media_type: "application/pdf", data: p.buffer.toString("base64") },
