@@ -256,8 +256,10 @@ export async function analyzeProposal(file, roster) {
     // of them is written out here: 16k of output truncated the long ones.
     max_tokens: 64000,
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    // Reading rate grids off scanned pages is the intelligence-sensitive part.
-    output_config: { effort: "high", format: jsonSchemaOutputFormat(SCHEMA) },
+    // Haiku doesn't support effort parameter; only Opus models do.
+    output_config: PROPOSAL_MODEL === "claude-haiku-4-5"
+      ? { format: jsonSchemaOutputFormat(SCHEMA) }
+      : { effort: "high", format: jsonSchemaOutputFormat(SCHEMA) },
     messages: [{ role: "user", content }],
   };
 
