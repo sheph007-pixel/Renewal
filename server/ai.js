@@ -9,9 +9,65 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
+import { PDFDocument } from "pdf-lib";
 
-/** The API refuses a PDF over this many pages outright. */
+/** The API refuses a PDF over this many pages outright, whatever the model. */
 const MAX_PDF_PAGES = 100;
+
+/** Cut a long PDF into readable parts, each at most MAX_PDF_PAGES. */
+async function splitPdf(buffer) {
+  const src = await PDFDocument.load(buffer);
+  const total = src.getPageCount();
+  const parts = [];
+  for (let start = 0; start < total; start += MAX_PDF_PAGES) {
+    const end = Math.min(start + MAX_PDF_PAGES, total);
+    const doc = await PDFDocument.create();
+    const pages = await doc.copyPages(
+      src,
+      Array.from({ length: end - start }, (_, i) => start + i),
+    );
+    for (const pg of pages) doc.addPage(pg);
+    parts.push({ buffer: Buffer.from(await doc.save()), first: start + 1, last: end, total });
+  }
+  return parts;
+}
+
+/**
+ * Fold the readings of a split proposal into one. Every plan from every part
+ * is kept, in order; the header facts come from the first part that states
+ * one, since a carrier prints them on the opening pages.
+ */
+function mergeReadings(readings) {
+  const firstSet = (key, blank) => {
+    for (const r of readings) {
+      const v = r[key];
+      if (v !== null && v !== undefined && v !== blank) return v;
+    }
+    return readings[0]?.[key] ?? null;
+  };
+  return {
+    ...readings[0],
+    carrier: firstSet("carrier", "Unknown"),
+    funding: firstSet("funding", "unknown"),
+    proposal_type: firstSet("proposal_type", "unknown"),
+    quotes_medical: readings.some((r) => r.quotes_medical === true),
+    quote_id: firstSet("quote_id"),
+    group_name_on_document: firstSet("group_name_on_document"),
+    matched_group: firstSet("matched_group"),
+    // The least sure part governs: a match the whole document does not support
+    // should not read as certain because its first pages did.
+    confidence: Math.min(...readings.map((r) => Number(r.confidence) || 0)),
+    effective_date: firstSet("effective_date"),
+    enrolled_on_document: firstSet("enrolled_on_document"),
+    total_monthly: firstSet("total_monthly"),
+    plans: readings.flatMap((r) => (Array.isArray(r.plans) ? r.plans : [])),
+    summary: readings.map((r) => r.summary).filter(Boolean).join(" "),
+    audit_flags: [
+      `Read in ${readings.length} parts: the document is longer than one reading holds.`,
+      ...new Set(readings.flatMap((r) => (Array.isArray(r.audit_flags) ? r.audit_flags : []))),
+    ],
+  };
+}
 
 /**
  * The API key. The SDK reads ANTHROPIC_API_KEY on its own; CLAUDE and
@@ -223,8 +279,44 @@ export async function analyzeProposal(file, roster) {
     .map((g) => `- ${g.name} (${g.enrolled} enrolled, ${g.tpa || "TPA unknown"})`)
     .join("\n");
 
-  const content = [];
+  const ctx = file.context;
+  const emailNote = ctx
+    ? `\n\nThis file arrived as an attachment to an email, which is useful context for the match (the subject or body often names the group):\nFrom: ${ctx.from || "?"}\nSubject: ${ctx.subject || "?"}\nDate: ${ctx.date || "?"}\nBody:\n${ctx.body || "(empty)"}`
+    : "";
+  const ask = (partNote = "") =>
+    `The file is named "${file.filename}".${emailNote}${partNote}\n\nKennion's roster - the only groups a proposal can be matched to:\n${rosterText}\n\nRead the proposal and fill in the structured result.`;
+
   const p = file.prepared;
+
+  // A quote longer than the API's page ceiling is read in parts and folded back
+  // into one result, rather than handed back to staff to split by hand.
+  if (p.kind === "pdf") {
+    const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
+    if (numpages > MAX_PDF_PAGES) {
+      const parts = await splitPdf(p.buffer);
+      const readings = [];
+      for (const part of parts) {
+        readings.push(
+          await readOnce(client, [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: part.buffer.toString("base64") },
+              title: file.filename,
+            },
+            {
+              type: "text",
+              text: ask(
+                `\n\nThis is pages ${part.first}-${part.last} of a ${part.total}-page proposal, read in parts. List only the plans printed on these pages; the other parts are read separately and their plans are added to yours.`,
+              ),
+            },
+          ]),
+        );
+      }
+      return mergeReadings(readings);
+    }
+  }
+
+  const content = [];
   if (p.kind === "pdf") {
     const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
     if (numpages > MAX_PDF_PAGES) {
@@ -250,16 +342,12 @@ export async function analyzeProposal(file, roster) {
       title: file.filename,
     });
   }
+  content.push({ type: "text", text: ask() });
+  return readOnce(client, content);
+}
 
-  const ctx = file.context;
-  const emailNote = ctx
-    ? `\n\nThis file arrived as an attachment to an email, which is useful context for the match (the subject or body often names the group):\nFrom: ${ctx.from || "?"}\nSubject: ${ctx.subject || "?"}\nDate: ${ctx.date || "?"}\nBody:\n${ctx.body || "(empty)"}`
-    : "";
-  content.push({
-    type: "text",
-    text: `The file is named "${file.filename}".${emailNote}\n\nKennion's roster - the only groups a proposal can be matched to:\n${rosterText}\n\nRead the proposal and fill in the structured result.`,
-  });
-
+/** One reading: the model call, and the structured result out of it. */
+async function readOnce(client, content) {
   const params = {
     model: PROPOSAL_MODEL,
     // A carrier quote can list dozens of plans over many pages, and every one
