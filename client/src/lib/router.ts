@@ -6,6 +6,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  * around as a link, and a reload lands where it started.
  *
  *   /                    group sign-in (/?code=XXXX signs that group in)
+ *   /login               …the same page, for a link that assumes this address
  *   /:slug               a signed-in group's own pages - Welcome
  *   /:slug/assistant     …Assistant (and /:slug/assistant/:id, one conversation)
  *   /:slug/changes       …an old address: What's Changing is a section of Welcome now
@@ -57,6 +58,8 @@ export type Page =
 
 export const PATHS = {
   signin: "/",
+  /** An alias for the same sign-in page - some link or bookmark elsewhere assumes this address exists. */
+  login: "/login",
   staffSignin: "/admin",
   current: "/current",
   options: "/options",
@@ -72,7 +75,7 @@ export const PATHS = {
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
 
 /** First path segments that are pages of their own, never a group's slug. */
-const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz"]);
+const RESERVED = new Set(["g", "admin", "api", "assets", "current", "options", "healthz", "login"]);
 const TABS = "assistant|changes|current|options|supplemental|resources|signup|disclaimers|census";
 /** The Assistant page may name one conversation: `/:slug/assistant/:id`. */
 const TAB_TAIL = `(?:\\/(${TABS})(?:\\/(\\d{1,12}))?)?`;
@@ -135,7 +138,7 @@ function safeDecode(s: string): string {
 }
 
 export function parsePath(path: string): Page {
-  if (path === PATHS.signin) return { kind: "signin", staff: false };
+  if (path === PATHS.signin || path === PATHS.login) return { kind: "signin", staff: false };
   if (path === PATHS.staffSignin) return { kind: "signin", staff: true };
   if (path === PATHS.current) return { kind: "group", tab: "current" };
   if (path === PATHS.options) return { kind: "group", tab: "options" };

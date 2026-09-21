@@ -693,8 +693,7 @@ button,
   }
 }
 
-/* Login: a brand panel beside the sign-in card. Narrow screens stack them;
-   the feature row itself only stacks to one column once it's too tight. */
+/* Login: a brand panel beside the sign-in card. Narrow screens stack them. */
 .login-split {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
@@ -707,12 +706,6 @@ button,
   .login-split > .login-brand {
     padding: 32px 24px !important;
     gap: 28px;
-  }
-}
-@media (max-width: 480px) {
-  .login-split .login-features {
-    grid-template-columns: 1fr !important;
-    gap: 18px !important;
   }
 }
 
