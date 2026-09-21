@@ -1604,7 +1604,10 @@ app.post("/api/group/renew", express.json({ limit: "16kb" }), async (req, res) =
   if (!vision.length) return res.status(400).json({ error: "Choose up to 3 vision options, or waive it." });
   if (!employerLife) return res.status(400).json({ error: "Choose an Employer Paid Life option, or decline it." });
   if (!signerName) return res.status(400).json({ error: "Enter your name." });
+  if (!signerTitle) return res.status(400).json({ error: "Enter your title." });
   if (!signerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (!signerPhone || signerPhone.replace(/\D/g, "").length < 10) return res.status(400).json({ error: "Enter a valid phone number." });
+  if (!note) return res.status(400).json({ error: "Let your account manager know if there's anything to flag before 2027." });
   if (!body.attest) return res.status(400).json({ error: "Confirm you're authorized to make these elections for the group." });
 
   const carrier = basis ? basis[0] : null;
