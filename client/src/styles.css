@@ -697,19 +697,19 @@ button,
   }
 }
 
-/* Login: a brand panel beside the sign-in card. Narrow screens stack them. */
-.login-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+/* Login: one sign-in card, centred on an otherwise empty page. */
+.login-page {
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: #f5f7f9;
 }
-@media (max-width: 860px) {
-  .login-split {
-    grid-template-columns: 1fr;
-  }
-  .login-split > .login-brand {
-    padding: 32px 24px !important;
-    gap: 28px;
+@media (max-width: 640px) {
+  .login-page {
+    align-items: flex-start;
+    padding: 56px 18px 32px;
   }
 }
 
