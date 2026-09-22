@@ -295,7 +295,65 @@ function designFor(planDesigns, planName) {
 const DESIGN_LINES = ["Deductible", "Out-of-Pocket Max", "Primary Care Office Visits", "Specialist Office Visits", "Virtual Primary Care Visits", "Emergency Room Facility Fee", "Inpatient Facility Fee", "Outpatient Facility Fee", "RX | Generics", "RX | Brand: Preferred", "RX | Brand: Non-preferred"];
 const designText = (d) => DESIGN_LINES.filter((k) => d[k]).map((k) => `${k.replace("RX | ", "Rx ")}: ${d[k]}`).join("; ");
 
-export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal, planDesigns, census }) {
+/** One benefit-summary line item as the assistant reads it, whatever shape its category uses (value or copay, note/frequency/description). */
+function benefitLineText(l) {
+  const val = l.value ?? l.copay ?? null;
+  const head = [l.label, val].filter(Boolean).join(": ");
+  const extra = [l.frequency, l.note, l.description].filter(Boolean).join("; ");
+  return extra ? `${head} (${extra})` : head;
+}
+
+/** One standardized plan/product as a single compact reference line: name, carrier, and its headline summary figures. */
+function benefitSummaryLine(e) {
+  const bits = Object.entries(e.summary || {})
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()} ${v}`);
+  const tag = e.status === "legacy" ? ` - legacy, ended ${e.effectiveThrough}` : "";
+  return `- ${e.name} (${e.carrier || "carrier ?"})${tag}${bits.length ? ": " + bits.join("; ") : ""}`;
+}
+
+const BENEFIT_CATEGORY_HEADING = {
+  dental: "Dental (Guardian)",
+  vision: "Vision (VSP)",
+  supplemental: "Supplemental / voluntary (Guardian)",
+  "medical-legacy": "Old Medical (ending 12/31/26 - reference only, never recommend for 2027)",
+};
+
+/**
+ * Kennion's standardized benefit summaries, from each carrier's own plan
+ * PDF: every dental, vision and supplemental product Kennion offers, plus
+ * the group's prior (2026) medical options. Every product gets one compact
+ * reference line so the assistant knows what exists; whichever the group
+ * actually has in force (matched against its supplemental lines by plan
+ * name) gets its full benefit-row detail too, so a coverage question about
+ * the group's own plan gets an exact answer, not a guess.
+ */
+function benefitSummariesText(benefitSummaries, g) {
+  if (!Array.isArray(benefitSummaries) || !benefitSummaries.length) return null;
+  const inForce = new Set((g.lines || []).map((l) => String(l.plan || "").trim().toLowerCase()));
+  const byCategory = new Map();
+  for (const e of benefitSummaries) {
+    if (!byCategory.has(e.category)) byCategory.set(e.category, []);
+    byCategory.get(e.category).push(e);
+  }
+  const out = [`\n## Standardized benefit summaries on file`];
+  out.push(`From Kennion's own carrier plan-summary PDFs. Dental, vision and supplemental below are the standing lineup (not tied to a plan year); Old Medical is the group's prior (2026) options, kept for reference only.`);
+  for (const cat of ["dental", "vision", "supplemental", "medical-legacy"]) {
+    const list = byCategory.get(cat);
+    if (!list || !list.length) continue;
+    out.push(`\n### ${BENEFIT_CATEGORY_HEADING[cat] || cat}`);
+    for (const e of list) {
+      out.push(benefitSummaryLine(e));
+      if (inForce.has(String(e.name).trim().toLowerCase())) {
+        out.push(`  In force for this group - full coverage detail:`);
+        for (const l of e.lines || []) out.push(`    - ${benefitLineText(l)}`);
+      }
+    }
+  }
+  return out.join("\n");
+}
+
+export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal, planDesigns, census, benefitSummaries }) {
   const g = group;
   const out = [];
   out.push(`# ${g.name}`);
@@ -359,6 +417,9 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
     out.push(`\n## Supplemental benefits in force`);
     for (const l of g.lines) out.push(`- ${l.benefit}: ${l.carrier} ${l.plan} - ${l.enrolled} enrolled, ${money(l.monthly)}/month`);
   }
+
+  const benefitText = benefitSummariesText(benefitSummaries, g);
+  if (benefitText) out.push(benefitText);
 
   if (funding) {
     out.push(`\n## This month's billing (${funding.month || "latest"})`);

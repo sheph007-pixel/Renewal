@@ -157,6 +157,20 @@ export const MANAGERS = MANAGER_LIST.managers;
 const MANAGER_BY_NAME = new Map(MANAGER_LIST.list.map((r) => [normalizeName(r.group), r.manager]));
 
 /**
+ * Standardized benefit summaries, read from each carrier's own plan-summary
+ * PDF: Guardian dental, VSP vision and Guardian supplemental (accident,
+ * cancer, critical illness, disability, hospital gap, voluntary life) - the
+ * standing lineup, not tied to a plan year - plus the group's prior (2026)
+ * "Old Medical" options, kept for reference now that 2027 medical is new.
+ * One entry per plan/product, each with a `summary` of headline figures and
+ * a `lines` array transcribing every benefit row. See describeGroup() in
+ * assistant.js for how the assistant reads this.
+ */
+const BENEFIT_SUMMARIES = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "data", "benefit-summaries.json"), "utf8"),
+);
+
+/**
  * The account manager a client may see: name, direct line, email and booking
  * link, and nothing else. A group with no manager on the list falls back to the
  * office, so the card on a client's page is never empty.
@@ -1914,6 +1928,7 @@ async function assistantData(g) {
     renewal: g.renewal,
     planDesigns: data.planDesigns,
     census: censusProfile(g),
+    benefitSummaries: BENEFIT_SUMMARIES,
   };
 }
 
