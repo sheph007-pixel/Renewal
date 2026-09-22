@@ -23,7 +23,7 @@ import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explai
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
-import { expandUpload, prepareForModel, classify } from "./intake.js";
+import { expandUpload, prepareForModel, classify, SUPPORTED } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
@@ -3989,20 +3989,39 @@ app.get("/api/resources/:id/file", async (req, res) => {
   res.send(r.data);
 });
 
-/** Staff uploads one piece of marketing material; Claude reads it and files it under a vendor immediately. */
+/**
+ * Staff uploads one piece of marketing material, or a .zip of several;
+ * Claude reads each one and files it under a vendor immediately. A zip is
+ * opened with the same reader a proposal upload uses - folders, macOS junk
+ * and anything unsupported inside it are left out rather than failing the
+ * whole upload - and every file it yields is read and filed on its own.
+ */
 app.post("/api/admin/resources", requireStaff, express.raw({ type: () => true, limit: "20mb" }), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
   const filename = String(req.query.filename || "resource").slice(0, 200);
   const mime = String(req.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
   try {
-    const prepared = await prepareForModel({ buffer: req.body, mime, filename });
-    const read = await categorizeResource({ filename, prepared });
-    const carrier = CARRIERS.find((c) => c.toLowerCase() === String(read.carrier || "").toLowerCase()) || "Other";
-    const title = String(read.title || filename).slice(0, 200);
-    const summary = read.summary ? String(read.summary).slice(0, 400) : null;
-    const { id, uploadedAt } = await resourceStore.add({ carrier, title, summary, filename, mime, size: req.body.length, data: req.body, uploadedBy: req.staffEmail || null });
-    console.log(`resource ${id}: "${title}" filed under ${carrier} by ${req.staffEmail || "staff"}`);
-    res.json({ id, carrier, title, summary, filename, mime, size: req.body.length, uploadedAt });
+    const { items, skipped } = await expandUpload({ buffer: req.body, mime, filename });
+    if (!items.length) return res.status(400).json({ error: `"${filename}" has nothing this reads. Upload ${SUPPORTED}.` });
+
+    const filed = [];
+    const failed = [...(skipped || [])];
+    for (const it of items) {
+      try {
+        const prepared = await prepareForModel(it);
+        const read = await categorizeResource({ filename: it.filename, prepared });
+        const carrier = CARRIERS.find((c) => c.toLowerCase() === String(read.carrier || "").toLowerCase()) || "Other";
+        const title = String(read.title || it.filename).slice(0, 200);
+        const summary = read.summary ? String(read.summary).slice(0, 400) : null;
+        const { id, uploadedAt } = await resourceStore.add({ carrier, title, summary, filename: it.filename, mime: it.mime, size: it.buffer.length, data: it.buffer, uploadedBy: req.staffEmail || null });
+        console.log(`resource ${id}: "${title}" filed under ${carrier} by ${req.staffEmail || "staff"}`);
+        filed.push({ id, carrier, title, summary, filename: it.filename, mime: it.mime, size: it.buffer.length, uploadedAt });
+      } catch (e) {
+        failed.push(`${it.filename}: ${e.message}`);
+      }
+    }
+    if (!filed.length) return res.status(422).json({ error: failed[0] || "Nothing could be filed." });
+    res.json({ resources: filed, failed });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }

@@ -96,9 +96,10 @@ function ResourceRow({ r, token, onChanged }: { r: Resource; token: string; onCh
 
 /**
  * Resources: marketing material for the client-facing Resources page - not
- * a plan document or a proposal. Upload a file and Claude reads it, says
- * which vendor it is for and gives it a title, and it is live on the shared
- * page immediately; a wrong guess is fixed right here, in the row.
+ * a plan document or a proposal. Upload a file, or a .zip of several, and
+ * Claude reads each one, says which vendor it is for and gives it a title,
+ * and it is live on the shared page immediately; a wrong guess is fixed
+ * right here, in the row.
  */
 export default function AdminResources({ token }: { token: string }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -127,7 +128,13 @@ export default function AdminResources({ token }: { token: string }) {
       });
       const j = await r.json().catch(() => ({ error: `Server returned ${r.status}.` }));
       if (!r.ok) throw new Error(j.error || `Server returned ${r.status}.`);
-      setDone(`"${j.title}" filed under ${j.carrier}.`);
+      const filed: { title: string; carrier: string }[] = j.resources || [];
+      const skipped: string[] = j.failed || [];
+      const summary =
+        filed.length === 1
+          ? `"${filed[0].title}" filed under ${filed[0].carrier}.`
+          : `${filed.length} file${filed.length === 1 ? "" : "s"} filed: ${filed.map((r) => `"${r.title}" (${r.carrier})`).join(", ")}.`;
+      setDone(skipped.length ? `${summary} Skipped: ${skipped.join(", ")}.` : summary);
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -141,12 +148,13 @@ export default function AdminResources({ token }: { token: string }) {
     <div style={{ ...panel, marginTop: 16, padding: "14px 22px" }}>
       <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>Resources</div>
       <div style={{ marginTop: 6, fontSize: 13, color: C.body, lineHeight: 1.6, maxWidth: 840 }}>
-        Marketing material for the client-facing Resources page - broker decks, one-pagers, FAQs. Upload a file and
-        Claude reads it, says which vendor it is for and gives it a short title, and it goes live on that page
-        immediately - the same page every group sees. Fix a wrong guess right in the row below, or remove it.
+        Marketing material for the client-facing Resources page - broker decks, one-pagers, FAQs. Upload a file, or a
+        .zip of several at once, and Claude reads each one, says which vendor it is for and gives it a short title,
+        and it goes live on that page immediately - the same page every group sees. Fix a wrong guess right in the
+        row below, or remove it.
       </div>
       <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, color: C.body }}>
-        <input ref={ref} type="file" aria-label="Marketing material" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
+        <input ref={ref} type="file" aria-label="Marketing material or a .zip of several" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
         {busy && <span style={{ color: C.faint }}>Reading…</span>}
         {done && <span style={{ color: C.green }}>{done}</span>}
         {error && <span style={{ color: C.red }}>{error}</span>}
