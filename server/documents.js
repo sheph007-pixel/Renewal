@@ -7,7 +7,6 @@ import PDFDocument from "pdfkit";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { networkLabel } from "./proposal-kind.js";
-import { RATE_DISCLAIMER } from "./disclaimer.js";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 
@@ -243,13 +242,11 @@ function pdfFooter(doc, { caption } = {}) {
     // Writing below the bottom margin would open a new page; lift it for the footer.
     const keep = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
-    // The notice, in full, above the page number; small, three lines at most.
     const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    doc.font("GSF").fontSize(6.5).fillColor(MUTED).text(RATE_DISCLAIMER, doc.page.margins.left, doc.page.height - 48, { width: w, align: "center", lineGap: 0 });
     doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(
       `${caption || "Monthly composite rates at the group's current enrollment, from the Carrier/TPA quotes on file"}  ·  Page ${i - range.start + 1} of ${range.count}`,
       doc.page.margins.left,
-      doc.page.height - 16,
+      doc.page.height - 24,
       { width: w, align: "center", lineBreak: false },
     );
     doc.page.margins.bottom = keep;
@@ -335,7 +332,6 @@ export async function renderComparison({ format, title, group: g, table }) {
     aoa.push([`Enrollment by tier: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${table.counts[k] || 0}`).join(", ")}`]);
     if (table.contribution) aoa.push([`Employer contribution modeled at: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money(table.contribution[k])}`).join(", ")} per month`]);
     for (const n of table.notes) aoa.push([n]);
-    aoa.push([RATE_DISCLAIMER]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"] = cols.map((c) => ({ wch: Math.max(10, Math.round(c.width / 6)) }));
     const wb = XLSX.utils.book_new();
@@ -405,7 +401,6 @@ export function renderPlanSheet({ group: g, columns, rows, contribution }) {
     ...(contribution ? [["Employer contribution applied", `${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money(contribution[k])}`).join(", ")} per month; employees pay the rest of their tier's rate.`]] : []),
     [],
     ["Every 2027 plan quoted for the group, one row each, with the same details the plan card shows: benefits as printed on the carrier's quote, monthly composite rates by tier, and the split at the employer contribution applied on the Medical Plans page."],
-    [RATE_DISCLAIMER],
   ];
   const wa = XLSX.utils.aoa_to_sheet(about);
   wa["!cols"] = [{ wch: 30 }, { wch: 110 }];
@@ -868,7 +863,7 @@ export async function renderDocument({ format, title, markdown, group: g }) {
         children.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "DFE3E6" } }, spacing: { after: 160 } }));
       }
     }
-    children.push(new Paragraph({ spacing: { before: 360 }, children: [new TextRun({ text: `Prepared with the BenSync Assistant from the group's own figures on file; confirm with your Kennion account manager. ${RATE_DISCLAIMER}`, color: "6B7276", size: 17 })] }));
+    children.push(new Paragraph({ spacing: { before: 360 }, children: [new TextRun({ text: `Prepared with the BenSync Assistant from the group's own figures on file; confirm with your Kennion account manager.`, color: "6B7276", size: 17 })] }));
     const doc = new Document({
       creator: "BenSync",
       title: name,

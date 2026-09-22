@@ -35,9 +35,6 @@ export default function Footer({ disclaimersHref }: { disclaimersHref?: string }
             </Link>
           </>
         )}
-        <div style={{ marginTop: 8 }}>
-          <span style={{ fontWeight: 700, color: C.muted }}>BenSync</span> · Powered by Kennion Benefit Advisors
-        </div>
       </div>
     </div>
   );
