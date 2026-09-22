@@ -328,13 +328,14 @@ export async function deleteFile(id: number): Promise<void> {
 }
 
 /**
- * The 2027 Program Overview, the group's own two-page summary: the program's
+ * The group's own Program Overview, a two-page summary: the program's
  * expansion, what stays the same and what is new, the two bills, the next
  * steps, FAQs and the team. Built on the server when the button is pressed,
- * so it always matches the pages. Saves through the browser.
+ * so it always matches the pages. Saves through the browser. `year` only
+ * names the downloaded file - the group's own effective date, not a fixed one.
  */
-export async function exportChangesPdf(groupName: string): Promise<void> {
-  await downloadFile("/api/group/export", `${groupName} - 2027 Program Overview.pdf`, { format: "changes" });
+export async function exportChangesPdf(groupName: string, year: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - ${year} Program Overview.pdf`, { format: "changes" });
 }
 
 /** Fetch a file with the session headers and hand it to the browser as a download. */
@@ -351,9 +352,9 @@ export async function exportGridPdf(view: ExportView, plans: string[], contribut
   await downloadFile("/api/group/export", `${groupName} - ${label}.pdf`, { view, plans, contribution });
 }
 
-/** Every 2027 plan's card as a row of an Excel workbook: the page builds the columns and rows, the server writes the file. */
-export async function exportPlansExcel(columns: string[], rows: (string | number | null)[][], contribution: Record<string, number>, groupName: string): Promise<void> {
-  await downloadFile("/api/group/export", `${groupName} - 2027 Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
+/** Every plan's card as a row of an Excel workbook: the page builds the columns and rows, the server writes the file. */
+export async function exportPlansExcel(columns: string[], rows: (string | number | null)[][], contribution: Record<string, number>, groupName: string, year: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - ${year} Medical Plans.xlsx`, { view: "all", format: "xlsx", columns, rows, contribution });
 }
 
 /** One person on the census, employee or dependant, in the Employee Navigator census's own columns. */
