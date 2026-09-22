@@ -1,5 +1,5 @@
 import { brandOf } from "@/lib/carrier-logos";
-import { websiteOf } from "@/lib/carrier-sites";
+import { findADoctorOf, websiteOf } from "@/lib/carrier-sites";
 import { C } from "@/lib/ui";
 import { useNarrow } from "@/lib/narrow";
 
@@ -71,6 +71,56 @@ export function CarrierSiteLink({ name, fontSize = 12.5 }: { name: string; fontS
     >
       <GlobeIcon size={Math.round(fontSize * 1.1)} />
       Website
+    </a>
+  );
+}
+
+/** A small magnifying-glass glyph for the "Find A Doctor" link. */
+function SearchIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ flex: "none" }}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+
+/**
+ * The carrier's or TPA's public provider-search tool, alongside its website
+ * link - "is my doctor in network?" is the very next question after "what's
+ * their website." Nothing when no directory is on file for the name.
+ */
+export function FindADoctorLink({ name, fontSize = 12.5 }: { name: string; fontSize?: number }) {
+  const narrow = useNarrow();
+  const url = findADoctorOf(name);
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="noprint"
+      title={`Find a doctor in ${name}'s network`}
+      aria-label={`Find a doctor in ${name}'s network (opens in a new tab)`}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        flex: "none",
+        padding: narrow ? "10px 13px" : "5px 11px",
+        borderRadius: 999,
+        border: `1px solid ${C.greenEdge}`,
+        background: C.greenTint,
+        fontSize,
+        fontWeight: 600,
+        color: C.green,
+        textDecoration: "none",
+        whiteSpace: "nowrap",
+      }}
+    >
+      <SearchIcon size={Math.round(fontSize * 1.1)} />
+      Find A Doctor
     </a>
   );
 }

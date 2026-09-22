@@ -38,6 +38,7 @@ import Home from "@/views/Home";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import Resources from "@/views/Resources";
 import SignUp from "@/views/SignUp";
+import GroupChip from "@/views/GroupChip";
 import SyncMark from "@/views/SyncMark";
 import SideNav, { RAIL_OPEN, RAIL_SHUT, type NavItem } from "@/views/SideNav";
 import Assistant from "@/views/Assistant";
@@ -62,7 +63,7 @@ const TAB_LABEL: Record<GroupTab, string> = {
   current: "Your Current Medical Plans",
   options: "New Medical Options",
   supplemental: "Supplemental Package",
-  resources: "Resources",
+  resources: "Carrier/TPA Resources",
   signup: "Sign Up",
   disclaimers: "Disclaimers",
   census: "Census",
@@ -882,27 +883,32 @@ export default function App() {
                     {subline}
                   </div>
                 </div>
-                {/* On the Medical Plans tabs only. */}
-                {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
-                  // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
-                  <div
-                    style={{
-                      ...panel,
-                      flex: "0 0 auto",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "8px 14px",
-                      background: g.sizeCategory === "51+" ? C.amberTint : C.greenTint,
-                      borderColor: g.sizeCategory === "51+" ? C.amberEdge : C.greenEdge,
-                      cursor: "default",
-                    }}
-                  >
-                    <PeopleIcon />
-                    <div>
-                      <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
-                    </div>
+                {(tab === "current" || tab === "options" || tab === "supplemental" || tab === "signup") && (
+                  <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 10 }}>
+                    {/* Same chip, same spot, on Medical Plans, Supplemental Package and Sign Up. */}
+                    <GroupChip g={g} />
+                    {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
+                      // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
+                      <div
+                        style={{
+                          ...panel,
+                          flex: "0 0 auto",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "8px 14px",
+                          background: g.sizeCategory === "51+" ? C.amberTint : C.greenTint,
+                          borderColor: g.sizeCategory === "51+" ? C.amberEdge : C.greenEdge,
+                          cursor: "default",
+                        }}
+                      >
+                        <PeopleIcon />
+                        <div>
+                          <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

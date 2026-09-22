@@ -41,3 +41,31 @@ export function websiteOf(name: string | null | undefined): string | null {
   for (const part of s.split("-")) if (SITES[part]) return SITES[part];
   return null;
 }
+
+/**
+ * Each carrier's or TPA's public provider-search tool - "is my doctor in
+ * network?" - independent of which specific plan a client is on. Gravie and
+ * Angle Health both price their plans on Cigna's network (Open Access Plus),
+ * so they point at Cigna's own directory rather than one of their own. A
+ * name not listed here simply shows no "Find A Doctor" link - never a
+ * guessed URL.
+ */
+const FIND_A_DOCTOR: Record<string, string> = {
+  unitedhealthcare: "https://connect.werally.com/guest/eyJkZWxzeXMiOiI1MiIsInBsYW5OYW1lIjoiQ2hvaWNlIFBsdXMifQouGJEydhvvIF0CEkL7OR4zyxz11_MPxoMvtvbzh-eZw",
+  uhc: "https://connect.werally.com/guest/eyJkZWxzeXMiOiI1MiIsInBsYW5OYW1lIjoiQ2hvaWNlIFBsdXMifQouGJEydhvvIF0CEkL7OR4zyxz11_MPxoMvtvbzh-eZw",
+  cigna: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+  gravie: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+  "angle-health": "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+  angle: "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+  guardian: "https://www.guardianlife.com/find-a-provider",
+  vsp: "https://www.vsp.com/eye-doctor",
+};
+
+/** The provider-search link for a carrier or TPA name, or null when none is on file. */
+export function findADoctorOf(name: string | null | undefined): string | null {
+  const s = slug(String(name || "").replace(/\s*\(UnitedHealthcare\)\s*$/i, ""));
+  if (!s) return null;
+  if (FIND_A_DOCTOR[s]) return FIND_A_DOCTOR[s];
+  for (const part of s.split("-")) if (FIND_A_DOCTOR[part]) return FIND_A_DOCTOR[part];
+  return null;
+}

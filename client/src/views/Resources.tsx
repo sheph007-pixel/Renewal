@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { C, h3, panel } from "@/lib/ui";
-import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
+import CarrierMark, { CarrierSiteLink, FindADoctorLink } from "@/views/CarrierMark";
+
+/** Shown even with nothing uploaded yet, so their Website / Find A Doctor links are always reachable. */
+const ALWAYS_SHOWN = ["Guardian", "VSP"];
 
 /** One piece of marketing material, as the server lists it - metadata only, the file is fetched separately when opened. */
 interface Resource {
@@ -62,15 +65,18 @@ function ResourceCard({ r }: { r: Resource }) {
 }
 
 /**
- * Resources: marketing material from each Carrier/TPA Kennion works with -
- * broker decks, one-pagers, FAQs - grouped by vendor, alphabetically, cards
- * alphabetical within a vendor too. Each section's own header carries the
- * vendor's name, large, and its website - once per vendor, not once per
- * card. Staff upload a file in the admin and Claude files it under the right
- * vendor immediately; this page just reads what is on file, so it takes no
- * group data and reads the same for every group. The title and one-line
- * description are the shared page header (App.tsx) - nothing here repeats
- * them.
+ * Carrier/TPA Resources: marketing material from each Carrier/TPA Kennion
+ * works with - broker decks, one-pagers, FAQs - grouped by vendor,
+ * alphabetically, cards alphabetical within a vendor too. Each section's own
+ * header carries the vendor's name, large, its website and its provider
+ * search ("Find A Doctor") where one is on file - once per vendor, not once
+ * per card. Guardian and VSP always get a section, even before any file is
+ * uploaded for them, since their Website/Find A Doctor links are useful on
+ * their own. Staff upload a file in the admin and Claude files it under the
+ * right vendor immediately; this page just reads what is on file, so it
+ * takes no group data and reads the same for every group. The title and
+ * one-line description are the shared page header (App.tsx) - nothing here
+ * repeats them.
  */
 export default function Resources() {
   const [resources, setResources] = useState<Resource[] | null>(null);
@@ -95,13 +101,16 @@ export default function Resources() {
   for (const r of resources || []) groups.set(r.carrier, [...(groups.get(r.carrier) || []), r]);
   for (const list of groups.values()) list.sort((a, b) => a.title.localeCompare(b.title));
   // Vendors with material first, alphabetically; "Other" (material about no one carrier) last.
-  const carriers = [...groups.keys()].sort((a, b) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)));
+  // Guardian and VSP show even with nothing uploaded - their Website and Find
+  // A Doctor links are worth having on this page regardless.
+  const carrierSet = new Set([...groups.keys(), ...(resources ? ALWAYS_SHOWN : [])]);
+  const carriers = [...carrierSet].sort((a, b) => (a === "Other" ? 1 : b === "Other" ? -1 : a.localeCompare(b)));
 
   return (
     <div>
       {error && <div style={{ ...panel, padding: "14px 18px", fontSize: 13.5, color: C.muted }}>Resources could not be loaded. Try again in a moment.</div>}
       {!error && resources == null && <div style={{ fontSize: 13.5, color: C.muted }}>Loading…</div>}
-      {!error && resources != null && !resources.length && (
+      {!error && resources != null && !carriers.length && (
         <div style={{ ...panel, padding: "14px 18px", fontSize: 13.5, color: C.muted }}>Nothing on file yet - check back as more material is added.</div>
       )}
 
@@ -114,14 +123,19 @@ export default function Resources() {
               <>
                 <CarrierMark name={carrier} withName size={28} fontSize={18} color={C.ink} />
                 <CarrierSiteLink name={carrier} fontSize={12.5} />
+                <FindADoctorLink name={carrier} fontSize={12.5} />
               </>
             )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
-            {groups.get(carrier)!.map((r) => (
-              <ResourceCard key={r.id} r={r} />
-            ))}
-          </div>
+          {groups.get(carrier)?.length ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+              {groups.get(carrier)!.map((r) => (
+                <ResourceCard key={r.id} r={r} />
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: C.faint }}>No resources on file yet for {carrier}.</div>
+          )}
         </section>
       ))}
     </div>
