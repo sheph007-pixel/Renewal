@@ -10,12 +10,13 @@ import {
   type SupplementalLine,
 } from "@/lib/model";
 import { SUPPLEMENTAL_SECTIONS, EMPLOYER_PAID_LIFE, type SupplementalRow } from "@/lib/supplemental";
-import { C, h2, h3, panel, sectionHead, textInput } from "@/lib/ui";
+import { C, h3, panel, textInput } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { carrierOf, fundingOf } from "@/views/PlanCard";
 import { useNarrow } from "@/lib/narrow";
 import { money0, networkTypeOf } from "@/lib/model";
 import CarrierMark from "@/views/CarrierMark";
+import { exportSignupConfirmation } from "@/lib/chat";
 
 interface Props {
   data: KennionData;
@@ -72,23 +73,26 @@ function currentPlanNames(rows: SupplementalRow[], lines: SupplementalLine[]): S
   return new Set(loose.map((r) => r.plan));
 }
 
-/** The company name, front and center - every step of the way, so it never reads like a generic form. */
+/**
+ * The company name, tucked in the top right rather than a full-width panel -
+ * the page header above already says "Sign Up" and the effective date, so
+ * this only has to say which group, in as little height as it can.
+ */
 function CompanyBanner({ g }: { g: Group }) {
   return (
-    <div style={{ ...panel, padding: "16px 20px", marginBottom: 18, display: "flex", alignItems: "center", gap: 14 }}>
-      <span aria-hidden style={{ flex: "none", display: "grid", placeItems: "center", width: 42, height: 42, borderRadius: 10, background: C.navy, color: "#fff", fontSize: 16, fontWeight: 700 }}>
-        {g.name
-          .replace(/[^A-Za-z0-9 ]/g, " ")
-          .split(/\s+/)
-          .filter((w) => w && !/^(inc|llc|co|corp|corporation|company|the|of|and)$/i.test(w))
-          .slice(0, 2)
-          .map((w) => w[0])
-          .join("")
-          .toUpperCase()}
-      </span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{g.name}</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>Benefits Election</div>
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px 5px 5px", borderRadius: 20, background: C.zebra, border: `1px solid ${C.hairline}`, maxWidth: "100%" }}>
+        <span aria-hidden style={{ flex: "none", display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: "50%", background: C.navy, color: "#fff", fontSize: 11, fontWeight: 700 }}>
+          {g.name
+            .replace(/[^A-Za-z0-9 ]/g, " ")
+            .split(/\s+/)
+            .filter((w) => w && !/^(inc|llc|co|corp|corporation|company|the|of|and)$/i.test(w))
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join("")
+            .toUpperCase()}
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
       </div>
     </div>
   );
@@ -176,6 +180,36 @@ function CheckOption({ title, current, checked, disabled, onClick }: { title: st
         </span>
       )}
     </label>
+  );
+}
+
+/** Builds and downloads the group's own PDF confirmation of what they elected, on demand - so there's a record beyond the on-screen summary. */
+function DownloadConfirmation({ groupName }: { groupName: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            await exportSignupConfirmation(groupName);
+          } catch (e) {
+            setError((e as Error).message || "Could not build the confirmation. Try again.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="noprint"
+        style={{ padding: "9px 16px", fontSize: 13, fontWeight: 600, color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, borderRadius: 4, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+      >
+        {busy ? "Building…" : "Download Confirmation"}
+      </button>
+      {error && <span style={{ fontSize: 12.5, color: C.red }}>{error}</span>}
+    </div>
   );
 }
 
@@ -346,9 +380,6 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   if (lastSignup?.kind === "renewal" && !sent && !editing) {
     return (
       <div>
-        <div className="anchor" style={sectionHead}>
-          <h2 style={h2}>Sign Up</h2>
-        </div>
         <CompanyBanner g={g} />
         <div style={{ ...panel, padding: "20px 22px", background: C.greenTint, borderColor: C.greenEdge }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 700, color: C.ink }}>
@@ -377,14 +408,17 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
               <strong>Employer Paid Life:</strong> {lastSignup.employerLife}
             </li>
           </ul>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="noprint"
-            style={{ marginTop: 14, padding: "9px 16px", fontSize: 13, fontWeight: 500, color: C.ink, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer" }}
-          >
-            Something Changed? Update Your Elections
-          </button>
+          <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <DownloadConfirmation groupName={g.name} />
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="noprint"
+              style={{ padding: "9px 16px", fontSize: 13, fontWeight: 500, color: C.ink, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 4, cursor: "pointer" }}
+            >
+              Something Changed? Update Your Elections
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -395,14 +429,14 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   if (sent) {
     return (
       <div>
-        <div className="anchor" style={sectionHead}>
-          <h2 style={h2}>Sign Up</h2>
-        </div>
         <div style={{ ...panel, padding: "26px 24px", textAlign: "center", background: C.greenTint, borderColor: C.greenEdge }}>
           <div style={{ fontSize: 30 }}>🎉</div>
           <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: C.ink }}>You're All Set - {g.name} Has {actionVerb === "Enroll" ? "Enrolled" : "Renewed"}</div>
           <div style={{ margin: "8px auto 0", maxWidth: 460, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
             {managerFirst} has your elections and will follow up to finalize contributions and get everything loaded for Open Enrollment. Questions in the meantime? Reach out anytime.
+          </div>
+          <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+            <DownloadConfirmation groupName={g.name} />
           </div>
         </div>
       </div>
@@ -413,10 +447,6 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
 
   return (
     <div>
-      <div className="anchor" style={sectionHead}>
-        <h2 style={h2}>Sign Up</h2>
-      </div>
-
       <CompanyBanner g={g} />
 
       {noBasesYet ? (

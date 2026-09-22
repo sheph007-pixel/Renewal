@@ -4,10 +4,20 @@
 // are computed here from the same figures the pages use, never by the model;
 // the model only chooses which plans to put next to each other.
 import PDFDocument from "pdfkit";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { networkLabel } from "./proposal-kind.js";
 import { RATE_DISCLAIMER } from "./disclaimer.js";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Google Sans Flex, embedded so every PDF carries its own glyphs rather than
+// falling back to whatever the reader's OS has installed. Static Regular/Bold
+// instances, cut from Google's variable font (it has no italic axis - places
+// that used to ask for "GSF" get the regular weight instead).
+const FONT_REGULAR = path.join(__dirname, "assets/fonts/GoogleSansFlex-Regular.ttf");
+const FONT_BOLD = path.join(__dirname, "assets/fonts/GoogleSansFlex-Bold.ttf");
 
 const TIER_KEYS = ["EE", "ES", "EC", "FAM"];
 const TIER_CENSUS = { EE: "Employee", ES: "Employee + Spouse", EC: "Employee + Child(ren)", FAM: "Employee + Family" };
@@ -194,6 +204,9 @@ const cellText = (r, key) => {
 function pdfBuffer(build, opts) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "LETTER", margin: 40, bufferPages: true, ...opts });
+    doc.registerFont("GSF", FONT_REGULAR);
+    doc.registerFont("GSF-Bold", FONT_BOLD);
+    doc.font("GSF");
     const chunks = [];
     doc.on("data", (c) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -213,11 +226,11 @@ const MUTED = "#6b7276";
 const RULE = "#dfe3e6";
 
 function pdfHeader(doc, { title, groupName, subtitle }) {
-  doc.font("Helvetica-Bold").fontSize(9).fillColor("#1F8A5B").text("BenSync", doc.page.margins.left, 24, { continued: true }).fillColor(MUTED).font("Helvetica").text("  ·  Kennion Benefit Advisors");
+  doc.font("GSF-Bold").fontSize(9).fillColor("#1F8A5B").text("BenSync", doc.page.margins.left, 24, { continued: true }).fillColor(MUTED).font("GSF").text("  ·  Kennion Benefit Advisors");
   doc.moveDown(0.4);
-  doc.font("Helvetica-Bold").fontSize(17).fillColor(NAVY).text(title);
+  doc.font("GSF-Bold").fontSize(17).fillColor(NAVY).text(title);
   doc.moveDown(0.15);
-  doc.font("Helvetica").fontSize(10).fillColor(MUTED).text(`${groupName}${subtitle ? `  ·  ${subtitle}` : ""}  ·  Prepared ${today()}`);
+  doc.font("GSF").fontSize(10).fillColor(MUTED).text(`${groupName}${subtitle ? `  ·  ${subtitle}` : ""}  ·  Prepared ${today()}`);
   doc.moveDown(0.8);
   doc.moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).lineWidth(0.6).strokeColor(RULE).stroke();
   doc.moveDown(0.6);
@@ -232,8 +245,8 @@ function pdfFooter(doc, { caption } = {}) {
     doc.page.margins.bottom = 0;
     // The notice, in full, above the page number; small, three lines at most.
     const w = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    doc.font("Helvetica").fontSize(6.5).fillColor(MUTED).text(RATE_DISCLAIMER, doc.page.margins.left, doc.page.height - 48, { width: w, align: "center", lineGap: 0 });
-    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(
+    doc.font("GSF").fontSize(6.5).fillColor(MUTED).text(RATE_DISCLAIMER, doc.page.margins.left, doc.page.height - 48, { width: w, align: "center", lineGap: 0 });
+    doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(
       `${caption || "Monthly composite rates at the group's current enrollment, from the Carrier/TPA quotes on file"}  ·  Page ${i - range.start + 1} of ${range.count}`,
       doc.page.margins.left,
       doc.page.height - 16,
@@ -252,7 +265,7 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
   const pad = 4;
   const bottom = doc.page.height - 50;
   const header = () => {
-    doc.font("Helvetica-Bold").fontSize(fontSize);
+    doc.font("GSF-Bold").fontSize(fontSize);
     const h = Math.max(...cols.map((c) => doc.heightOfString(c.label, { width: c.width - pad * 2 }))) + 10;
     doc.rect(x, doc.y, cols.reduce((n, c) => n + c.width, 0), h).fill("#202429");
     let cx = x;
@@ -267,7 +280,7 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
   header();
   let lastSection = null;
   for (const r of rows) {
-    doc.font("Helvetica").fontSize(fontSize);
+    doc.font("GSF").fontSize(fontSize);
     const texts = cols.map((c) => c.text(r));
     const h = Math.max(...texts.map((t, i) => doc.heightOfString(t || " ", { width: cols[i].width - pad * 2 }))) + pad * 2;
     const section = sectionOf ? sectionOf(r) : null;
@@ -278,16 +291,16 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
       lastSection = null;
     }
     if (needSection) {
-      doc.font("Helvetica-Bold").fontSize(fontSize).fillColor(NAVY).text(section, x + pad, doc.y + 4, { lineBreak: false });
+      doc.font("GSF-Bold").fontSize(fontSize).fillColor(NAVY).text(section, x + pad, doc.y + 4, { lineBreak: false });
       doc.y += 16;
       lastSection = section;
-      doc.font("Helvetica").fontSize(fontSize);
+      doc.font("GSF").fontSize(fontSize);
     }
     const y = doc.y;
     let cx = x;
     texts.forEach((t, i) => {
       const c = cols[i];
-      doc.fillColor(c.strong && c.strong(r) ? NAVY : INK).font(c.strong && c.strong(r) ? "Helvetica-Bold" : "Helvetica");
+      doc.fillColor(c.strong && c.strong(r) ? NAVY : INK).font(c.strong && c.strong(r) ? "GSF-Bold" : "GSF");
       doc.text(t, cx + pad, y + pad, { width: c.width - pad * 2, align: c.align });
       cx += c.width;
     });
@@ -296,7 +309,7 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
   }
   // Positioned text leaves the cursor in the last column; what follows starts at the margin again.
   doc.x = x;
-  doc.fillColor(INK).font("Helvetica");
+  doc.fillColor(INK).font("GSF");
   return doc.y;
 }
 
@@ -336,7 +349,7 @@ export async function renderComparison({ format, title, group: g, table }) {
       const cols = columnsFor(table).map((c) => ({ ...c, text: (r) => cellText(r, c.key), strong: c.key === "name" ? () => true : c.key === "monthly" ? () => true : null }));
       pdfTable(doc, { columns: cols, rows: table.rows, sectionOf: (r) => r.section, fontSize: 7.5 });
       doc.moveDown(1);
-      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
+      doc.font("GSF").fontSize(8.5).fillColor(MUTED);
       doc.text(`Enrollment by tier: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${table.counts[k] || 0}`).join(" · ")}.`);
       if (table.todayTotal != null) doc.text(`Today's total medical premium: ${money(table.todayTotal)} per month (${money0(table.todayTotal * 12)} per year).`);
       if (table.contribution) doc.text(`Employer contribution modeled at ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money(table.contribution[k])}`).join(", ")} per month; employees pay the rest.`);
@@ -344,7 +357,7 @@ export async function renderComparison({ format, title, group: g, table }) {
       const withBenefits = table.rows.filter((r) => r.benefits && Object.values(r.benefits).some(Boolean));
       if (withBenefits.length) {
         doc.moveDown(1);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("In-network benefits, as printed on the quotes");
+        doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text("In-network benefits, as printed on the quotes");
         doc.moveDown(0.3);
         const bcols = [
           { key: "name", label: "Plan", width: 150, align: "left", text: (r) => r.name, strong: () => true },
@@ -419,26 +432,26 @@ export async function renderPlanCardPdf({ group: g, card }) {
     const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     pdfHeader(doc, { title: card.title, groupName: g.name, subtitle: [card.carrier, card.funding, card.type].filter(Boolean).join(" · ") });
     if (card.subtitle) {
-      doc.font("Helvetica").fontSize(10).fillColor(MUTED).text(card.subtitle, x0, doc.y - 4, { width });
+      doc.font("GSF").fontSize(10).fillColor(MUTED).text(card.subtitle, x0, doc.y - 4, { width });
       doc.moveDown(0.6);
     }
     // The headline: the average employee's monthly share, and what the company pays.
     const y = doc.y;
     doc.rect(x0, y, width, 58).fill(TINT);
-    doc.font("Helvetica-Bold").fontSize(22).fillColor(NAVY).text(card.headline.average == null ? "-" : money(card.headline.average), x0, y + 9, { width, align: "center" });
-    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text("Average Employee Monthly Contribution", x0, y + 34, { width, align: "center" });
-    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(`Your Company Pays ${card.headline.companyPays == null ? "-" : money(card.headline.companyPays)} / month  ·  ${card.headline.basis || ""}`, x0, y + 45, { width, align: "center" });
+    doc.font("GSF-Bold").fontSize(22).fillColor(NAVY).text(card.headline.average == null ? "-" : money(card.headline.average), x0, y + 9, { width, align: "center" });
+    doc.font("GSF").fontSize(8.5).fillColor(MUTED).text("Average Employee Monthly Contribution", x0, y + 34, { width, align: "center" });
+    doc.font("GSF-Bold").fontSize(9).fillColor(INK).text(`Your Company Pays ${card.headline.companyPays == null ? "-" : money(card.headline.companyPays)} / month  ·  ${card.headline.basis || ""}`, x0, y + 45, { width, align: "center" });
     doc.x = x0;
     doc.y = y + 70;
     // Two columns: what it covers on the left, what it costs on the right.
     const gap = 24;
     const colW = (width - gap) / 2;
     const top = doc.y;
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("What it covers", x0, top, { width: colW });
+    doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text("What it covers", x0, top, { width: colW });
     let ly = top + 16;
     for (const [label, value, url] of card.benefits || []) {
-      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(label, x0, ly, { width: 100, lineBreak: false });
-      doc.font("Helvetica").fontSize(8.5).fillColor(INK);
+      doc.font("GSF").fontSize(8.5).fillColor(MUTED).text(label, x0, ly, { width: 100, lineBreak: false });
+      doc.font("GSF").fontSize(8.5).fillColor(INK);
       const vh = doc.heightOfString(String(value == null ? "-" : value), { width: colW - 104 });
       doc.text(String(value == null ? "-" : value), x0 + 104, ly, { width: colW - 104, align: "right" });
       if (url) doc.fillColor("#1F8A5B").fontSize(7.5).text(label === "Network" ? "Find a doctor" : "Formulary", x0 + 104, ly + vh, { width: colW - 104, align: "right", link: url, lineBreak: false });
@@ -447,13 +460,13 @@ export async function renderPlanCardPdf({ group: g, card }) {
     }
     const leftEnd = ly;
     const rx = x0 + colW + gap;
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("Monthly Composite Rates", rx, top, { width: colW });
+    doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text("Monthly Composite Rates", rx, top, { width: colW });
     let ry = top + 16;
     const cw = [colW - 3 * 50, 50, 50, 50];
     const rowText = (cells, bold = false, color = INK) => {
       let cx = rx;
       cells.forEach((c, i) => {
-        doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8).fillColor(color).text(c, cx, ry, { width: cw[i] - 4, align: i ? "right" : "left", lineBreak: false, height: 10, ellipsis: true });
+        doc.font(bold ? "GSF-Bold" : "GSF").fontSize(8).fillColor(color).text(c, cx, ry, { width: cw[i] - 4, align: i ? "right" : "left", lineBreak: false, height: 10, ellipsis: true });
         cx += cw[i];
       });
       ry += 14;
@@ -466,7 +479,7 @@ export async function renderPlanCardPdf({ group: g, card }) {
     const tot = card.totals || {};
     const pct = () => "";
     const totalRow = (label, v, strong) => {
-      doc.font(strong ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(INK).text(label, rx, ry, { width: colW - 120, lineBreak: false });
+      doc.font(strong ? "GSF-Bold" : "GSF").fontSize(9).fillColor(INK).text(label, rx, ry, { width: colW - 120, lineBreak: false });
       doc.text(`${v == null ? "-" : money(v)}${strong ? pct(v) : ""}`, rx + colW - 120, ry, { width: 120, align: "right", lineBreak: false });
       ry += 15;
     };
@@ -475,7 +488,7 @@ export async function renderPlanCardPdf({ group: g, card }) {
     totalRow("Total Monthly Bill", tot.premium, false);
     doc.x = x0;
     doc.y = Math.max(leftEnd, ry) + 14;
-    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
+    doc.font("GSF").fontSize(8.5).fillColor(MUTED);
     if (tot.enrolled != null) doc.text(`Priced at ${tot.enrolled} enrolled; the employer contribution applied on the Medical Plans page.`, { width });
     if (card.audit) doc.text(card.audit, { width });
     pdfFooter(doc);
@@ -502,19 +515,19 @@ function pdfStats(doc, stats) {
   stats.forEach((st, i) => {
     const x = x0 + i * (w + gap);
     doc.rect(x, y, w, h).fill(TINT);
-    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(st.label.toUpperCase(), x + 8, y + 8, { width: w - 16, lineBreak: false });
-    doc.font("Helvetica-Bold").fontSize(13).fillColor(NAVY).text(st.value, x + 8, y + 20, { width: w - 16, lineBreak: false });
-    if (st.note) doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(st.note, x + 8, y + 34, { width: w - 16, lineBreak: false });
+    doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(st.label.toUpperCase(), x + 8, y + 8, { width: w - 16, lineBreak: false });
+    doc.font("GSF-Bold").fontSize(13).fillColor(NAVY).text(st.value, x + 8, y + 20, { width: w - 16, lineBreak: false });
+    if (st.note) doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(st.note, x + 8, y + 34, { width: w - 16, lineBreak: false });
   });
   doc.x = x0;
   doc.y = y + h + 12;
-  doc.fillColor(INK).font("Helvetica");
+  doc.fillColor(INK).font("GSF");
 }
 
 /** Vertical bars with a label under each and the count above; drawn in a box at (x, y) of the given width. */
 function pdfBars(doc, { x, y, width, title, bars, color }) {
   const height = 96;
-  doc.font("Helvetica-Bold").fontSize(9).fillColor(NAVY).text(title, x, y, { width, lineBreak: false });
+  doc.font("GSF-Bold").fontSize(9).fillColor(NAVY).text(title, x, y, { width, lineBreak: false });
   const top = y + 18;
   const base = top + height - 22;
   const max = Math.max(1, ...bars.map((b) => b.value));
@@ -525,10 +538,10 @@ function pdfBars(doc, { x, y, width, title, bars, color }) {
     const bx = x + i * (w + gap);
     const bh = Math.round(((base - top - 12) * b.value) / max);
     doc.rect(bx, base - bh, w, bh).fill(b.value ? color : RULE);
-    doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(String(b.value), bx, base - bh - 11, { width: w, align: "center", lineBreak: false });
-    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(b.label, bx, base + 4, { width: w, align: "center", lineBreak: false });
+    doc.font("GSF-Bold").fontSize(8).fillColor(INK).text(String(b.value), bx, base - bh - 11, { width: w, align: "center", lineBreak: false });
+    doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(b.label, bx, base + 4, { width: w, align: "center", lineBreak: false });
   });
-  doc.fillColor(INK).font("Helvetica");
+  doc.fillColor(INK).font("GSF");
   return top + height;
 }
 
@@ -544,20 +557,20 @@ function pdfBillChart(doc, { rows, todayTotal }) {
   const y0 = doc.y;
   rows.forEach((r, i) => {
     const y = y0 + i * rowH;
-    doc.font("Helvetica").fontSize(7.5).fillColor(INK).text(r.label, x0, y + 4, { width: labelW - 8, height: 10, ellipsis: true });
+    doc.font("GSF").fontSize(7.5).fillColor(INK).text(r.label, x0, y + 4, { width: labelW - 8, height: 10, ellipsis: true });
     const w = Math.max(2, Math.round((barW * (r.monthly || 0)) / max));
     doc.rect(x0 + labelW, y + 3, w, rowH - 7).fill(r.color);
-    doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(money0(r.monthly), x0 + labelW + barW + 6, y + 4, { width: valueW - 6, lineBreak: false });
+    doc.font("GSF-Bold").fontSize(8).fillColor(INK).text(money0(r.monthly), x0 + labelW + barW + 6, y + 4, { width: valueW - 6, lineBreak: false });
   });
   const bottom = y0 + rows.length * rowH;
   if (todayTotal) {
     const tx = x0 + labelW + Math.round((barW * todayTotal) / max);
     doc.moveTo(tx, y0 - 2).lineTo(tx, bottom + 2).lineWidth(0.8).dash(3, { space: 2 }).strokeColor(MUTED).stroke().undash();
-    doc.font("Helvetica").fontSize(7.5).fillColor(MUTED).text(`Today ${money0(todayTotal)}`, tx - 60, bottom + 4, { width: 120, align: "center", lineBreak: false });
+    doc.font("GSF").fontSize(7.5).fillColor(MUTED).text(`Today ${money0(todayTotal)}`, tx - 60, bottom + 4, { width: 120, align: "center", lineBreak: false });
   }
   doc.x = x0;
   doc.y = bottom + (todayTotal ? 18 : 8);
-  doc.fillColor(INK).font("Helvetica");
+  doc.fillColor(INK).font("GSF");
 }
 
 /**
@@ -600,18 +613,18 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     pdfHeader(doc, { title: "AI Picks: Why These Plans", groupName: g.name, subtitle: `${picks.length} picks · run ${ranOn}` });
 
     // What this is.
-    doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(
+    doc.font("GSF").fontSize(9.5).fillColor(INK).text(
       `Kennion Benefit Advisors took ${g.name} to market. From the plans quoted, the assistant chose three from each Carrier/TPA lineup - a Lower Cost, a Best Fit and a Richer Benefits option - weighing your census (ages and family make-up), your enrollment by tier and the employer contribution set on the Medical Plans page. This report keeps those picks and the reason behind each one.`,
       { width, lineGap: 1.5 },
     );
     if (rec && rec.summary) {
       doc.moveDown(0.5);
-      doc.font("Helvetica-Oblique").fontSize(9.5).fillColor(INK).text(rec.summary, { width, lineGap: 1.5 });
+      doc.font("GSF").fontSize(9.5).fillColor(INK).text(rec.summary, { width, lineGap: 1.5 });
     }
     doc.moveDown(0.9);
 
     // The group the picks were weighed on.
-    doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Your group");
+    doc.font("GSF-Bold").fontSize(12).fillColor(NAVY).text("Your group");
     doc.moveDown(0.4);
     if (census) {
       pdfStats(doc, [
@@ -634,10 +647,10 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       doc.x = x0;
       doc.y = Math.max(yb, yt) + 6;
     } else {
-      doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(`No census ages on file. The picks were weighed on enrollment by tier: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${counts[k] || 0}`).join(", ")}.`, { width });
+      doc.font("GSF").fontSize(9).fillColor(MUTED).text(`No census ages on file. The picks were weighed on enrollment by tier: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${counts[k] || 0}`).join(", ")}.`, { width });
       doc.moveDown(0.6);
     }
-    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED);
+    doc.font("GSF").fontSize(8.5).fillColor(MUTED);
     if (table.contribution) doc.text(`Employer contribution applied: ${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money0(table.contribution[k])}`).join(" · ")} per month; employees pay the rest of their tier's rate.`, { width });
     doc.moveDown(1);
 
@@ -646,14 +659,14 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     if (start) {
       room(60);
       const y = doc.y;
-      doc.font("Helvetica").fontSize(9.5);
+      doc.font("GSF").fontSize(9.5);
       const lead = `${start.carrier} Option ${start.optionId}`;
       const rest = ` (${start.funding ? `${start.funding}, ` : ""}${PICK_LABEL[start.tier] || start.tier}; the ${start.plan}). ${rec.startWithReason || ""}`.trimEnd();
       const h = doc.heightOfString(lead + rest, { width: width - 28 }) + 30;
       doc.rect(x0, y, width, h).fill("#E8F3ED");
       doc.rect(x0, y, 4, h).fill(GREEN);
-      doc.font("Helvetica-Bold").fontSize(9).fillColor("#16714A").text("START HERE", x0 + 14, y + 9, { lineBreak: false });
-      doc.font("Helvetica-Bold").fontSize(9.5).fillColor(INK).text(lead, x0 + 14, y + 22, { width: width - 28, continued: true }).font("Helvetica").text(rest);
+      doc.font("GSF-Bold").fontSize(9).fillColor("#16714A").text("START HERE", x0 + 14, y + 9, { lineBreak: false });
+      doc.font("GSF-Bold").fontSize(9.5).fillColor(INK).text(lead, x0 + 14, y + 22, { width: width - 28, continued: true }).font("GSF").text(rest);
       doc.x = x0;
       doc.y = y + h + 14;
     }
@@ -670,11 +683,11 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
       const reason = p.reason || "";
       // Every line wraps at the block's width; the block is as tall as its lines.
       const w = width - 24;
-      doc.font("Helvetica").fontSize(8.5);
+      doc.font("GSF").fontSize(8.5);
       const factsH = facts ? doc.heightOfString(facts, { width: w }) + 3 : 0;
-      doc.font("Helvetica-Bold").fontSize(8.5);
+      doc.font("GSF-Bold").fontSize(8.5);
       const billH = doc.heightOfString(bill, { width: w }) + 3;
-      doc.font("Helvetica-Oblique").fontSize(8.5);
+      doc.font("GSF").fontSize(8.5);
       const reasonH = reason ? doc.heightOfString(reason, { width: w }) + 4 : 0;
       const need = 24 + 11 + factsH + billH + reasonH + 12;
       return { facts, bill, reason, factsH, billH, need, w };
@@ -682,7 +695,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     for (const l of lineups) {
       // The heading stays with its first pick.
       room(28 + blockOf(l.picks[0]).need);
-      doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text(`${l.carrier}${l.funding ? ` · ${l.funding}` : ""}`, x0, doc.y, { width });
+      doc.font("GSF-Bold").fontSize(12).fillColor(NAVY).text(`${l.carrier}${l.funding ? ` · ${l.funding}` : ""}`, x0, doc.y, { width });
       doc.moveDown(0.35);
       for (const p of l.picks) {
         const label = PICK_LABEL[p.tier] || p.tier;
@@ -691,18 +704,18 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
         const y = doc.y;
         doc.rect(x0, y, width, need - 6).fill(TINT);
         doc.rect(x0, y, 4, need - 6).fill(PICK_COLOR[p.tier] || NAVY);
-        doc.font("Helvetica-Bold").fontSize(8).fillColor(PICK_COLOR[p.tier] || NAVY).text(label.toUpperCase(), x0 + 12, y + 8, { lineBreak: false });
+        doc.font("GSF-Bold").fontSize(8).fillColor(PICK_COLOR[p.tier] || NAVY).text(label.toUpperCase(), x0 + 12, y + 8, { lineBreak: false });
         const lw = doc.widthOfString(label.toUpperCase()) + 10;
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(`${p.carrier} Option ${p.optionId}`, x0 + 12 + lw, y + 7, { width: w - lw, height: 12, ellipsis: true });
-        doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(p.plan, x0 + 12, y + 21, { width: w, height: 10, ellipsis: true });
+        doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text(`${p.carrier} Option ${p.optionId}`, x0 + 12 + lw, y + 7, { width: w - lw, height: 12, ellipsis: true });
+        doc.font("GSF").fontSize(8.5).fillColor(MUTED).text(p.plan, x0 + 12, y + 21, { width: w, height: 10, ellipsis: true });
         let ly = y + 33;
         if (facts) {
-          doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: w });
+          doc.font("GSF").fontSize(8.5).fillColor(MUTED).text(facts, x0 + 12, ly, { width: w });
           ly += factsH;
         }
-        doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(bill, x0 + 12, ly, { width: w });
+        doc.font("GSF-Bold").fontSize(8.5).fillColor(INK).text(bill, x0 + 12, ly, { width: w });
         ly += billH;
-        if (reason) doc.font("Helvetica-Oblique").fontSize(8.5).fillColor(INK).text(reason, x0 + 12, ly + 1, { width: w });
+        if (reason) doc.font("GSF").fontSize(8.5).fillColor(INK).text(reason, x0 + 12, ly + 1, { width: w });
         doc.x = x0;
         doc.y = y + need;
       }
@@ -713,8 +726,8 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     const chart = picks.map((p) => ({ p, r: rowFor(p) })).filter((x) => x.r && x.r.monthly != null);
     if (chart.length) {
       room(40 + chart.length * 18 + 30);
-      doc.font("Helvetica-Bold").fontSize(12).fillColor(NAVY).text("Total monthly bill, side by side", x0, doc.y, { width });
-      doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text(`Each pick at your enrollment of ${enrolled}. Green is Lower Cost, navy Best Fit, orange Richer Benefits.`, { width });
+      doc.font("GSF-Bold").fontSize(12).fillColor(NAVY).text("Total monthly bill, side by side", x0, doc.y, { width });
+      doc.font("GSF").fontSize(8.5).fillColor(MUTED).text(`Each pick at your enrollment of ${enrolled}. Green is Lower Cost, navy Best Fit, orange Richer Benefits.`, { width });
       doc.moveDown(0.6);
       pdfBillChart(doc, {
         rows: chart.sort((a, b) => a.r.monthly - b.r.monthly).map(({ p, r }) => ({ label: `${p.carrier} Option ${p.optionId}${p.funding ? ` (${p.funding})` : ""} · ${PICK_LABEL[p.tier] || p.tier}`, monthly: r.monthly, color: PICK_COLOR[p.tier] || NAVY })),
@@ -723,8 +736,8 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     }
 
     room(50);
-    doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text("How the picks were made", x0, doc.y, { width });
-    doc.font("Helvetica").fontSize(8.5).fillColor(INK).text(
+    doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text("How the picks were made", x0, doc.y, { width });
+    doc.font("GSF").fontSize(8.5).fillColor(INK).text(
       "For each Carrier/TPA lineup the assistant read every quoted plan's rates, deductible, out-of-pocket maximum and benefits, then chose the option that costs least at your enrollment (Lower Cost), the one whose design best matches your group's ages and family make-up (Best Fit), and the one that covers the most for the money (Richer Benefits). UnitedHealthcare's fully insured and level funded quotes are separate lineups, so each gets its three. Run AI Picks again after new quotes arrive or the employer contribution changes; the picks can change with them. Your Kennion account manager can walk through any of these.",
       { width, lineGap: 1.2 },
     );
@@ -860,7 +873,7 @@ export async function renderDocument({ format, title, markdown, group: g }) {
       creator: "BenSync",
       title: name,
       numbering: { config: [{ reference: "numbers", levels: [{ level: 0, format: "decimal", text: "%1.", alignment: AlignmentType.START, style: { paragraph: { indent: { left: 540, hanging: 300 } } } }] }] },
-      styles: { default: { document: { run: { font: "Calibri", size: 22 } } } },
+      styles: { default: { document: { run: { font: "Google Sans Flex", size: 22 } } } },
       sections: [{ children }],
     });
     const data = await Packer.toBuffer(doc);
@@ -872,14 +885,14 @@ export async function renderDocument({ format, title, markdown, group: g }) {
     const write = (text, opts = {}) => {
       const rs = runs(text);
       rs.forEach((r, i) => {
-        doc.font(r.bold ? "Helvetica-Bold" : "Helvetica").text(r.text, { ...opts, continued: i < rs.length - 1 });
+        doc.font(r.bold ? "GSF-Bold" : "GSF").text(r.text, { ...opts, continued: i < rs.length - 1 });
       });
     };
     for (const b of blocks) {
       if (doc.y > doc.page.height - 90) doc.addPage();
       if (b.type === "heading") {
         doc.moveDown(0.5);
-        doc.font("Helvetica-Bold").fontSize(b.level <= 1 ? 14 : b.level === 2 ? 12 : 11).fillColor(NAVY).text(plain(b.text), { width });
+        doc.font("GSF-Bold").fontSize(b.level <= 1 ? 14 : b.level === 2 ? 12 : 11).fillColor(NAVY).text(plain(b.text), { width });
         doc.moveDown(0.25);
       } else if (b.type === "para") {
         doc.fontSize(10.5).fillColor(INK);
@@ -890,7 +903,7 @@ export async function renderDocument({ format, title, markdown, group: g }) {
         b.items.forEach((it, i) => {
           const marker = b.ordered ? `${i + 1}.` : "•";
           const y = doc.y;
-          doc.font("Helvetica").text(marker, 52, y, { width: 16, lineBreak: false });
+          doc.font("GSF").text(marker, 52, y, { width: 16, lineBreak: false });
           doc.x = 68;
           doc.y = y;
           write(it, { width: width - 28, lineGap: 2 });
@@ -909,7 +922,7 @@ export async function renderDocument({ format, title, markdown, group: g }) {
       }
     }
     doc.moveDown(1);
-    doc.font("Helvetica").fontSize(8.5).fillColor(MUTED).text("Prepared with the BenSync Assistant from the group's own figures on file; confirm with your Kennion account manager.", { width });
+    doc.font("GSF").fontSize(8.5).fillColor(MUTED).text("Prepared with the BenSync Assistant from the group's own figures on file; confirm with your Kennion account manager.", { width });
     pdfFooter(doc);
   });
   return { filename: `${safeName(g.name)} - ${safeName(name)} ${stamp}.pdf`, mime: "application/pdf", data };
@@ -1012,18 +1025,18 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     const heading = (text, need = 60) => {
       room(need);
       doc.moveDown(0.4);
-      doc.font("Helvetica-Bold").fontSize(12.5).fillColor(NAVY).text(text, x0, doc.y, { width });
+      doc.font("GSF-Bold").fontSize(12.5).fillColor(NAVY).text(text, x0, doc.y, { width });
       doc.moveDown(0.35);
     };
     const para = (text, opts = {}) => {
-      doc.font(opts.font || "Helvetica").fontSize(opts.size || 9.5).fillColor(opts.color || INK).text(text, x0, doc.y, { width, lineGap: 1.5 });
+      doc.font(opts.font || "GSF").fontSize(opts.size || 9.5).fillColor(opts.color || INK).text(text, x0, doc.y, { width, lineGap: 1.5 });
       doc.moveDown(opts.after ?? 0.5);
     };
     /** Bullets in a column at (x, y) of the given width; returns the y below them. */
     const bulletsAt = (items, x, y, w, size = 9.5) => {
       let cy = y;
       for (const t of items) {
-        doc.font("Helvetica").fontSize(size);
+        doc.font("GSF").fontSize(size);
         const h = doc.heightOfString(t, { width: w - 14, lineGap: 1.5 });
         doc.fillColor(GREEN).text("•", x + 2, cy, { lineBreak: false });
         doc.fillColor(INK).text(t, x + 14, cy, { width: w - 14, lineGap: 1.5 });
@@ -1032,21 +1045,21 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       return cy;
     };
     const bullets = (items) => {
-      doc.font("Helvetica").fontSize(9.5);
+      doc.font("GSF").fontSize(9.5);
       room(items.reduce((h, t) => h + doc.heightOfString(t, { width: width - 14, lineGap: 1.5 }) + 4, 0) + 6);
       doc.y = bulletsAt(items, x0, doc.y, width);
       doc.x = x0;
       doc.moveDown(0.4);
     };
     const callout = (label, text) => {
-      doc.font("Helvetica").fontSize(10);
+      doc.font("GSF").fontSize(10);
       const h = doc.heightOfString(text, { width: width - 28, lineGap: 1.5 }) + 34;
       room(h + 10);
       const y = doc.y;
       doc.rect(x0, y, width, h).fill(TINT);
       doc.rect(x0, y, 4, h).fill(GREEN);
-      doc.font("Helvetica-Bold").fontSize(8.5).fillColor("#16714A").text(label.toUpperCase(), x0 + 14, y + 9, { lineBreak: false });
-      doc.font("Helvetica").fontSize(10).fillColor(INK).text(text, x0 + 14, y + 23, { width: width - 28, lineGap: 1.5 });
+      doc.font("GSF-Bold").fontSize(8.5).fillColor("#16714A").text(label.toUpperCase(), x0 + 14, y + 9, { lineBreak: false });
+      doc.font("GSF").fontSize(10).fillColor(INK).text(text, x0 + 14, y + 23, { width: width - 28, lineGap: 1.5 });
       doc.x = x0;
       doc.y = y + h + 12;
     };
@@ -1058,10 +1071,10 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       const heights = cols.map((c) => {
         let h = 30;
         if (c.lead) {
-          doc.font("Helvetica").fontSize(9).fillColor(MUTED);
+          doc.font("GSF").fontSize(9).fillColor(MUTED);
           h += doc.heightOfString(c.lead, { width: inner, lineGap: 1.5 }) + 6;
         }
-        doc.font("Helvetica").fontSize(9.5);
+        doc.font("GSF").fontSize(9.5);
         h += (c.items || []).reduce((s, t) => s + doc.heightOfString(t, { width: inner - 14, lineGap: 1.5 }) + 4, 0);
         return h + 8;
       });
@@ -1072,10 +1085,10 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
         const x = x0 + i * (colW + gap);
         doc.rect(x, y, colW, h).fill(TINT);
         doc.rect(x, y, colW, 3).fill(c.accent || GREEN);
-        doc.font("Helvetica-Bold").fontSize(10.5).fillColor(NAVY).text(c.title, x + 12, y + 12, { width: inner, lineBreak: false });
+        doc.font("GSF-Bold").fontSize(10.5).fillColor(NAVY).text(c.title, x + 12, y + 12, { width: inner, lineBreak: false });
         let cy = y + 30;
         if (c.lead) {
-          doc.font("Helvetica").fontSize(9).fillColor(MUTED).text(c.lead, x + 12, cy, { width: inner, lineGap: 1.5 });
+          doc.font("GSF").fontSize(9).fillColor(MUTED).text(c.lead, x + 12, cy, { width: inner, lineGap: 1.5 });
           cy += doc.heightOfString(c.lead, { width: inner, lineGap: 1.5 }) + 6;
         }
         if (c.items && c.items.length) bulletsAt(c.items, x + 12, cy, inner);
@@ -1085,14 +1098,14 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     };
     const steps = (rows) => {
       rows.forEach(([title, body], i) => {
-        doc.font("Helvetica").fontSize(9.5);
+        doc.font("GSF").fontSize(9.5);
         const h = doc.heightOfString(body, { width: width - 30, lineGap: 1.5 }) + 15;
         room(h + 4);
         const y = doc.y;
         doc.circle(x0 + 8, y + 6, 8).fill("#E8F3ED");
-        doc.font("Helvetica-Bold").fontSize(8).fillColor("#16714A").text(String(i + 1), x0, y + 2, { width: 16, align: "center", lineBreak: false });
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text(title, x0 + 24, y, { width: width - 30, lineBreak: false });
-        doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(body, x0 + 24, y + 13, { width: width - 30, lineGap: 1.5 });
+        doc.font("GSF-Bold").fontSize(8).fillColor("#16714A").text(String(i + 1), x0, y + 2, { width: 16, align: "center", lineBreak: false });
+        doc.font("GSF-Bold").fontSize(9.5).fillColor(NAVY).text(title, x0 + 24, y, { width: width - 30, lineBreak: false });
+        doc.font("GSF").fontSize(9.5).fillColor(INK).text(body, x0 + 24, y + 13, { width: width - 30, lineGap: 1.5 });
         doc.x = x0;
         doc.y = y + h + 3;
       });
@@ -1100,12 +1113,12 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     };
     const faqs = (rows) => {
       rows.forEach(([q, a]) => {
-        doc.font("Helvetica").fontSize(9.5);
+        doc.font("GSF").fontSize(9.5);
         const h = 14 + doc.heightOfString(a, { width, lineGap: 1.5 });
         room(h + 8);
         const y = doc.y;
-        doc.font("Helvetica-Bold").fontSize(9.5).fillColor(NAVY).text(q, x0, y, { width, lineBreak: false });
-        doc.font("Helvetica").fontSize(9.5).fillColor(INK).text(a, x0, y + 14, { width, lineGap: 1.5 });
+        doc.font("GSF-Bold").fontSize(9.5).fillColor(NAVY).text(q, x0, y, { width, lineBreak: false });
+        doc.font("GSF").fontSize(9.5).fillColor(INK).text(a, x0, y + 14, { width, lineGap: 1.5 });
         doc.x = x0;
         doc.y = y + h + 7;
       });
@@ -1114,7 +1127,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     pdfHeader(doc, { title: `${renewalYear} Program Overview`, groupName: g.name, subtitle: `Your ${planYear} To ${renewalYear} Renewal Summary` });
 
     // Page 1: the good news, in order.
-    para("Good news: the Kennion Program is growing.", { font: "Helvetica-Bold", size: 12, color: NAVY, after: 0.35 });
+    para("Good news: the Kennion Program is growing.", { font: "GSF-Bold", size: 12, color: NAVY, after: 0.35 });
     para(
       `Kennion has helped employers with employee benefits for more than 50 years and has operated the Kennion Program since 2013. As the program has grown and clients have asked for more choice, we have expanded our group health offering for ${renewalYear} to include major national carriers, networks and program partners. For ${g.name}, that means more medical plan options, more price points and more flexibility, backed by the same Kennion team you already know.`,
       { after: 0.8 },
@@ -1170,7 +1183,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     ]);
 
     doc.moveDown(0.2);
-    para(`The bottom line: more options from major national programs, more flexibility for your budget and your employees, and the same Kennion team walking you through every step. We are excited to bring it to you.`, { font: "Helvetica-Bold", size: 10.5, color: NAVY, after: 0 });
+    para(`The bottom line: more options from major national programs, more flexibility for your budget and your employees, and the same Kennion team walking you through every step. We are excited to bring it to you.`, { font: "GSF-Bold", size: 10.5, color: NAVY, after: 0 });
 
     // Page 2: what happens next, the questions we hear most, then the team.
     doc.addPage();
@@ -1182,7 +1195,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
       ["Sign Up", submittedOn ? `You submitted your plan choices on ${submittedOn}. You can send an update any time.` : `Once your strategy is set, confirm the plans and benefits you want to offer for ${renewalYear}. The Sign Up page on BenSync takes about a minute.`],
     ]);
     para("Once your selections are finalized, Kennion coordinates Employee Navigator setup, carrier implementation, employee communications, open enrollment, enrollment support, final enrollment and first-month premium setup.", { after: 0.3 });
-    para("We help you build the right strategy. Then we handle the rest.", { font: "Helvetica-Bold", after: 0.3 });
+    para("We help you build the right strategy. Then we handle the rest.", { font: "GSF-Bold", after: 0.3 });
 
     heading("Questions We Hear Most", 100);
     faqs([
@@ -1211,9 +1224,9 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
         const h = 34 + m.lines.length * 12 + 10;
         tallest = Math.max(tallest, h);
         doc.rect(x, y, colW, h).fill(TINT);
-        doc.font("Helvetica-Bold").fontSize(10).fillColor(NAVY).text(m.name, x + 10, y + 9, { width: colW - 20, lineBreak: false });
-        doc.font("Helvetica").fontSize(8).fillColor(MUTED).text(m.title, x + 10, y + 21, { width: colW - 20, lineBreak: false });
-        m.lines.forEach((l, j) => doc.font("Helvetica").fontSize(8.5).fillColor(INK).text(l, x + 10, y + 36 + j * 12, { width: colW - 20, lineBreak: false }));
+        doc.font("GSF-Bold").fontSize(10).fillColor(NAVY).text(m.name, x + 10, y + 9, { width: colW - 20, lineBreak: false });
+        doc.font("GSF").fontSize(8).fillColor(MUTED).text(m.title, x + 10, y + 21, { width: colW - 20, lineBreak: false });
+        m.lines.forEach((l, j) => doc.font("GSF").fontSize(8.5).fillColor(INK).text(l, x + 10, y + 36 + j * 12, { width: colW - 20, lineBreak: false }));
       });
       doc.x = x0;
       doc.y = y + tallest + 10;
@@ -1223,4 +1236,69 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
     pdfFooter(doc, { caption: "Prepared for your group by Kennion Benefit Advisors. Plan details and rates are on BenSync." });
   });
   return { filename: `${safeName(g.name)} - ${renewalYear} Program Overview ${stamp}.pdf`, mime: "application/pdf", data };
+}
+
+/**
+ * The Election Confirmation: a one-page receipt of a group's Sign Up
+ * submission - the medical carrier and plan(s), dental, vision, employer
+ * paid life and any note, then who signed and when. No rates, no plan
+ * tables: this is a record of what was chosen, not a comparison.
+ */
+export async function renderSignupConfirmation({ group: g, signup, manager, broker }) {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const fmtDate = (v) => (v ? new Date(v).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null);
+  const submittedOn = fmtDate(signup.submittedAt);
+  const dash = (v) => (v == null || v === "" ? "-" : v);
+  const listOrDash = (xs) => (Array.isArray(xs) && xs.length ? xs.join(", ") : "-");
+
+  const data = await pdfBuffer((doc) => {
+    const x0 = doc.page.margins.left;
+    const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const bottom = doc.page.height - 60;
+    const room = (need) => {
+      if (doc.y + need > bottom) doc.addPage();
+    };
+    const heading = (text, need = 40) => {
+      room(need);
+      doc.moveDown(0.4);
+      doc.font("GSF-Bold").fontSize(12.5).fillColor(NAVY).text(text, x0, doc.y, { width });
+      doc.moveDown(0.35);
+    };
+    /** One label/value line: the label bold in a fixed-width column, the value beside it, wrapping as needed. */
+    const row = (label, value) => {
+      const labelW = 170;
+      const text = dash(value);
+      doc.font("GSF").fontSize(9.5);
+      const h = doc.heightOfString(text, { width: width - labelW, lineGap: 1.5 });
+      room(h + 8);
+      const y = doc.y;
+      doc.font("GSF-Bold").fontSize(9.5).fillColor(INK).text(label, x0, y, { width: labelW, lineBreak: false });
+      doc.font("GSF").fontSize(9.5).fillColor(INK).text(text, x0 + labelW, y, { width: width - labelW, lineGap: 1.5 });
+      doc.x = x0;
+      doc.y = y + h + 8;
+    };
+
+    pdfHeader(doc, { title: "Election Confirmation", groupName: g.name, subtitle: submittedOn ? `Submitted ${submittedOn}` : null });
+
+    heading("Your Election", 60);
+    row("Medical Carrier", signup.carrier);
+    row("Medical Plan(s)", listOrDash(signup.plans));
+    row("Dental", listOrDash(signup.dental));
+    row("Vision", listOrDash(signup.vision));
+    row("Employer Paid Life", signup.employerLife);
+    if (signup.note) row("Notes", signup.note);
+
+    heading("Signed By", 60);
+    row("Name", signup.signerName);
+    row("Title", signup.signerTitle);
+    row("Submitted", submittedOn);
+
+    if (manager && manager.name) {
+      heading("Questions?", 40);
+      const contact = [manager.name, manager.email].filter(Boolean).join(" · ");
+      doc.font("GSF").fontSize(9.5).fillColor(INK).text(`Contact ${contact || "your Kennion account manager"} with any questions about this election.`, x0, doc.y, { width, lineGap: 1.5 });
+      doc.moveDown(0.4);
+    }
+  });
+  return { filename: `${safeName(g.name)} - Election Confirmation ${stamp}.pdf`, mime: "application/pdf", data };
 }

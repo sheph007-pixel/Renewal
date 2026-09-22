@@ -104,7 +104,7 @@ export default function CarrierMark({ name, size = 22, withName = true, fontSize
         fontWeight: 700,
         letterSpacing: "0.2px",
         lineHeight: 1,
-        fontFamily: "Sora, Manrope, -apple-system, sans-serif",
+        fontFamily: '"Google Sans Flex", -apple-system, sans-serif',
       }}
     >
       {brand.short}

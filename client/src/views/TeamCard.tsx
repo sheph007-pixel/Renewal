@@ -55,8 +55,37 @@ export default function TeamCard({ people, assistant, note }: Props) {
         <div style={{ marginTop: 3, fontSize: 15.5, fontWeight: 600, color: C.onColor, letterSpacing: "-0.1px" }}>Here Every Step Of The Way</div>
       </div>
 
+      {/* AI Assistant leads - expert brokerage meets AI-powered tech, so the
+          instant answer is the first door, with the people right behind it. */}
+      {assistant && (
+        <div style={{ ...member(0), background: C.zebra }}>
+          <span aria-hidden="true" style={{ ...avatar, background: C.navy, color: C.teal }}>
+            <SyncMark size={20} />
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 16.5, fontWeight: 700, color: C.ink }}>BenSync AI Assistant</div>
+            <div style={{ fontSize: 12.5, color: C.faint }}>AI Assistant · Available Any Time</div>
+            <div style={{ ...line, marginTop: 5, lineHeight: 1.55 }}>Instant answers on your plans, your options and what a contribution would cost.</div>
+            {assistant.onOpen ? (
+              <button type="button" onClick={assistant.onOpen} style={{ ...smallPrimaryBtn, marginTop: 10, fontWeight: 600 }}>
+                Ask The AI Assistant
+              </button>
+            ) : (
+              <Link className="cta" href={assistant.href} style={{ ...smallPrimaryBtn, display: "inline-block", marginTop: 10, fontWeight: 600, textDecoration: "none" }}>
+                Ask The AI Assistant
+              </Link>
+            )}
+            <div style={{ marginTop: 6 }}>
+              <Link className="cta" href={assistant.href} style={{ ...ctaLink, fontSize: 12.5 }}>
+                Open The Assistant Page &rarr;
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {list.map((m, i) => (
-        <div key={m.name} style={member(i)}>
+        <div key={m.name} style={member(assistant ? i + 1 : i)}>
           <span aria-hidden="true" style={{ ...avatar, background: C.blueTint, color: C.blueInk, border: `1px solid ${C.blueEdge}` }}>
             {monogram(m.name)}
           </span>
@@ -89,33 +118,6 @@ export default function TeamCard({ people, assistant, note }: Props) {
           </div>
         </div>
       ))}
-
-      {assistant && (
-        <div style={{ ...member(list.length), background: C.zebra }}>
-          <span aria-hidden="true" style={{ ...avatar, background: C.navy, color: C.teal }}>
-            <SyncMark size={20} />
-          </span>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 15.5, fontWeight: 600, color: C.ink }}>BenSync AI Assistant</div>
-            <div style={{ fontSize: 12.5, color: C.faint }}>AI Assistant · Available Any Time</div>
-            <div style={{ ...line, marginTop: 5, lineHeight: 1.55 }}>Instant answers on your plans, your options and what a contribution would cost.</div>
-            {assistant.onOpen ? (
-              <button type="button" onClick={assistant.onOpen} style={{ ...smallPrimaryBtn, marginTop: 10, fontWeight: 600 }}>
-                Ask The AI Assistant
-              </button>
-            ) : (
-              <Link className="cta" href={assistant.href} style={{ ...smallPrimaryBtn, display: "inline-block", marginTop: 10, fontWeight: 600, textDecoration: "none" }}>
-                Ask The AI Assistant
-              </Link>
-            )}
-            <div style={{ marginTop: 6 }}>
-              <Link className="cta" href={assistant.href} style={{ ...ctaLink, fontSize: 12.5 }}>
-                Open The Assistant Page &rarr;
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ padding: "12px 20px 14px", borderTop: `1px solid ${C.rule}`, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>{note}</div>
     </div>

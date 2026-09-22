@@ -173,7 +173,11 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
               padding: 0,
               listStyle: "none",
               display: "grid",
-              gridTemplateColumns: narrow ? "1fr" : "repeat(auto-fit, minmax(160px, 1fr))",
+              // Always exactly 4 equal columns on a normal-width screen - not
+              // auto-fit, which can silently drop to fewer, unevenly-sized
+              // columns depending on the viewport. Only the narrow/mobile
+              // breakpoint stacks them.
+              gridTemplateColumns: narrow ? "1fr" : "repeat(4, 1fr)",
               gap: 10,
             }}
           >
