@@ -186,6 +186,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
         <div className="noprint" style={{ display: "flex", gap: 8 }}>
           {data.invoice && (
             <a
+              className="cta"
               href={invoiceHref}
               target="_blank"
               rel="noreferrer"
@@ -195,7 +196,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
               View Invoice
             </a>
           )}
-          <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
+          <a className="cta" href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
             Employee Navigator
           </a>
         </div>
@@ -287,11 +288,11 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
               <h2 style={h2}>Your Current Supplemental Package</h2>
               <div className="noprint" style={{ display: "flex", gap: 8 }}>
                 {data.invoice && (
-                  <a href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} - opens in a new tab`} style={headerBtn}>
+                  <a className="cta" href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} - opens in a new tab`} style={headerBtn}>
                     View Invoice
                   </a>
                 )}
-                <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
+                <a className="cta" href={NAVIGATOR_URL} target="_blank" rel="noreferrer" style={headerBtn}>
                   Employee Navigator
                 </a>
               </div>

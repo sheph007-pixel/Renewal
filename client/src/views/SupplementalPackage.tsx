@@ -87,7 +87,7 @@ export default function SupplementalPackage() {
               {s.product} <span style={{ color: C.faint, fontWeight: 400 }}>·</span> {s.carrier}
             </div>
             {providerLink(s) && (
-              <a className="noprint" href={providerLink(s)!.href} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 500, color: C.blue, background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none", whiteSpace: "nowrap" }}>
+              <a className="noprint cta" href={providerLink(s)!.href} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 500, color: C.blue, background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: "4px 10px", textDecoration: "none", whiteSpace: "nowrap" }}>
                 {providerLink(s)!.linkLabel} ↗
               </a>
             )}
