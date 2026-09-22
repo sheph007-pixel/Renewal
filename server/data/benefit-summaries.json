@@ -1434,11 +1434,6 @@
         "note": "A specified period of time after your effective date during which the initial Diagnosis benefits will not be payable."
       },
       {
-        "label": "Cancer Screening",
-        "value": "200% of Spouse AD&D benefit",
-        "note": "Printed exactly as shown in source document; this value appears inconsistent with the 'Cancer Screening' label (possible document error/template carryover) - unable to verify intended meaning from the PDF."
-      },
-      {
         "label": "Cancer Screening - Benefit Amount",
         "value": "$50; $50 for Follow-Up screening",
         "note": null
@@ -1525,8 +1520,8 @@
       },
       {
         "label": "Home Health Care",
-        "value": "%40/visit up to 30 visits per year",
-        "note": "Printed exactly as shown in source PDF (the '%' before 40 appears to be an OCR/typographical error, likely intended as '$40')."
+        "value": "$40/visit up to 30 visits per year",
+        "note": "Source PDF (including Kennion's own branded benefit-summary reprint) prints this as \"%40/visit\"; corrected to $40, the only reading consistent with every other dollar-denominated line in this schedule."
       },
       {
         "label": "Hormone Therapy",
@@ -1654,7 +1649,7 @@
         "text": "Benefits will be paid for experimental treatment prescribed by a doctor for the purpose of destroying or changing abnormal tissue. All treatment must be NCI listed as viable experimental treatment for Internal Cancer."
       }
     ],
-    "notes": null,
+    "notes": "Verified against Kennion's own Guardian-branded \"Cancer Insurance\" benefit summary and Guardian's enrollment-system benefit summary for group 00569928 (Sept 2026 review). The duplicate, garbled \"Cancer Screening\" line (matching the Accident plan's \"Common Disaster\" value verbatim) was a confirmed template/copy-paste error in the source PDF and has been removed; the correct $50/screening value was already present under \"Cancer Screening - Benefit Amount\" and is corroborated by Guardian's own enrollment-system printout.",
     "sourceFile": "Supplemental/Cancer Insurance.pdf"
   },
   {
@@ -1851,8 +1846,8 @@
       },
       {
         "label": "Guarantee Issue - Employee",
-        "value": "Less than age 70: $10,00",
-        "note": "Printed exactly as shown in source PDF; appears to be a truncated/typo value (likely intended as $10,000, matching the plan's stated max benefit) - unable to verify exact figure from the PDF."
+        "value": "Less than age 70: $10,000",
+        "note": "Kennion's own branded benefit-summary PDF prints this as \"$10,00\"; corrected to $10,000, confirmed against Guardian's own enrollment-system benefit summary for group 00569928, which states \"Member Guaranteed Issue Ages 15-69 $10,000\"."
       },
       {
         "label": "Guarantee Issue - Spouse",
