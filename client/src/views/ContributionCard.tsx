@@ -134,7 +134,7 @@ export default function ContributionCard({ tiers, editable }: Props) {
 
       <p style={{ margin: "6px 0 14px", fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>
         {editable
-          ? "What you'd put toward each tier for 2027, per enrolled employee per month. Starts equal to what you spend today - change any figure to see the cost."
+          ? "What you'd put toward each tier, per enrolled employee per month. Starts equal to what you spend today - change any figure to see the cost."
           : "What you put toward each tier today, per enrolled employee per month, averaged across your current plans."}
       </p>
 

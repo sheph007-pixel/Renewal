@@ -24,7 +24,11 @@ const fileBadge = (mime: string, filename: string) => {
 
 const fmtSize = (n: number) => (n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`);
 
-/** One resource card: title, a one-line summary where Claude gave one, and links to download the file or visit the carrier's own website. Two separate links, so the card itself is a plain panel rather than one big anchor. */
+/**
+ * One resource card: title, a one-line summary where Claude gave one, and a
+ * link to download the file. The carrier's website is not repeated here - it
+ * sits once, on the section header above every card in this vendor's group.
+ */
 function ResourceCard({ r }: { r: Resource }) {
   return (
     <div style={{ ...panel, display: "flex", flexDirection: "column", gap: 8, padding: "14px 16px" }}>
@@ -51,7 +55,6 @@ function ResourceCard({ r }: { r: Resource }) {
           </svg>
           Download
         </a>
-        <CarrierSiteLink name={r.carrier} fontSize={12} />
         <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 400, color: C.faint }}>{fmtSize(r.size)}</span>
       </div>
     </div>
@@ -61,11 +64,13 @@ function ResourceCard({ r }: { r: Resource }) {
 /**
  * Resources: marketing material from each Carrier/TPA Kennion works with -
  * broker decks, one-pagers, FAQs - grouped by vendor, alphabetically, cards
- * alphabetical within a vendor too. Staff upload a file in the admin and
- * Claude files it under the right vendor immediately; this page just reads
- * what is on file, so it takes no group data and reads the same for every
- * group. The title and one-line description are the shared page header
- * (App.tsx) - nothing here repeats them.
+ * alphabetical within a vendor too. Each section's own header carries the
+ * vendor's name, large, and its website - once per vendor, not once per
+ * card. Staff upload a file in the admin and Claude files it under the right
+ * vendor immediately; this page just reads what is on file, so it takes no
+ * group data and reads the same for every group. The title and one-line
+ * description are the shared page header (App.tsx) - nothing here repeats
+ * them.
  */
 export default function Resources() {
   const [resources, setResources] = useState<Resource[] | null>(null);
@@ -102,11 +107,14 @@ export default function Resources() {
 
       {carriers.map((carrier) => (
         <section key={carrier} style={{ marginBottom: 26 }}>
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
             {carrier === "Other" ? (
               <h3 style={h3}>Other</h3>
             ) : (
-              <CarrierMark name={carrier} withName size={22} fontSize={15} color={C.ink} />
+              <>
+                <CarrierMark name={carrier} withName size={28} fontSize={18} color={C.ink} />
+                <CarrierSiteLink name={carrier} fontSize={12.5} />
+              </>
             )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>

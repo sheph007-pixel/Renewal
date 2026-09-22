@@ -224,7 +224,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     try {
       if (set.view === "all") {
         const sheet = planSheet(set.plans, applied, counts);
-        await exportPlansExcel(sheet.columns, sheet.rows, applied, g.name);
+        await exportPlansExcel(sheet.columns, sheet.rows, applied, g.name, effectiveYear(g));
       } else {
         await exportGridPdf(set.view, set.plans.map((p) => p.optionId ?? p.plan), applied, g.name);
       }

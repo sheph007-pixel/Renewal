@@ -53,10 +53,11 @@ function DownloadIcon() {
 }
 
 /**
- * The button that builds the group's own 2027 Program Overview
- * on the server and saves it through the browser. The PDF is made fresh
- * each time, from the quotes on file at that moment, so it always says what
- * the pages say.
+ * The button that builds the group's own Program Overview on the server and
+ * saves it through the browser. The PDF is made fresh each time, from the
+ * quotes on file at that moment, so it always says what the pages say. The
+ * year names the download itself, not the button or caption text - the
+ * Effective Date line above already says when.
  */
 function DownloadChanges({ groupName, year }: { groupName: string; year: string }) {
   const [busy, setBusy] = useState(false);
@@ -70,7 +71,7 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
           setBusy(true);
           setError("");
           try {
-            await exportChangesPdf(groupName);
+            await exportChangesPdf(groupName, year);
           } catch (e) {
             setError((e as Error).message || "Could not build the summary. Try again.");
           } finally {
@@ -80,10 +81,10 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
         style={{ ...primaryBtn, display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
         <DownloadIcon />
-        {busy ? "Building Your Overview…" : `Download ${year} Program Overview`}
+        {busy ? "Building Your Overview…" : "Download Program Overview"}
       </button>
       <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || `A simple two-page overview of what's new for ${year}, ready to share with your team.`}
+        {error || "A simple two-page overview of what's new, ready to share with your team."}
       </span>
     </div>
   );
@@ -119,7 +120,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
       href: signUpHref,
       body: (
         <>
-          Once your strategy is set, confirm the plans and benefits you want to offer for {year}.
+          Once your strategy is set, confirm the plans and benefits you want to offer.
           {submitted && <> You submitted on {submitted}; you can send an update any time.</>}
         </>
       ),
@@ -132,21 +133,21 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
           {isNew ? (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To The {year} Kennion Program</h2>
-              <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program for {year}.</p>
+              <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+              <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
+              <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program.</p>
               <p style={p}>
                 Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the
                 Kennion Program since 2013 - pairing dedicated account management with major national carriers, networks
                 and program partners to build a plan strategy that fits your group.
               </p>
-              <p style={p}>
-                Below you&rsquo;ll find your {year} program overview, along with how the process works from here.
-              </p>
+              <p style={p}>Below you&rsquo;ll find your program overview, along with how the process works from here.</p>
             </>
           ) : (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your {year} Renewal</h2>
-              <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for {year}.</p>
+              <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+              <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
+              <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding.</p>
               <p style={p}>
                 Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
                 since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
@@ -159,7 +160,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             </>
           )}
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
-            <p style={{ ...kicker, marginBottom: 8 }}>{year} Program Overview</p>
+            <p style={{ ...kicker, marginBottom: 8 }}>Program Overview</p>
             <DownloadChanges groupName={groupName} year={year} />
           </div>
         </div>

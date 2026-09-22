@@ -738,10 +738,13 @@ export default function App() {
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
   // Effective Date is the one date a group sees anywhere in the app - shown
   // once, under the header, on Medical Plans, Supplemental Package and Sign
-  // Up. It comes from the group's own record (set per group in Admin, New
-  // or Existing), never spelled out or duplicated elsewhere on the page.
+  // Up (and on Welcome, in its own panel). It comes from the group's own
+  // record (set per group in Admin, New or Existing), never spelled out or
+  // duplicated elsewhere on the page. Bold under the header so it reads as
+  // a fact, not a caption.
+  const showingEffectiveDate = tab === "signup" || tab === "supplemental" || tab === "options" || tab === "current";
   const subline =
-    tab === "signup" || tab === "supplemental" || tab === "options" || tab === "current"
+    showingEffectiveDate
       ? `Effective Date: ${effectiveDateLabel(g)}`
       : tab === "disclaimers"
         ? "What every rate, benefit and recommendation here is, and is not."
@@ -873,7 +876,11 @@ export default function App() {
                 </h1>
                 {/* Welcome is titled with the group's name and carries nothing under it - everywhere
                     else, the Effective Date (or the tab's own line) sits under the title. */}
-                {tab !== "home" && <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subline}</div>}
+                {tab !== "home" && (
+                  <div style={{ marginTop: 4, fontSize: 13, color: showingEffectiveDate ? C.ink : C.muted, fontWeight: showingEffectiveDate ? 700 : 400, lineHeight: 1.6 }}>
+                    {subline}
+                  </div>
+                )}
               </div>
               {/* On the Medical Plans tabs only: Welcome opens without it. */}
               {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
