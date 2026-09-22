@@ -188,7 +188,7 @@ export default function Login({
 
             <div style={card}>
               <h1 style={{ margin: "0 0 22px", fontSize: 19, fontWeight: 700, color: C.ink, letterSpacing: "-0.2px" }}>
-                Staff sign in
+                Admin sign in
               </h1>
 
               {twoFactor ? (
