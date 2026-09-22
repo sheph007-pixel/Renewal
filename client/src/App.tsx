@@ -36,7 +36,6 @@ import type { FundingInfo } from "@/views/Funding";
 import Current from "@/views/Current";
 import Options from "@/views/Options";
 import Home from "@/views/Home";
-import WhatsChanging from "@/views/WhatsChanging";
 import SupplementalPackage from "@/views/SupplementalPackage";
 import Resources from "@/views/Resources";
 import SignUp from "@/views/SignUp";
@@ -948,26 +947,18 @@ export default function App() {
             {tab === "assistant" ? (
               <Assistant threadId={page.thread} hrefFor={assistantHref} />
             ) : tab === "home" ? (
-              <>
-                <Home
-                  groupName={g.name}
-                  optionsHref={hrefFor("options")}
-                  supplementalHref={hrefFor("supplemental")}
-                  signUpHref={hrefFor("signup")}
-                  assistantHref={assistantOn ? assistantHref() : null}
-                  manager={manager}
-                  broker={broker}
-                  lastSignup={data.signup || null}
-                  effectiveDate={g.effectiveDate}
-                  groupStatus={g.groupStatus}
-                />
-                {/* What's New sits under the welcome: where the market review stands, one page, less to click through. Nothing to compare for a group with no prior coverage on file. */}
-                {g.groupStatus !== "new" && (
-                  <section id="changes" className="anchor" style={{ marginTop: 26 }}>
-                    <WhatsChanging data={data} g={g} optionsHref={hrefFor("options")} />
-                  </section>
-                )}
-              </>
+              <Home
+                groupName={g.name}
+                optionsHref={hrefFor("options")}
+                supplementalHref={hrefFor("supplemental")}
+                signUpHref={hrefFor("signup")}
+                assistantHref={assistantOn ? assistantHref() : null}
+                manager={manager}
+                broker={broker}
+                lastSignup={data.signup || null}
+                effectiveDate={g.effectiveDate}
+                groupStatus={g.groupStatus}
+              />
             ) : tab === "current" ? (
               <Current
                 data={data}

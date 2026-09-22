@@ -4,7 +4,6 @@ import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignup } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
-import ProgramStory from "@/views/ProgramStory";
 import { useNarrow } from "@/lib/narrow";
 
 /** The licensed broker on every client's team, used when the server sends no broker contact. */
@@ -91,14 +90,14 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
 }
 
 /**
- * The Welcome tab for an existing Kennion client. Not a sales letter: they
- * know Kennion and are already in the program. In about twenty seconds the
- * page says that the program expanded for 2027, that BenSync makes the
- * options easier to evaluate, that the client chooses what to offer, and
- * that Kennion handles everything after that. The 2027 Program Overview
- * is one click away, the 2027 Kennion Program story (ProgramStory) plays
- * first, at the top of the page, and the team card beside it keeps the
- * people and the AI Assistant reachable without making a call the next step.
+ * The Welcome tab: one plain welcome panel (copy branches on groupStatus -
+ * an existing client already knows Kennion and is being told the program
+ * expanded; a new client is being told what the program is) with the year's
+ * Program Overview one click away, then How It Works. No sales carousel, no
+ * separate "what's new" section - a returning client can see their own
+ * option count on Medical Plans instead of a second summary of it here. The
+ * team card beside it keeps the people and the AI Assistant reachable
+ * without making a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup, effectiveDate, groupStatus }: Props) {
   const narrow = useNarrow();
@@ -130,27 +129,40 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-        <ProgramStory year={year} />
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
-          <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your {year} {isNew ? "Program" : "Renewal"}</h2>
-          <p style={{ ...p, fontWeight: 600, color: C.ink }}>
-            {isNew ? `You're joining the Kennion Program for ${year}.` : `The Kennion Program is expanding for ${year}.`}
-          </p>
-          <p style={p}>
-            Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
-            since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
-            we&rsquo;re expanding our group health offering through major national partners, networks and programs.
-          </p>
-          <p style={p}>
-            That means more medical plan options, more flexibility and a better way to evaluate what works for your group, backed
-            by the same Kennion team you already know.
-          </p>
+          {isNew ? (
+            <>
+              <h2 style={{ ...head, fontSize: 20 }}>Welcome To The {year} Kennion Program</h2>
+              <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program for {year}.</p>
+              <p style={p}>
+                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the
+                Kennion Program since 2013 - pairing dedicated account management with major national carriers, networks
+                and program partners to build a plan strategy that fits your group.
+              </p>
+              <p style={p}>
+                Below you&rsquo;ll find your {year} program overview, along with how the process works from here.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your {year} Renewal</h2>
+              <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding for {year}.</p>
+              <p style={p}>
+                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
+                since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
+                we&rsquo;re expanding our group health offering through major national partners, networks and programs.
+              </p>
+              <p style={p}>
+                That means more medical plan options, more flexibility and a better way to evaluate what works for your group, backed
+                by the same Kennion team you already know.
+              </p>
+            </>
+          )}
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
             <p style={{ ...kicker, marginBottom: 8 }}>{year} Program Overview</p>
             <DownloadChanges groupName={groupName} year={year} />
           </div>
         </div>
-
 
         <div style={{ ...panel, padding: narrow ? "18px 18px 16px" : "24px 34px 22px" }}>
           <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
