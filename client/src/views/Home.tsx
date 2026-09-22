@@ -168,19 +168,31 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             }}
           >
             {steps.map((s, i) => (
-              <li key={s.title} style={{ minWidth: 0, height: "100%" }}>
+              <li key={s.title} style={{ minWidth: 0, height: "100%", display: "flex", flexDirection: "column" }}>
+                {/* Step number sits above the card, outside its border and padding -
+                    a small overline, not competing with the title for width or its
+                    own line inside the box. The title is free to wrap to a second
+                    line instead of truncating with an ellipsis; the grid row already
+                    stretches every <li> in it to the tallest one's height, so all 4
+                    cards still end up the same height even when one title wraps and
+                    the others don't. */}
+                <div
+                  aria-hidden="true"
+                  style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.5px", color: C.blueInk, textTransform: "uppercase", marginBottom: 4 }}
+                >
+                  Step {i + 1}
+                </div>
                 {/* The whole card is the link, not just the title - .rowlink darkens
                     the background on hover so the card reads as clickable wherever
                     the pointer lands on it, not just over the two words of the title.
-                    height: 100% + box-sizing keep all 4 cards the same height
-                    regardless of how much their own body copy wraps - the grid row
-                    already stretches the <li>, this just makes the link fill it. */}
+                    flex: 1 1 auto fills the remaining height in the <li> below the
+                    step number, so the card's own bottom edges still line up. */}
                 <Link
                   className="rowlink card-link"
                   href={s.href}
                   style={{
                     display: "block",
-                    height: "100%",
+                    flex: "1 1 auto",
                     boxSizing: "border-box",
                     padding: "11px 10px 10px",
                     borderRadius: 8,
@@ -190,21 +202,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     cursor: "pointer",
                   }}
                 >
-                  {/* Step number as its own kicker line, then the title full width and
-                      larger below it - reads as a headline, not a small inline label.
-                      The title still never wraps to a second line (an ellipsis takes
-                      over instead), so all 4 cards stay the same height. */}
-                  <div
-                    aria-hidden="true"
-                    style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.5px", color: C.blueInk, textTransform: "uppercase", marginBottom: 3 }}
-                  >
-                    Step {i + 1}
-                  </div>
-                  <div
-                    className="cta"
-                    title={s.title}
-                    style={{ ...ctaLink, display: "block", fontSize: 15.5, lineHeight: 1.25, letterSpacing: "-0.2px", marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
+                  <div className="cta" style={{ ...ctaLink, display: "block", fontSize: 15.5, lineHeight: 1.25, letterSpacing: "-0.2px", marginBottom: 5, textWrap: "pretty" as const }}>
                     {s.title}
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
