@@ -93,12 +93,16 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
 /**
  * The Welcome tab: one plain welcome panel (copy branches on groupStatus -
  * an existing client already knows Kennion and is being told the program
- * expanded; a new client is being told what the program is) with the year's
- * Program Overview one click away, then How It Works. No sales carousel, no
- * separate "what's new" section - a returning client can see their own
- * option count on Medical Plans instead of a second summary of it here. The
- * team card beside it keeps the people and the AI Assistant reachable
- * without making a call the next step.
+ * expanded; a new client is being told what the program is), kept to one
+ * paragraph so the page fits above the fold, with the year's Program
+ * Overview one click away. Then How It Works: four numbered boxes in a row
+ * (wrapping on a narrow screen), not a stacked list - the natural left-to-
+ * right reading order already says 1, 2, 3, 4, and a row takes a fraction
+ * of the height four stacked rows would. No sales carousel, no separate
+ * "what's new" section - a returning client can see their own option count
+ * on Medical Plans instead of a second summary of it here. The team card
+ * beside it keeps the people and the AI Assistant reachable without making
+ * a call the next step.
  */
 export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup, effectiveDate, groupStatus }: Props) {
   const narrow = useNarrow();
@@ -112,16 +116,16 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   const year = effectiveYear(eff);
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your {effectiveDateLabel(eff)} effective date.</> },
+    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
     { title: "Review Supplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
-    { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans, model contributions and narrow the options that make the most sense for your group.</> },
+    { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
     {
       title: "Sign Up",
       href: signUpHref,
       body: (
         <>
-          Once your strategy is set, confirm the plans and benefits you want to offer.
-          {submitted && <> You submitted on {submitted}; you can send an update any time.</>}
+          Confirm the plans and benefits you want to offer.
+          {submitted && <> Submitted {submitted}; send an update any time.</>}
         </>
       ),
     },
@@ -134,58 +138,72 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           {isNew ? (
             <>
               <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
-              <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
+              <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program.</p>
-              <p style={p}>
+              <p style={{ ...p, marginBottom: 0 }}>
                 Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the
                 Kennion Program since 2013 - pairing dedicated account management with major national carriers, networks
                 and program partners to build a plan strategy that fits your group.
               </p>
-              <p style={p}>Below you&rsquo;ll find your program overview, along with how the process works from here.</p>
             </>
           ) : (
             <>
               <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
-              <p style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
+              <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding.</p>
-              <p style={p}>
-                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion Program
-                since 2013. As the program has grown and clients have asked for more choice, flexibility and better technology,
-                we&rsquo;re expanding our group health offering through major national partners, networks and programs.
-              </p>
-              <p style={p}>
-                That means more medical plan options, more flexibility and a better way to evaluate what works for your group, backed
-                by the same Kennion team you already know.
+              <p style={{ ...p, marginBottom: 0 }}>
+                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion
+                Program since 2013. We&rsquo;re expanding our group health offering through major national partners, networks and
+                programs - more medical plan options, more flexibility, and a better way to evaluate what works for your group,
+                backed by the same Kennion team you already know.
               </p>
             </>
           )}
-          <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
             <p style={{ ...kicker, marginBottom: 8 }}>Program Overview</p>
             <DownloadChanges groupName={groupName} year={year} />
           </div>
         </div>
 
-        <div style={{ ...panel, padding: narrow ? "18px 18px 16px" : "24px 34px 22px" }}>
-          <p style={{ ...kicker, marginBottom: 4 }}>How It Works</p>
-          <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 14 }}>
+        <div style={{ ...panel, padding: narrow ? "18px 18px 16px" : "20px 26px 20px" }}>
+          <p style={{ ...kicker, marginBottom: 10 }}>How It Works</p>
+          <ol
+            style={{
+              margin: 0,
+              padding: 0,
+              listStyle: "none",
+              display: "grid",
+              gridTemplateColumns: narrow ? "1fr" : "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 10,
+            }}
+          >
             {steps.map((s, i) => (
-              <li key={s.title} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                <span
-                  aria-hidden="true"
-                  style={{ flex: "none", width: 26, height: 26, borderRadius: 13, background: C.blueTint, color: C.blueInk, fontSize: 13, fontWeight: 700, display: "grid", placeItems: "center", marginTop: 1 }}
-                >
-                  {i + 1}
-                </span>
-                <div style={{ minWidth: 0 }}>
-                  <Link className="cta" href={s.href} style={{ ...ctaLink, fontSize: 15.5 }}>
+              <li
+                key={s.title}
+                style={{
+                  minWidth: 0,
+                  padding: "12px 13px 11px",
+                  borderRadius: 8,
+                  background: C.zebra,
+                  border: `1px solid ${C.hairline}`,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{ flex: "none", width: 20, height: 20, borderRadius: 10, background: C.blueTint, color: C.blueInk, fontSize: 11.5, fontWeight: 700, display: "grid", placeItems: "center" }}
+                  >
+                    {i + 1}
+                  </span>
+                  <Link className="cta" href={s.href} style={{ ...ctaLink, fontSize: 13.5, lineHeight: 1.3 }}>
                     {s.title}
                   </Link>
-                  <div style={{ marginTop: 2, fontSize: 14, lineHeight: 1.6, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
                 </div>
+                <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
               </li>
             ))}
           </ol>
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.rule}` }}>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
             <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest</h3>
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
               Once your selections are finalized, Kennion coordinates {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
