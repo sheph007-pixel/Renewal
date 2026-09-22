@@ -60,6 +60,17 @@ button,
   filter: brightness(0.96);
 }
 
+/* A card that's really a link (Welcome's How It Works steps): border picks
+   up the brand green on hover, on top of .rowlink's background dim, so the
+   whole card reads as clickable, not just its title. */
+.card-link {
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.card-link:hover {
+  border-color: #1F8A5B !important;
+  box-shadow: 0 2px 6px rgba(15, 42, 71, 0.1);
+}
+
 @media print {
   /* The printed proposal is the only thing this app prints, and it reads
      best wide: four plans side by side on one landscape page. */
