@@ -185,6 +185,10 @@ button,
        row's existing flex + align-items: center keeps the label centred. */
     min-height: 44px;
   }
+  /* Nothing to divide once the pages sit in a wrapping row. */
+  .shell > .sidebar > .rail-nav > .rail-sep {
+    display: none;
+  }
   .shell > .sidebar > .brand {
     border-bottom: 0 !important;
   }
