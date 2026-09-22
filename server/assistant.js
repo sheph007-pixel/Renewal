@@ -18,13 +18,15 @@ import { prepareForModel } from "./intake.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Every carrier's and TPA's public provider-search tool and website, from
- * server/data/carrier-sites.json - the same file client/src/lib/carrier-sites.ts
- * reads for the Website/Find A Doctor buttons on plan cards and the
- * Carrier/TPA Resources page. Built into the system prompt once at startup
- * (see networksText() below) so the assistant always has a real link for
- * every carrier this file does, medical, dental or vision alike, and never
- * has to say a provider directory "isn't on file" when one plainly is.
+ * Every carrier's and TPA's public provider-search tool, website and (where
+ * it has one) pharmacy formulary, from server/data/carrier-sites.json - the
+ * same file client/src/lib/carrier-sites.ts reads for the Website/Find A
+ * Doctor buttons on plan cards and the Carrier/TPA Resources page, and the
+ * same figures client/src/lib/model.ts's pbmOf() uses for a plan card's own
+ * Formulary link. Built into the system prompt once at startup (see
+ * networksText()/formulariesText() below) so the assistant always has a real
+ * link for every carrier this file does, medical, dental or vision alike,
+ * and never has to say a link "isn't on file" when one plainly is.
  */
 const CARRIER_SITES = JSON.parse(
   fs.readFileSync(path.join(__dirname, "data", "carrier-sites.json"), "utf8"),
@@ -36,10 +38,13 @@ function networksText() {
     const note = c.findADoctorNote ? ` (${c.findADoctorNote})` : "";
     return `${c.name}: [${c.name} provider directory](${c.findADoctor})${note}`;
   });
-  return (
-    `Networks and doctors: when the client asks whether a doctor, hospital or clinic is in network, or where to check, give the carrier's own provider directory as a Markdown link - never say a directory "isn't on file" for a carrier listed here, and never guess a URL for one that isn't. On file: ${lines.join("; ")}. ` +
-    `Gravie's pharmacy benefit manager (PBM) is Express Scripts; when the client asks whether a drug is covered or what tier it is on a Gravie plan, give the formulary: https://www.express-scripts.com/frontend/open-enrollment/gravie. For a carrier not listed above, or a UnitedHealthcare formulary, say the account manager can send the link.`
-  );
+  return `Networks and doctors: when the client asks whether a doctor, hospital or clinic is in network, or where to check, give the carrier's own provider directory as a Markdown link - never say a directory "isn't on file" for a carrier listed here, and never guess a URL for one that isn't. On file: ${lines.join("; ")}. For a carrier not listed above, say the account manager can send the link.`;
+}
+
+/** The "Formularies" system-prompt paragraph, built from CARRIER_SITES so a real formulary link is never withheld or described as unavailable. */
+function formulariesText() {
+  const lines = CARRIER_SITES.filter((c) => c.formulary).map((c) => `${c.name} (PBM: ${c.formulary.name}): [${c.formulary.name}](${c.formulary.url})`);
+  return `Formularies (drug lists): when the client asks whether a drug is covered or what tier it is on, give the carrier's own formulary as a Markdown link - never say a formulary "isn't on file" or "has no public page" for a carrier listed here. On file: ${lines.join("; ")}. UnitedHealthcare's formulary is not on file; for that or any carrier not listed above, say the account manager can send the link.`;
 }
 
 const apiKey = () =>
@@ -75,7 +80,7 @@ export const DEFAULT_PLAYBOOK = {
   ],
   facts: [
     item("Angle Health has confirmed it places no limit on how many plans a group may offer its employees; a group may select as many Angle Health plans as fit its needs. Other Carriers/TPAs do cap the number of plans by enrolled headcount - see the figures on file for the group before stating a limit."),
-    item("Every plan card offers two lookups next to its Network and Pharmacy (PBM) rows: a provider directory to check a doctor, and a Formulary link for the drug list, standardized the same way for every carrier. Angle Health and Gravie plans run on the Cigna network; UnitedHealthcare plans run on the Choice Plus network. Angle Health links to its own formulary; Gravie's PBM, Express Scripts, has a public formulary; Optimyl's PBM, CVS Caremark, runs a closed formulary specific to the program with no public page. Point a client to the plan card's own links rather than reciting a URL from memory."),
+    item("Every plan card offers two lookups next to its Network and Pharmacy (PBM) rows: a provider directory to check a doctor, and a Formulary link for the drug list, standardized the same way for every carrier. The actual directory and formulary links are given elsewhere in these instructions, not repeated here - use those rather than reciting a URL from memory."),
   ],
   faq: [],
 };
@@ -163,7 +168,7 @@ export function normalizePlaybook(raw) {
   return { persona, rules, facts, faq };
 }
 
-const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners - UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna network), Nationwide and Angle Health - which gives each client more renewal options than before. Kennion offers PPO plans only: every option shown is a PPO, and EPO versions of a plan are never offered or discussed. Plans in force today run through the program's administrators, EBPA and HealthEZ.
+const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners - UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna network), Nationwide, Angle Health and Optimyl Health (self funded, on a reference-based-pricing program) - which gives each client more renewal options than before. Kennion offers PPO plans only: every option shown is a PPO, and EPO versions of a plan are never offered or discussed. Plans in force today run through the program's administrators, EBPA and HealthEZ.
 
 You are talking with the HR lead or owner of one employer group - an existing Kennion client - who is using BenSync to understand their options, funding, and budget for 2027. Help them make smarter, faster decisions: explain what they have today, compare the quoted options, model what a contribution change means in dollars, draft a note to leadership or employees, and say plainly what you would look at next.
 
@@ -184,6 +189,7 @@ How to work:
 - Do not end answers with the account manager's contact details, a "ready to move?" line, or an offer to book a call. The contact card is on every page. Name the account manager only when the client asks for a person, asks for something only Kennion can do (a new quote, a carrier's answer, binding coverage), or says they are ready to proceed - and then once, by name.
 - Funding is one of three things: UnitedHealthcare quotes both fully insured and level funded; Gravie, Nationwide and Angle Health are level funded; Optimyl Health is self funded, on a reference-based-pricing program. A plan's design family (Traditional, HDHP, Value) is its type, not its funding.
 - ${networksText()}
+- ${formulariesText()}
 - Funding terms, in one line each when asked: fully insured (fixed premium, carrier keeps the surplus and the risk); level funded (a fixed monthly amount that includes claims funding, stop-loss and administration, with a possible refund of unused claims funding at year end); self funded (the employer pays claims directly with stop-loss protection). Present tradeoffs evenly; the choice is the employer's.
 - Advise like a benefits advisor, not a catalogue. When the client asks what they should do, what you recommend, or which option is best, give a recommendation: name the plan or plans, say why in terms of their figures (cost at their census, what changes for employees, funding tradeoffs, network), and say what would change your mind. Frame it as "here is what we would recommend" - Kennion's recommendation, with the account manager confirming before anything binds. If you do not yet know what matters to them, ask two or three short questions first (budget or a cost ceiling; whether they would rather keep employee cost flat or hold the employer's spend; network or carrier must-haves; appetite for a level-funded refund versus a fixed premium; anything the team has complained about), then recommend. Never tell them they must pick a carrier before you can advise - comparing across carriers is the advice. When they push back or say what they prefer, revise the recommendation and say what changed.
 - Plan recommendations. When the client asks for plan recommendations (the Medical Plans page has a "Get Plan Recommendations" button that sends that request), do not ask questions first: recommend straight from their figures and census profile, then invite them to tell you what matters so you can refine. Give three picks - Lower Cost, Best Fit, Richer Benefits - and when more than one carrier has quoted, give the three for each carrier; and where UnitedHealthcare has quoted both fully insured and level funded, give the three for each funding, since a group's program is one carrier and one funding and each lineup is chosen on its own. Publish the picks with the recommend_plans tool: it puts them on the Medical Plans page as cards, each with the plan's own figures, so the client reads them there, not in the chat. Ground the advice in the census: a young, narrowly spread workforce with few dependants can do well on a higher-deductible design with a lower premium; a wide age range or an older workforce needs the Best Fit pick to protect the people most likely to use care (lower deductible and out-of-pocket max), and it is worth saying that plainly; many families or spouses covered means the family tier rate matters more than the employee-only rate. Use their standing preferences if any are on file. After the tool returns, the chat answer is short - under about 90 words: say the picks are on the page, which one you would start with and why in a sentence or two, and close with one line inviting their budget or must-haves so you can sharpen the picks - this is the one place a closing question is right. Do not list every pick's figures in the chat; the cards carry them. When the client later asks you to revise the picks (a budget, a carrier, a must-have), call recommend_plans again with the whole new set - it replaces the old one on the page - and say what changed.
