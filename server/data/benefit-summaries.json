@@ -2280,7 +2280,7 @@
     "id": "old-medical-basic-gold",
     "category": "medical-legacy",
     "name": "Basic Gold",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2377,14 +2377,14 @@
         "value": "$250 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Basic Gold.pdf"
   },
   {
     "id": "old-medical-choice-gold",
     "category": "medical-legacy",
     "name": "Choice Gold",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2481,14 +2481,14 @@
         "value": "$150 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Choice Gold.pdf"
   },
   {
     "id": "old-medical-classic-silver",
     "category": "medical-legacy",
     "name": "Classic Silver",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2585,14 +2585,14 @@
         "value": "$250 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Classic Silver.pdf"
   },
   {
     "id": "old-medical-core-health",
     "category": "medical-legacy",
     "name": "Core Health",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2653,14 +2653,14 @@
         "value": "$75 Copay / $100 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Core Health.pdf"
   },
   {
     "id": "old-medical-deluxe-platinum",
     "category": "medical-legacy",
     "name": "Deluxe Platinum",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2757,14 +2757,14 @@
         "value": "$150 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Deluxe Platinum.pdf"
   },
   {
     "id": "old-medical-elite-health",
     "category": "medical-legacy",
     "name": "Elite Health",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2825,14 +2825,14 @@
         "value": "$75 Copay / $100 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Elite Health.pdf"
   },
   {
     "id": "old-medical-enhanced-silver",
     "category": "medical-legacy",
     "name": "Enhanced Silver",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -2929,14 +2929,14 @@
         "value": "$250 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Enhanced Silver.pdf"
   },
   {
     "id": "old-medical-freedom-bronze",
     "category": "medical-legacy",
     "name": "Freedom Bronze",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3021,14 +3021,14 @@
         "value": "$25 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible. Footnote markers ** and ^ appear next to MRI & Advanced Imaging and Outpatient Facility rows on the source PDF, but no corresponding footnote text was printed on the page.",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible. Footnote markers ** and ^ appear next to MRI & Advanced Imaging and Outpatient Facility rows on the source PDF, but no corresponding footnote text was printed on the page.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Bronze.pdf"
   },
   {
     "id": "old-medical-freedom-gold",
     "category": "medical-legacy",
     "name": "Freedom Gold",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3113,14 +3113,14 @@
         "value": "$25 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Gold.pdf"
   },
   {
     "id": "old-medical-freedom-platinum",
     "category": "medical-legacy",
     "name": "Freedom Platinum",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3205,14 +3205,14 @@
         "value": "$25 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Platinum.pdf"
   },
   {
     "id": "old-medical-freedom-silver",
     "category": "medical-legacy",
     "name": "Freedom Silver",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3297,14 +3297,14 @@
         "value": "$25 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Silver.pdf"
   },
   {
     "id": "old-medical-preferred-silver",
     "category": "medical-legacy",
     "name": "Preferred Silver",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3401,14 +3401,14 @@
         "value": "$250 Copay"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Preferred Silver.pdf"
   },
   {
     "id": "old-medical-premier-health",
     "category": "medical-legacy",
     "name": "Premier Health",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3469,14 +3469,14 @@
         "value": "$75 Copay / $100 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Premier Health.pdf"
   },
   {
     "id": "old-medical-saver-hsa",
     "category": "medical-legacy",
     "name": "Saver HSA",
-    "carrier": null,
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3573,14 +3573,14 @@
         "value": "100% covered*"
       }
     ],
-    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
     "sourceFile": "Old Medical (Ending 12-31-26)/Saver HSA.pdf"
   },
   {
     "id": "old-medical-select-health",
     "category": "medical-legacy",
     "name": "Select Health",
-    "carrier": "Cobalt",
+    "carrier": "HealthEZ (EBPA)",
     "status": "legacy",
     "effectiveThrough": "2026-12-31",
     "summary": {
@@ -3641,7 +3641,7 @@
         "value": "$75 Copay / $100 Copay"
       }
     ],
-    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Select Health.pdf"
   }
 ]
