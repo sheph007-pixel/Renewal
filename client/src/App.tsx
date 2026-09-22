@@ -865,17 +865,21 @@ export default function App() {
             >
               <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
                 {/* Same wording as the side rail's current entry, so the page
-                    a client lands on after clicking a link is never in doubt. */}
+                    a client lands on after clicking a link is never in doubt.
+                    Welcome no longer repeats the group's name here - the
+                    welcome card below greets the group by name itself, so
+                    the name isn't split across a bare header and a generic
+                    "Welcome" in the card. */}
                 <h1 style={{ ...h1, display: "flex", alignItems: "center", gap: 10 }}>
                   {tab === "assistant" && (
                     <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: C.navy, color: C.teal, flex: "none" }}>
                       <SyncMark size={18} />
                     </span>
                   )}
-                  {tab === "home" ? g.name : tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
+                  {tab === "home" ? "Welcome" : tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
                 </h1>
-                {/* Welcome is titled with the group's name and carries nothing under it - everywhere
-                    else, the Effective Date (or the tab's own line) sits under the title. */}
+                {/* Welcome carries nothing under it - everywhere else, the
+                    Effective Date (or the tab's own line) sits under the title. */}
                 {tab !== "home" && (
                   <div style={{ marginTop: 4, fontSize: 13, color: showingEffectiveDate ? C.ink : C.muted, fontWeight: showingEffectiveDate ? 700 : 400, lineHeight: 1.6 }}>
                     {subline}
