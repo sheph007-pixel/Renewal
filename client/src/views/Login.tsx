@@ -1,4 +1,4 @@
-import { BenSync, C, Logo, panel, primaryBtn, textInput } from "@/lib/ui";
+import { BenSync, C, panel, primaryBtn, textInput } from "@/lib/ui";
 
 interface Props {
   mode: "group" | "staff";
@@ -94,16 +94,38 @@ export default function Login({
     </div>
   );
 
+  const brand = (
+    <div style={{ textAlign: "center", marginBottom: 26 }}>
+      <img src={BenSync} alt="BenSync" style={{ height: 28, display: "block", margin: "0 auto" }} />
+      <div style={{ marginTop: 8, fontSize: 12, color: C.faint }}>Powered By Kennion Benefit Advisors</div>
+      {mode === "group" && (
+        <>
+          <div
+            style={{
+              marginTop: 18,
+              fontSize: 12.5,
+              fontWeight: 700,
+              letterSpacing: "0.4px",
+              color: C.blue,
+              textTransform: "uppercase",
+            }}
+          >
+            Employee Benefits Program
+          </div>
+          <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted }}>
+            Medical + Dental + Vision + Supplemental
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="login-page">
       <div style={{ width: "100%", maxWidth: 380 }}>
         {mode === "group" ? (
           <>
-            <img
-              src={BenSync}
-              alt="BenSync"
-              style={{ height: 28, display: "block", margin: "0 auto 26px" }}
-            />
+            {brand}
 
             <div style={card}>
               <h1 style={{ margin: "0 0 22px", fontSize: 19, fontWeight: 700, color: C.ink, letterSpacing: "-0.2px" }}>
@@ -158,11 +180,7 @@ export default function Login({
           </>
         ) : (
           <>
-            <img
-              src={Logo}
-              alt="Kennion Benefit Advisors"
-              style={{ height: 26, display: "block", margin: "0 auto 26px" }}
-            />
+            {brand}
 
             <div style={card}>
               <h1 style={{ margin: "0 0 22px", fontSize: 19, fontWeight: 700, color: C.ink, letterSpacing: "-0.2px" }}>
