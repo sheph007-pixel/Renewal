@@ -96,11 +96,11 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   const year = effectiveYear(eff);
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Compare Medical Plans", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
-    { title: "Explore Supplemental Package", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
-    { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
+    { title: "Compare Your\nMedical Plan Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
+    { title: "Explore Your\nSupplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
+    { title: "Build Your\nBenefits Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
     {
-      title: "Sign Up",
+      title: "Confirm Your\nGroup Selections",
       href: signUpHref,
       body: (
         <>
@@ -202,7 +202,11 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     cursor: "pointer",
                   }}
                 >
-                  <div className="cta" style={{ ...ctaLink, display: "block", fontSize: 15.5, lineHeight: 1.25, letterSpacing: "-0.2px", marginBottom: 5, textWrap: "pretty" as const }}>
+                  {/* An explicit line break (\n) in the title, not the browser's own
+                      wrapping - whiteSpace: pre-line respects it so all 4 cards break
+                      at the same intentional spot instead of wherever the column
+                      happens to be narrow enough to force a wrap. */}
+                  <div className="cta" style={{ ...ctaLink, display: "block", fontSize: 15.5, lineHeight: 1.25, letterSpacing: "-0.2px", marginBottom: 5, whiteSpace: "pre-line" }}>
                     {s.title}
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
