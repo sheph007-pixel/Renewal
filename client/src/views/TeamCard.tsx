@@ -64,8 +64,7 @@ export default function TeamCard({ people, assistant, note }: Props) {
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 16.5, fontWeight: 700, color: C.ink }}>BenSync AI Assistant</div>
-            <div style={{ fontSize: 12.5, color: C.faint }}>AI Assistant · Available Any Time</div>
-            <div style={{ ...line, marginTop: 5, lineHeight: 1.55 }}>Instant answers on your plans, your options and what a contribution would cost.</div>
+            <div style={{ ...line, marginTop: 5, lineHeight: 1.55 }}>Available any time with instant answers to your questions.</div>
             {assistant.onOpen ? (
               <button type="button" onClick={assistant.onOpen} style={{ ...smallPrimaryBtn, marginTop: 10, fontWeight: 600 }}>
                 Ask The AI Assistant
