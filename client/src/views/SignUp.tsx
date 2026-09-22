@@ -47,15 +47,29 @@ const planAmount = (s: string): number => {
 
 type PlanSortKey = "option" | "network" | "plan";
 
-/** A name close enough to what the group already has to flag with the "Current Plan" star - loose on purpose, since the current export rarely spells a plan the way the 2027 catalogue does. */
-function isCurrentPlan(planName: string, lines: SupplementalLine[]): boolean {
-  const norm = (s: string) => s.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
-  const key = norm(planName);
-  if (!key) return false;
-  return lines.some((l) => {
-    const lk = norm(l.plan);
-    return !!lk && (lk.includes(key) || key.includes(lk));
+/**
+ * Which rows in a section (dental or vision) to flag with the "Current Plan"
+ * star: an exact name match against what the group already has, section-wide,
+ * if there is one. Several dental rows are the same plan at two tiers - "X"
+ * and "X (W Ortho)" - a real, differently priced difference, not a spelling
+ * variant, so an exact match always wins over a loose one: normalizing used
+ * to strip the "(W Ortho)" qualifier entirely, which made those two rows
+ * indistinguishable and starred both whenever the group's line was the plain
+ * "X". Only when nothing in the section matches exactly do we fall back to a
+ * loose, either-way substring match, since the export rarely spells a plan
+ * the way the catalogue does.
+ */
+function currentPlanNames(rows: SupplementalRow[], lines: SupplementalLine[]): Set<string> {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const lineKeys = lines.map((l) => norm(l.plan)).filter(Boolean);
+  if (!lineKeys.length) return new Set();
+  const exact = rows.filter((r) => lineKeys.includes(norm(r.plan)));
+  if (exact.length) return new Set(exact.map((r) => r.plan));
+  const loose = rows.filter((r) => {
+    const key = norm(r.plan);
+    return !!key && lineKeys.some((lk) => lk.includes(key) || key.includes(lk));
   });
+  return new Set(loose.map((r) => r.plan));
 }
 
 /** The company name, front and center - every step of the way, so it never reads like a generic form. */
@@ -288,6 +302,8 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
 
   const dentalSection = SUPPLEMENTAL_SECTIONS.find((s) => s.id === "dental")!;
   const visionSection = SUPPLEMENTAL_SECTIONS.find((s) => s.id === "vision")!;
+  const currentDentalPlans = currentPlanNames(dentalSection.rows, currentDentalLines);
+  const currentVisionPlans = currentPlanNames(visionSection.rows, currentVisionLines);
   const autoIncluded = SUPPLEMENTAL_SECTIONS.filter((s) => ["life", "accident", "critical", "cancer", "hospital", "std"].includes(s.id));
 
   const goTo = (n: number) => {
@@ -561,7 +577,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                     <CheckOption
                       key={r.plan}
                       title={r.plan}
-                      current={isCurrentPlan(r.plan, currentDentalLines)}
+                      current={currentDentalPlans.has(r.plan)}
                       checked={dental.includes(r.plan)}
                       disabled={!dental.includes(r.plan) && (dental.length >= DENTAL_VISION_MAX || dental.includes("Waive Dental Coverage"))}
                       onClick={() => setDental((d) => toggleCapped(d, r.plan, DENTAL_VISION_MAX))}
@@ -584,7 +600,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                     <CheckOption
                       key={r.plan}
                       title={r.plan}
-                      current={isCurrentPlan(r.plan, currentVisionLines)}
+                      current={currentVisionPlans.has(r.plan)}
                       checked={vision.includes(r.plan)}
                       disabled={!vision.includes(r.plan) && (vision.length >= DENTAL_VISION_MAX || vision.includes("Waive Vision Coverage"))}
                       onClick={() => setVision((v) => toggleCapped(v, r.plan, DENTAL_VISION_MAX))}
