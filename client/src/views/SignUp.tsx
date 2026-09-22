@@ -739,7 +739,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                 </div>
 
                 <label style={{ display: "block", marginTop: 14, fontSize: 13, color: C.muted }}>
-                  Questions For Your Account Manager *
+                  Questions For Your Kennion Account Manager *
                   <textarea
                     required
                     value={note}

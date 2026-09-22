@@ -1205,7 +1205,7 @@ export async function renderChangesReport({ group: g, proposals, slots, manager,
 
     // The team, three across.
     const team = [];
-    if (manager && manager.name) team.push({ name: manager.name, title: manager.title || "Account Manager", lines: [manager.phone ? `Direct ${manager.phone}` : null, manager.email || null, manager.calendly ? "Schedule A Meeting on BenSync" : null].filter(Boolean) });
+    if (manager && manager.name) team.push({ name: manager.name, title: manager.title || "Kennion Account Manager", lines: [manager.phone ? `Direct ${manager.phone}` : null, manager.email || null, manager.calendly ? "Schedule A Meeting on BenSync" : null].filter(Boolean) });
     if (broker && broker.name) team.push({ name: broker.name, title: broker.title || "Licensed Broker", lines: [broker.phone ? `Direct ${broker.phone}` : null, broker.email || null].filter(Boolean) });
     if (assistant) team.push({ name: "BenSync AI Assistant", title: "AI Assistant · Available Any Time", lines: ["Instant answers on your plans,", "your options and contributions.", "Ask from any page on BenSync."] });
     if (team.length) {
