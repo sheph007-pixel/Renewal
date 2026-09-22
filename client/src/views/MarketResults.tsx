@@ -20,26 +20,38 @@ import InfoTip from "@/views/InfoTip";
 export default function MarketResults({ plans }: { plans: MarketPlan[] }) {
   const sentences = useMemo(() => marketResultsSentences(marketResults(plans)), [plans]);
   if (!sentences.length) return null;
+  // The closing sentence is fixed, partner-count-agnostic copy - always last,
+  // so it's split out to render bold on its own line below the data-backed
+  // sentences, which stay inline in their own paragraph as before.
+  const lead = sentences.slice(0, -1);
+  const closing = sentences[sentences.length - 1];
   return (
     <section className="panel noprint" aria-label="Your Market Results" style={{ ...panel, padding: "18px 20px 16px", marginBottom: 18, borderLeft: `4px solid ${C.blue}` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <div style={{ fontSize: 18, fontWeight: 600, color: C.navy, lineHeight: 1.2 }}>Your Market Results</div>
         <InfoTip text={MARKET_RESULTS_TIP} place="below" />
       </div>
-      <p style={{ margin: 0, fontSize: 15, color: C.ink, lineHeight: 1.75, overflowWrap: "anywhere" }}>
-        {sentences.map((sent, i) => (
-          <span key={i}>
-            {i > 0 ? " " : ""}
-            {sent.map((seg, j) =>
-              seg.value ? (
-                <strong key={j} style={{ color: C.navy, fontWeight: 700, textDecoration: "underline", textDecorationColor: C.blueEdge, textUnderlineOffset: 3 }}>
-                  {seg.text}
-                </strong>
-              ) : (
-                <span key={j}>{seg.text}</span>
-              ),
-            )}
-          </span>
+      {lead.length > 0 && (
+        <p style={{ margin: 0, fontSize: 15, color: C.ink, lineHeight: 1.75, overflowWrap: "anywhere" }}>
+          {lead.map((sent, i) => (
+            <span key={i}>
+              {i > 0 ? " " : ""}
+              {sent.map((seg, j) =>
+                seg.value ? (
+                  <strong key={j} style={{ color: C.navy, fontWeight: 700, textDecoration: "underline", textDecorationColor: C.blueEdge, textUnderlineOffset: 3 }}>
+                    {seg.text}
+                  </strong>
+                ) : (
+                  <span key={j}>{seg.text}</span>
+                ),
+              )}
+            </span>
+          ))}
+        </p>
+      )}
+      <p style={{ margin: lead.length > 0 ? "10px 0 0" : 0, fontSize: 15, color: C.ink, fontWeight: 700, lineHeight: 1.75, overflowWrap: "anywhere" }}>
+        {closing.map((seg, j) => (
+          <span key={j}>{seg.text}</span>
         ))}
       </p>
     </section>

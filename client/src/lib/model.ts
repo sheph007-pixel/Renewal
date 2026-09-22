@@ -1511,13 +1511,10 @@ export function marketResultsSentences(s: MarketResults | null): MarketSentence[
       out.push([T("We also included "), ...parts, T(", as an alternative to traditional network-based coverage.")]);
     }
   }
-  // What happens next, in one sentence. With only one Carrier/TPA on the
-  // table there is no Carrier/TPA to pick between, only its plans.
-  out.push(
-    s.partners.length === 1
-      ? [T("Your group will select the health plans you want to offer your employees.")]
-      : [T("Your group will pick the Carrier/TPA you want to partner with, then select the health plans you want to offer your employees.")],
-  );
+  // What happens next, in one fixed closing sentence - the same for every
+  // group regardless of partner count, rendered on its own line and bold by
+  // the page since it is the summary's takeaway, not a data-backed clause.
+  out.push([T("Your company chooses a Carrier/TPA and the health plans to offer. Employees then choose from those selected plans during open enrollment.")]);
   return out;
 }
 
