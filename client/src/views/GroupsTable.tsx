@@ -116,7 +116,24 @@ export const GROUP_STATUS_TONE: Record<GroupStatus, [string, string, string]> = 
   new: [C.teal, C.tealTint, C.teal],
 };
 
-type Field = "companyId" | "sizeCategory" | "broker" | "renewal" | "manager" | "groupStatus";
+/**
+ * How the table shows and edits a group's category: New, Existing or
+ * Archived, one of three - not a fourth server field. Archived stays the
+ * `archived` flag it always was (it gates sign-in and hides the row by
+ * default) and New/Existing stays `groupStatus`; this is just the one
+ * control that reads and writes both together, so staff see one clean
+ * three-way choice instead of two separate toggles.
+ */
+const DISPLAY_STATUSES = ["new", "existing", "archived"] as const;
+type DisplayStatus = (typeof DISPLAY_STATUSES)[number];
+const DISPLAY_STATUS_LABEL: Record<DisplayStatus, string> = { ...GROUP_STATUS_LABEL, archived: "Archived" };
+const DISPLAY_STATUS_TONE: Record<DisplayStatus, [string, string, string]> = {
+  ...GROUP_STATUS_TONE,
+  archived: [C.red, C.redTint, C.redEdge],
+};
+const displayStatusOf = (g: AdminGroup): DisplayStatus => (g.archived ? "archived" : g.groupStatus || "existing");
+
+type Field = "companyId" | "sizeCategory" | "broker" | "renewal" | "manager" | "groupStatus" | "archived";
 
 type SortKey = "name" | "location" | "contact" | "enrolled" | "share" | "sizeCategory" | "broker" | "manager" | "renewal" | "invoice";
 
@@ -276,8 +293,10 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  async function save(group: string, field: Field, value: string) {
+  async function save(group: string, field: Field, value: unknown) {
     setError("");
     const r = await fetch("/api/admin/group-meta", {
       method: "POST",
@@ -293,6 +312,30 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
     setSaved(group + "|" + field);
     setTimeout(() => setSaved(""), 1500);
     return true;
+  }
+
+  /** Move one group to a display status, writing only whichever real field(s) actually change. */
+  async function setStatus(g: AdminGroup, target: DisplayStatus) {
+    if (target === "archived") {
+      if (!g.archived) await save(g.name, "archived", true);
+      return;
+    }
+    if (g.archived) await save(g.name, "archived", false);
+    if ((g.groupStatus || "existing") !== target) await save(g.name, "groupStatus", target);
+  }
+
+  /** The same move, for every selected group - one at a time, so one failure does not abandon the rest. */
+  async function bulkSetStatus(target: DisplayStatus) {
+    setBulkBusy(true);
+    try {
+      for (const name of selected) {
+        const g = groups.find((x) => x.name === name);
+        if (g) await setStatus(g, target);
+      }
+      setSelected(new Set());
+    } finally {
+      setBulkBusy(false);
+    }
   }
 
   // The roster the dashboard describes: in the portal, not archived. The same
@@ -684,10 +727,71 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
           </div>
         )}
 
+        {selected.size > 0 && (
+          <div
+            style={{
+              margin: "12px 18px 0",
+              padding: "9px 14px",
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 10,
+              background: C.blueTint,
+              border: `1px solid ${C.blueEdge}`,
+              borderRadius: 4,
+              fontSize: 13,
+            }}
+          >
+            <strong style={{ color: C.ink }}>{selected.size} selected</strong>
+            <span style={{ color: C.muted }}>Set status:</span>
+            {DISPLAY_STATUSES.map((s) => {
+              const [fg, bg, bd] = DISPLAY_STATUS_TONE[s];
+              return (
+                <button
+                  key={s}
+                  onClick={() => void bulkSetStatus(s)}
+                  disabled={bulkBusy}
+                  style={{
+                    padding: "5px 12px",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: fg,
+                    background: bg,
+                    border: `1px solid ${bd}`,
+                    borderRadius: 4,
+                    cursor: bulkBusy ? "default" : "pointer",
+                    opacity: bulkBusy ? 0.6 : 1,
+                  }}
+                >
+                  {DISPLAY_STATUS_LABEL[s]}
+                </button>
+              );
+            })}
+            {bulkBusy && <span style={{ color: C.faint }}>Saving…</span>}
+            <button
+              onClick={() => setSelected(new Set())}
+              disabled={bulkBusy}
+              style={{ marginLeft: "auto", background: "none", border: "none", fontSize: 12.5, color: C.blue, cursor: bulkBusy ? "default" : "pointer", padding: 0 }}
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
+
         <div style={{ overflowX: "auto", padding: "0 8px" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
             <thead>
               <tr>
+                <th style={{ ...th, width: 30 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select every group shown"
+                    checked={rows.length > 0 && rows.every((g) => selected.has(g.name))}
+                    onChange={(e) =>
+                      setSelected(e.target.checked ? new Set(rows.map((g) => g.name)) : new Set())
+                    }
+                  />
+                </th>
                 <H k="name" label="Company" />
                 <H k="location" label="Location" width={150} />
                 <H k="contact" label="Contact" />
@@ -697,6 +801,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                 <H k="broker" label="Broker" width={150} />
                 <H k="manager" label="Manager" width={120} />
                 <H k="renewal" label="Renewal" width={140} />
+                <th style={{ ...th, width: 150 }}>Status</th>
                 <H k="invoice" label="Invoice" width={110} />
               </tr>
             </thead>
@@ -708,8 +813,25 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                 const [rfg, rbg, rbd] = RENEWAL_TONE[r];
                 const b = g.broker || "kennion";
                 const contact = g.contacts?.[0];
+                const status = displayStatusOf(g);
+                const [sfg, sbg, sbd] = DISPLAY_STATUS_TONE[status];
                 return (
-                  <tr key={g.name}>
+                  <tr key={g.name} style={{ background: selected.has(g.name) ? C.blueTint : undefined }}>
+                    <td style={{ ...td, padding: "10px" }}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${g.name}`}
+                        checked={selected.has(g.name)}
+                        onChange={(e) =>
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(g.name);
+                            else next.delete(g.name);
+                            return next;
+                          })
+                        }
+                      />
+                    </td>
                     <td style={{ ...td, lineHeight: 1.4 }}>
                       <Link href={groupPath(g.name)} style={{ color: C.blue, fontWeight: 500 }}>
                         {g.name}
@@ -881,6 +1003,20 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                         ))}
                       </select>
                     </td>
+                    <td style={{ ...td, padding: "7px 10px" }}>
+                      <select
+                        value={status}
+                        onChange={(e) => void setStatus(g, e.target.value as DisplayStatus)}
+                        aria-label={`Status for ${g.name}`}
+                        style={{ ...selectStyle(sfg, saved === g.name + "|groupStatus" || saved === g.name + "|archived" ? C.greenTint : sbg, sbd), minWidth: 118 }}
+                      >
+                        {DISPLAY_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {DISPLAY_STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {g.invoice ? (
                         <Link
@@ -907,7 +1043,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
               })}
               {!rows.length && (
                 <tr>
-                  <td colSpan={9} style={{ ...td, padding: "26px 10px", textAlign: "center", color: C.faint }}>
+                  <td colSpan={12} style={{ ...td, padding: "26px 10px", textAlign: "center", color: C.faint }}>
                     No groups match.{" "}
                     {filtering && (
                       <button onClick={clear} style={{ background: "none", border: "none", color: C.blue, cursor: "pointer", fontSize: 13, padding: 0 }}>
@@ -921,7 +1057,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
             {/* Totals for the rows shown - they move with every filter. */}
             <tfoot>
               <tr>
-                <td colSpan={3} style={{ padding: "12px 10px", fontSize: 13, color: C.ink, borderTop: `1px solid ${C.border}` }}>
+                <td colSpan={4} style={{ padding: "12px 10px", fontSize: 13, color: C.ink, borderTop: `1px solid ${C.border}` }}>
                   <strong>{rows.length === 1 ? "1 group" : `${rows.length} groups`}</strong>
                   <span style={{ color: C.muted }}>
                     {" "}
@@ -940,7 +1076,7 @@ export default function GroupsTable({ groups, token, onChanged }: Props) {
                   {pct(shown.enrolled, counts.enrolled)}
                   <div style={{ fontSize: 11.5, fontWeight: 400, color: C.ghost }}>of block</div>
                 </td>
-                <td colSpan={4} style={{ borderTop: `1px solid ${C.border}` }} />
+                <td colSpan={6} style={{ borderTop: `1px solid ${C.border}` }} />
               </tr>
             </tfoot>
           </table>
