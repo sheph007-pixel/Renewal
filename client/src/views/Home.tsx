@@ -118,7 +118,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           {isNew ? (
             <>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-                <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
                 <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
               </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
@@ -132,7 +132,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           ) : (
             <>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-                <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
                 <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
               </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
