@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  effectiveDateLabel,
-  effectiveYear,
   marketPlans,
   planLimitFor,
   type AccountManager,
@@ -76,7 +74,7 @@ function CompanyBanner({ g }: { g: Group }) {
       </span>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{g.name}</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{effectiveYear(g)} Benefits Election · Effective {effectiveDateLabel(g)}</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>Benefits Election</div>
       </div>
     </div>
   );
@@ -343,7 +341,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             </span>
-            {g.name} is {actionPast} for {effectiveYear(g)}
+            {g.name} is {actionPast}
           </div>
           <div style={{ marginTop: 10, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
             Signed {fmtDate(lastSignup.submittedAt)} by {lastSignup.signerName}
@@ -386,9 +384,9 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
         </div>
         <div style={{ ...panel, padding: "26px 24px", textAlign: "center", background: C.greenTint, borderColor: C.greenEdge }}>
           <div style={{ fontSize: 30 }}>🎉</div>
-          <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: C.ink }}>You're All Set - {g.name} Has {actionVerb === "Enroll" ? "Enrolled" : "Renewed"} For {effectiveYear(g)}</div>
+          <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700, color: C.ink }}>You're All Set - {g.name} Has {actionVerb === "Enroll" ? "Enrolled" : "Renewed"}</div>
           <div style={{ margin: "8px auto 0", maxWidth: 460, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
-            {managerFirst} has your elections and will follow up to finalize contributions and get {effectiveYear(g)} loaded for Open Enrollment. Questions in the meantime? Reach out anytime.
+            {managerFirst} has your elections and will follow up to finalize contributions and get everything loaded for Open Enrollment. Questions in the meantime? Reach out anytime.
           </div>
         </div>
       </div>
@@ -408,9 +406,9 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
       {noBasesYet ? (
         <div style={{ ...panel, padding: "18px 20px" }}>
           <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
-            No {effectiveYear(g)} medical quotes are on file for your group yet, so there's nothing to sign up for just yet. Check{" "}
+            No medical quotes are on file for your group yet, so there's nothing to sign up for just yet. Check{" "}
             <Link href={optionsHref} style={{ color: C.blue }}>
-              New {effectiveYear(g)} Medical Options
+              New Medical Options
             </Link>{" "}
             soon, or reach out to {managerFirst}.
           </p>
@@ -446,7 +444,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
             {step === 0 && (
               <>
                 <h3 style={h3}>Which Carrier/TPA Are You Choosing For Medical?</h3>
-                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Only carriers with a {effectiveYear(g)} quote on file for your group are shown.</p>
+                <p style={{ margin: "4px 0 16px", fontSize: 13.5, color: C.muted }}>Only carriers with a quote on file for your group are shown.</p>
                 <div style={{ display: "grid", gap: 10 }}>
                   {bases.map((b, i) => (
                     <OptionCard key={b.key} letter={letters[i]} title={`${b.carrier} - ${b.funding}`} sub={`${b.count} plan${b.count === 1 ? "" : "s"} available`} on={carrier === b.key} onClick={() => pickCarrier(b.key)} />
@@ -680,20 +678,20 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                     required
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder={`Contribution changes, timing, anything else before we finalize ${effectiveYear(g)}`}
+                    placeholder="Contribution changes, timing, anything else before we finalize your elections"
                     style={{ display: "block", marginTop: 5, width: "100%", minHeight: 74, padding: "11px 13px", fontSize: 14, lineHeight: 1.55, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 6, outline: "none", resize: "vertical", boxSizing: "border-box" }}
                   />
                 </label>
 
                 <label style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, fontSize: 13, color: C.body, cursor: "pointer" }}>
                   <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} style={{ marginTop: 2, accentColor: C.blue, width: 17, height: 17, flex: "none" }} />
-                  I confirm I am authorized to make these elections on behalf of {g.name}, and that typing my name above is my electronic signature confirming this {effectiveYear(g)} benefits election.
+                  I confirm I am authorized to make these elections on behalf of {g.name}, and that typing my name above is my electronic signature confirming this benefits election.
                 </label>
 
                 <StepNav
                   onBack={back}
                   onContinue={submit}
-                  continueLabel={submitting ? "Submitting…" : `Confirm & ${actionVerb} For ${effectiveYear(g)}`}
+                  continueLabel={submitting ? "Submitting…" : `Confirm & ${actionVerb}`}
                   disabled={submitting || !signerName.trim() || !signerTitle.trim() || !emailOk || !phoneOk || !note.trim() || !attest}
                 />
                 {submitError && (
