@@ -171,6 +171,19 @@ const BENEFIT_SUMMARIES = JSON.parse(
 );
 
 /**
+ * The Supplemental Package rate grid - dental, vision, life, accident,
+ * critical illness, cancer, hospital indemnity and short term disability,
+ * with their monthly rates by tier. The same file client/src/lib/supplemental.ts
+ * reads for the Supplemental Package page, so the assistant's own numbers
+ * can never drift from what a client sees there. Every group gets this
+ * identical lineup at these identical rates - unlike Medical, which is
+ * quoted per group, nothing here is ever a per-group unknown.
+ */
+const SUPPLEMENTAL_RATES = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "data", "supplemental-rates.json"), "utf8"),
+);
+
+/**
  * The account manager a client may see: name, direct line, email and booking
  * link, and nothing else. A group with no manager on the list falls back to the
  * office, so the card on a client's page is never empty.
@@ -1929,6 +1942,7 @@ async function assistantData(g) {
     planDesigns: data.planDesigns,
     census: censusProfile(g),
     benefitSummaries: BENEFIT_SUMMARIES,
+    supplementalRates: SUPPLEMENTAL_RATES,
   };
 }
 
