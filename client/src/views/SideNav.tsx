@@ -396,12 +396,11 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
               <span
                 style={{
                   display: "block",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  whiteSpace: "normal",
+                  overflowWrap: "break-word",
                   fontSize: 13,
                   fontWeight: 600,
-                  lineHeight: 1.25,
+                  lineHeight: 1.3,
                   color: "#fff",
                   letterSpacing: "-0.1px",
                 }}
