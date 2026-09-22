@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { C, ctaLink, h2, h3, kicker, panel, primaryBtn } from "@/lib/ui";
+import { C, ctaLink, h2, h3, kicker, Logo, panel, primaryBtn } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignup } from "@/lib/model";
@@ -117,7 +117,10 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
           {isNew ? (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
+              </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program.</p>
               <p style={{ ...p, marginBottom: 0 }}>
@@ -128,7 +131,10 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             </>
           ) : (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
+              </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding.</p>
               <p style={{ ...p, marginBottom: 0 }}>
