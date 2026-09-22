@@ -218,6 +218,9 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
               Once your selections are finalized, Kennion coordinates {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
             </p>
+            <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
+              It doesn&rsquo;t stop at renewal - your Kennion team stays on as a year-round partner, with proactive support from our brokerage team and ongoing help for your employees that lightens HR&rsquo;s workload and improves their experience.
+            </p>
             <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>We help you build the right strategy. Then we handle the rest.</p>
           </div>
         </div>
