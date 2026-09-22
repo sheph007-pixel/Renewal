@@ -41,7 +41,15 @@ const card = {
   textAlign: "center",
 } as const;
 
-const fullInput = { ...textInput, width: "100%", padding: "11px 13px", borderRadius: 8, textAlign: "center" } as const;
+const fullInput = {
+  ...textInput,
+  width: "100%",
+  padding: "11px 13px",
+  borderRadius: 8,
+  textAlign: "center",
+  background: C.page,
+  border: `1px solid ${C.rule}`,
+} as const;
 
 const fullBtn = {
   ...primaryBtn,
@@ -143,7 +151,6 @@ export default function Login({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onSubmit();
                   }}
-                  placeholder="KEN-XXXX-XXXX"
                   autoComplete="off"
                   autoFocus
                   disabled={busy}
