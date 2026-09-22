@@ -6,15 +6,6 @@ import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignu
 import TeamCard from "@/views/TeamCard";
 import { useNarrow } from "@/lib/narrow";
 
-/** The licensed broker on every client's team, used when the server sends no broker contact. */
-const HUNTER: AccountManager = {
-  name: "Hunter Shepherd",
-  title: "President & Licensed Broker",
-  phone: "205-641-0469",
-  email: "hunter@kennion.com",
-  calendly: "https://calendly.com/kennion/call",
-};
-
 /** What Kennion coordinates once the client's selections are final, in the order it happens. */
 const HANDLED = [
   "Employee Navigator setup",
@@ -104,7 +95,7 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
  * beside it keeps the people and the AI Assistant reachable without making
  * a call the next step.
  */
-export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, broker, lastSignup, effectiveDate, groupStatus }: Props) {
+export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup, effectiveDate, groupStatus }: Props) {
   const narrow = useNarrow();
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
@@ -228,7 +219,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
 
       <div style={{ flex: "0 1 300px", minWidth: 260 }}>
         <TeamCard
-          people={[manager, broker || HUNTER]}
+          people={[manager]}
           assistant={assistantHref ? { href: assistantHref, onOpen: () => setChatOpen(true) } : null}
           note="Questions along the way? Your Kennion team is here throughout the process."
         />
