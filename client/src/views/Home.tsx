@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { C, ctaLink, h2, h3, kicker, panel, primaryBtn } from "@/lib/ui";
+import { C, ctaLink, h2, h3, kicker, Logo, panel, primaryBtn } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
 import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignup } from "@/lib/model";
@@ -117,7 +117,10 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
           {isNew ? (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome To The Kennion Program</h2>
+                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
+              </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program.</p>
               <p style={{ ...p, marginBottom: 0 }}>
@@ -128,7 +131,10 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             </>
           ) : (
             <>
-              <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+                <h2 style={{ ...head, fontSize: 20 }}>Welcome To Your Renewal</h2>
+                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
+              </div>
               <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
               <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding.</p>
               <p style={{ ...p, marginBottom: 0 }}>
@@ -176,7 +182,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     display: "block",
                     height: "100%",
                     boxSizing: "border-box",
-                    padding: "12px 13px 11px",
+                    padding: "11px 10px 10px",
                     borderRadius: 8,
                     background: C.zebra,
                     border: `1px solid ${C.hairline}`,
@@ -184,14 +190,23 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                  {/* The title never wraps - a long one (e.g. "Explore Supplemental
+                      Package") gets an ellipsis instead of breaking the row's height,
+                      so all 4 titles read on one line at any normal width. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, minWidth: 0 }}>
                     <span
                       aria-hidden="true"
-                      style={{ flex: "none", width: 20, height: 20, borderRadius: 10, background: C.blueTint, color: C.blueInk, fontSize: 11.5, fontWeight: 700, display: "grid", placeItems: "center" }}
+                      style={{ flex: "none", width: 18, height: 18, borderRadius: 9, background: C.blueTint, color: C.blueInk, fontSize: 10.5, fontWeight: 700, display: "grid", placeItems: "center" }}
                     >
                       {i + 1}
                     </span>
-                    <span className="cta" style={{ ...ctaLink, fontSize: 13.5, lineHeight: 1.3 }}>{s.title}</span>
+                    <span
+                      className="cta"
+                      title={s.title}
+                      style={{ ...ctaLink, fontSize: 12.5, lineHeight: 1.3, letterSpacing: "-0.1px", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
+                      {s.title}
+                    </span>
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
                 </Link>
