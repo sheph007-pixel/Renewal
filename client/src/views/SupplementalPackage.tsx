@@ -11,7 +11,7 @@ import {
   frequencyLabel,
   type Frequency,
 } from "@/lib/supplemental";
-import { C, chip, h2, num, panel, sectionHead, th } from "@/lib/ui";
+import { C, chip, num, panel, th } from "@/lib/ui";
 
 /**
  * The Kennion supplemental package - one rate grid per product line, each
@@ -41,11 +41,13 @@ export default function SupplementalPackage() {
 
   return (
     <div>
+      {/* No second "Supplemental Package" heading here - the page's own title
+          above already says it. The toolbar sits right at the top, at the
+          same height the Medical Plans page's own toolbar does. */}
       <div
         className="anchor"
-        style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}
+        style={{ margin: "0 0 12px", paddingBottom: 9, borderBottom: `1px solid ${C.border}`, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 12 }}
       >
-        <h2 style={h2}>Supplemental Package</h2>
         <div className="noprint" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
           <div role="group" aria-label="Pay frequency" style={{ display: "flex", gap: 4 }}>
             {FREQUENCIES.map((f) => (
