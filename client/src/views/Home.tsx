@@ -83,9 +83,9 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
         <DownloadIcon />
         {busy ? "Building Your Overview…" : "Download Program Overview"}
       </button>
-      <span style={{ fontSize: 12.5, color: error ? C.red : C.faint, lineHeight: 1.5 }}>
-        {error || "A simple two-page overview of what's new, ready to share with your team."}
-      </span>
+      {error && (
+        <span style={{ fontSize: 12.5, color: C.red, lineHeight: 1.5 }}>{error}</span>
+      )}
     </div>
   );
 }
@@ -117,7 +117,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
     { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
-    { title: "Review Supplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
+    { title: "Review Supplemental", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
     { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
     {
       title: "Sign Up",
@@ -178,28 +178,34 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             }}
           >
             {steps.map((s, i) => (
-              <li
-                key={s.title}
-                style={{
-                  minWidth: 0,
-                  padding: "12px 13px 11px",
-                  borderRadius: 8,
-                  background: C.zebra,
-                  border: `1px solid ${C.hairline}`,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-                  <span
-                    aria-hidden="true"
-                    style={{ flex: "none", width: 20, height: 20, borderRadius: 10, background: C.blueTint, color: C.blueInk, fontSize: 11.5, fontWeight: 700, display: "grid", placeItems: "center" }}
-                  >
-                    {i + 1}
-                  </span>
-                  <Link className="cta" href={s.href} style={{ ...ctaLink, fontSize: 13.5, lineHeight: 1.3 }}>
-                    {s.title}
-                  </Link>
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
+              <li key={s.title} style={{ minWidth: 0 }}>
+                {/* The whole card is the link, not just the title - .rowlink darkens
+                    the background on hover so the card reads as clickable wherever
+                    the pointer lands on it, not just over the two words of the title. */}
+                <Link
+                  className="rowlink card-link"
+                  href={s.href}
+                  style={{
+                    display: "block",
+                    padding: "12px 13px 11px",
+                    borderRadius: 8,
+                    background: C.zebra,
+                    border: `1px solid ${C.hairline}`,
+                    textDecoration: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                    <span
+                      aria-hidden="true"
+                      style={{ flex: "none", width: 20, height: 20, borderRadius: 10, background: C.blueTint, color: C.blueInk, fontSize: 11.5, fontWeight: 700, display: "grid", placeItems: "center" }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="cta" style={{ ...ctaLink, fontSize: 13.5, lineHeight: 1.3 }}>{s.title}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
+                </Link>
               </li>
             ))}
           </ol>
