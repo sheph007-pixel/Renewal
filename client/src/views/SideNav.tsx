@@ -245,7 +245,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        title={isCompact ? `${manager.name} · Your Account Manager` : undefined}
+        title={isCompact ? `${manager.name} · Your Kennion Account Manager` : undefined}
         style={{
           display: "flex",
           alignItems: "center",
@@ -267,7 +267,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
           <>
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
-              <span style={{ display: "block", fontSize: 11, color: C.teal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Account Manager · Contact</span>
+              <span style={{ display: "block", fontSize: 11, color: C.teal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Kennion Account Manager · Contact</span>
             </span>
             <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" {...stroke} style={{ flex: "none", color: C.railMuted, transform: open ? "rotate(180deg)" : "none" }}>
               <path d="M6 15l6-6 6 6" />
@@ -294,7 +294,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
             zIndex: 20,
           }}
         >
-          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" }}>Your Account Manager</div>
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.4px", color: C.faint, textTransform: "uppercase" }}>Your Kennion Account Manager</div>
           <div style={{ marginTop: 2, fontSize: 14.5, fontWeight: 700, color: C.ink }}>{manager.name}</div>
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5, fontSize: 13 }}>
             {manager.phone && <a href={telHref(manager.phone)}>{manager.phone}</a>}
