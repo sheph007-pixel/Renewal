@@ -267,7 +267,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
           <>
             <span style={{ minWidth: 0, flex: 1 }}>
               <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{manager.name}</span>
-              <span style={{ display: "block", fontSize: 11, color: C.teal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Kennion Account Manager · Contact</span>
+              <span style={{ display: "block", fontSize: 11, color: C.teal, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Kennion Account Manager</span>
             </span>
             <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" {...stroke} style={{ flex: "none", color: C.railMuted, transform: open ? "rotate(180deg)" : "none" }}>
               <path d="M6 15l6-6 6 6" />
