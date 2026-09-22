@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { money } from "@/lib/model";
 import {
   CARRIERS,
@@ -11,6 +11,8 @@ import {
   frequencyLabel,
   type Frequency,
 } from "@/lib/supplemental";
+import { benefitSummaryFor, fetchBenefitSummaries, type BenefitSummary } from "@/lib/benefit-summaries";
+import BenefitSummaryModal from "@/views/BenefitSummaryModal";
 import { C, chip, num, panel, th } from "@/lib/ui";
 
 /**
@@ -22,6 +24,18 @@ import { C, chip, num, panel, th } from "@/lib/ui";
 export default function SupplementalPackage() {
   const [freq, setFreq] = useState<Frequency>("monthly");
   const [busy, setBusy] = useState(false);
+  const [summaries, setSummaries] = useState<BenefitSummary[]>([]);
+  const [opened, setOpened] = useState<BenefitSummary | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchBenefitSummaries()
+      .then((list) => alive && setSummaries(list))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const headCell = { ...th, background: C.headerBg, color: "#fff", borderBottom: "none", padding: "11px 10px" };
   const cell = { padding: "10px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14, background: C.card };
@@ -108,19 +122,28 @@ export default function SupplementalPackage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {s.rows.map((row) => (
-                    <tr key={row.plan}>
-                      <td style={{ ...cell, paddingLeft: 14, fontWeight: 500, color: C.ink }}>{row.plan}</td>
-                      {SUPPLEMENTAL_TIERS.map((t) => {
-                        const v = row[t.key];
-                        return (
-                          <td key={t.key} style={{ ...numCell, color: v == null ? C.ghost : C.ink }}>
-                            {v == null ? "-" : money(convertRate(v, freq))}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                  {s.rows.map((row) => {
+                    const entry = benefitSummaryFor(summaries, s.id, row.plan);
+                    return (
+                      <tr
+                        key={row.plan}
+                        className={entry ? "rowlink" : undefined}
+                        onClick={entry ? () => setOpened(entry) : undefined}
+                        style={entry ? { cursor: "pointer" } : undefined}
+                        title={entry ? "Click for a benefit summary" : undefined}
+                      >
+                        <td style={{ ...cell, paddingLeft: 14, fontWeight: 500, color: C.ink }}>{row.plan}</td>
+                        {SUPPLEMENTAL_TIERS.map((t) => {
+                          const v = row[t.key];
+                          return (
+                            <td key={t.key} style={{ ...numCell, color: v == null ? C.ghost : C.ink }}>
+                              {v == null ? "-" : money(convertRate(v, freq))}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -129,6 +152,8 @@ export default function SupplementalPackage() {
       ))}
 
       <p style={{ margin: "4px 0 0", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{SUPPLEMENTAL_FOOTNOTE}</p>
+
+      {opened && <BenefitSummaryModal entry={opened} onClose={() => setOpened(null)} />}
     </div>
   );
 }

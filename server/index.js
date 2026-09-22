@@ -3995,6 +3995,46 @@ const RESOURCE_SEED = [
   { carrier: "VSP", dir: "vsp", file: "Vision_Base.pdf", title: "Base Vision Benefit Summary", summary: "VSP's Base Vision plan - exam, lens and frame allowance, and frequency." },
   { carrier: "VSP", dir: "vsp", file: "Vision_Standard.pdf", title: "Standard Vision Benefit Summary", summary: "VSP's Standard Vision plan - exam, lens and frame allowance, and frequency." },
   { carrier: "VSP", dir: "vsp", file: "Vision_Premium.pdf", title: "Premium Vision Benefit Summary", summary: "VSP's Premium Vision plan - exam, lens and frame allowance, and frequency." },
+  // Full legal Certificates, Guardian's own enrollment-system printouts, and
+  // the group's original (Dec 2022) per-option enrollment paperwork - kept on
+  // file alongside the benefit-summary one-pagers above for complete records.
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Guardian_1.pdf", title: "Guardian Group Policy Certificate 1", summary: "Full legal certificate of coverage for the Guardian supplemental lines." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Guardian_2.pdf", title: "Guardian Group Policy Certificate 2", summary: "Full legal certificate of coverage for the Guardian supplemental lines." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Guardian_3.pdf", title: "Guardian Group Policy Certificate 3", summary: "Full legal certificate of coverage for the Guardian supplemental lines." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Group_Life_Policy.pdf", title: "Group Life Policy Certificate", summary: "Full legal certificate of coverage for Guardian voluntary life/AD&D." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Critical_Illness.pdf", title: "Critical Illness Certificate", summary: "Full legal certificate of coverage for Guardian Critical Illness." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_STD.pdf", title: "Short Term Disability Certificate", summary: "Full legal certificate of coverage for Guardian Voluntary Disability." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Advantage_with_Ortho.pdf", title: "Advantage Dental with Ortho Certificate", summary: "Full legal certificate of coverage for Advantage Dental with Ortho." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Basic.pdf", title: "Basic Dental Certificate", summary: "Full legal certificate of coverage for Basic Dental." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Choice.pdf", title: "Choice Dental Certificate", summary: "Full legal certificate of coverage for Choice Dental." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Complete.pdf", title: "Complete Dental Certificate", summary: "Full legal certificate of coverage for Complete Dental." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Complete_with_Ortho.pdf", title: "Complete Dental with Ortho Certificate", summary: "Full legal certificate of coverage for Complete Dental with Ortho." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Value.pdf", title: "Value Dental Certificate", summary: "Full legal certificate of coverage for Value Dental." },
+  { carrier: "Guardian", dir: "guardian", file: "Certificate_Dental_Value_with_Ortho.pdf", title: "Value Dental with Ortho Certificate", summary: "Full legal certificate of coverage for Value Dental with Ortho." },
+  { carrier: "Guardian", dir: "guardian", file: "Enrollment_Summary_Class_0001.pdf", title: "Guardian Enrollment Summary - Class 0001", summary: "Guardian's own enrollment-system benefit summary for employees electing $5,000-$25,000 in basic life coverage: Critical Illness, Accident, Cancer and Hospital Indemnity." },
+  { carrier: "Guardian", dir: "guardian", file: "Enrollment_Summary_Class_0002.pdf", title: "Guardian Enrollment Summary - Class 0002", summary: "Guardian's own enrollment-system benefit summary for employees electing $30,000 in basic life coverage: Critical Illness, Accident, Cancer and Hospital Indemnity." },
+  { carrier: "Guardian", dir: "guardian", file: "Enrollment_Summary_Class_0003.pdf", title: "Guardian Enrollment Summary - Class 0003", summary: "Guardian's own enrollment-system benefit summary for employees electing $50,000-$100,000 in life coverage: Critical Illness, Accident, Cancer and Hospital Indemnity." },
+  { carrier: "Guardian", dir: "guardian", file: "Accident_Enrollment_Option_A.pdf", title: "Accident Insurance - Enrollment Paperwork", summary: "Original group enrollment documentation for Accident Insurance." },
+  { carrier: "Guardian", dir: "guardian", file: "Cancer_Enrollment_Option_A.pdf", title: "Cancer Insurance - Enrollment Paperwork", summary: "Original group enrollment documentation for Cancer Insurance." },
+  { carrier: "Guardian", dir: "guardian", file: "Critical_Illness_Enrollment.pdf", title: "Critical Illness Insurance - Enrollment Paperwork", summary: "Original group enrollment documentation for Critical Illness Insurance." },
+  { carrier: "Guardian", dir: "guardian", file: "STD_Enrollment.pdf", title: "Voluntary Disability - Enrollment Paperwork", summary: "Original group enrollment documentation for Voluntary Short Term Disability." },
+  { carrier: "Guardian", dir: "guardian", file: "Life_Enrollment_Basic_and_Voluntary.pdf", title: "Basic and Voluntary Life - Enrollment Paperwork", summary: "Original group enrollment documentation for Basic and Voluntary Life insurance." },
+  { carrier: "Guardian", dir: "guardian", file: "Life_Enrollment_10000.pdf", title: "Voluntary Life $10,000 - Enrollment Paperwork", summary: "Original group enrollment documentation for the $10,000 Voluntary Life option." },
+  { carrier: "Guardian", dir: "guardian", file: "Life_Enrollment_25000.pdf", title: "Voluntary Life $25,000 - Enrollment Paperwork", summary: "Original group enrollment documentation for the $25,000 Voluntary Life option." },
+  { carrier: "Guardian", dir: "guardian", file: "Life_Enrollment_30000.pdf", title: "Voluntary Life $30,000 - Enrollment Paperwork", summary: "Original group enrollment documentation for the $30,000 Voluntary Life option." },
+  { carrier: "Guardian", dir: "guardian", file: "Hospital_Indemnity_Enrollment_500.pdf", title: "Hospital Indemnity $500 Plan - Enrollment Paperwork", summary: "Original group enrollment documentation for the $500 Hospital Indemnity plan." },
+  { carrier: "Guardian", dir: "guardian", file: "Hospital_Indemnity_Enrollment_1000.pdf", title: "Hospital Indemnity $1,000 Plan - Enrollment Paperwork", summary: "Original group enrollment documentation for the $1,000 Hospital Indemnity plan." },
+  { carrier: "Guardian", dir: "guardian", file: "Hospital_Indemnity_Enrollment_2000.pdf", title: "Hospital Indemnity $2,000 Plan - Enrollment Paperwork", summary: "Original group enrollment documentation for the $2,000 Hospital Indemnity plan." },
+  { carrier: "Guardian", dir: "guardian", file: "Hospital_Indemnity_Enrollment_3000.pdf", title: "Hospital Indemnity $3,000 Plan - Enrollment Paperwork", summary: "Original group enrollment documentation for the $3,000 Hospital Indemnity plan." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Class_0007.pdf", title: "Dental - Class 0007 Enrollment Paperwork", summary: "Original group enrollment documentation for Dental, Class 0007." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Base_Opt1_Texas.pdf", title: "Dental Base, Option 1 (Texas) - Enrollment Paperwork", summary: "Original group enrollment documentation for the Base Dental plan, Option 1, Texas." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Complete_Opt2_Texas.pdf", title: "Complete Dental, Option 2 (Texas) - Enrollment Paperwork", summary: "Original group enrollment documentation for the Complete Dental plan, Option 2, Texas." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Value_Opt2_Texas.pdf", title: "Value Dental, Option 2 (Texas) - Enrollment Paperwork", summary: "Original group enrollment documentation for the Value Dental plan, Option 2, Texas." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Value_Ortho_Opt4_Texas.pdf", title: "Value Dental with Ortho, Option 4 (Texas) - Enrollment Paperwork", summary: "Original group enrollment documentation for Value Dental with Ortho, Option 4, Texas." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Enrollment_Complete_Ortho_Opt6_Texas.pdf", title: "Complete Dental with Ortho, Option 6 (Texas) - Enrollment Paperwork", summary: "Original group enrollment documentation for Complete Dental with Ortho, Option 6, Texas." },
+  { carrier: "VSP", dir: "vsp", file: "Certificate_Vision.pdf", title: "Vision Certificate", summary: "Full legal certificate of coverage for VSP vision insurance." },
+  { carrier: "VSP", dir: "vsp", file: "Contract_2020.pdf", title: "VSP Contract (2020)", summary: "VSP's group vision contract on file, effective January 1, 2020." },
+  { carrier: "VSP", dir: "vsp", file: "Evidence_of_Coverage_2020.doc", title: "VSP Evidence of Coverage (2020)", summary: "VSP's evidence of coverage document on file, effective January 1, 2020." },
 ];
 async function loadMarketingResources() {
   const have = new Set((await resourceStore.list()).map((r) => `${r.carrier}|${r.filename}`));
@@ -4008,7 +4048,8 @@ async function loadMarketingResources() {
       console.error(`resource seed: ${r.file}:`, e.message);
       continue;
     }
-    await resourceStore.add({ carrier: r.carrier, title: r.title, summary: r.summary || null, filename: r.file, mime: "application/pdf", size: data.length, data, uploadedBy: "system" });
+    const mime = /\.docx?$/i.test(r.file) ? "application/msword" : "application/pdf";
+    await resourceStore.add({ carrier: r.carrier, title: r.title, summary: r.summary || null, filename: r.file, mime, size: data.length, data, uploadedBy: "system" });
     seeded++;
   }
   if (seeded) console.log(`resources: seeded ${seeded} marketing resource(s)`);
@@ -4018,6 +4059,17 @@ async function loadMarketingResources() {
 app.get("/api/resources", async (_req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.json({ resources: await resourceStore.list() });
+});
+
+/**
+ * The standardized dental/vision/supplemental/legacy-medical benefit
+ * summaries, read by the assistant's own context (describeGroup) and by the
+ * Supplemental Package page's per-row detail popup. Public and the same for
+ * every group, like the rate grid it accompanies - no session needed.
+ */
+app.get("/api/benefit-summaries", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.json({ benefitSummaries: BENEFIT_SUMMARIES });
 });
 
 /** One resource's actual file. */
