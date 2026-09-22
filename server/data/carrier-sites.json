@@ -9,10 +9,32 @@
     },
     {
       "name": "Cigna",
-      "slugs": ["cigna", "gravie", "angle-health", "angle"],
+      "slugs": ["cigna"],
       "website": "https://www.cigna.com/",
       "findADoctor": "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
-      "findADoctorNote": "search it as Open Access Plus - this is also the right lookup for a Gravie or Angle Health plan, both of which price on Cigna's network"
+      "findADoctorNote": "search it as Open Access Plus"
+    },
+    {
+      "name": "Gravie",
+      "slugs": ["gravie"],
+      "website": "https://www.gravie.com/",
+      "findADoctor": "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+      "findADoctorNote": "Gravie prices on Cigna's network - search it as Open Access Plus",
+      "formulary": { "name": "Express Scripts", "url": "https://www.express-scripts.com/frontend/open-enrollment/gravie" }
+    },
+    {
+      "name": "Angle Health",
+      "slugs": ["angle-health", "angle"],
+      "website": "https://www.anglehealth.com/",
+      "findADoctor": "https://hcpdirectory.cigna.com/web/public/consumer/directory/search?consumerCode=HDC001",
+      "findADoctorNote": "Angle Health prices on Cigna's network - search it as Open Access Plus",
+      "formulary": { "name": "Angle Health Formulary", "url": "https://formulary.anglehealth.com/?hsCtaAttrib=195574382245" }
+    },
+    {
+      "name": "Optimyl Health",
+      "slugs": ["optimyl-health", "optimyl"],
+      "website": "https://www.optimyl.com/",
+      "formulary": { "name": "CVS Caremark", "url": "https://app.kennion.com/assets/optimyl/cvs-caremark-value-formulary.pdf" }
     },
     {
       "name": "Guardian",
@@ -29,7 +51,6 @@
     { "name": "Nationwide", "slugs": ["nationwide"], "website": "https://www.nationwide.com/" },
     { "name": "Surest", "slugs": ["surest"], "website": "https://www.surest.com/" },
     { "name": "Cobalt Benefits Group", "slugs": ["cobalt", "cobalt-benefits-group"], "website": "https://www.cobaltbenefitsgroup.com/" },
-    { "name": "Optimyl Health", "slugs": ["optimyl-health", "optimyl"], "website": "https://www.optimyl.com/" },
     { "name": "HealthEZ", "slugs": ["healthez"], "website": "https://healthez.com/" },
     { "name": "EBPA", "slugs": ["ebpa"], "website": "https://www.ebpabenefits.com/" },
     { "name": "BCBS of Alabama", "slugs": ["bcbs-of-alabama", "blue-cross-blue-shield-of-alabama", "blue-cross-and-blue-shield-of-alabama"], "website": "https://www.bcbsal.org/" },

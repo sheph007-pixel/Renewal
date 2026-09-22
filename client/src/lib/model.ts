@@ -933,13 +933,13 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
 }
 
 /**
- * The pharmacy benefit manager behind a carrier's plans, with its public
- * formulary where Kennion has a link a client can open (Gravie's PBM,
- * Express Scripts, has one); the name shows with no "Formulary" link when it
- * does not (Optimyl's PBM, CVS, runs a closed formulary specific to the
- * program - no public page to send a client to). Null for a carrier with no
- * PBM on file yet - the card still shows the row, blank, so every card reads
- * the same.
+ * The pharmacy benefit manager behind a carrier's plans, with its formulary
+ * link where Kennion has one a client can open: Gravie's PBM, Express
+ * Scripts, has a public formulary; Optimyl's PBM, CVS Caremark, runs a
+ * closed formulary specific to the program, so the link here is Kennion's
+ * own hosted copy of it rather than a public CVS page. Null for a carrier
+ * with no PBM on file yet - the card still shows the row, blank, so every
+ * card reads the same.
  */
 export function pbmOf(carrier: string | null | undefined): { name: string; url?: string } | null {
   const c = String(carrier || "");
