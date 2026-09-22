@@ -852,64 +852,61 @@ export default function App() {
               Kennion Benefit Advisors &middot; {g.name} &middot; {printLine}
             </div>
 
-            <div
-              className="noprint"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 16,
-                margin: "0 0 18px",
-              }}
-            >
-              <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
-                {/* Same wording as the side rail's current entry, so the page
-                    a client lands on after clicking a link is never in doubt.
-                    Welcome no longer repeats the group's name here - the
-                    welcome card below greets the group by name itself, so
-                    the name isn't split across a bare header and a generic
-                    "Welcome" in the card. */}
-                <h1 style={{ ...h1, display: "flex", alignItems: "center", gap: 10 }}>
-                  {tab === "assistant" && (
-                    <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: C.navy, color: C.teal, flex: "none" }}>
-                      <SyncMark size={18} />
-                    </span>
-                  )}
-                  {tab === "home" ? "Welcome" : tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
-                </h1>
-                {/* Welcome carries nothing under it - everywhere else, the
-                    Effective Date (or the tab's own line) sits under the title. */}
-                {tab !== "home" && (
+            {/* Welcome skips this whole header - its own card below already
+                greets the group by name ("Welcome, {group}"), so a bare
+                "Welcome" up here would just repeat the same word twice. */}
+            {tab !== "home" && (
+              <div
+                className="noprint"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  margin: "0 0 18px",
+                }}
+              >
+                <div style={{ maxWidth: 820, flex: "1 1 420px" }}>
+                  {/* Same wording as the side rail's current entry, so the page
+                      a client lands on after clicking a link is never in doubt. */}
+                  <h1 style={{ ...h1, display: "flex", alignItems: "center", gap: 10 }}>
+                    {tab === "assistant" && (
+                      <span style={{ display: "grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: C.navy, color: C.teal, flex: "none" }}>
+                        <SyncMark size={18} />
+                      </span>
+                    )}
+                    {tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
+                  </h1>
                   <div style={{ marginTop: 4, fontSize: 13, color: showingEffectiveDate ? C.ink : C.muted, fontWeight: showingEffectiveDate ? 700 : 400, lineHeight: 1.6 }}>
                     {subline}
                   </div>
+                </div>
+                {/* On the Medical Plans tabs only. */}
+                {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
+                  // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
+                  <div
+                    style={{
+                      ...panel,
+                      flex: "0 0 auto",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 14px",
+                      background: g.sizeCategory === "51+" ? C.amberTint : C.greenTint,
+                      borderColor: g.sizeCategory === "51+" ? C.amberEdge : C.greenEdge,
+                      cursor: "default",
+                    }}
+                  >
+                    <PeopleIcon />
+                    <div>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
+                    </div>
+                  </div>
                 )}
               </div>
-              {/* On the Medical Plans tabs only: Welcome opens without it. */}
-              {(tab === "current" || tab === "options") && groupSizeLabel(g) && (
-                // Tinted by category so it reads as something to hover: amber for 51+ (the employer mandate applies), green for 2-50.
-                <div
-                  style={{
-                    ...panel,
-                    flex: "0 0 auto",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 14px",
-                    background: g.sizeCategory === "51+" ? C.amberTint : C.greenTint,
-                    borderColor: g.sizeCategory === "51+" ? C.amberEdge : C.greenEdge,
-                    cursor: "default",
-                  }}
-                >
-                  <PeopleIcon />
-                  <div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: g.sizeCategory === "51+" ? C.amber : C.green, textTransform: "uppercase", letterSpacing: "0.4px" }}>Group Size</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.ink, whiteSpace: "nowrap" }}>{groupSizeLabel(g)}</div>
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {(tab === "current" || tab === "options") && (
               <nav aria-label="Medical Plans" className="noprint" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20, borderBottom: `2px solid ${C.border}` }}>
