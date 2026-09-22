@@ -3976,6 +3976,25 @@ const RESOURCE_SEED = [
   { carrier: "Gravie", dir: "gravie", file: "Gravie_Provider_Guidance_Cigna.pdf", title: "Talking To Providers About Your Gravie Plan", summary: "How to explain a Gravie/Cigna plan to a provider's office, and where to get help if a provider has questions." },
   { carrier: "Gravie", dir: "gravie", file: "Gravie_Level_Funded_Broker_Ebook.pdf", title: "Level-Funded eBook", summary: "Gravie's broker-facing overview of level-funded health plans and its approach to small and midsize business benefits." },
   { carrier: "Gravie", dir: "gravie", file: "Who_Is_Gravie_Overview.pdf", title: "Who Is Gravie?", summary: "An overview of Gravie's approach to group health plans and ICHRAs for small and midsize employers." },
+  // Guardian and VSP benefit summaries - the standing supplemental/dental/vision lineup, the
+  // same for every group as part of the Kennion Program, not tied to a plan year.
+  { carrier: "Guardian", dir: "guardian", file: "Accident_Insurance.pdf", title: "Accident Insurance Benefit Summary", summary: "Cash benefits paid directly to you for injuries, treatments and services from a covered accident." },
+  { carrier: "Guardian", dir: "guardian", file: "Cancer_Insurance.pdf", title: "Cancer Insurance Benefit Summary", summary: "Lump-sum cash payments for procedures, screenings and treatments related to a covered cancer diagnosis." },
+  { carrier: "Guardian", dir: "guardian", file: "Critical_Illness_Insurance.pdf", title: "Critical Illness Insurance Benefit Summary", summary: "A cash benefit for a range of covered serious illnesses such as cancer, stroke and heart attack." },
+  { carrier: "Guardian", dir: "guardian", file: "Hospital_Indemnity_Insurance.pdf", title: "Hospital Indemnity Insurance Benefit Summary", summary: "Cash benefits for hospital admission, confinement, surgery and related care." },
+  { carrier: "Guardian", dir: "guardian", file: "Voluntary_Life_Insurance.pdf", title: "Voluntary Life Insurance Benefit Summary", summary: "Employee, spouse and child life coverage amounts, guarantee issue and portability." },
+  { carrier: "Guardian", dir: "guardian", file: "Voluntary_Disability_Insurance.pdf", title: "Voluntary Disability Insurance Benefit Summary", summary: "Short-term disability income protection - benefit amount, elimination period and duration." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Basic.pdf", title: "Basic Dental Benefit Summary", summary: "Guardian's Basic Dental plan - coverage levels, deductible and annual maximum." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Value.pdf", title: "Value Dental Benefit Summary", summary: "Guardian's Value Dental plan - coverage levels, deductible and annual maximum." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Value_with_Ortho.pdf", title: "Value Dental with Ortho Benefit Summary", summary: "Guardian's Value Dental plan with orthodontia coverage added." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Choice.pdf", title: "Choice Dental Benefit Summary", summary: "Guardian's Choice Dental plan - coverage levels, deductible and annual maximum." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Complete.pdf", title: "Complete Dental Benefit Summary", summary: "Guardian's Complete Dental plan - coverage levels, deductible and annual maximum." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Complete_with_Ortho.pdf", title: "Complete Dental with Ortho Benefit Summary", summary: "Guardian's Complete Dental plan with orthodontia coverage added." },
+  { carrier: "Guardian", dir: "guardian", file: "Dental_Advantage_with_Ortho.pdf", title: "Advantage Dental with Ortho Benefit Summary", summary: "Guardian's Advantage Dental plan with orthodontia coverage added." },
+  { carrier: "VSP", dir: "vsp", file: "Vision_Value.pdf", title: "Value Vision Benefit Summary", summary: "VSP's Value Vision plan - exam, lens and frame allowance, and frequency." },
+  { carrier: "VSP", dir: "vsp", file: "Vision_Base.pdf", title: "Base Vision Benefit Summary", summary: "VSP's Base Vision plan - exam, lens and frame allowance, and frequency." },
+  { carrier: "VSP", dir: "vsp", file: "Vision_Standard.pdf", title: "Standard Vision Benefit Summary", summary: "VSP's Standard Vision plan - exam, lens and frame allowance, and frequency." },
+  { carrier: "VSP", dir: "vsp", file: "Vision_Premium.pdf", title: "Premium Vision Benefit Summary", summary: "VSP's Premium Vision plan - exam, lens and frame allowance, and frequency." },
 ];
 async function loadMarketingResources() {
   const have = new Set((await resourceStore.list()).map((r) => `${r.carrier}|${r.filename}`));
