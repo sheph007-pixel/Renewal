@@ -104,7 +104,7 @@ export default function Login({
   );
 
   const programTag = (
-    <div style={{ marginBottom: 22 }}>
+    <div style={{ marginBottom: 26 }}>
       <div
         style={{
           fontSize: 12.5,
@@ -132,10 +132,6 @@ export default function Login({
             <div style={card}>
               {programTag}
 
-              <h1 style={{ margin: "0 0 22px", fontSize: 19, fontWeight: 700, color: C.ink, letterSpacing: "-0.2px" }}>
-                Sign in
-              </h1>
-
               <div style={fieldGap}>
                 <label htmlFor="access-code" style={labelStyle}>
                   Group Access Code
@@ -156,7 +152,7 @@ export default function Login({
               </div>
 
               <button onClick={onSubmit} disabled={busy} style={{ ...fullBtn, opacity: busy ? 0.6 : 1 }}>
-                {busy ? "Checking…" : "Continue"}
+                {busy ? "Checking…" : "Sign in"}
               </button>
 
               {codeError && err("That code doesn't match a group. Check the letter we sent, or email us.")}
