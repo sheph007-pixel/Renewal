@@ -21,6 +21,8 @@ export interface NavItem {
   cta?: boolean;
   /** Other pages this row stands for: Medical Plans covers both the 2026 and the 2027 page. */
   also?: GroupTab[];
+  /** A hairline above this row, setting it apart from the rows before it. */
+  divider?: boolean;
 }
 
 /** The rail's width, which the shell reads as `--rail` to move the page over. */
@@ -33,6 +35,8 @@ interface Props {
   collapsed: boolean;
   onToggle: () => void;
   homeHref: string;
+  /** Resources sits in the footer now, below the renewal flow. */
+  resourcesHref: string;
   /** The client's name: the rail is theirs, so it sits top-left. */
   groupName: string;
   manager: AccountManager | null | undefined;
@@ -80,13 +84,7 @@ function TabIcon({ tab }: { tab: GroupTab }) {
         </svg>
       );
     case "resources":
-      return (
-        <svg {...s}>
-          <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16l4 4v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20Z" />
-          <path d="M15.5 3v4.5h4.5" />
-          <path d="M8 12h8M8 16h5" />
-        </svg>
-      );
+      return <ResourcesIcon />;
     case "signup":
       return (
         <svg {...s}>
@@ -95,6 +93,16 @@ function TabIcon({ tab }: { tab: GroupTab }) {
         </svg>
       );
   }
+}
+
+function ResourcesIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}>
+      <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16l4 4v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 20Z" />
+      <path d="M15.5 3v4.5h4.5" />
+      <path d="M8 12h8M8 16h5" />
+    </svg>
+  );
 }
 
 function GridIcon() {
@@ -139,8 +147,12 @@ export function monogram(name: string): string {
   return (a + b).toUpperCase();
 }
 
-/** One row in the rail's footer: an icon, a label, an outbound arrow for links that leave the site. */
-function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; label: string; href?: string; external?: boolean; onClick?: () => void }) {
+/**
+ * One row in the rail's footer: an icon, a label, an outbound arrow for links
+ * that leave the site. `inApp` rows are pages rather than links out, so they
+ * navigate through the router and go white when the page is the one showing.
+ */
+function LinkRow({ icon, label, href, external, inApp, on, onClick }: { icon: ReactNode; label: string; href?: string; external?: boolean; inApp?: boolean; on?: boolean; onClick?: () => void }) {
   const style = {
     display: "flex",
     alignItems: "center",
@@ -148,8 +160,8 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
     padding: "6px 10px",
     borderRadius: 7,
     fontSize: 12.5,
-    fontWeight: 500,
-    color: C.railInk,
+    fontWeight: on ? 600 : 500,
+    color: on ? "#fff" : C.railInk,
     textDecoration: "none",
     background: "none",
     border: "none",
@@ -159,7 +171,7 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
   };
   const inner = (
     <>
-      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", color: C.railMuted }}>
+      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", color: on ? "#fff" : C.railMuted }}>
         {icon}
       </span>
       <span style={{ flex: 1 }}>{label}</span>
@@ -170,6 +182,13 @@ function LinkRow({ icon, label, href, external, onClick }: { icon: ReactNode; la
       )}
     </>
   );
+  if (href && inApp) {
+    return (
+      <Link className="rail-row" href={href} aria-current={on ? "page" : undefined} style={style}>
+        {inner}
+      </Link>
+    );
+  }
   if (href) {
     return (
       <a className="rail-row" href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} style={style}>
@@ -308,7 +327,7 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
  * while a long rate grid scrolls past it, and collapses to icons for anyone
  * who wants the width back; collapsed or not, the links are the same links.
  */
-export default function SideNav({ items, current, collapsed, onToggle, homeHref, groupName, manager, onExit }: Props) {
+export default function SideNav({ items, current, collapsed, onToggle, homeHref, resourcesHref, groupName, manager, onExit }: Props) {
   const [ticket, setTicket] = useState(false);
   const toggle = (
     <button
@@ -396,9 +415,9 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
       {collapsed && <div style={{ display: "grid", placeItems: "center", padding: "8px 0 0" }}>{toggle}</div>}
 
       <nav className="rail-nav" aria-label="Pages" style={{ padding: "8px 8px 6px", display: "flex", flexDirection: "column", gap: 1 }}>
-        {items.map((it) => {
+        {items.flatMap((it) => {
           const on = it.tab === current || (it.also || []).includes(current);
-          return (
+          const row = (
             <Link
               key={it.tab}
               className="rail-item"
@@ -428,6 +447,13 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
               {!collapsed && it.cta && !on && <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: C.teal }} />}
             </Link>
           );
+          if (!it.divider) return [row];
+          // The rows stay direct children of the nav, so the narrow-screen
+          // layout still styles them; the hairline hides itself there.
+          return [
+            <div key={`${it.tab}-sep`} aria-hidden className="rail-sep" style={{ height: 1, margin: collapsed ? "6px 10px" : "7px 10px", background: C.railLine }} />,
+            row,
+          ];
         })}
       </nav>
 
@@ -435,6 +461,14 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
         {collapsed ? (
           <div style={{ padding: "8px 8px 12px", borderTop: `1px solid ${C.railLine}`, display: "grid", gap: 6, justifyItems: "center" }}>
             {manager?.name && <ManagerRow manager={manager} compact />}
+            <Link
+              href={resourcesHref}
+              title="Resources"
+              aria-current={current === "resources" ? "page" : undefined}
+              style={{ display: "grid", placeItems: "center", padding: 6, color: current === "resources" ? "#fff" : C.railMuted }}
+            >
+              <ResourcesIcon />
+            </Link>
             <a href={NAVIGATOR_URL} target="_blank" rel="noreferrer" title="Employee Navigator" style={{ display: "grid", placeItems: "center", padding: 6, color: C.railMuted }}>
               <GridIcon />
             </a>
@@ -450,6 +484,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             {manager?.name && <ManagerRow manager={manager} />}
 
             <div className="rail-links" style={{ padding: "6px 8px 8px", borderTop: `1px solid ${C.railLine}` }}>
+              <LinkRow icon={<ResourcesIcon />} label="Resources" href={resourcesHref} inApp on={current === "resources"} />
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
               <LinkRow icon={<TicketIcon />} label="Support Ticket" onClick={() => setTicket(true)} />
               <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />

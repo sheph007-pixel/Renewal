@@ -777,7 +777,7 @@ export default function App() {
   };
   // Medical Plans in the rail opens on the 2027 options - the page the
   // renewal is about - with today's plans a tab away.
-  const navItems: NavItem[] = (["home", "assistant", "options", "supplemental", "resources", "signup"] as GroupTab[])
+  const navItems: NavItem[] = (["home", "options", "supplemental", "signup", "assistant"] as GroupTab[])
     .filter((t) => t !== "assistant" || assistantOn)
     .map((t) => ({
       tab: t,
@@ -787,6 +787,8 @@ export default function App() {
       mark: t === "home" ? "home" : undefined,
       cta: t === "signup",
       also: t === "options" ? (["current"] as GroupTab[]) : undefined,
+      // The assistant is not a step in the renewal: a hairline sets it apart.
+      divider: t === "assistant" || undefined,
     }));
   /**
    * Medical Plans is one page in the rail with two tabs on it. The 2027
@@ -823,6 +825,7 @@ export default function App() {
             })
           }
           homeHref={hrefFor("home")}
+          resourcesHref={hrefFor("resources")}
           groupName={g.name}
           manager={manager}
           onExit={signOut}
