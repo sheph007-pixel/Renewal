@@ -3995,8 +3995,10 @@ app.get("/api/resources/:id/file", async (req, res) => {
  * opened with the same reader a proposal upload uses - folders, macOS junk
  * and anything unsupported inside it are left out rather than failing the
  * whole upload - and every file it yields is read and filed on its own.
+ * 60mb, matching every other batch-zip upload here (invoices, proposals):
+ * a handful of full-size PDF decks zipped together clears 20mb easily.
  */
-app.post("/api/admin/resources", requireStaff, express.raw({ type: () => true, limit: "20mb" }), async (req, res) => {
+app.post("/api/admin/resources", requireStaff, express.raw({ type: () => true, limit: "60mb" }), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: "No file received." });
   const filename = String(req.query.filename || "resource").slice(0, 200);
   const mime = String(req.get("content-type") || "application/octet-stream").split(";")[0].trim().toLowerCase();
