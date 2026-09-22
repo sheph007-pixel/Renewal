@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, effectiveYear, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, h3, num, panel, pill, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
@@ -211,7 +211,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     const cmp = proposal.map((n) => plans.find((p) => p.plan === n)).filter((p): p is MarketPlan => !!p);
     const pk = plans.filter((p) => picks.has(p.plan));
     return [
-      { view: "all", label: "All Plans", hint: `Every 2027 plan's details, one row each (${plans.length})`, plans },
+      { view: "all", label: "All Plans", hint: `Every plan's details, one row each (${plans.length})`, plans },
       { view: "picks", label: "AI Picks report", hint: pk.length ? "Your census, each pick's reason, the bills side by side" : "Press AI Picks first", plans: pk },
       { view: "favorites", label: "Favorites", hint: favs.length ? `${favs.length} plan${favs.length === 1 ? "" : "s"} side by side, with benefits` : "Heart a plan first", plans: favs },
       { view: "compare", label: "Comparison", hint: cmp.length ? `${cmp.length} plan${cmp.length === 1 ? "" : "s"} side by side, with benefits` : "Add a plan with + first", plans: cmp },
@@ -760,7 +760,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
-                aria-label="Search 2027 plan options"
+                aria-label="Search plan options"
                 style={{ ...textInput, fontSize: 13, padding: "7px 11px", width: 104 }}
               />
               <div ref={exportRef} style={{ position: "relative" }}>
@@ -973,7 +973,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       {proposed.length > 0 && (
         <div id="print-proposal" className="printonly" style={{ display: "none" }}>
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>{g.name} · 2027 Medical Options Proposal</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: C.ink }}>{g.name} · {effectiveYear(g)} Medical Options Proposal</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
               Priced at {totals.enrolled} enrolled · employer contribution {TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")} per month ·{" "}
               {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
   effectiveDateLabel,
-  effectiveYear,
   groupSizeLabel,
   marketPlans,
   minimumContribution,
@@ -737,9 +736,13 @@ export default function App() {
    * as a different plan year to anyone comparing two groups.
    */
   const planYear = (g.pyEnd || "2026-12-31").slice(0, 4);
+  // Effective Date is the one date a group sees anywhere in the app - shown
+  // once, under the header, on Medical Plans, Supplemental Package and Sign
+  // Up. It comes from the group's own record (set per group in Admin, New
+  // or Existing), never spelled out or duplicated elsewhere on the page.
   const subline =
-    tab === "signup" || tab === "supplemental"
-      ? `Effective ${effectiveDateLabel(g)}`
+    tab === "signup" || tab === "supplemental" || tab === "options" || tab === "current"
+      ? `Effective Date: ${effectiveDateLabel(g)}`
       : tab === "disclaimers"
         ? "What every rate, benefit and recommendation here is, and is not."
       : tab === "census"
@@ -748,11 +751,11 @@ export default function App() {
           ? "Ask anything about employee benefits and get the answer in seconds."
       : tab === "resources"
           ? "Marketing material from each Carrier/TPA, in one place."
-          : `Calendar Year (January 1 - December 31, ${planYear})`;
+          : "";
 
   const printLine =
     (tab === "options" || tab === "signup"
-      ? `${effectiveYear(g)} options, effective ${effectiveDateLabel(g)}`
+      ? `Options, effective ${effectiveDateLabel(g)}`
       : tab === "supplemental"
         ? "Supplemental benefits on file, besides medical"
         : `Current group health plans and cost, calendar year ${planYear}`) +
@@ -790,14 +793,15 @@ export default function App() {
       divider: t === "assistant" || undefined,
     }));
   /**
-   * Medical Plans is one page in the rail with two tabs on it. The 2027
+   * Medical Plans is one page in the rail with two tabs on it. The new
    * options lead and carry the emphasis - that is what the client is here to
-   * decide - and today's plans sit beside them, muted, for reference.
+   * decide - and today's plans sit beside them, muted, for reference. Neither
+   * label names a year; the Effective Date under the page header says when.
    */
   const medicalTabs: { tab: GroupTab; label: string; lead: boolean }[] = [
-    { tab: "options", label: `New ${effectiveYear(g)} Medical Options`, lead: true },
+    { tab: "options", label: "New Medical Options", lead: true },
     // Nothing to show a group with no prior coverage on file.
-    ...(g.groupStatus === "new" ? [] : [{ tab: "current" as GroupTab, label: `Current ${planYear} Medical Plans`, lead: false }]),
+    ...(g.groupStatus === "new" ? [] : [{ tab: "current" as GroupTab, label: "Current Medical Plans", lead: false }]),
   ];
 
   const shut = navCollapsed && !narrow;
@@ -867,9 +871,9 @@ export default function App() {
                   )}
                   {tab === "home" ? g.name : tab === "assistant" ? "BenSync AI Assistant" : tab === "current" || tab === "options" ? "Medical Plans" : TAB_LABEL[tab]}
                 </h1>
-                {/* Welcome is titled with the group's name and carries nothing under it; Medical
-                    Plans carries no line under its title either: its two tabs name their own years. */}
-                {tab !== "home" && tab !== "options" && tab !== "current" && <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subline}</div>}
+                {/* Welcome is titled with the group's name and carries nothing under it - everywhere
+                    else, the Effective Date (or the tab's own line) sits under the title. */}
+                {tab !== "home" && <div style={{ marginTop: 4, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{subline}</div>}
               </div>
               {/* On the Medical Plans tabs only: Welcome opens without it. */}
               {(tab === "current" || tab === "options") && groupSizeLabel(g) && (

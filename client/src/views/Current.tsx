@@ -182,7 +182,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
       <SpendDashboard totals={totals} enrolled={enrolled} censusHref={groupHome(g, "census")} />
 
       <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <h2 style={h2}>Your 2026 Medical Plans</h2>
+        <h2 style={h2}>Your Current Medical Plans</h2>
         <div className="noprint" style={{ display: "flex", gap: 8 }}>
           {data.invoice && (
             <a
@@ -284,7 +284,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
         return (
           <>
             <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={h2}>Your 2026 Supplemental Package</h2>
+              <h2 style={h2}>Your Current Supplemental Package</h2>
               <div className="noprint" style={{ display: "flex", gap: 8 }}>
                 {data.invoice && (
                   <a href={invoiceHref} target="_blank" rel="noreferrer" title={`${data.invoice.filename} - opens in a new tab`} style={headerBtn}>
