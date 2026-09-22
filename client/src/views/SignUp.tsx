@@ -461,29 +461,49 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
         </div>
       ) : (
         <>
-          {/* Progress: a dot per step, the ones already visited are clickable. */}
-          <div className="noprint" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-            {STEP_LABELS.map((label, i) => (
-              <button
-                key={label}
-                type="button"
-                disabled={i > maxStep}
-                onClick={() => goTo(i)}
+          {/* Progress: a fill bar with a percent, then a pill per step - the
+              ones already visited are clickable. */}
+          <div className="noprint" style={{ marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7, fontSize: 13, fontWeight: 600, color: C.muted }}>
+              <span>
+                Step {step + 1} of {STEP_LABELS.length}
+              </span>
+              <span>{Math.round(((step + 1) / STEP_LABELS.length) * 100)}% Complete</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: C.hairline, overflow: "hidden", marginBottom: 14 }}>
+              <div
                 style={{
-                  padding: "5px 10px",
-                  fontSize: 11.5,
-                  fontWeight: 600,
-                  borderRadius: 12,
-                  border: `1px solid ${i === step ? C.blue : C.border}`,
-                  background: i === step ? C.blue : i < step ? C.blueTint : C.card,
-                  color: i === step ? "#fff" : i <= maxStep ? C.ink : C.faint,
-                  cursor: i > maxStep ? "default" : "pointer",
-                  whiteSpace: "nowrap",
+                  height: "100%",
+                  width: `${((step + 1) / STEP_LABELS.length) * 100}%`,
+                  background: C.blue,
+                  borderRadius: 4,
+                  transition: "width 0.2s ease",
                 }}
-              >
-                {i + 1}. {label}
-              </button>
-            ))}
+              />
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {STEP_LABELS.map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  disabled={i > maxStep}
+                  onClick={() => goTo(i)}
+                  style={{
+                    padding: "9px 16px",
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    borderRadius: 16,
+                    border: `1px solid ${i === step ? C.blue : C.border}`,
+                    background: i === step ? C.blue : i < step ? C.blueTint : C.card,
+                    color: i === step ? "#fff" : i <= maxStep ? C.ink : C.faint,
+                    cursor: i > maxStep ? "default" : "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {i + 1}. {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div style={{ ...panel, padding: narrow ? "20px 18px" : "26px 30px" }}>
