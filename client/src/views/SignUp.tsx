@@ -73,31 +73,6 @@ function currentPlanNames(rows: SupplementalRow[], lines: SupplementalLine[]): S
   return new Set(loose.map((r) => r.plan));
 }
 
-/**
- * The company name, tucked in the top right rather than a full-width panel -
- * the page header above already says "Sign Up" and the effective date, so
- * this only has to say which group, in as little height as it can.
- */
-function CompanyBanner({ g }: { g: Group }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px 5px 5px", borderRadius: 20, background: C.zebra, border: `1px solid ${C.hairline}`, maxWidth: "100%" }}>
-        <span aria-hidden style={{ flex: "none", display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: "50%", background: C.navy, color: "#fff", fontSize: 11, fontWeight: 700 }}>
-          {g.name
-            .replace(/[^A-Za-z0-9 ]/g, " ")
-            .split(/\s+/)
-            .filter((w) => w && !/^(inc|llc|co|corp|corporation|company|the|of|and)$/i.test(w))
-            .slice(0, 2)
-            .map((w) => w[0])
-            .join("")
-            .toUpperCase()}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 600, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
-      </div>
-    </div>
-  );
-}
-
 /** A big selectable card - the carrier, and every lettered option (employer life). One shape, everywhere it's a single choice. */
 function OptionCard({ letter, title, sub, on, onClick }: { letter?: string; title: string; sub?: string; on: boolean; onClick: () => void }) {
   return (
@@ -380,7 +355,6 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   if (lastSignup?.kind === "renewal" && !sent && !editing) {
     return (
       <div>
-        <CompanyBanner g={g} />
         <div style={{ ...panel, padding: "20px 22px", background: C.greenTint, borderColor: C.greenEdge }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 15, fontWeight: 700, color: C.ink }}>
             <span aria-hidden style={{ display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: "50%", background: C.green, color: "#fff", flex: "none" }}>
@@ -447,8 +421,6 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
 
   return (
     <div>
-      <CompanyBanner g={g} />
-
       {noBasesYet ? (
         <div style={{ ...panel, padding: "18px 20px" }}>
           <p style={{ margin: 0, fontSize: 13.5, color: C.body, lineHeight: 1.6 }}>
