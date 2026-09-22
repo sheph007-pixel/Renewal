@@ -21,7 +21,7 @@ import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
-import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet } from "./documents.js";
+import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify, SUPPORTED } from "./intake.js";
 import JSZip from "jszip";
@@ -1344,7 +1344,7 @@ async function sendSupportEmail(t, g) {
     ["Requester", t.requester],
     ["Manager", typeof g.manager === "string" ? g.manager : (g.manager && g.manager.name) || "-"],
   ];
-  const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
+  const html = `<div style="font:14px/1.5 'Google Sans Flex',-apple-system,Segoe UI,Roboto,sans-serif;color:#222">
     <h2 style="margin:0 0 12px;font-size:17px">Support ticket ${ticketRef(t.id)} · ${escapeHtml(g.name)}</h2>
     <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
     <div style="font-weight:600;margin-bottom:4px">${escapeHtml(t.subject)}</div>
@@ -1400,7 +1400,7 @@ async function sendRenewalEmail(e, g) {
     ["Signer email", e.signerEmail || "-"],
     ["Signer phone", e.signerPhone || "-"],
   ];
-  const html = `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">
+  const html = `<div style="font:14px/1.5 'Google Sans Flex',-apple-system,Segoe UI,Roboto,sans-serif;color:#222">
     <h2 style="margin:0 0 12px;font-size:17px">${escapeHtml(g.name)} has ${verb} - effective ${effective}</h2>
     <table style="border-collapse:collapse;margin-bottom:14px">${lines.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#666">${k}</td><td style="padding:2px 0"><b>${escapeHtml(v)}</b></td></tr>`).join("")}</table>
     ${e.note ? `<div style="font-weight:600;margin-bottom:4px">Note from the group</div><div style="white-space:pre-wrap;border-left:3px solid #1F8A5B;padding-left:12px">${escapeHtml(e.note)}</div>` : ""}
@@ -2082,6 +2082,14 @@ app.post("/api/group/export", async (req, res) => {
         signup: await latestSignup(g.name).catch(() => null),
         assistant: assistantEnabled(),
       });
+    } else if (body.format === "signup") {
+      // A receipt of the group's most recent Sign Up submission - carrier,
+      // plans, dental/vision, employer life, note and who signed - nothing
+      // computed, just what is on file.
+      const raw = await latestSignup(g.name).catch(() => null);
+      const signup = shapeSignup(raw);
+      if (!signup) return res.status(404).json({ error: "No election on file yet." });
+      file = await renderSignupConfirmation({ group, signup, manager: managerContact(g.manager), broker: brokerContact() });
     } else if (body.format === "plan") {
       // One plan's card, as the page shows it; checked for shape and size.
       const c = body.card && typeof body.card === "object" ? body.card : null;

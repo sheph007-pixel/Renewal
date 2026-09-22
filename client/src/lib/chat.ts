@@ -338,6 +338,16 @@ export async function exportChangesPdf(groupName: string, year: string): Promise
   await downloadFile("/api/group/export", `${groupName} - ${year} Program Overview.pdf`, { format: "changes" });
 }
 
+/**
+ * The group's own Election Confirmation: a receipt of its most recent Sign
+ * Up submission - carrier, plan(s), dental, vision, employer life, note and
+ * who signed. Built on the server from the signup on file. Saves through
+ * the browser.
+ */
+export async function exportSignupConfirmation(groupName: string): Promise<void> {
+  await downloadFile("/api/group/export", `${groupName} - Election Confirmation.pdf`, { format: "signup" });
+}
+
 /** Fetch a file with the session headers and hand it to the browser as a download. */
 /** Which grid view a file is of: the AI Picks report, or a comparison of the favorites, the comparison or every plan showing. */
 export type ExportView = "picks" | "favorites" | "compare" | "all";
