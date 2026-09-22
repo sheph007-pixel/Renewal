@@ -28,6 +28,7 @@ const labelStyle = {
   fontWeight: 600,
   color: C.ink,
   marginBottom: 7,
+  textAlign: "center",
 } as const;
 
 const fieldGap = { marginBottom: 16 } as const;
@@ -36,10 +37,11 @@ const card = {
   ...panel,
   borderRadius: 14,
   boxShadow: "0 10px 30px -18px rgba(15,42,71,0.20), 0 1px 3px rgba(15,42,71,0.05)",
-  padding: "34px 32px 30px",
+  padding: "38px 36px 34px",
+  textAlign: "center",
 } as const;
 
-const fullInput = { ...textInput, width: "100%", padding: "11px 13px", borderRadius: 8 } as const;
+const fullInput = { ...textInput, width: "100%", padding: "11px 13px", borderRadius: 8, textAlign: "center" } as const;
 
 const fullBtn = {
   ...primaryBtn,
@@ -98,36 +100,38 @@ export default function Login({
     <div style={{ textAlign: "center", marginBottom: 26 }}>
       <img src={BenSync} alt="BenSync" style={{ height: 28, display: "block", margin: "0 auto" }} />
       <div style={{ marginTop: 8, fontSize: 12, color: C.faint }}>Powered By Kennion Benefit Advisors</div>
-      {mode === "group" && (
-        <>
-          <div
-            style={{
-              marginTop: 18,
-              fontSize: 12.5,
-              fontWeight: 700,
-              letterSpacing: "0.4px",
-              color: C.blue,
-              textTransform: "uppercase",
-            }}
-          >
-            Employee Benefits Program
-          </div>
-          <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted }}>
-            Medical + Dental + Vision + Supplemental
-          </div>
-        </>
-      )}
+    </div>
+  );
+
+  const programTag = (
+    <div style={{ marginBottom: 22 }}>
+      <div
+        style={{
+          fontSize: 12.5,
+          fontWeight: 700,
+          letterSpacing: "0.4px",
+          color: C.blue,
+          textTransform: "uppercase",
+        }}
+      >
+        Employee Benefits Program
+      </div>
+      <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted }}>
+        Medical + Dental + Vision + Supplemental
+      </div>
     </div>
   );
 
   return (
     <div className="login-page">
-      <div style={{ width: "100%", maxWidth: 380 }}>
+      <div style={{ width: "100%", maxWidth: 420 }}>
         {mode === "group" ? (
           <>
             {brand}
 
             <div style={card}>
+              {programTag}
+
               <h1 style={{ margin: "0 0 22px", fontSize: 19, fontWeight: 700, color: C.ink, letterSpacing: "-0.2px" }}>
                 Sign in
               </h1>
