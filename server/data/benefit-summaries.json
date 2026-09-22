@@ -1,0 +1,3647 @@
+[
+  {
+    "id": "dental-advantage-dental-w-ortho",
+    "category": "dental",
+    "name": "Advantage Dental (W Ortho)",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$25",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "80%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": "50%",
+      "annualMaximum": "$2500",
+      "orthoLifetimeMaximum": "$2500",
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, Onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Orthodontia",
+        "value": "50%",
+        "note": "Child(ren)"
+      }
+    ],
+    "notes": "**For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. When Orthodontia coverage is for \"Child(ren)\" only, the orthodontic appliance must be placed prior to the age limit set by your plan; If full-time status is required by your plan in order to remain insured after a certain age; then orthodontic maintenance may continue as long as full-time student status is maintained. If Orthodontia coverage is for \"Adults and Child(ren)\" this limitation does not apply. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Advantage Dental (W Ortho).pdf"
+  },
+  {
+    "id": "dental-basic-dental",
+    "category": "dental",
+    "name": "Basic Dental",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "80%",
+      "basicCoinsurance": "50%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": null,
+      "annualMaximum": "$750",
+      "orthoLifetimeMaximum": null,
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "80%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "80%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Perio Surgery",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Periodontal Maintenance",
+        "value": "50%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Scaling & Root Planing (per quadrant)",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      }
+    ],
+    "notes": "Orthodontia: Not covered (applies to all levels). **For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Basic Dental.pdf"
+  },
+  {
+    "id": "dental-choice-dental",
+    "category": "dental",
+    "name": "Choice Dental",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "50%",
+      "majorCoinsurance": "0%",
+      "orthoCoinsurance": null,
+      "annualMaximum": "$750",
+      "orthoLifetimeMaximum": null,
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Inlays, Onlays, Veneers**",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "0%",
+        "note": null
+      }
+    ],
+    "notes": "Orthodontia: Not covered (applies to all levels). **For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Choice Dental.pdf"
+  },
+  {
+    "id": "dental-complete-dental-w-ortho",
+    "category": "dental",
+    "name": "Complete Dental (W Ortho)",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "80%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": "50%",
+      "annualMaximum": "$1500",
+      "orthoLifetimeMaximum": "$1500",
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Perio Surgery",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Periodontal Maintenance",
+        "value": "80%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Scaling & Root Planing (per quadrant)",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Simple Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Surgical Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, Onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Orthodontia",
+        "value": "50%",
+        "note": "Child(ren)"
+      }
+    ],
+    "notes": "**For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. When Orthodontia coverage is for \"Child(ren)\" only, the orthodontic appliance must be placed prior to the age limit set by your plan; If full-time status is required by your plan in order to remain insured after a certain age; then orthodontic maintenance may continue as long as full-time student status is maintained. If Orthodontia coverage is for \"Adults and Child(ren)\" this limitation does not apply. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Complete Dental (W Ortho).pdf"
+  },
+  {
+    "id": "dental-complete-dental",
+    "category": "dental",
+    "name": "Complete Dental",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "80%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": null,
+      "annualMaximum": "$1500",
+      "orthoLifetimeMaximum": null,
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Perio Surgery",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Periodontal Maintenance",
+        "value": "80%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Root Canal",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Scaling & Root Planing (per quadrant)",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      }
+    ],
+    "notes": "Orthodontia: Not covered (applies to all levels). **For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Complete Dental.pdf"
+  },
+  {
+    "id": "dental-value-dental-w-ortho",
+    "category": "dental",
+    "name": "Value Dental (W Ortho)",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "80%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": "50%",
+      "annualMaximum": "$1000",
+      "orthoLifetimeMaximum": "$1000",
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Perio Surgery",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Periodontal Maintenance",
+        "value": "80%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Scaling & Root Planing (per quadrant)",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Simple Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Surgical Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, Onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Orthodontia",
+        "value": "50%",
+        "note": "Child(ren)"
+      }
+    ],
+    "notes": "**For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. When Orthodontia coverage is for \"Child(ren)\" only, the orthodontic appliance must be placed prior to the age limit set by your plan; If full-time status is required by your plan in order to remain insured after a certain age; then orthodontic maintenance may continue as long as full-time student status is maintained. If Orthodontia coverage is for \"Adults and Child(ren)\" this limitation does not apply. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings.",
+    "sourceFile": "Dental/Value Dental (W Ortho).pdf"
+  },
+  {
+    "id": "dental-value-dental",
+    "category": "dental",
+    "name": "Value Dental",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "deductibleIndividual": "$50",
+      "deductibleFamilyLimit": "3 per family",
+      "deductibleWaivedFor": "Preventive",
+      "preventiveCoinsurance": "100%",
+      "basicCoinsurance": "80%",
+      "majorCoinsurance": "50%",
+      "orthoCoinsurance": null,
+      "annualMaximum": "$1000",
+      "orthoLifetimeMaximum": null,
+      "dependentAgeLimit": "26"
+    },
+    "lines": [
+      {
+        "label": "Cleaning (prophylaxis)",
+        "value": "100%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Fluoride Treatments",
+        "value": "100%",
+        "note": "Under age 19"
+      },
+      {
+        "label": "Oral Exams",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Sealants (per tooth)",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "X-rays",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Anesthesia*",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Fillings‡",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Perio Surgery",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Periodontal Maintenance",
+        "value": "80%",
+        "note": "Once Every 6 months"
+      },
+      {
+        "label": "Scaling & Root Planing (per quadrant)",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Simple Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Surgical Extractions",
+        "value": "80%",
+        "note": null
+      },
+      {
+        "label": "Bridges and Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Inlays, Onlays, Veneers**",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Repair & Maintenance of Crowns, Bridges & Dentures",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Root Canal",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Single Crowns",
+        "value": "50%",
+        "note": null
+      }
+    ],
+    "notes": "Orthodontia: Not covered (applies to all levels). **For PPO and or Indemnity members, Crowns, Inlays, Onlays and Labial Veneers are covered only when needed because of decay or injury or other pathology when the tooth cannot be restored with amalgam or composite filing material. *General Anesthesia – restrictions apply. ‡For PPO and or Indemnity members, Fillings – restrictions may apply to composite fillings. NOTE: source PDF prints \"Scaling & Root Planing (per quadrant 80%\" with the closing parenthesis apparently dropped before the value; transcribed here with the parenthesis restored to match the label used identically on the other plans.",
+    "sourceFile": "Dental/Value Dental.pdf"
+  },
+  {
+    "id": "vision-base",
+    "category": "vision",
+    "name": "Base Vision",
+    "carrier": "VSP",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "examCopay": "$20",
+      "examFrequency": "Every calendar year",
+      "frameAllowance": "$130",
+      "featuredFrameAllowance": "$150",
+      "contactsAllowance": "$130",
+      "contactLensExamCopay": "Up to $60"
+    },
+    "lines": [
+      {
+        "label": "WellVision Exam",
+        "description": "Focuses on your eyes and overall wellness",
+        "copay": "$20",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Prescription Glasses",
+        "description": null,
+        "copay": "$20",
+        "frequency": "See frames and lenses"
+      },
+      {
+        "label": "Frame",
+        "description": "$130 allowance for a wide selection of frames\n$150 allowance for featured frame brands\n20% savings on the amount over your allowance",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Lenses",
+        "description": "Single vision, lined bifocal, and lined trifocal lenses\nPolycarbonate lenses for dependent children",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Standard progressive lenses",
+        "description": null,
+        "copay": "$50",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Premium progressive lenses",
+        "description": null,
+        "copay": "$80-$90",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Custom progressive lenses",
+        "description": "Average savings of 35-40% on other lens enhancements",
+        "copay": "$120-$160",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Contacts (instead of glasses)",
+        "description": "$130 allowance for contacts; copay does not apply\nContact lens exam (fitting and evaluation)",
+        "copay": "Up to $60",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Diabetic Eyecare Plus Program",
+        "description": "Services related to diabetic eye disease, glaucoma and age-related macular degeneration (AMD). Retinal screening for eligible members with diabetes. Limitations and coordination with medical coverage may apply. Ask your doctor for details.",
+        "copay": "$20",
+        "frequency": "As needed"
+      },
+      {
+        "label": "Glass and Sunglass",
+        "description": "Extra $20 to spend on featured frame brands. 30% savings on additional glasses and sunglasses, including lens enhancements, from the same provider on the same day as your WellVision Exam. Or get 20% from any provider within 12 months of your last WellVision Exam.",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Retinal Screening",
+        "description": "No more than a $39 copay on routine retinal screening as an enhancement to a WellVision Exam",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Laser Vision Correction",
+        "description": "Average 15% off the regular price or 5% off the promotional price; discounts only available from contracted facilities\nAfter surgery, use your frame allowance (if eligible) for sunglasses from any doctor",
+        "copay": null,
+        "frequency": null
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Vision/Base Vision.pdf"
+  },
+  {
+    "id": "vision-premium",
+    "category": "vision",
+    "name": "Premium Vision",
+    "carrier": "VSP",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "examCopay": "$20",
+      "examFrequency": "Every calendar year",
+      "frameAllowance": "$180",
+      "featuredFrameAllowance": "$200",
+      "contactsAllowance": "$180",
+      "contactLensExamCopay": "Up to $60"
+    },
+    "lines": [
+      {
+        "label": "WellVision Exam",
+        "description": "Focuses on your eyes and overall wellness",
+        "copay": "$20",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Prescription Glasses",
+        "description": null,
+        "copay": "$20",
+        "frequency": "See frames and lenses"
+      },
+      {
+        "label": "Frame",
+        "description": "$180 allowance for a wide selection of frames\n$200 allowance for featured frame brands\n20% savings on the amount over your allowance",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Lenses",
+        "description": "Single vision, lined bifocal, and lined trifocal lenses\nPolycarbonate lenses for dependent children",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Tints/Photochromic adaptive lenses",
+        "description": null,
+        "copay": "$0",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Scratch-resistant coating",
+        "description": null,
+        "copay": "$0",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Standard progressive lenses",
+        "description": null,
+        "copay": "$50",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Premium progressive lenses",
+        "description": null,
+        "copay": "$50",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Custom progressive lenses",
+        "description": "Average savings of 35-40% on other lens enhancement",
+        "copay": null,
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Contacts (instead of glasses)",
+        "description": "$180 allowance for contacts; copay does not apply\nContact lens exam (fitting and evaluation)",
+        "copay": "Up to $60",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Diabetic Eyecare Plus Program",
+        "description": "Services related to diabetic eye disease, glaucoma and age-related macular degeneration (AMD). Retinal screening for eligible members with diabetes. Limitations and coordination with medical coverage may apply. Ask your doctor for details.",
+        "copay": "$20",
+        "frequency": "As needed"
+      },
+      {
+        "label": "Glass and Sunglass",
+        "description": "Extra $20 to spend on featured frame brands.\n30% savings on additional glasses and sunglasses, including lens enhancements, from the same provider on the same day as your WellVision Exam. Or get 20% from any provider within 12 months of your last WellVision Exam.",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Retinal Screening",
+        "description": "No more than a $39 copay on routine retinal screening as an enhancement to a WellVision Exam",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Laser Vision Correction",
+        "description": "Average 15% off the regular price or 5% off the promotional price; discounts only available from contracted facilities\nAfter surgery, use your frame allowance (if eligible) for sunglasses from any doctor",
+        "copay": null,
+        "frequency": null
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Vision/Premium Vision.pdf"
+  },
+  {
+    "id": "vision-standard",
+    "category": "vision",
+    "name": "Standard Vision",
+    "carrier": "VSP",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "examCopay": "$10",
+      "examFrequency": "Every calendar year",
+      "frameAllowance": "$150",
+      "featuredFrameAllowance": "$170",
+      "contactsAllowance": "$130",
+      "contactLensExamCopay": "Up to $60"
+    },
+    "lines": [
+      {
+        "label": "WellVision Exam",
+        "description": "Focuses on your eyes and overall wellness",
+        "copay": "$10",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Prescription Glasses",
+        "description": null,
+        "copay": "$20",
+        "frequency": "See frames and lenses"
+      },
+      {
+        "label": "Frame",
+        "description": "$150 allowance for a wide selection of frames\n$170 allowance for featured frame brands\n20% savings on the amount over your allowance",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Lenses",
+        "description": "Single vision, lined bifocal, and lined trifocal lenses\nPolycarbonate lenses for dependent children",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Standard progressive lenses",
+        "description": null,
+        "copay": "$0",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Premium progressive lenses",
+        "description": null,
+        "copay": "$80-$90",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Custom progressive lenses",
+        "description": "Average savings of 35-40% on other lens enhancements",
+        "copay": "$120-$160",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Contacts (instead of glasses)",
+        "description": "$130 allowance for contacts; copay does not apply\nContact lens exam (fitting and evaluation)",
+        "copay": "Up to $60",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Diabetic Eyecare Plus Program",
+        "description": "Services related to diabetic eye disease, glaucoma and age-related macular degeneration (AMD). Retinal screening for eligible members with diabetes. Limitations and coordination with medical coverage may apply. Ask your doctor for details.",
+        "copay": "$20",
+        "frequency": "As needed"
+      },
+      {
+        "label": "Glass and Sunglass",
+        "description": "Extra $20 to spend on featured frame brands.\n30% savings on additional glasses and sunglasses, including lens enhancements, from the same provider on the same day as your WellVision Exam. Or get 20% from any provider within 12 months of your last WellVision Exam.",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Retinal Screening",
+        "description": "No more than a $39 copay on routine retinal screening as an enhancement to a WellVision Exam",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Laser Vision Correction",
+        "description": "Average 15% off the regular price or 5% off the promotional price; discounts only available from contracted facilities",
+        "copay": null,
+        "frequency": null
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Vision/Standard Vision.pdf"
+  },
+  {
+    "id": "vision-value",
+    "category": "vision",
+    "name": "Value Vision",
+    "carrier": "VSP",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "examCopay": "$20",
+      "examFrequency": "Every calendar year",
+      "frameAllowance": "$150",
+      "featuredFrameAllowance": "$170",
+      "contactsAllowance": "$150",
+      "contactLensExamCopay": "Up to $60"
+    },
+    "lines": [
+      {
+        "label": "WellVision Exam",
+        "description": "Focuses on your eyes and overall wellness",
+        "copay": "$20",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Prescription Glasses",
+        "description": null,
+        "copay": "$20",
+        "frequency": "See frames and lenses"
+      },
+      {
+        "label": "Frame",
+        "description": "$150 allowance for a wide selection of frames\n$170 allowance for featured frame brands\n20% savings on the amount over your allowance",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every other calendar year"
+      },
+      {
+        "label": "Lenses",
+        "description": "Single vision, lined bifocal, and lined trifocal lenses\nPolycarbonate lenses for dependent children",
+        "copay": "Included in Prescription Glasses",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Standard progressive lenses",
+        "description": null,
+        "copay": "$0",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Premium progressive lenses",
+        "description": null,
+        "copay": "$80-$90",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Custom progressive lenses",
+        "description": "Average savings of 35-40% on other lens enhancements",
+        "copay": "$120-$160",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Contacts (instead of glasses)",
+        "description": "$150 allowance for contacts; copay does not apply\nContact lens exam (fitting and evaluation)",
+        "copay": "Up to $60",
+        "frequency": "Every calendar year"
+      },
+      {
+        "label": "Diabetic Eyecare Plus Program",
+        "description": "Services related to diabetic eye disease, glaucoma and age-related macular degeneration (AMD). Retinal screening for eligible members with diabetes. Limitations and coordination with medical coverage may apply. Ask your doctor for details.",
+        "copay": "$20",
+        "frequency": "As needed"
+      },
+      {
+        "label": "Glass and Sunglass",
+        "description": "Extra $20 to spend on featured frame brands.\n30% savings on additional glasses and sunglasses, including lens enhancements, from the same provider on the same day as your WellVision Exam. Or get 20% from any provider within 12 months of your last WellVision Exam.",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Retinal Screening",
+        "description": "No more than a $39 copay on routine retinal screening as an enhancement to a WellVision Exam",
+        "copay": null,
+        "frequency": null
+      },
+      {
+        "label": "Laser Vision Correction",
+        "description": "Average 15% off the regular price or 5% off the promotional price; discounts only available from contracted facilities\nAfter surgery, use your frame allowance (if eligible) for sunglasses from any doctor",
+        "copay": null,
+        "frequency": null
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Vision/Value Vision.pdf"
+  },
+  {
+    "id": "supplemental-accident-insurance",
+    "category": "supplemental",
+    "name": "Accident Insurance",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "The cash benefits below are paid to you for covered injuries, treatments and services, in addition to whatever your medical plan may cover. Payments go directly to you, not the doctor. Easy enrollment with no medical questions.",
+      "keyBenefitAmounts": "AD&D: Employee $25,000 / Spouse $12,500 / Child $5,000"
+    },
+    "lines": [
+      {
+        "label": "Accident Coverage Type",
+        "value": "Off Job",
+        "note": null
+      },
+      {
+        "label": "Portability",
+        "value": "Included",
+        "note": "Allows you to take your Accident coverage with you if you terminate employment."
+      },
+      {
+        "label": "AD&D Benefit Amount - Employee",
+        "value": "$25,000",
+        "note": null
+      },
+      {
+        "label": "AD&D Benefit Amount - Spouse",
+        "value": "$12,500",
+        "note": null
+      },
+      {
+        "label": "AD&D Benefit Amount - Child",
+        "value": "$5,000",
+        "note": null
+      },
+      {
+        "label": "Catastrophic Loss - Quadriplegia, Loss of Speech & Hearing (both ears), Loss of Cognitive Function",
+        "value": "100% of AD&D",
+        "note": null
+      },
+      {
+        "label": "Catastrophic Loss - Hemiplegia & Paraplegia",
+        "value": "50% of AD&D",
+        "note": null
+      },
+      {
+        "label": "Common Carrier",
+        "value": "200% of AD&D benefit",
+        "note": null
+      },
+      {
+        "label": "Common Disaster",
+        "value": "200% of Spouse AD&D benefit",
+        "note": null
+      },
+      {
+        "label": "Dismemberment (Hand, Foot, Sight) - Single",
+        "value": "50% of AD&D benefit",
+        "note": null
+      },
+      {
+        "label": "Dismemberment (Hand, Foot, Sight) - Multiple",
+        "value": "100% of AD&D benefit",
+        "note": null
+      },
+      {
+        "label": "Dismemberment (Thumb/Index Finger Same Hand, Four Fingers Same Hand, All Toes Same Foot)",
+        "value": "25% of AD&D Benefit",
+        "note": null
+      },
+      {
+        "label": "Seatbelts and Airbags",
+        "value": "Seatbelts: $10,000 & Airbags: $15,000",
+        "note": null
+      },
+      {
+        "label": "Reasonable Accommodation to Home or Vehicle",
+        "value": "$2,500",
+        "note": null
+      },
+      {
+        "label": "Wellness Benefit",
+        "value": "$50",
+        "note": "Per year limit"
+      },
+      {
+        "label": "Child(ren) Age Limits",
+        "value": "Children age birth to 26 years",
+        "note": null
+      },
+      {
+        "label": "Accident Emergency Room Treatment",
+        "value": "$175",
+        "note": null
+      },
+      {
+        "label": "Accident Follow-Up Visit - Doctor",
+        "value": "$50 up to 6 treatments",
+        "note": null
+      },
+      {
+        "label": "Air Ambulance",
+        "value": "$1,000",
+        "note": null
+      },
+      {
+        "label": "Appliance",
+        "value": "$125",
+        "note": "Wheelchair, leg or back brace, crutches, walker, walking boot that extends above the ankle or brace for the neck."
+      },
+      {
+        "label": "Blood/Plasma/Platelets",
+        "value": "$300",
+        "note": null
+      },
+      {
+        "label": "Burns (2nd Degree/3rd Degree)",
+        "value": "9 sq inches to 18 sq inches: $0/$2,000; 18 sq inches to 35 sq inches: $1,000/$4,000; Over 35 sq inches: $3,000/$12,000",
+        "note": null
+      },
+      {
+        "label": "Burn (Skin Graft)",
+        "value": "50% of burn benefit",
+        "note": null
+      },
+      {
+        "label": "Child Organized Sport",
+        "value": "20% increase to child benefits",
+        "note": "Benefit is paid if the covered accident occurred while your covered child is participating in an organized sport that is governed by an organization and requires formal registration to participate."
+      },
+      {
+        "label": "Chiropractic Visits",
+        "value": "$25 per visit up to 6 visits",
+        "note": null
+      },
+      {
+        "label": "Coma",
+        "value": "$10,000",
+        "note": null
+      },
+      {
+        "label": "Concussions",
+        "value": "$75",
+        "note": null
+      },
+      {
+        "label": "Dislocations",
+        "value": "Schedule up to $4,400",
+        "note": null
+      },
+      {
+        "label": "Diagnostic Exam (Major)",
+        "value": "$150",
+        "note": null
+      },
+      {
+        "label": "Emergency Dental Work",
+        "value": "$300/Crown, $75/Extraction",
+        "note": null
+      },
+      {
+        "label": "Epidural Pain Management",
+        "value": "$100, 2 times per accident",
+        "note": null
+      },
+      {
+        "label": "Eye Injury",
+        "value": "$300",
+        "note": null
+      },
+      {
+        "label": "Family Care",
+        "value": "$20/day up to 30 days",
+        "note": null
+      },
+      {
+        "label": "Fracture",
+        "value": "Schedule up to $5,500",
+        "note": null
+      },
+      {
+        "label": "Hospital Admission",
+        "value": "$1,000",
+        "note": null
+      },
+      {
+        "label": "Hospital Confinement",
+        "value": "$225/day - up to 1 year",
+        "note": null
+      },
+      {
+        "label": "Hospital ICU Admission",
+        "value": "$2,000",
+        "note": null
+      },
+      {
+        "label": "Hospital ICU Confinement",
+        "value": "$450/day - up to 15 days",
+        "note": null
+      },
+      {
+        "label": "Initial Physician's Office/Urgent Care Facility Treatment",
+        "value": "$75",
+        "note": null
+      },
+      {
+        "label": "Joint Replacement (hip/knee/shoulder)",
+        "value": "$2,500/$1,250/$1,250",
+        "note": null
+      },
+      {
+        "label": "Knee Cartilage",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Laceration",
+        "value": "Schedule up to $400",
+        "note": null
+      },
+      {
+        "label": "Lodging",
+        "value": "$125/day, up to 30 days for companion hotel stay",
+        "note": "The hospital must be more than 50 miles from the insured's residence."
+      },
+      {
+        "label": "Occupational or Physical Therapy",
+        "value": "$25/day up to 10 days",
+        "note": null
+      },
+      {
+        "label": "Prosthetic Device/Artificial Limb - 1",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Prosthetic Device/Artificial Limb - 2 or more",
+        "value": "$1,000",
+        "note": null
+      },
+      {
+        "label": "Rehabilitation Unit Confinement",
+        "value": "$150/day up to 15 days",
+        "note": null
+      },
+      {
+        "label": "Ruptured Disc With Surgical Repair",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Surgery",
+        "value": "Schedule up to $1,250",
+        "note": null
+      },
+      {
+        "label": "Surgery - Hernia",
+        "value": "$150",
+        "note": null
+      },
+      {
+        "label": "Surgery (Exploratory or Arthroscopic)",
+        "value": "$250",
+        "note": null
+      },
+      {
+        "label": "Tendon/Ligament/Rotator Cuff - 1",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Tendon/Ligament/Rotator Cuff - 2 or more",
+        "value": "$1,000",
+        "note": null
+      },
+      {
+        "label": "Transportation",
+        "value": "$500, 3 times per accident",
+        "note": "Benefit is paid if you have to travel more than 50 miles one way to receive special treatment at a hospital or facility due to a covered accident."
+      },
+      {
+        "label": "X-Ray",
+        "value": "$30",
+        "note": null
+      }
+    ],
+    "definitions": [
+      {
+        "term": "Common Carrier",
+        "text": "Benefit is paid if an insured's death occurs due to an accident while riding as a fare-paying passenger in a public conveyance. If this is paid, we do not pay the Accidental Death benefit."
+      },
+      {
+        "term": "Common Disaster",
+        "text": "Benefit is paid if both you & your spouse die in a covered accident or separate covered accidents within the same 24 hour period."
+      },
+      {
+        "term": "Reasonable Accommodation",
+        "text": "Benefit is payable if a modification is required to an insured's place of residence or vehicle due to an Accidental Dismemberment or Catastrophic loss."
+      },
+      {
+        "term": "Accident Emergency Room Treatment",
+        "text": "Benefit is paid only when an insured is examined or treated within 72 hours of a covered accident."
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Supplemental/Accident Insurance.pdf"
+  },
+  {
+    "id": "supplemental-cancer-insurance",
+    "category": "supplemental",
+    "name": "Cancer Insurance",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "Lump-sum cash payments for certain procedures, screenings and treatments related to a covered cancer diagnosis, in addition to whatever your medical plan covers. Payments are made directly to you and can be used for any purpose. Ability to take the coverage with you if you change jobs or retire. Affordable group rates.",
+      "keyBenefitAmounts": "Initial Diagnosis Benefit: Employee $1,500 / Spouse $1,500 / Child $1,500"
+    },
+    "lines": [
+      {
+        "label": "Initial Diagnosis Benefit - Employee",
+        "value": "$1,500",
+        "note": "Benefit is paid when you are diagnosed with Internal cancer for the first time while insured under this Plan."
+      },
+      {
+        "label": "Initial Diagnosis Benefit - Spouse",
+        "value": "$1,500",
+        "note": "Benefit is paid when you are diagnosed with Internal cancer for the first time while insured under this Plan."
+      },
+      {
+        "label": "Initial Diagnosis Benefit - Child",
+        "value": "$1,500",
+        "note": "Benefit is paid when you are diagnosed with Internal cancer for the first time while insured under this Plan."
+      },
+      {
+        "label": "Benefit Waiting Period",
+        "value": "30 Days",
+        "note": "A specified period of time after your effective date during which the initial Diagnosis benefits will not be payable."
+      },
+      {
+        "label": "Cancer Screening",
+        "value": "200% of Spouse AD&D benefit",
+        "note": "Printed exactly as shown in source document; this value appears inconsistent with the 'Cancer Screening' label (possible document error/template carryover) - unable to verify intended meaning from the PDF."
+      },
+      {
+        "label": "Cancer Screening - Benefit Amount",
+        "value": "$50; $50 for Follow-Up screening",
+        "note": null
+      },
+      {
+        "label": "Radiation Therapy or Chemotherapy - Benefit",
+        "value": "Schedule amounts up to a $4,000 benefit year maximum.",
+        "note": null
+      },
+      {
+        "label": "Pre-Existing Conditions Limitation",
+        "value": "3 month look back period, 12 month exclusion period.",
+        "note": "A pre-existing condition includes any condition for which you, in the specified time period prior to coverage in this plan, consulted with a physician, received treatment, or took prescribed drugs."
+      },
+      {
+        "label": "Portability",
+        "value": "Included",
+        "note": "Allows you to take your Cancer coverage with you if you terminate employment. Ported Cancer plan terminates at age 70."
+      },
+      {
+        "label": "Child(ren) Age Limits",
+        "value": "Children age birth to 26 years",
+        "note": null
+      },
+      {
+        "label": "Air Ambulance",
+        "value": "$1,500/trip, limit 2 trips per hospital confinement",
+        "note": null
+      },
+      {
+        "label": "Ambulance",
+        "value": "$200/trip, limit 2 trips per hospital confinement",
+        "note": null
+      },
+      {
+        "label": "Anesthesia",
+        "value": "25% of surgery benefit",
+        "note": null
+      },
+      {
+        "label": "Anti-Nausea",
+        "value": "$50/day up to $150 per month",
+        "note": null
+      },
+      {
+        "label": "Attending Physician",
+        "value": "$25/day while hospital confined. Limit 75 visits.",
+        "note": null
+      },
+      {
+        "label": "Blood/Plasma/Platelets",
+        "value": "$100/day up to $5,000 per year",
+        "note": null
+      },
+      {
+        "label": "Bone Marrow/Stem Cell - Bone Marrow",
+        "value": "$7,500",
+        "note": null
+      },
+      {
+        "label": "Bone Marrow/Stem Cell - Stem Cell",
+        "value": "$1,500",
+        "note": null
+      },
+      {
+        "label": "Bone Marrow/Stem Cell - 2nd Transplant/Donor",
+        "value": "50% benefit for 2nd transplant. $1,000 benefit if a donor",
+        "note": null
+      },
+      {
+        "label": "Experimental Treatment",
+        "value": "$100/day up to $1,000/month",
+        "note": null
+      },
+      {
+        "label": "Extended Care Facility/Skilled Nursing Care",
+        "value": "$100/day up to 90 days per year",
+        "note": null
+      },
+      {
+        "label": "Government or Charity Hospital",
+        "value": "$300 per day in lieu of all other benefits",
+        "note": null
+      },
+      {
+        "label": "Home Health Care",
+        "value": "%40/visit up to 30 visits per year",
+        "note": "Printed exactly as shown in source PDF (the '%' before 40 appears to be an OCR/typographical error, likely intended as '$40')."
+      },
+      {
+        "label": "Hormone Therapy",
+        "value": "$35/treatment up to 12 treatments per year",
+        "note": null
+      },
+      {
+        "label": "Hospice",
+        "value": "$50/day up to 100 days/lifetime",
+        "note": null
+      },
+      {
+        "label": "Hospital Confinement",
+        "value": "$300/day for first 30 days; $600/day for 31st day thereafter per confinement",
+        "note": null
+      },
+      {
+        "label": "ICU Confinement",
+        "value": "$400/day for first 30 days; $600/day for 31st day thereafter per confinement",
+        "note": null
+      },
+      {
+        "label": "Immunotherapy",
+        "value": "$500 per month, $2,500 lifetime max",
+        "note": null
+      },
+      {
+        "label": "Inpatient Special Nursing",
+        "value": "$100/day up to 30 days per year",
+        "note": null
+      },
+      {
+        "label": "Medical Imaging",
+        "value": "$100/image up to 2 per year",
+        "note": null
+      },
+      {
+        "label": "Outpatient and Family Member Lodging",
+        "value": "$75/day, up to 90 days per year",
+        "note": "Lodging must be more than 50 miles from your home"
+      },
+      {
+        "label": "Physical or Speech Therapy",
+        "value": "$25/visit up to 4 visits per month, $400 lifetime max",
+        "note": null
+      },
+      {
+        "label": "Prosthetic - Surgically Implanted",
+        "value": "$2,000/device, $4,000 lifetime max",
+        "note": null
+      },
+      {
+        "label": "Prosthetic - Non-Surgically",
+        "value": "$200/device, $400 lifetime max",
+        "note": null
+      },
+      {
+        "label": "Reconstructive Surgery - Breast TRAM Flap",
+        "value": "$2,000",
+        "note": null
+      },
+      {
+        "label": "Reconstructive Surgery - Breast Reconstruction",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Reconstructive Surgery - Breast Symmetry",
+        "value": "$250",
+        "note": null
+      },
+      {
+        "label": "Reconstructive Surgery - Facial Reconstruction",
+        "value": "$500",
+        "note": null
+      },
+      {
+        "label": "Second Surgical Opinion",
+        "value": "$200/surgery procedure",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - Biopsy Only",
+        "value": "$100",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - Reconstructive Surgery",
+        "value": "$250",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - Excision of a Skin Cancer",
+        "value": "$375",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - Excision of a Skin Cancer With Flap or Graft",
+        "value": "$600",
+        "note": null
+      },
+      {
+        "label": "Surgical Benefit",
+        "value": "Schedule amount up to $4,125",
+        "note": null
+      },
+      {
+        "label": "Transportation/Companion Transportation",
+        "value": "$0.50/mile up to $1,000 per round trip/equal benefit for companion",
+        "note": "Benefit is paid if you have to travel more than 50 miles one way to receive treatment for internal cancer."
+      },
+      {
+        "label": "Waiver of Premium",
+        "value": "Included",
+        "note": "If you become disabled due to cancer that is diagnosed after the employee's effective date, and you remain disabled for 90 days, we will waive the premium due after such 90 days for as long as you remain disabled."
+      }
+    ],
+    "definitions": [
+      {
+        "term": "Cancer",
+        "text": "Cancer means you have been diagnosed with a disease manifested by the presence of a malignant tumor characterized by the uncontrolled growth and spread of malignant cells in any part of the body. This includes leukemia, Hodgkin's disease, lymphoma, sarcoma, malignant tumors and melanoma. Cancer includes carcinomas in-situ (in the natural or normal place, confined to the site of origin, without having invaded neighboring tissue). Pre-malignant conditions or conditions with malignant potential, such as myelodyplastic and myeloproliferative disorders, carcinoid, leukoplakia, hyperplasia, actinic keratosis, polycythemia, and nonmalignant melanoma, moles or similar diseases or lesions will not be considered cancer. Cancer must be diagnosed while insured under the cancer plan."
+      },
+      {
+        "term": "Experimental Treatment",
+        "text": "Benefits will be paid for experimental treatment prescribed by a doctor for the purpose of destroying or changing abnormal tissue. All treatment must be NCI listed as viable experimental treatment for Internal Cancer."
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Supplemental/Cancer Insurance.pdf"
+  },
+  {
+    "id": "supplemental-critical-illness-insurance",
+    "category": "supplemental",
+    "name": "Critical Illness Insurance",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "A cash benefit is paid to you for a range of covered serious illnesses such as Cancer, Stroke and Heart Attack, in addition to whatever your medical insurance may cover. Payments are made directly to you and can be used for any purpose.",
+      "keyBenefitAmounts": "Employee lump sum up to $10,000 / Spouse 50% of employee benefit / Child 25% of employee benefit"
+    },
+    "lines": [
+      {
+        "label": "Benefit Amount(s)",
+        "value": "Employee may choose a lump sum benefit up to $10,000.",
+        "note": null
+      },
+      {
+        "label": "Invasive Cancer - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Invasive Cancer - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Carcinoma In Situ - 1st Occurrence",
+        "value": "30%",
+        "note": null
+      },
+      {
+        "label": "Carcinoma In Situ - 2nd Occurrence",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Benign Brain Tumor - 1st Occurrence",
+        "value": "75%",
+        "note": null
+      },
+      {
+        "label": "Benign Brain Tumor - 2nd Occurrence",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - 1st Occurrence",
+        "value": "$250 per lifetime",
+        "note": null
+      },
+      {
+        "label": "Skin Cancer - 2nd Occurrence",
+        "value": "Not covered",
+        "note": null
+      },
+      {
+        "label": "Heart Attack - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Heart Attack - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Stroke - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Stroke - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Heart Failure - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Heart Failure - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Coronary Arteriosclerosis - 1st Occurrence",
+        "value": "30%",
+        "note": null
+      },
+      {
+        "label": "Coronary Arteriosclerosis - 2nd Occurrence",
+        "value": "0%",
+        "note": null
+      },
+      {
+        "label": "Organ Failure - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Organ Failure - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Kidney Failure - 1st Occurrence",
+        "value": "100%",
+        "note": null
+      },
+      {
+        "label": "Kidney Failure - 2nd Occurrence",
+        "value": "50%",
+        "note": null
+      },
+      {
+        "label": "Addison's Disease",
+        "value": "30%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "ALS (Lou Gehrig's Disease)",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Alzheimer's Disease",
+        "value": "50%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Coma",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Huntington's Disease",
+        "value": "30%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Loss of Hearing",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Loss of Sight",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Loss of Speech",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Multiple Sclerosis",
+        "value": "30%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Parkinson's Disease",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Permanent Paralysis",
+        "value": "50% for 1 limb, 100% for 2 limbs",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Severe Burns",
+        "value": "100%",
+        "note": "1st Occurrence only"
+      },
+      {
+        "label": "Spouse Benefit",
+        "value": "50% of employee's lump sum benefit",
+        "note": null
+      },
+      {
+        "label": "Child Benefit",
+        "value": "25% of employee's lump sum benefit",
+        "note": "Children age Birth to 26 years"
+      },
+      {
+        "label": "Benefit Reductions",
+        "value": "50% at age 70",
+        "note": "Benefits are reduced by a certain percentage as an employee ages"
+      },
+      {
+        "label": "Guarantee Issue - Employee",
+        "value": "Less than age 70: $10,00",
+        "note": "Printed exactly as shown in source PDF; appears to be a truncated/typo value (likely intended as $10,000, matching the plan's stated max benefit) - unable to verify exact figure from the PDF."
+      },
+      {
+        "label": "Guarantee Issue - Spouse",
+        "value": "Less than age 70: $5,000",
+        "note": null
+      },
+      {
+        "label": "Guarantee Issue - Child",
+        "value": "All Amounts",
+        "note": null
+      },
+      {
+        "label": "Guarantee Issue - Health Questions Requirement",
+        "value": "Health questions are required if the elected amount exceeds the Guarantee Issue, as well as for all applicants age 70+ regardless of elected amount.",
+        "note": null
+      },
+      {
+        "label": "Portability",
+        "value": "Included",
+        "note": "Allows you to take your Critical Illness coverage with you if you terminate employment"
+      },
+      {
+        "label": "Pre-Existing Condition Limitation",
+        "value": "12 months prior, 12 months after",
+        "note": "A pre-existing condition includes any condition for which you, in the specified time period prior to coverage in this plan, consulted with a physician, received treatment, or took prescribed drugs."
+      }
+    ],
+    "definitions": [
+      {
+        "term": "Stroke",
+        "text": "Stroke must be severe enough to cause neurological deficits at least 30 days after the event."
+      },
+      {
+        "term": "Heart Failure",
+        "text": "An insured must be placed on an organ transplant list in order to be eligible for the Heart failure benefits."
+      },
+      {
+        "term": "Coronary Arteriosclerosis",
+        "text": "Coronary Arteriosclerosis must be severe enough to require a coronary artery bypass graft."
+      },
+      {
+        "term": "Organ Failure",
+        "text": "Organ failure includes both lungs, liver, pancreas or bone marrow and requires the insured to be placed on an organ transplant list."
+      },
+      {
+        "term": "Kidney Failure",
+        "text": "An insured must be placed on an organ transplant list in order to be eligible for the Kidney failure benefits."
+      }
+    ],
+    "notes": null,
+    "sourceFile": "Supplemental/Critical Illness Insurance.pdf"
+  },
+  {
+    "id": "supplemental-disability-insurance",
+    "category": "supplemental",
+    "name": "Voluntary Disability",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "Income replacement because it pays you benefits to replace a portion of the income you lose if you're unable to work due to a prolonged illness or injury. Starts paying weekly benefits on 8th day of a qualifying illness or injury and covers you for a 13 week benefit period. You'll continue to receive benefits until you're able to return to work or until you reach the end of benefit period.",
+      "keyBenefitAmounts": "Weekly Benefit $100/$200/$300/$400/$500 (not to exceed 60% of weekly earnings); benefits begin 8th day; 13-week duration"
+    },
+    "lines": [
+      {
+        "label": "Benefits Begin For Accident Or Sickness",
+        "value": "8th day",
+        "note": null
+      },
+      {
+        "label": "Duration of Benefits",
+        "value": "13 weeks",
+        "note": null
+      },
+      {
+        "label": "Definition of Disability",
+        "value": "Own Job",
+        "note": null
+      },
+      {
+        "label": "Weekly Benefit",
+        "value": "$100, $200, $300, $400, $500 not to exceed 60% of weekly earnings",
+        "note": null
+      },
+      {
+        "label": "Interruption of Elimination Period",
+        "value": "Unlimited, no set number of days",
+        "note": null
+      },
+      {
+        "label": "Return to Work",
+        "value": "Zero Day Residual",
+        "note": null
+      },
+      {
+        "label": "Maximum Partial Disability Earnings",
+        "value": "80% Indexed",
+        "note": null
+      },
+      {
+        "label": "Partial Disability Calculation",
+        "value": "Greater of direct reduction or proportionate loss",
+        "note": null
+      },
+      {
+        "label": "Integration Method",
+        "value": "Direct Offset, Family - benefits reduced by other group disability benefits, plus insured and dependent social security benefits",
+        "note": null
+      },
+      {
+        "label": "Salary Continuation/Association IDI",
+        "value": "No Offset",
+        "note": null
+      },
+      {
+        "label": "Minimum Weekly Benefit",
+        "value": "Flat $25",
+        "note": null
+      },
+      {
+        "label": "Pre-Existing Condition",
+        "value": "3/12 with 2 week limitation.",
+        "note": null
+      },
+      {
+        "label": "Earnings Definition",
+        "value": "Standard, excluding bonus & commission",
+        "note": null
+      },
+      {
+        "label": "Telephonic Claims",
+        "value": "TeleGuard Included",
+        "note": null
+      },
+      {
+        "label": "Coverage Type",
+        "value": "Non-occupational",
+        "note": null
+      },
+      {
+        "label": "Rehabilitation Services",
+        "value": "110% benefit amount, voluntary participation, Includes Dependent care expense",
+        "note": null
+      },
+      {
+        "label": "Specified Injury",
+        "value": "Pays benefit for a guaranteed number of weeks based on specified injury",
+        "note": null
+      },
+      {
+        "label": "Tax Services",
+        "value": "Tax reports only",
+        "note": null
+      },
+      {
+        "label": "Worksite Modification",
+        "value": "$2,500",
+        "note": null
+      },
+      {
+        "label": "Annual Re-Enrollment",
+        "value": "On an annual basis, participating employees will be allowed to 'step-up' one eligible increment",
+        "note": null
+      }
+    ],
+    "definitions": [],
+    "notes": "Filing A Claim Is Easy With Our TeleGuard Call Center - No claims forms to complete. No mail delays. Employees simply call a dedicated toll-free number. Our in-house, specially-trained TeleGuard experts collect all information and get the answers we need the first time, helping to expedite claims review and determination. In fact, employees can expect their short term disability payment in less than a week starting from the time we receive the claim. || SUMMARY OF PLAN LIMITATIONS AND EXCLUSIONS: Not available for employees in restricted industries. See Restricted Industry Listing for Group Disability available through Kennion. We do not pay benefits for charges relating to a covered person: taking part in any war or act of war (including service in the armed forces) committing a felony or taking part in any riot or other civil disorder or intentionally injuring themselves or attempting suicide while sane or insane, and for the voluntary inhalation or ingestion of poison, gas, solvent, chemical, or other substance not intended for internal consumption. We do not pay benefits due solely to the risk of relapse, during any period in which a covered person is confined to a correctional facility, an employee is not under the care of a doctor, an employee is receiving treatment outside of the US or Canada, and the employee's loss of earnings is not solely due to disability. During the exclusion/limitation period, this disability plan does not pay charges relating to a pre-existing condition. A pre-existing condition includes any condition for which an employee, in a specified period of time prior to coverage in this plan, consults with a physician, receives treatment, or takes prescribed drugs. If this plan is transferred from another insurance carrier, the time an insured is covered under that plan will count toward satisfying Carrier pre-existing condition exclusion/limitation period. Please refer to the plan details for specific time periods. Contract # GP-1-STD-15-1.0 et al. (Disability 2016). In order to be eligible for coverage; employees must be legally working (a) in the United States or (b) outside the United States, for a US based employer in a country or region approved by Carrier. This policy provides disability income insurance only. It does not provide 'basic hospital,' 'basic medical,' or 'major medical' insurance as defined by the New York State Insurance Department. Evidence of Insurability is required for all late enrollees.",
+    "sourceFile": "Supplemental/Disability Insurance.pdf"
+  },
+  {
+    "id": "supplemental-hospital-surgery-insurance-gap",
+    "category": "supplemental",
+    "name": "Hospital + Surgery Insurance",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "The cash benefits shown below are paid to you when you are admitted to a hospital or have surgery. Benefit payments sent directly to you and can be used for any purpose - from covering medical copays and deductibles to paying for everyday expenses such as the mortgage, groceries and utilities. Simple enrollment with no health or medical questions to answer. Ability to take the coverage with you if you change jobs or retire.",
+      "keyBenefitAmounts": "4 plan options - Hospital/ICU Admission ranges $500 (Choice) to $3,000 (Enhanced) per admission"
+    },
+    "lines": [
+      {
+        "label": "Hospital/ICU Admission - Option 1 (Choice Hospital Plan)",
+        "value": "$500 per admission, limited to 1 admission(s) per insured and 3 admission(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Admission - Option 2 (Basic Hospital Plan)",
+        "value": "$1,000 per admission, limited to 1 admission(s) per insured and 3 admission(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Admission - Option 3 (Preferred Hospital Plan)",
+        "value": "$2,000 per admission, limited to 1 admission(s) per insured and 3 admission(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Admission - Option 4 (Enhanced Hospital Plan)",
+        "value": "$3,000 per admission, limited to 1 admission(s) per insured and 3 admission(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Confinement - Option 1 (Choice Hospital Plan)",
+        "value": "$200/$200 per day, limited to 15 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Confinement - Option 2 (Basic Hospital Plan)",
+        "value": "$250/$250 per day, limited to 15 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Confinement - Option 3 (Preferred Hospital Plan)",
+        "value": "$300/$300 per day, limited to 15 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Hospital/ICU Confinement - Option 4 (Enhanced Hospital Plan)",
+        "value": "$400/$400 per day, limited to 15 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Diagnostic Tests - Option 1 (Choice Hospital Plan)",
+        "value": "$100 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Diagnostic Tests - Option 2 (Basic Hospital Plan)",
+        "value": "$250 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Diagnostic Tests - Option 3 (Preferred Hospital Plan)",
+        "value": "$250 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Diagnostic Tests - Option 4 (Enhanced Hospital Plan)",
+        "value": "$500 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Doctor's Office Visit - Option 1 (Choice Hospital Plan)",
+        "value": "$25 per day, limited to 3 day(s) per insured and 5 day(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Doctor's Office Visit - Option 2 (Basic Hospital Plan)",
+        "value": "$35 per day, limited to 3 day(s) per insured and 5 day(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Doctor's Office Visit - Option 3 (Preferred Hospital Plan)",
+        "value": "$35 per day, limited to 3 day(s) per insured and 5 day(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Doctor's Office Visit - Option 4 (Enhanced Hospital Plan)",
+        "value": "$50 per day, limited to 3 day(s) per insured and 5 day(s) per covered family per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Emergency Room/Urgent Care Facility - Option 1 (Choice Hospital Plan)",
+        "value": "$200/$50 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Emergency Room/Urgent Care Facility - Option 2 (Basic Hospital Plan)",
+        "value": "$300/$75 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Emergency Room/Urgent Care Facility - Option 3 (Preferred Hospital Plan)",
+        "value": "$400/$100 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Emergency Room/Urgent Care Facility - Option 4 (Enhanced Hospital Plan)",
+        "value": "$500/$150 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Inpatient Surgical - Option 1 (Choice Hospital Plan)",
+        "value": "$250 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Inpatient Surgical - Option 2 (Basic Hospital Plan)",
+        "value": "$500 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Inpatient Surgical - Option 3 (Preferred Hospital Plan)",
+        "value": "$500 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Inpatient Surgical - Option 4 (Enhanced Hospital Plan)",
+        "value": "$1,000 per day, limited to 1 day(s) per insured per benefit year.",
+        "note": null
+      },
+      {
+        "label": "Outpatient Surgery - Option 1 (Choice Hospital Plan)",
+        "value": "Category 1 $250, Category 2 $500, limited to 1 day(s) of surgery per insured per benefit year",
+        "note": null
+      },
+      {
+        "label": "Outpatient Surgery - Option 2 (Basic Hospital Plan)",
+        "value": "Category 1 $500, Category 2 $1,000, limited to 1 day(s) of surgery per insured per benefit year",
+        "note": null
+      },
+      {
+        "label": "Outpatient Surgery - Option 3 (Preferred Hospital Plan)",
+        "value": "Category 1 $750, Category 2 $1,500, limited to 1 day(s) of surgery per insured per benefit year",
+        "note": null
+      },
+      {
+        "label": "Outpatient Surgery - Option 4 (Enhanced Hospital Plan)",
+        "value": "Category 1 $1,000, Category 2 $2,000, limited to 1 day(s) of surgery per insured per benefit year",
+        "note": null
+      },
+      {
+        "label": "Pre-Existing Conditions Limitation (All Options)",
+        "value": "3 months prior, 12 months after",
+        "note": "A pre-existing condition includes any condition for which you, in the specified time period prior to coverage in this plan, consulted with a physician, received treatment, or took prescribed drugs."
+      },
+      {
+        "label": "Portability (All Options)",
+        "value": "Included",
+        "note": "Allows you to take your Hospital Indemnity coverage with you if you terminate employment."
+      },
+      {
+        "label": "Child(ren) Age Limits (All Options)",
+        "value": "Children age birth to 26 years",
+        "note": null
+      },
+      {
+        "label": "Eligibility Age Limit",
+        "value": "Applicants over the age of 69 are not eligible to enroll in the Hospital Indemnity coverage.",
+        "note": null
+      }
+    ],
+    "definitions": [],
+    "notes": "UNDERSTANDING YOUR BENEFITS - Hospital + Surgery: Hospital Admission & Hospital ICU Admission benefits are not payable on the same day. Premium will be waived if you are hospitalized for more than 30 days. Hospital admission or confinement benefits are not payable for a newborn unless the child is admitted to the Neonatal ICU. Hospital/ICU confinement benefits are not payable on the same day as Hospital/ICU admission benefit. After initial enrollment, Hospital Indemnity coverage will continue as long as an insured is actively at work. We limit what we pay for vaginal and scheduled caesarian newborn delivery to 25% of the Inpatient Surgery benefit. Category 2 outpatient surgeries are paid at a higher benefit than category 1 outpatient surgeries based on the severity of the surgical procedure. For procedures not specifically listed in your certificate booklet, we will use the Current Procedural Terminology (CPT) Code provided by the Covered Person's Doctor and a current relative value scale to determine the category in which the procedure belongs.",
+    "sourceFile": "Supplemental/Hospital + Surgery Insurance (GAP).pdf"
+  },
+  {
+    "id": "supplemental-voluntary-life",
+    "category": "supplemental",
+    "name": "Voluntary Life Insurance",
+    "carrier": "Guardian",
+    "status": "current",
+    "effectiveThrough": null,
+    "summary": {
+      "howItWorks": "The foundation of a smart financial plan that helps protect you and those who depend on you. Affordable group rates. Flexibility to update your coverage as your life changes or take it with you if you change jobs or retire. (Up To $100,000 With No Medical Questions)",
+      "keyBenefitAmounts": "Employee up to $100,000 Guarantee Issue / Spouse $25,000 or $50,000 / Child $10,000"
+    },
+    "lines": [
+      {
+        "label": "Benefit Amount(s)",
+        "value": "$20,000 increments to a maximum of $100,000 Guarantee Issue.",
+        "note": null
+      },
+      {
+        "label": "Accidental Death and Dismemberment",
+        "value": "Employee, Spouse & Child(ren) coverage. Maximum 1 times life amount.",
+        "note": null
+      },
+      {
+        "label": "Spouse Benefit",
+        "value": "$25,000, $50,000 (elect one option)",
+        "note": "Amount is limited to 50% of employee's benefit. See Cost Illustration page for details. Spouse coverage terminates at age 70."
+      },
+      {
+        "label": "Child Benefit",
+        "value": "$10,000",
+        "note": "Your dependent children age 14 days to 26 years. Subject to state limits. Amount is limited to 50% of employee's benefit. See Cost Illustration page for details."
+      },
+      {
+        "label": "Guarantee Issue - Employee",
+        "value": "$100,000",
+        "note": "You are not required to answer health questions to qualify for coverage up to and including the specified amount, when you sign up for coverage during the initial enrollment period."
+      },
+      {
+        "label": "Guarantee Issue - Spouse",
+        "value": "$50,000",
+        "note": null
+      },
+      {
+        "label": "Guarantee Issue - Dependent Children",
+        "value": "$10,000",
+        "note": null
+      },
+      {
+        "label": "Premiums",
+        "value": "Increase on plan anniversary after you enter next five-year age group",
+        "note": null
+      },
+      {
+        "label": "Conversion",
+        "value": "Yes, with restrictions; see certificate of benefits",
+        "note": "Allows you to continue your coverage after your group plan has terminated."
+      },
+      {
+        "label": "Waiver of Premiums",
+        "value": "For employees disabled prior to age 60, with premiums waived until age 65, if conditions met",
+        "note": "Premium will not need to be paid if you are totally disabled."
+      },
+      {
+        "label": "Benefit Reductions",
+        "value": "35% at age 65, 60% at age 70, 75% at age 75, 85% at age 80",
+        "note": "Benefits are reduced by a certain percentage as an employee ages."
+      },
+      {
+        "label": "Annual Election Option",
+        "value": "Allows employees to step up to an amount of up to $50,000, up to the Guarantee Issue amount, without a medical exam when they re-enroll.",
+        "note": null
+      }
+    ],
+    "definitions": [],
+    "notes": "Subject to coverage limits. Spouse coverage terminates at age 70. || LIMITATIONS & EXCLUSIONS: You must be working full-time on the effective date of your coverage; otherwise, your coverage becomes effective after you have completed a specific waiting period. Employees must be legally working in the United States in order to be eligible for coverage. Underwriting must approve coverage for employees on temporary assignment: (a) exceeding one year; or (b) in an area under travel warning by the US Department of State. Subject to state specific variations. Evidence of Insurability is required on all late enrollees. Please refer to certificate of coverage for full plan description. Dependent life insurance will not take effect if a dependent, other than a newborn, is confined to the hospital or other health care facility or is unable to perform the normal activities of someone of like age and sex. We pay no benefits if the insured's death is due to suicide within two years from the insured's original effective date. This two year limitation also applies to any increase in benefit. This exclusion may vary according to state law. Late entrants and benefit increases require underwriting approval. Guarantee Issue/Conditional Issue amounts may vary based on age and case size. See your Plan Administrator for details. For AD&D: We pay no benefits for any loss caused: by willful self-injury; sickness, disease or medical treatment; by participating in a civil disorder or committing a felony; Traveling on any type of aircraft while having duties on that aircraft; by declared or undeclared act of war or armed aggression; while a member of any armed force (May vary by state); while driving a motor vehicle without a current, valid driver's license; by legal intoxication; or by voluntarily using a non-prescription controlled substance. Contract #GP-1-R-ADCL1-00 et al. We won't pay more than 100% of the Insurance amount for all losses due to the same accident, except as stated. || WillPrep Services: Special bonus for participants in voluntary life plan. Your employer has worked to make WillPrep Services available to eligible members with Voluntary Life plans. WillPrep Services offer support and guidance including online planning documents, a resource library and access to professionals for Advanced Healthcare Directives, Estate Taxes, Executors & Probate, Financial Power of Attorney, Guardianship and Conservatorship, Healthcare Power of Attorney, Wills and Living Wills, Trusts, and a Resource Library. || Please note: This communication is intended to provide you with highlights of our benefits program. It is not intended to address all details. Actual benefit coverage is specified in The Plan Documents. In the event of any differences between this communication and the Plan Documents, the Plan Documents will govern.",
+    "sourceFile": "Supplemental/Voluntary Life (Max 100k).pdf"
+  },
+  {
+    "id": "old-medical-basic-gold",
+    "category": "medical-legacy",
+    "name": "Basic Gold",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$1,000",
+      "deductibleFamily": "$2,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$6,000",
+      "oopMaxFamily": "$12,000",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$250 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$250 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$250 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$250 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "$15 Copay"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "$37.50 Copay"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$125 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$100 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$250 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Basic Gold.pdf"
+  },
+  {
+    "id": "old-medical-choice-gold",
+    "category": "medical-legacy",
+    "name": "Choice Gold",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$500",
+      "deductibleFamily": "$1,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$5,000",
+      "oopMaxFamily": "$10,000",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$35 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$200 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$200 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$200 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$200 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "$15 Copay"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "$37.50 Copay"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$100 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$150 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Choice Gold.pdf"
+  },
+  {
+    "id": "old-medical-classic-silver",
+    "category": "medical-legacy",
+    "name": "Classic Silver",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$4,000",
+      "deductibleFamily": "$8,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$8,150",
+      "oopMaxFamily": "$16,300",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$70 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$70 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$450 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$450 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$450 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$70 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$450 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$70 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "$15 Copay"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "$37.50 Copay"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$75 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$187.50 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$100 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$250 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Classic Silver.pdf"
+  },
+  {
+    "id": "old-medical-core-health",
+    "category": "medical-legacy",
+    "name": "Core Health",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$9,000",
+      "deductibleFamily": "$18,000",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$9,000",
+      "oopMaxFamily": "$18,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Primary Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Inpatient Hospital – Facility",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Outpatient Hospital – Facility / Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Emergency Room – Facility / Physician",
+        "value": "$250"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Generic Only – Generic",
+        "value": "No Charge"
+      },
+      {
+        "label": "Generic Only – Preferred Brand / Non-Preferred Brand",
+        "value": "$75 Copay / $100 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Core Health.pdf"
+  },
+  {
+    "id": "old-medical-deluxe-platinum",
+    "category": "medical-legacy",
+    "name": "Deluxe Platinum",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$100",
+      "deductibleFamily": "$200",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$3,000",
+      "oopMaxFamily": "$6,000",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$20 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$30 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$150 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$150 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$150 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$150 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$30 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$30 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$75 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$150 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Deluxe Platinum.pdf"
+  },
+  {
+    "id": "old-medical-elite-health",
+    "category": "medical-legacy",
+    "name": "Elite Health",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$1,000",
+      "deductibleFamily": "$2,000",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$1,000",
+      "oopMaxFamily": "$2,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Primary Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Inpatient Hospital – Facility",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Outpatient Hospital – Facility / Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Emergency Room – Facility / Physician",
+        "value": "$250"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Generic Only – Generic",
+        "value": "No Charge"
+      },
+      {
+        "label": "Generic Only – Preferred Brand / Non-Preferred Brand",
+        "value": "$75 Copay / $100 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Elite Health.pdf"
+  },
+  {
+    "id": "old-medical-enhanced-silver",
+    "category": "medical-legacy",
+    "name": "Enhanced Silver",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$3,000",
+      "deductibleFamily": "$6,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$7,900",
+      "oopMaxFamily": "$15,800",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$65 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$65 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$400 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$400 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$400 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$65 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$400 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$65 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "$15 Copay"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "$37.50 Covered"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$75 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$187.50 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$100 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$250 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Enhanced Silver.pdf"
+  },
+  {
+    "id": "old-medical-freedom-bronze",
+    "category": "medical-legacy",
+    "name": "Freedom Bronze",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$8,550",
+      "deductibleFamily": "$17,100",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$8,550",
+      "oopMaxFamily": "$17,100",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$35 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "MRI & Advanced Imaging **",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility ^",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Generic Only – Retail 30 Day Supply",
+        "value": "$10 Copay"
+      },
+      {
+        "label": "Generic Only – Mail Order 90 Day Supply",
+        "value": "$25 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible. Footnote markers ** and ^ appear next to MRI & Advanced Imaging and Outpatient Facility rows on the source PDF, but no corresponding footnote text was printed on the page.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Bronze.pdf"
+  },
+  {
+    "id": "old-medical-freedom-gold",
+    "category": "medical-legacy",
+    "name": "Freedom Gold",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$500",
+      "deductibleFamily": "$1,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$5,000",
+      "oopMaxFamily": "$10,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$35 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "MRI & Advanced Imaging",
+        "value": "$200 Copay / Procedure"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$200 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$200 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$200 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$200 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Generic Only – Retail 30 Day Supply",
+        "value": "$10 Copay"
+      },
+      {
+        "label": "Generic Only – Mail Order 90 Day Supply",
+        "value": "$25 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Gold.pdf"
+  },
+  {
+    "id": "old-medical-freedom-platinum",
+    "category": "medical-legacy",
+    "name": "Freedom Platinum",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$100",
+      "deductibleFamily": "$200",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$3,000",
+      "oopMaxFamily": "$6,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$20 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$30 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "MRI & Advanced Imaging",
+        "value": "$150 Copay / Procedure"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$150 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$150 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$150 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$150 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$30 Copay"
+      },
+      {
+        "label": "Generic Only – Retail 30 Day Supply",
+        "value": "$10 Copay"
+      },
+      {
+        "label": "Generic Only – Mail Order 90 Day Supply",
+        "value": "$25 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Platinum.pdf"
+  },
+  {
+    "id": "old-medical-freedom-silver",
+    "category": "medical-legacy",
+    "name": "Freedom Silver",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$2,000",
+      "deductibleFamily": "$4,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$6,350",
+      "oopMaxFamily": "$12,700",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "MRI & Advanced Imaging",
+        "value": "$300 Copay / Procedure"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$300 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$300 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$300 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$300 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Generic Only – Retail 30 Day Supply",
+        "value": "$10 Copay"
+      },
+      {
+        "label": "Generic Only – Mail Order 90 Day Supply",
+        "value": "$25 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Freedom Silver.pdf"
+  },
+  {
+    "id": "old-medical-preferred-silver",
+    "category": "medical-legacy",
+    "name": "Preferred Silver",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$2,000",
+      "deductibleFamily": "$4,000",
+      "coinsurance": "20%",
+      "oopMaxIndividual": "$6,350",
+      "oopMaxFamily": "$12,700",
+      "planType": null
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$40 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "$300 Copay / Day"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "$300 Copay / Procedure"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$300 Copay"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "$300 Copay / Day"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% Covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "$15 Copay"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "$37.50 Covered"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "$60 Copay"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "$150 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "$100 Copay"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "$250 Copay"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Preferred Silver.pdf"
+  },
+  {
+    "id": "old-medical-premier-health",
+    "category": "medical-legacy",
+    "name": "Premier Health",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$3,000",
+      "deductibleFamily": "$6,000",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$3,000",
+      "oopMaxFamily": "$6,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Primary Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Inpatient Hospital – Facility",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Outpatient Hospital – Facility / Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Emergency Room – Facility / Physician",
+        "value": "$250"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Generic Only – Generic",
+        "value": "No Charge"
+      },
+      {
+        "label": "Generic Only – Preferred Brand / Non-Preferred Brand",
+        "value": "$75 Copay / $100 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Premier Health.pdf"
+  },
+  {
+    "id": "old-medical-saver-hsa",
+    "category": "medical-legacy",
+    "name": "Saver HSA",
+    "carrier": null,
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$6,450",
+      "deductibleFamily": "$12,900",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$6,450",
+      "oopMaxFamily": "$12,900",
+      "planType": "HSA"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "100% covered"
+      },
+      {
+        "label": "Primary Services",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: Days 1-5",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Facility: After Day 5",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Facility",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Outpatient Hospital – Physician",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Emergency Room – Physician",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – Days 1-5",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Facility – After day 5",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient Physician",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Generic – Retail 30 Day Supply",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Generic – Mail Order 90 Day Supply",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Preferred brand – Retail 30 Day Supply",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Preferred brand – Mail Order 90 Day Supply",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Non-preferred brand – Retail 30 Day Supply",
+        "value": "100% covered*"
+      },
+      {
+        "label": "Non-preferred brand – Mail Order 90 Day Supply",
+        "value": "100% covered*"
+      }
+    ],
+    "notes": "This serves as a summary of your benefit plan only. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusive provisions. The prescription drug benefit is managed by MedOne and covers both brand name drugs and generic drugs. Generic drugs have the same active-ingredient formula as a brand name drug. Generic drugs usually cost less than brand name drugs and are rated by the Food and Drug Administration (FDA) to be as safe and effective as brand name drugs. The prescription drug benefit does not cover specialty drugs. See attached for details on your prescription drug benefit. *After deductible",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Saver HSA.pdf"
+  },
+  {
+    "id": "old-medical-select-health",
+    "category": "medical-legacy",
+    "name": "Select Health",
+    "carrier": "Cobalt",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$5,000",
+      "deductibleFamily": "$10,000",
+      "coinsurance": "0%",
+      "oopMaxIndividual": "$5,000",
+      "oopMaxFamily": "$10,000",
+      "planType": "RBP"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Primary Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "No Charge"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Inpatient Hospital – Facility",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Inpatient Hospital – Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Outpatient Hospital – Facility / Physician",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Emergency Room – Facility / Physician",
+        "value": "$250"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "No Charge After Deductible"
+      },
+      {
+        "label": "Generic Only – Generic",
+        "value": "No Charge"
+      },
+      {
+        "label": "Generic Only – Preferred Brand / Non-Preferred Brand",
+        "value": "$75 Copay / $100 Copay"
+      }
+    ],
+    "notes": "The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Select Health.pdf"
+  }
+]
