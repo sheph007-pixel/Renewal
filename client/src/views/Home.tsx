@@ -182,7 +182,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     display: "block",
                     height: "100%",
                     boxSizing: "border-box",
-                    padding: "12px 13px 11px",
+                    padding: "11px 10px 10px",
                     borderRadius: 8,
                     background: C.zebra,
                     border: `1px solid ${C.hairline}`,
@@ -190,14 +190,23 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
                     cursor: "pointer",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                  {/* The title never wraps - a long one (e.g. "Explore Supplemental
+                      Package") gets an ellipsis instead of breaking the row's height,
+                      so all 4 titles read on one line at any normal width. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, minWidth: 0 }}>
                     <span
                       aria-hidden="true"
-                      style={{ flex: "none", width: 20, height: 20, borderRadius: 10, background: C.blueTint, color: C.blueInk, fontSize: 11.5, fontWeight: 700, display: "grid", placeItems: "center" }}
+                      style={{ flex: "none", width: 18, height: 18, borderRadius: 9, background: C.blueTint, color: C.blueInk, fontSize: 10.5, fontWeight: 700, display: "grid", placeItems: "center" }}
                     >
                       {i + 1}
                     </span>
-                    <span className="cta" style={{ ...ctaLink, fontSize: 13.5, lineHeight: 1.3 }}>{s.title}</span>
+                    <span
+                      className="cta"
+                      title={s.title}
+                      style={{ ...ctaLink, fontSize: 12.5, lineHeight: 1.3, letterSpacing: "-0.1px", minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
+                      {s.title}
+                    </span>
                   </div>
                   <div style={{ fontSize: 12.5, lineHeight: 1.5, color: C.body, textWrap: "pretty" as const }}>{s.body}</div>
                 </Link>
