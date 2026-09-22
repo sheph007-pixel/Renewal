@@ -6,17 +6,6 @@ import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignu
 import TeamCard from "@/views/TeamCard";
 import { useNarrow } from "@/lib/narrow";
 
-/** What Kennion coordinates once the client's selections are final, in the order it happens. */
-const HANDLED = [
-  "Employee Navigator setup",
-  "carrier implementation",
-  "employee communications",
-  "open enrollment",
-  "enrollment support",
-  "final enrollment",
-  "first-month premium setup",
-];
-
 interface Props {
   groupName: string;
   optionsHref: string;
@@ -207,12 +196,12 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
             <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest</h3>
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
-              Once your selections are finalized, Kennion coordinates {HANDLED.slice(0, -1).join(", ")} and {HANDLED[HANDLED.length - 1]}.
+              Once your selections are finalized, Kennion coordinates Employee Navigator setup, carrier implementation, employee communications, open enrollment, and first-month premium setup.
             </p>
             <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
-              It doesn&rsquo;t stop at renewal - your Kennion team stays on as a year-round partner, with proactive support from our brokerage team and ongoing help for your employees that lightens HR&rsquo;s workload and improves their experience.
+              Your support continues year-round, with a dedicated team to help employees navigate their benefits and lighten HR&rsquo;s workload.
             </p>
-            <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>We help you build the right strategy. Then we handle the rest.</p>
+            <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>The right benefits for your team. Support every step of the way.</p>
           </div>
         </div>
       </div>
