@@ -462,7 +462,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             {manager?.name && <ManagerRow manager={manager} compact />}
             <Link
               href={resourcesHref}
-              title="Resources"
+              title="Carrier/TPA Resources"
               aria-current={current === "resources" ? "page" : undefined}
               style={{ display: "grid", placeItems: "center", padding: 6, color: current === "resources" ? "#fff" : C.railMuted }}
             >
@@ -483,7 +483,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             {manager?.name && <ManagerRow manager={manager} />}
 
             <div className="rail-links" style={{ padding: "6px 8px 8px", borderTop: `1px solid ${C.railLine}` }}>
-              <LinkRow icon={<ResourcesIcon />} label="Resources" href={resourcesHref} inApp on={current === "resources"} />
+              <LinkRow icon={<ResourcesIcon />} label="Carrier/TPA Resources" href={resourcesHref} inApp on={current === "resources"} />
               <LinkRow icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external />
               <LinkRow icon={<TicketIcon />} label="Support Ticket" onClick={() => setTicket(true)} />
               <LinkRow icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
