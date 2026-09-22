@@ -40,7 +40,7 @@ export const DEFAULT_PLAYBOOK = {
   rules: [
     item("The new program is a move to new carriers, not a renewal of the old plan: compare total cost and plan design side by side, and never describe it as a percentage increase or decrease on the current rates."),
     item("When comparing level funded to fully insured, always mention the potential year-end refund of unused claims funding on a level-funded plan, and the fixed, no-surprises premium on a fully insured one."),
-    item("A quote on file is the carrier's number; anything not quoted is unknown - say so plainly."),
+    item("For Medical: a quote on file is the carrier's number; anything not quoted for this group is unknown - say so plainly. This does not apply to the Supplemental Package (dental, vision, life, accident, critical illness, cancer, hospital indemnity, short term disability): those rates are standardized and identical for every group in the Kennion Program, always on file, and never a per-group quote - never tell a client a supplemental product isn't available or suggest getting pricing for one."),
     item("Kennion binds coverage, not the assistant. Only when the client says they are ready to move, point them to Sign Up."),
   ],
   facts: [
@@ -353,7 +353,35 @@ function benefitSummariesText(benefitSummaries, g) {
   return out.join("\n");
 }
 
-export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal, planDesigns, census, benefitSummaries }) {
+/**
+ * The Supplemental Package rate grid, from server/data/supplemental-rates.json -
+ * the same source client/src/lib/supplemental.ts reads for the Supplemental
+ * Package page, so these figures can never drift from what a client sees
+ * there. Every group in the Kennion Program gets this identical lineup at
+ * these identical monthly rates - unlike Medical, which is quoted per group,
+ * nothing here is ever "not on file" or waiting on a carrier's number.
+ */
+function supplementalRatesText(rates) {
+  if (!rates || !Array.isArray(rates.sections) || !rates.sections.length) return null;
+  const out = [`\n## Supplemental Package - the same rates for every group, always on file`];
+  out.push(
+    `This is the Kennion Program's standing supplemental lineup - dental, vision, life, accident, critical illness, cancer, hospital indemnity and short term disability. Every group gets the identical products at the identical monthly rates below; this is never a per-group quote, so never say a product "isn't on file" or suggest getting a quote for one of these - point to the figure instead. Rates effective ${rates.effective}, shown MONTHLY, by tier (${(rates.tiers || []).map((t) => t.label).join(" / ")}).`,
+  );
+  for (const s of rates.sections) {
+    const byAge = /^(under age|age )/i.test(s.rows[0]?.plan || "");
+    out.push(`\n### ${s.product} (${s.carrier})${byAge ? " - rate by age band" : ""}`);
+    for (const row of s.rows) {
+      const cells = (rates.tiers || [])
+        .filter((t) => row[t.key] != null)
+        .map((t) => `${t.label} ${money(row[t.key])}`);
+      out.push(`- ${row.plan}: ${cells.join(", ")}`);
+    }
+  }
+  if (rates.footnote) out.push(`\nNote: ${rates.footnote}`);
+  return out.join("\n");
+}
+
+export function describeGroup({ group, proposals, funding, manager, splits, signup, renewal, planDesigns, census, benefitSummaries, supplementalRates }) {
   const g = group;
   const out = [];
   out.push(`# ${g.name}`);
@@ -417,6 +445,9 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
     out.push(`\n## Supplemental benefits in force`);
     for (const l of g.lines) out.push(`- ${l.benefit}: ${l.carrier} ${l.plan} - ${l.enrolled} enrolled, ${money(l.monthly)}/month`);
   }
+
+  const ratesText = supplementalRatesText(supplementalRates);
+  if (ratesText) out.push(ratesText);
 
   const benefitText = benefitSummariesText(benefitSummaries, g);
   if (benefitText) out.push(benefitText);
