@@ -96,8 +96,8 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
   const year = effectiveYear(eff);
 
   const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Review Medical Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
-    { title: "Review Supplemental", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
+    { title: "Compare Medical Plans", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
+    { title: "Explore Supplemental Package", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
     { title: "Build Your Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
     {
       title: "Sign Up",
@@ -162,15 +162,20 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
             }}
           >
             {steps.map((s, i) => (
-              <li key={s.title} style={{ minWidth: 0 }}>
+              <li key={s.title} style={{ minWidth: 0, height: "100%" }}>
                 {/* The whole card is the link, not just the title - .rowlink darkens
                     the background on hover so the card reads as clickable wherever
-                    the pointer lands on it, not just over the two words of the title. */}
+                    the pointer lands on it, not just over the two words of the title.
+                    height: 100% + box-sizing keep all 4 cards the same height
+                    regardless of how much their own body copy wraps - the grid row
+                    already stretches the <li>, this just makes the link fill it. */}
                 <Link
                   className="rowlink card-link"
                   href={s.href}
                   style={{
                     display: "block",
+                    height: "100%",
+                    boxSizing: "border-box",
                     padding: "12px 13px 11px",
                     borderRadius: 8,
                     background: C.zebra,
