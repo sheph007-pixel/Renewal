@@ -392,6 +392,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           if (sort.key === "ded") return dedOf(p) ?? Infinity;
           if (sort.key === "oop") return p.oop ?? Infinity;
           if (sort.key === "er") return split(p)?.er ?? Infinity;
+          if (sort.key === "ee") return p.rates.EE ?? Infinity;
           return p.monthly ?? Infinity;
         };
         const va = val(a);
@@ -809,6 +810,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   ["ded", "Deductible"],
                   ["oop", "OOP Max"],
                   ["er", "Your Company Pays"],
+                  ["ee", "Employee Only Rate"],
                   ["total", "Total Monthly Bill"],
                   [null, ""],
                   [null, ""],
@@ -835,7 +837,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // floored at 860px wide below), so a few extra pixels on
                     // the icon columns buys a better tap target there
                     // without touching the desktop layout at all.
-                    width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
+                    width: i === 9 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 9 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -844,6 +846,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     {h}
                     {k === "er" && (
                       <InfoTip text="You define your budget per plan in the setup process with Kennion. You control this amount. Employees pay the rest, pre-tax, through payroll deduction." color="rgba(255,255,255,0.85)" place="below" />
+                    )}
+                    {k === "ee" && (
+                      <InfoTip text="The plan's Employee Only Monthly Rate: what one employee-only enrollee costs before any employer contribution. This is the figure every carrier's quote sheet leads with, the same regardless of your workforce's actual tier mix - the standard way to compare plans apples to apples." color="rgba(255,255,255,0.85)" place="below" />
                     )}
                     {k === "total" && (
                       <InfoTip text={`The full monthly premium for your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: what your company pays plus what employees pay.`} color="rgba(255,255,255,0.85)" place="below" />
@@ -890,6 +895,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : "-"}
                   </td>
+                  <td style={numCell}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</td>
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "-" : money0(p.monthly)}
                   </td>
@@ -932,7 +938,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             })}
             {!list.length && (
               <tr>
-                <td colSpan={11} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
+                <td colSpan={12} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No Favorites Yet" : plans.length ? "No Plans Match These Filters" : "No Quoted Plans Yet"}</div>
                   <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
                     {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
