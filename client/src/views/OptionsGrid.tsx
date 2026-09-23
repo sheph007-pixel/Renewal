@@ -945,11 +945,14 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   // spells out its deductible and OOP max in the name itself)
                   // reads on one line - the five dollar columns after it hold
                   // short figures and give up the room for it.
-                  ["plan", "Plan", "left", 430],
+                  ["plan", "Plan", "left", 360],
                   ["ded", "Deductible", "right", 95],
                   ["oop", "OOP Max", "right", 90],
                   ["ee", "Employee Rate", "right", 120],
-                  ["er", "Employer Contribution", "right", 120],
+                  // "Employer Contribution" is the longest header on the
+                  // grid - it needs the extra width Plan gives up above to
+                  // read on one line like every other header here.
+                  ["er", "Employer Contribution", "right", 190],
                   ["total", "Monthly Bill", "right", 130],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
