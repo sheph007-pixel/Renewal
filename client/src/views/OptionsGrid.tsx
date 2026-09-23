@@ -579,8 +579,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           the card. Every dollar figure is a month at the group's own enrollment - 
           the column tooltips say so. */}
       <div className="panel" style={{ ...panel, padding: 0 }}>
-        {/* Employer Contribution: the grid card's top band - one line, Edit opens the four fields. */}
-        <div id="contribution" className="anchor noprint" style={{ background: C.band, borderBottom: `1px solid ${C.rule}`, borderRadius: "10px 10px 0 0" }}>
+        {/* Employer Contribution: the grid card's top band - one line, Edit opens the four fields.
+            A border of its own (not just the panel's), with the same left-accent "this
+            matters" treatment as Your Market Results, so it reads as its own callout
+            rather than blending into the grid below it. */}
+        <div id="contribution" className="anchor noprint" style={{ background: C.band, border: `1px solid ${C.blueEdge}`, borderLeft: `4px solid ${C.blue}`, borderRadius: "10px 10px 0 0" }}>
           <button
             onClick={() => setContribOpen((v) => !v)}
             aria-expanded={contribOpen}
@@ -598,7 +601,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 </Link>
                 {!contribOpen && ` · ${TIERS.map((t) => `${t.short} ${money0(applied[t.key] || 0)}`).join(" · ")}`}
               </span>
-              <span style={{ fontSize: 12.5, color: C.blue, fontWeight: 600 }}>{contribOpen ? "Collapse ▴" : "Edit ▾"}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.blueInk, background: C.blueTint, border: `1px solid ${C.blueEdge}`, borderRadius: 6, padding: "5px 12px", whiteSpace: "nowrap" }}>
+                {contribOpen ? "Collapse ▴" : "Edit ▾"}
+              </span>
             </span>
           </button>
           {contribOpen && (
