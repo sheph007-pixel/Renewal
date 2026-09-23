@@ -5,12 +5,25 @@
 // the model only chooses which plans to put next to each other.
 import PDFDocument from "pdfkit";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { networkLabel } from "./proposal-kind.js";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// The same benefit summaries the pages and the assistant read - here for the
+// one figure a "Today (2026)" row needs that the census itself never carries:
+// deductible and OOP max on the plan the group is in now.
+const LEGACY_DESIGNS = JSON.parse(fs.readFileSync(path.join(__dirname, "data", "benefit-summaries.json"), "utf8")).filter((d) => d.category === "medical-legacy");
+const normPlan = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** The legacy design a current plan's name is - "EBPA Deluxe Platinum" carries "Deluxe Platinum" - or null when none matches. */
+function legacyDesignFor(planName) {
+  const n = normPlan(planName);
+  if (!n) return null;
+  return LEGACY_DESIGNS.find((d) => n.includes(normPlan(d.name))) || null;
+}
 // Google Sans Flex, embedded so every PDF carries its own glyphs rather than
 // falling back to whatever the reader's OS has installed. Static Regular/Bold
 // instances, cut from Google's variable font (it has no italic axis - places
@@ -89,14 +102,15 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
         er = round2(er);
         ee = round2(ee);
       }
+      const legacy = legacyDesignFor(p.plan);
       rows.push({
         section: "Today (2026)",
         name: p.plan,
         carrier: p.tpa || g.tpa || "-",
         funding: "In force",
         network: "-",
-        deductible: "-",
-        oopMax: "-",
+        deductible: legacy?.summary.deductibleIndividual || "-",
+        oopMax: legacy?.summary.oopMaxIndividual || "-",
         rates,
         enrolled: p.enrolled,
         monthly: p.monthly ?? null,
