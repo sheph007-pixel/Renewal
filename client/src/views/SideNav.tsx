@@ -125,6 +125,16 @@ function TicketIcon() {
   );
 }
 
+function MoreIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}>
+      <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function LogOutIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" {...stroke}>
@@ -151,17 +161,38 @@ export function monogram(name: string): string {
  * One row in the rail's footer: an icon, a label, an outbound arrow for links
  * that leave the site. `inApp` rows are pages rather than links out, so they
  * navigate through the router and go white when the page is the one showing.
+ * `theme="light"` is the same row on a white popup instead of the dark rail -
+ * the phone's More menu, which sits in its own card rather than on the rail.
  */
-function LinkRow({ icon, label, href, external, inApp, on, onClick }: { icon: ReactNode; label: string; href?: string; external?: boolean; inApp?: boolean; on?: boolean; onClick?: () => void }) {
+function LinkRow({
+  icon,
+  label,
+  href,
+  external,
+  inApp,
+  on,
+  onClick,
+  theme = "dark",
+}: {
+  icon: ReactNode;
+  label: string;
+  href?: string;
+  external?: boolean;
+  inApp?: boolean;
+  on?: boolean;
+  onClick?: () => void;
+  theme?: "dark" | "light";
+}) {
+  const light = theme === "light";
   const style = {
     display: "flex",
     alignItems: "center",
     gap: 10,
-    padding: "6px 10px",
+    padding: light ? "9px 10px" : "6px 10px",
     borderRadius: 7,
-    fontSize: 12.5,
+    fontSize: light ? 13.5 : 12.5,
     fontWeight: on ? 600 : 500,
-    color: on ? "#fff" : C.railInk,
+    color: light ? (on ? C.blueInk : C.ink) : on ? "#fff" : C.railInk,
     textDecoration: "none",
     background: "none",
     border: "none",
@@ -171,12 +202,12 @@ function LinkRow({ icon, label, href, external, inApp, on, onClick }: { icon: Re
   };
   const inner = (
     <>
-      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", color: on ? "#fff" : C.railMuted }}>
+      <span aria-hidden style={{ display: "grid", placeItems: "center", flex: "none", color: light ? (on ? C.blueInk : C.faint) : on ? "#fff" : C.railMuted }}>
         {icon}
       </span>
       <span style={{ flex: 1 }}>{label}</span>
       {external && (
-        <span aria-hidden style={{ color: C.railMuted, fontSize: 11 }}>
+        <span aria-hidden style={{ color: light ? C.faint : C.railMuted, fontSize: 11 }}>
           &#8599;
         </span>
       )}
@@ -184,20 +215,20 @@ function LinkRow({ icon, label, href, external, inApp, on, onClick }: { icon: Re
   );
   if (href && inApp) {
     return (
-      <Link className="rail-row" href={href} aria-current={on ? "page" : undefined} style={style}>
+      <Link className={light ? undefined : "rail-row"} href={href} aria-current={on ? "page" : undefined} style={style} onClick={onClick}>
         {inner}
       </Link>
     );
   }
   if (href) {
     return (
-      <a className="rail-row" href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} style={style}>
+      <a className={light ? undefined : "rail-row"} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined} style={style} onClick={onClick}>
         {inner}
       </a>
     );
   }
   return (
-    <button className="rail-row" onClick={onClick} style={style}>
+    <button className={light ? undefined : "rail-row"} onClick={onClick} style={style}>
       {inner}
     </button>
   );
@@ -329,6 +360,25 @@ function ManagerRow({ manager, compact }: { manager: AccountManager; compact?: b
  */
 export default function SideNav({ items, current, collapsed, onToggle, homeHref, resourcesHref, groupName, manager, onExit }: Props) {
   const [ticket, setTicket] = useState(false);
+  const narrow = useNarrow();
+  // On a phone the rail is a compact strip, not a column, so Resources,
+  // Employee Navigator, Support Ticket and Log Out move behind one More
+  // button rather than wrapping across the footer.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const away = (e: MouseEvent) => {
+      if (moreBox.current && !moreBox.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMoreOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [moreOpen]);
   const toggle = (
     <button
       className="collapse-btn"
@@ -364,7 +414,7 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
         }}
       >
         {!collapsed && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
+          <div className="brand-logo-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 }}>
             <Link href={homeHref} aria-label="BenSync home" style={{ display: "block", lineHeight: 0 }}>
               <img src={BenSyncDark} alt="BenSync" style={{ height: 18, display: "block" }} />
             </Link>
@@ -477,6 +527,54 @@ export default function SideNav({ items, current, collapsed, onToggle, homeHref,
             <button onClick={onExit} title="Log Out" style={{ display: "grid", placeItems: "center", padding: 6, background: "none", border: "none", color: C.railMuted, cursor: "pointer" }}>
               <LogOutIcon />
             </button>
+          </div>
+        ) : narrow ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {manager?.name && <ManagerRow manager={manager} compact />}
+            <div ref={moreBox} style={{ position: "relative", marginLeft: "auto" }}>
+              <button
+                onClick={() => setMoreOpen((v) => !v)}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                aria-label="More"
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  minWidth: 44,
+                  minHeight: 44,
+                  padding: 6,
+                  borderRadius: 8,
+                  background: moreOpen ? C.railActive : "none",
+                  border: `1px solid ${C.railLine}`,
+                  color: C.railInk,
+                  cursor: "pointer",
+                }}
+              >
+                <MoreIcon />
+              </button>
+              {moreOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 6px)",
+                    width: 232,
+                    maxWidth: "calc(100vw - 24px)",
+                    padding: 6,
+                    borderRadius: 10,
+                    background: "#fff",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+                    zIndex: 20,
+                  }}
+                >
+                  <LinkRow theme="light" icon={<ResourcesIcon />} label="Carrier/TPA Resources" href={resourcesHref} inApp on={current === "resources"} onClick={() => setMoreOpen(false)} />
+                  <LinkRow theme="light" icon={<GridIcon />} label="Employee Navigator" href={NAVIGATOR_URL} external onClick={() => setMoreOpen(false)} />
+                  <LinkRow theme="light" icon={<TicketIcon />} label="Support Ticket" onClick={() => { setTicket(true); setMoreOpen(false); }} />
+                  <LinkRow theme="light" icon={<LogOutIcon />} label="Log Out" onClick={onExit} />
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <>
