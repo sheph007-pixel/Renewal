@@ -106,7 +106,6 @@ function Head({
         background: C.headerBg,
         color: "#fff",
         borderBottom: "none",
-        borderRight: "1px solid rgba(255,255,255,0.12)",
       }}
     >
       <button
@@ -159,9 +158,10 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
   const by = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== "plan" && key !== "carrier" }));
 
-  // Excel-style grid: a thin light line around every cell, plain white rows - 
-  // not alternating bands, which read as color-coding when there is none here.
-  const cell = { padding: "10px 10px", border: `1px solid ${C.rule}`, fontSize: 14, background: C.card };
+  // The same hairline-row grid as the Medical Plans page - a thin line under
+  // each row, no vertical rules between columns, plain white rows (not
+  // alternating bands, which read as color-coding when there is none here).
+  const cell = { padding: "10px 10px", borderBottom: `1px solid ${C.hairline}`, fontSize: 14, background: C.card };
   const rateCell = { ...cell, textAlign: "right" as const, ...num };
 
   // Every section header button - View Invoice, Employee Navigator - reads
@@ -251,14 +251,14 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
           </tbody>
           <tfoot>
             <tr style={{ background: C.hairline }}>
-              <td style={{ padding: "12px 10px 12px 14px", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}` }}>
+              <td style={{ padding: "12px 10px 12px 14px", fontSize: 14, fontWeight: 600, color: C.ink, borderTop: `1px solid ${C.rule}` }}>
                 {rows.length === 1 ? "Total" : `Total - ${rows.length} plans`}
               </td>
-              <td style={{ border: `1px solid ${C.rule}` }} />
-              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.ink, border: `1px solid ${C.rule}`, ...num }}>
+              <td style={{ borderTop: `1px solid ${C.rule}` }} />
+              <td style={{ padding: "12px 10px", textAlign: "right", fontSize: 14, fontWeight: 600, color: C.ink, borderTop: `1px solid ${C.rule}`, ...num }}>
                 {enrolled}
               </td>
-              <td colSpan={TIERS.length} style={{ border: `1px solid ${C.rule}` }} />
+              <td colSpan={TIERS.length} style={{ borderTop: `1px solid ${C.rule}` }} />
               <td
                 style={{
                   padding: "12px 14px 12px 10px",
@@ -266,7 +266,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
                   fontSize: 16,
                   fontWeight: 600,
                   color: C.ink,
-                  border: `1px solid ${C.rule}`,
+                  borderTop: `1px solid ${C.rule}`,
                   ...num,
                 }}
               >
@@ -281,7 +281,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
       {(() => {
         const other = otherBenefits(g, data.invoice);
         const known = other.some((b) => b.source);
-        const hcell = { ...th, background: C.headerBg, color: "#fff", borderBottom: "none", borderRight: "1px solid rgba(255,255,255,0.12)", padding: "12px 10px" };
+        const hcell = { ...th, background: C.headerBg, color: "#fff", borderBottom: "none", padding: "12px 10px" };
         return (
           <>
             <div className="anchor" style={{ ...sectionHead, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -304,7 +304,7 @@ export default function Current({ data, overrides, g, rows, totals, invoiceHref 
                     <tr>
                       <th style={{ ...hcell, textAlign: "left", padding: "11px 10px 11px 14px" }}>Benefit</th>
                       <th style={{ ...hcell, textAlign: "center", width: 120 }}>Offered</th>
-                      <th style={{ ...hcell, textAlign: "right", width: 160, borderRight: "none", padding: "11px 14px 11px 10px" }}>Enrolled</th>
+                      <th style={{ ...hcell, textAlign: "right", width: 160, padding: "11px 14px 11px 10px" }}>Enrolled</th>
                     </tr>
                   </thead>
                   <tbody>
