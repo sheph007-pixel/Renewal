@@ -221,7 +221,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
         <tbody>
           {benefits.map(([label, value]) => {
             // Lookups sit on their row: the directory on Network, the formulary on Pharmacy.
-            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find a doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
+            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find A Doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>
@@ -337,7 +337,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
         <tbody>
           {benefits.map(([label, value]) => {
             // Lookups sit on their row: the directory on Network, the formulary on Pharmacy.
-            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find a doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
+            const link = label === "Network" && m.links.directory ? { ...m.links.directory, text: "Find A Doctor" } : label === "Pharmacy (PBM)" && m.links.formulary ? { ...m.links.formulary, text: "Formulary" } : null;
             return (
               <tr key={label}>
                 <td style={{ padding: "4px 8px 4px 0", color: C.muted, verticalAlign: "top", whiteSpace: "nowrap" }}>{label}</td>

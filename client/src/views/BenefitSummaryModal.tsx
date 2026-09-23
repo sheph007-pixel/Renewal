@@ -76,7 +76,7 @@ export default function BenefitSummaryModal({ entry, onClose }: { entry: Benefit
           style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: C.blueInk, background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
         >
           <span style={{ display: "inline-block", transform: showDetail ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>›</span>
-          {showDetail ? "Hide full benefit detail" : "See full benefit detail"}
+          {showDetail ? "Hide Full Benefit Detail" : "See Full Benefit Detail"}
         </button>
 
         {showDetail && (
