@@ -195,13 +195,13 @@ export function filterChips(f: PlanFilters): FilterChip[] {
 
 // ------------------------------------------------------------------- sort
 
-export type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "total";
+export type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "ee" | "total";
 export interface SortState {
   key: SortKey;
   dir: 1 | -1;
 }
-/** Lowest Total Monthly Bill first: the order the grid has always opened in. */
-export const DEFAULT_SORT: SortState = { key: "total", dir: 1 };
+/** Lowest Employee Only rate first: the one figure every carrier's quote leads with, so it's what a broker scans for first. */
+export const DEFAULT_SORT: SortState = { key: "ee", dir: 1 };
 
 const SORT_NAMES: Record<SortKey, string> = {
   option: "Option",
@@ -211,6 +211,7 @@ const SORT_NAMES: Record<SortKey, string> = {
   ded: "Deductible",
   oop: "OOP max",
   er: "Your company pays",
+  ee: "Employee only rate",
   total: "Monthly bill",
 };
 const TEXT_SORTS: SortKey[] = ["option", "carrier", "network", "plan"];
@@ -224,6 +225,8 @@ export function sortLabel(s: SortState): string {
 
 /** What the Sort by dropdown offers; a column sorted from the table header outside this list still shows as the current choice. */
 export const SORT_CHOICES: SortState[] = [
+  { key: "ee", dir: 1 },
+  { key: "ee", dir: -1 },
   { key: "total", dir: 1 },
   { key: "total", dir: -1 },
   { key: "ded", dir: 1 },
