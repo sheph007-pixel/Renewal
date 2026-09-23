@@ -3638,5 +3638,117 @@
     ],
     "notes": "Administered by HealthEZ and/or EBPA (confirmed from Kennion's own group records) - not Cobalt. The member is free to see any provider of their choice anywhere in the US for full coverage. There is no \"network\". Members will be responsible for normal copays, and out-of-pocket expenses. The plan will protect members from a balance bill from a provider for any amount in excess of the allowable reimbursement. Allowable reimbursements are based on a multiple of Medicare. Please refer to your Summary Plan Description for actual coverage, limitation, and exclusion provisions.",
     "sourceFile": "Old Medical (Ending 12-31-26)/Select Health.pdf"
+  },
+  {
+    "id": "old-medical-value-essential",
+    "category": "medical-legacy",
+    "name": "Value Essential",
+    "carrier": "HealthEZ (EBPA)",
+    "status": "legacy",
+    "effectiveThrough": "2026-12-31",
+    "summary": {
+      "deductibleIndividual": "$0",
+      "deductibleFamily": "$0",
+      "coinsurance": null,
+      "oopMaxIndividual": "None",
+      "oopMaxFamily": "None",
+      "planType": "MEC"
+    },
+    "lines": [
+      {
+        "label": "Preventive Care",
+        "value": "No Charge"
+      },
+      {
+        "label": "Primary Services",
+        "value": "$25 Copay"
+      },
+      {
+        "label": "Specialist Services",
+        "value": "$50 Copay"
+      },
+      {
+        "label": "Diagnostic Test (X-Ray, Blood Work)",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Imaging (CT/PET Scans, MRIs)",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Generic Drugs – Retail 30 Day Supply",
+        "value": "$10 Copay"
+      },
+      {
+        "label": "Generic Drugs – Mail Order 90 Day Supply",
+        "value": "$20 Copay"
+      },
+      {
+        "label": "Preferred / Non-Preferred Brand Drugs",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Specialty Drugs",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Outpatient Surgery – Facility / Physician",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Emergency Room – Facility",
+        "value": "$350 Copay"
+      },
+      {
+        "label": "Emergency Medical Transportation",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Urgent Care",
+        "value": "$75 Copay"
+      },
+      {
+        "label": "Inpatient Hospital – Facility / Physician",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Inpatient",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Mental Health/Chemical Dependency – Outpatient",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Maternity – Office Visits",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Maternity – Childbirth/Delivery",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Home Health Care",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Rehabilitation/Habilitation Services",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Skilled Nursing Care",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Durable Medical Equipment",
+        "value": "Not Covered"
+      },
+      {
+        "label": "Hospice Services",
+        "value": "Not Covered"
+      }
+    ],
+    "notes": "Administered by EBPA (confirmed from Kennion's own group records). Value Essential is a limited-benefit Minimum Essential Coverage (MEC) plan: it meets the ACA's Minimum Essential Coverage requirement but does not meet Minimum Value Standards, so members may still qualify for a premium tax credit through the Marketplace. No deductible, no out-of-pocket limit and no provider network, but coverage is narrow - diagnostic tests, imaging, hospital facility/physician care, outpatient surgery, mental health/substance abuse care and maternity are not covered. Please refer to your Summary of Benefits and Coverage for actual coverage, limitation, and exclusion provisions.",
+    "sourceFile": "Old Medical (Ending 12-31-26)/Value Essential.pdf"
   }
 ]
