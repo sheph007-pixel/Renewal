@@ -171,37 +171,47 @@ button,
     position: static;
     width: auto;
     height: auto;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-    padding: 8px 10px;
+    flex-direction: column;
+    padding: 0;
+    /* The desktop rail scrolls internally (overflow-y: auto above); here it
+       is a normal, page-scrolling block, and that same overflow would clip
+       the More menu's dropdown, which hangs below the footer row. */
+    overflow: visible;
   }
-  .shell > .sidebar > .brand,
-  .shell > .sidebar > .rail-foot {
-    flex: 1 1 100%;
+  .shell > .sidebar > .brand {
+    padding: 8px 12px !important;
+    border-bottom: 0 !important;
   }
+  /* The BenSync wordmark repeats the page's own header below it - only the
+     client's own name (and the toggle, already hidden) earns the space. */
+  .shell > .sidebar .brand-logo-row {
+    display: none;
+  }
+  /* A slim, horizontally-scrolling strip of pills instead of a column each
+     page stacked full-width - the rail used to run 600px+ tall on a phone
+     before any page content showed. Tab order still runs left to right. */
   .shell > .sidebar > .rail-nav {
     display: flex;
-    flex: 1 1 100%;
     flex-direction: row !important;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 4px 0 !important;
+    flex-wrap: nowrap;
+    gap: 6px !important;
+    padding: 0 10px 8px !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   .shell > .sidebar > .rail-nav > a {
-    flex: 1 1 200px;
+    flex: 0 0 auto;
     /* A comfortable tap target: box-sizing is border-box site-wide, so this
        is the row's full height regardless of its own padding, and the
        row's existing flex + align-items: center keeps the label centred. */
     min-height: 44px;
+    padding: 0 14px !important;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.12);
   }
-  /* Nothing to divide once the pages sit in a wrapping row. */
+  /* Nothing to divide once the pages sit in a scrolling row. */
   .shell > .sidebar > .rail-nav > .rail-sep {
     display: none;
-  }
-  .shell > .sidebar > .brand {
-    border-bottom: 0 !important;
   }
   .shell > .sidebar .rail-brand {
     display: none;
@@ -209,31 +219,12 @@ button,
   .shell > .sidebar .collapse-btn {
     display: none !important;
   }
-  /* The foot becomes one compact line of contacts rather than a stack. */
+  /* The foot: the account manager, and one More button for everything else
+     that used to wrap across the bottom (Resources, Employee Navigator,
+     Support Ticket, Log Out). */
   .shell > .sidebar > .rail-foot {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 6px 16px;
-    padding: 8px 12px;
-  }
-  .shell > .sidebar .rail-links {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 4px 14px;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-  }
-  .shell > .sidebar .rail-links > div:first-child {
-    display: none;
-  }
-  .shell > .sidebar .rail-links > a,
-  .shell > .sidebar .rail-links > button {
-    width: auto;
-    padding: 0 !important;
-    font-size: 12.5px;
+    padding: 8px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
   .shell > .sidebar .rail-manager {
     margin: 0 !important;
@@ -246,9 +237,10 @@ button,
     margin-left: 0;
   }
   .shell > .main > .inner {
-    /* The chat launcher is fixed in this same corner (bottom: 22px, 50px
-       tall); give the last panel room so it never sits behind it. */
-    padding: 14px 14px 88px;
+    /* The chat launcher is fixed in this same corner (bottom: 16px, 50px
+       tall circle on a phone); give the last panel room so it never sits
+       behind it. */
+    padding: 14px 14px 82px;
   }
 }
 
@@ -483,9 +475,18 @@ button,
     height: 100vh;
     border-radius: 0;
   }
+  /* Icon-only circle instead of the desktop pill: smaller footprint, less of
+     whatever it happens to sit over while a short page is still scrolling. */
   .chat-fab {
     right: 16px;
     bottom: 16px;
+    min-width: 50px;
+    width: 50px;
+    padding: 0;
+    gap: 0;
+  }
+  .chat-fab-label {
+    display: none;
   }
   /* The open box fills the screen and has its own close button. */
   .chat-box + .chat-fab {
