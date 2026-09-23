@@ -511,6 +511,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
     </>
   );
 
+  // What a column header's hover/focus tooltip says, for the three whose
+  // meaning isn't obvious from the label alone - shown on the header itself
+  // rather than a standalone ⓘ icon beside it, which (with the sort arrow)
+  // was pushing these headers to three cramped lines.
+  const HEADER_INFO: Partial<Record<SortKey, string>> = {
+    er: "You define your budget per plan in the setup process with Kennion. You control this amount. Employees pay the rest, pre-tax, through payroll deduction.",
+    ee: "The plan's Employee Only Monthly Rate: what one employee-only enrollee costs before any employer contribution. This is the figure every carrier's quote sheet leads with, the same regardless of your workforce's actual tier mix - the standard way to compare plans apples to apples.",
+    total: `The full monthly premium for your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: what your company pays plus what employees pay.`,
+  };
+
   return (
     <div>
       {/* What came back from market, from every quoted plan - fixed 50% employer share, untouched by the controls above - and what to do next, with the assistant's recommendations beside it. */}
@@ -816,7 +826,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 <th
                   key={i}
                   onClick={k ? () => sortOn(k) : undefined}
-                  title={k ? "Sort by this column" : undefined}
+                  title={k ? (HEADER_INFO[k] ? `${HEADER_INFO[k]} Click to sort by this column.` : "Sort by this column") : undefined}
                   aria-sort={k && sort.key === k ? (sort.dir > 0 ? "ascending" : "descending") : undefined}
                   style={{
                     padding: "12px 10px 11px",
@@ -853,18 +863,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     userSelect: "none",
                   }}
                 >
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {h}
-                    {k === "er" && (
-                      <InfoTip text="You define your budget per plan in the setup process with Kennion. You control this amount. Employees pay the rest, pre-tax, through payroll deduction." color="rgba(255,255,255,0.85)" place="below" />
-                    )}
-                    {k === "ee" && (
-                      <InfoTip text="The plan's Employee Only Monthly Rate: what one employee-only enrollee costs before any employer contribution. This is the figure every carrier's quote sheet leads with, the same regardless of your workforce's actual tier mix - the standard way to compare plans apples to apples." color="rgba(255,255,255,0.85)" place="below" />
-                    )}
-                    {k === "total" && (
-                      <InfoTip text={`The full monthly premium for your ${totals.enrolled} enrolled employee${totals.enrolled === 1 ? "" : "s"}: what your company pays plus what employees pay.`} color="rgba(255,255,255,0.85)" place="below" />
-                    )}
-                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{h}</span>
                   {k && sort.key === k ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
