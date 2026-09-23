@@ -59,6 +59,14 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
+/** A colored badge for the funding label, in place of plain grey text -
+    Level Funded is what most quotes are, so it reads in the brand color;
+    Fully Insured (fundingOf's only other value) stays visually distinct. */
+function fundingPillColors(label: string): [string, string, string] {
+  if (/fully\s*insured/i.test(label)) return [C.body, C.hairline, C.border];
+  return [C.blueInk, C.blueTint, C.blueEdge];
+}
+
 /**
  * Every plan's card as one row: the same details the card shows (benefits
  * as printed, rates by tier and the split at the applied contribution, the
@@ -1001,30 +1009,40 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const sp = split(p);
               const heart = !!selected[p.plan];
               const added = inProposal(p.plan);
-              const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
+              // Every row the same height regardless of what its cells hold
+              // (a two-line Plan cell, an Underwriting flag, a two-digit vs.
+              // five-digit rate) - the hairline between rows then reads as a
+              // clean, even grid rather than one that jogs up and down.
+              const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink, verticalAlign: "middle" as const };
               // Right-aligned: a dollar column's digits stack on their ones
               // place, so the eye can compare magnitudes straight down the
               // column - the standard way a rate table reads.
               const numCell = { ...cell, textAlign: "right" as const, ...num };
+              const [fundFg, fundBg, fundBd] = fundingPillColors(fundingOf(p));
               return (
-                <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
+                <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ height: 60, background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
                   <td style={cell}>
-                    <div style={{ fontSize: 14 }}>{p.plan}</div>
-                    <div style={{ fontSize: 11.5, color: C.faint }}>
-                      {fundingOf(p)}
-                      {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
-
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 14 }}>{p.plan}</span>
+                      {p.underwritingNote && (
+                        <span aria-hidden style={{ display: "inline-grid", placeItems: "center", flex: "none", width: 15, height: 15, borderRadius: "50%", background: C.amberTint, color: C.amber, fontSize: 9 }}>
+                          ⚑
+                        </span>
+                      )}
+                      {p.underwritingNote && (
+                        <InfoTip text={`Underwriting Required - ${p.underwritingNote}`} color={C.amber} place="below" />
+                      )}
                     </div>
-                    {p.underwritingNote && (
-                      <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), display: "inline-flex", alignItems: "center", gap: 4, marginTop: 3 }}>
-                        ⚑ Underwriting Required
-                        <InfoTip text={p.underwritingNote} color={C.amber} place="below" />
+                    <div style={{ marginTop: 3 }}>
+                      <span style={{ ...pill(fundFg, fundBg, fundBd), borderRadius: 10 }}>
+                        {fundingOf(p)}
+                        {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
                       </span>
-                    )}
+                    </div>
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
                   <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
