@@ -809,6 +809,129 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           {appliedChips.length > 0 && <AppliedFilters showing={list.length} total={plans.length} chips={appliedChips} onClearAll={clearAll} showCount={false} />}
         </div>
 
+        {narrow ? (
+          // A big tappable card per plan instead of a sideways-scrolling
+          // table row - the desktop table below is untouched; this is a
+          // wholly separate render path that only ever shows when narrow.
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 14px 16px" }}>
+            {list.map((p) => {
+              const sp = split(p);
+              const heart = !!selected[p.plan];
+              const added = inProposal(p.plan);
+              const pk = picks.get(p.plan);
+              return (
+                <div
+                  key={p.plan}
+                  data-plan={p.plan}
+                  className={flash === p.plan ? "rowlink row-flash" : "rowlink"}
+                  onClick={() => setOpen(p.plan)}
+                  style={{ ...panel, padding: 14, background: heart ? C.blueTint : C.card, cursor: "pointer", display: "flex", flexDirection: "column", gap: 8 }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <CarrierMark name={carrierOf(p)} size={28} fontSize={14} color={C.body} />
+                      {p.optionId && <span style={{ fontSize: 12.5, fontWeight: 700, color: C.faint, whiteSpace: "nowrap" }}>{p.optionId}</span>}
+                    </div>
+                    <button className="grid-icon noprint" onClick={(e) => { e.stopPropagation(); toggleHeart(p.plan); }} aria-label={heart ? `Remove ${p.plan} from favorites` : `Add ${p.plan} to favorites`} title={heartTitle(p)} style={{ ...iconBtn, width: 44, height: 44, color: heart ? C.red : C.ghost, flex: "none" }}>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill={heart ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+                        <path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2 0 3.4 1.1 5 3 1.6-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.9 12 20.5 12 20.5Z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 16.5, fontWeight: 700, color: C.ink, lineHeight: 1.3 }}>{p.plan}</div>
+                    <div style={{ fontSize: 12.5, color: C.faint, marginTop: 2 }}>
+                      {fundingOf(p)}
+                      {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
+                    </div>
+                    {p.underwritingNote && (
+                      <span style={{ ...pill(C.amber, C.amberTint, C.amberEdge), display: "inline-flex", alignItems: "center", gap: 4, marginTop: 6 }}>
+                        ⚑ Underwriting Required
+                        <InfoTip text={p.underwritingNote} color={C.amber} place="below" />
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: C.faint }}>Employee Only Rate</div>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: C.ink, ...num }}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11.5, color: C.faint }}>Your Company Pays</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: C.ink, ...num }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
+                        {sp ? money0(sp.er) : "-"}
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11.5, color: C.faint }}>Total Monthly Bill</div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: C.ink, ...num }}>{p.monthly == null ? "-" : money0(p.monthly)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, fontSize: 12.5, color: C.faint, ...num }}>
+                    <span>Deductible {fmtDed(p.ded)}</span>
+                    <span>OOP Max {p.oop == null ? "-" : money0(p.oop)}</span>
+                  </div>
+                  <div className="noprint" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 2 }} onClick={(e) => e.stopPropagation()}>
+                    {pk ? (
+                      <button onClick={() => setOpen(p.plan)} aria-label={`AI pick: ${TIER_LABEL[pk.tier]}`} title={`AI pick · ${TIER_LABEL[pk.tier]}${pk.start ? " · start here" : ""} - ${pk.reason}`} style={{ ...pill(C.blueInk, C.blueTint, C.blueEdge), display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+                        </svg>
+                        {TIER_LABEL[pk.tier]}
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      onClick={() => toggleProposal(p.plan)}
+                      disabled={!added && compareFull}
+                      aria-label={added ? `Remove ${p.plan} from the comparison` : `Add ${p.plan} to the comparison`}
+                      title={added ? "Remove From Compare" : compareFull ? `Up to ${MAX_COMPARE} plans side by side - remove one first` : "Add To Compare"}
+                      style={{
+                        ...iconBtn,
+                        width: "auto",
+                        height: 44,
+                        minWidth: 44,
+                        padding: "0 16px",
+                        gap: 6,
+                        borderRadius: 8,
+                        fontWeight: 700,
+                        fontSize: 13.5,
+                        color: added ? "#fff" : compareFull ? C.hairline : C.blue,
+                        background: added ? C.green : "transparent",
+                        border: `1px solid ${added ? C.green : compareFull ? C.hairline : C.blueEdge}`,
+                      }}
+                    >
+                      {added ? (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 12.5l4.5 4.5L19 7.5" />
+                        </svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                          <path d="M12 5v14M5 12h14" />
+                        </svg>
+                      )}
+                      {added ? "In Comparison" : "Compare"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {!list.length && (
+              <div style={{ padding: "34px 10px 30px", textAlign: "center" }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No Favorites Yet" : plans.length ? "No Plans Match These Filters" : "No Quoted Plans Yet"}</div>
+                <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
+                  {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
+                </div>
+                {filtering && (
+                  <button onClick={clearAll} style={{ ...chip(false), color: C.blue, fontWeight: 600, marginTop: 14 }}>
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
         <table style={{ width: "100%", minWidth: 1350, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
           <thead>
@@ -967,6 +1090,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           </tbody>
         </table>
         </div>
+        )}
       </div>
 
       {opened && (
