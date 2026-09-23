@@ -195,7 +195,7 @@ export function filterChips(f: PlanFilters): FilterChip[] {
 
 // ------------------------------------------------------------------- sort
 
-export type SortKey = "option" | "carrier" | "network" | "plan" | "ded" | "oop" | "er" | "ee" | "total";
+export type SortKey = "option" | "carrier" | "plan" | "ded" | "oop" | "er" | "ee" | "total";
 export interface SortState {
   key: SortKey;
   dir: 1 | -1;
@@ -206,7 +206,6 @@ export const DEFAULT_SORT: SortState = { key: "ee", dir: 1 };
 const SORT_NAMES: Record<SortKey, string> = {
   option: "Option",
   carrier: "Carrier/TPA",
-  network: "Network type",
   plan: "Plan",
   ded: "Deductible",
   oop: "OOP max",
@@ -214,7 +213,7 @@ const SORT_NAMES: Record<SortKey, string> = {
   ee: "Employee only rate",
   total: "Monthly bill",
 };
-const TEXT_SORTS: SortKey[] = ["option", "carrier", "network", "plan"];
+const TEXT_SORTS: SortKey[] = ["option", "carrier", "plan"];
 
 /** "Monthly bill: Low to high", "Carrier/TPA: A to Z" - plain words, for the Sort by control and its options. */
 export function sortLabel(s: SortState): string {
