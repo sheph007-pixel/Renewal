@@ -941,12 +941,16 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 [
                   ["option", "Option", "left", 64],
                   ["carrier", "Carrier/TPA", "left", 150],
-                  ["plan", "Plan", "left", 260],
-                  ["ded", "Deductible", "right", 110],
-                  ["oop", "OOP Max", "right", 100],
-                  ["ee", "Employee Only Rate", "right", 175],
-                  ["er", "Your Company Pays", "right", 165],
-                  ["total", "Total Monthly Bill", "right", 175],
+                  // Wide enough that a long plan name (a Gravie Copay design
+                  // spells out its deductible and OOP max in the name itself)
+                  // reads on one line - the five dollar columns after it hold
+                  // short figures and give up the room for it.
+                  ["plan", "Plan", "left", 430],
+                  ["ded", "Deductible", "right", 95],
+                  ["oop", "OOP Max", "right", 90],
+                  ["ee", "Employee Only Rate", "right", 120],
+                  ["er", "Your Company Pays", "right", 120],
+                  ["total", "Total Monthly Bill", "right", 130],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
