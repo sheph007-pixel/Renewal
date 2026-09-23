@@ -291,9 +291,20 @@ function pdfTable(doc, { columns, rows, fontSize = 8, sectionOf }) {
   header();
   let lastSection = null;
   for (const r of rows) {
-    doc.font("GSF").fontSize(fontSize);
     const texts = cols.map((c) => c.text(r));
-    const h = Math.max(...texts.map((t, i) => doc.heightOfString(t || " ", { width: cols[i].width - pad * 2 }))) + pad * 2;
+    // Measured in whatever font each column actually draws in - a bold
+    // column (the plan name, the monthly total) is wider than regular at the
+    // same size, so measuring every column in regular font can under-count
+    // how many lines bold text wraps to, understating the row's real height
+    // and letting the next row's text overlap what's still printing above it.
+    const h = Math.max(
+      ...texts.map((t, i) => {
+        const c = cols[i];
+        doc.font(c.strong && c.strong(r) ? "GSF-Bold" : "GSF").fontSize(fontSize);
+        return doc.heightOfString(t || " ", { width: c.width - pad * 2 });
+      }),
+    ) + pad * 2;
+    doc.font("GSF").fontSize(fontSize);
     const section = sectionOf ? sectionOf(r) : null;
     const needSection = section && section !== lastSection;
     if (doc.y + h + (needSection ? 16 : 0) > bottom) {
