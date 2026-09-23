@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, effectiveYear, fmtDed, money0, networkLabel, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
+import { NETWORK_TYPES, RATE_DISCLAIMER, TIERS, censusCounts, censusProfile, contributionFloor, costSplit, effectiveYear, fmtDed, money0, networkTypeOf, optionSortKey, type AccountManager, type Group, type MarketPlan, type TierContribution, type TierKey } from "@/lib/model";
 import { C, chip, h3, num, panel, pill, textInput } from "@/lib/ui";
 import { RECOMMENDATIONS_TITLE, askQuietly, loadRecommendations, loadThreads, useChat, type RecommendedPick, exportGridPdf, exportPlanCardPdf, exportPlansExcel } from "@/lib/chat";
 import { websiteOf } from "@/lib/carrier-sites";
@@ -53,8 +53,6 @@ type GridView = "all" | "picks" | "favorites" | "compare";
 /** The assistant's three picks per carrier, as tagged on the grid. */
 const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us - and for UnitedHealthcare, for each funding it quoted, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
-/** The network as a column: any Cigna network reads "Cigna"; "(PPO)" is dropped beside a PPO-only grid. */
-const networkOf = (p: MarketPlan) => (networkLabel(p.network) || "").replace(/\s*\((EPO|PPO)\)\s*$/i, "");
 /** PPO / EPO / RBP, from the proposal; "-" where the quote does not say. */
 const netType = (p: MarketPlan) => networkTypeOf(p) || "-";
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
@@ -387,7 +385,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             return `${pfx} ${String(n === Infinity ? 999999 : n).padStart(6, "0")}`;
           }
           if (sort.key === "carrier") return carrierOf(p).toLowerCase();
-          if (sort.key === "network") return `${netType(p)} ${networkOf(p)}`.toLowerCase();
           if (sort.key === "plan") return p.plan.toLowerCase();
           if (sort.key === "ded") return dedOf(p) ?? Infinity;
           if (sort.key === "oop") return p.oop ?? Infinity;
@@ -805,12 +802,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                 [
                   ["option", "Option"],
                   ["carrier", "Carrier/TPA"],
-                  ["network", "Network Type"],
                   ["plan", "Plan"],
                   ["ded", "Deductible"],
                   ["oop", "OOP Max"],
-                  ["er", "Your Company Pays"],
                   ["ee", "Employee Only Rate"],
+                  ["er", "Your Company Pays"],
                   ["total", "Total Monthly Bill"],
                   [null, ""],
                   [null, ""],
@@ -837,7 +833,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // floored at 860px wide below), so a few extra pixels on
                     // the icon columns buys a better tap target there
                     // without touching the desktop layout at all.
-                    width: i === 9 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 9 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
+                    width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -872,10 +868,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
-                  <td style={{ ...cell, color: C.body, whiteSpace: "nowrap" }}>
-                    <div style={{ fontWeight: 600, color: networkTypeOf(p) ? C.ink : C.faint }}>{netType(p)}</div>
-                    <div style={{ fontSize: 11.5, color: C.faint }}>{networkOf(p) || ""}</div>
-                  </td>
                   <td style={cell}>
                     <div>{p.plan}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
@@ -892,10 +884,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
                   <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
+                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</td>
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : "-"}
                   </td>
-                  <td style={numCell}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</td>
                   <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "-" : money0(p.monthly)}
                   </td>
@@ -938,7 +930,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
             })}
             {!list.length && (
               <tr>
-                <td colSpan={12} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
+                <td colSpan={11} style={{ padding: "34px 10px 30px", textAlign: "center" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{favoritesOnly && !favorites ? "No Favorites Yet" : plans.length ? "No Plans Match These Filters" : "No Quoted Plans Yet"}</div>
                   <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
                     {favoritesOnly && !favorites ? "Press ♡ on a plan to add it to your favorites." : plans.length ? "Try removing a filter, or clear them all to see every quoted plan." : "Plans appear here as carriers' proposals come in."}
