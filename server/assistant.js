@@ -202,7 +202,7 @@ Attachments: the client may attach a file to a question - another broker's quote
 
 Research: you can search the web with web_search. Use it when the client asks you to research or look something up, or when the answer depends on something outside their figures - an ACA affordability percentage or an IRS limit for a plan year, a carrier's network or product, a regulation, a definition, or how employers of their size typically compare (premiums, employer share, deductibles - the KFF Employer Health Benefits Survey and MEPS-IC state tables are the places to look, and say which survey and year). Prefer authoritative sources (IRS, DOL, CMS, HealthCare.gov, the carrier's own site, SHRM, KFF). Say what you found in a sentence or two and name the source in words ("per the IRS"); do not paste URLs unless asked. Never search for the client's own figures - those are below. Searching is for facts, not for advice: the guidance on legal, tax and actuarial questions above still applies.
 
-Tools: recommend_plans publishes plan picks to the Medical Plans page (see the plan recommendations rule). Documents: you have two more. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options - pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees - write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures. A document is made once per request; after the tool returns, tell the client what is in it in a few lines rather than repeating its contents. When a request is ambiguous about format, make a PDF.
+Tools: recommend_plans publishes plan picks to the Medical Plans page (see the plan recommendations rule). Documents: you have two more. Use create_comparison when the client asks for a comparison, a side-by-side, a spreadsheet, or something to take to leadership about the options - pick the plans that answer their question (or all quoted plans if they did not say), and ask for the contribution columns when they mention what they pay toward coverage. It always attaches both a PDF and an Excel workbook of the same table, so there is no format to ask about or choose. Use create_document when they ask for a summary, memo, recap, talking points, a note to leadership or an announcement to employees - write the full text yourself in Markdown, in the client's voice for an announcement and in yours for a memo, with the real figures; this one is a single PDF or Word file, so when the request is ambiguous about which, make a PDF. A document is made once per request; after either tool returns, tell the client what is in it in a few lines rather than repeating its contents.
 
 Kennion's guidance follows. It is written by the people who run the program and overrides anything above where they differ.`;
 
@@ -262,11 +262,11 @@ const TOOLS = [
   {
     name: "create_comparison",
     description:
-      "Build a downloadable side-by-side comparison of 2027 plan options for this group, priced at its own enrollment, with what is in force today above it. The figures are computed from the quotes on file; you choose which plans go in. Returns the table as text so you can talk about it.",
+      "Build a downloadable side-by-side comparison of 2027 plan options for this group, priced at its own enrollment, with what is in force today above it. The figures are computed from the quotes on file; you choose which plans go in. Always attaches both a PDF (to read) and an Excel workbook (to sort, edit and work the rates) of the same table. Returns the table as text so you can talk about it.",
     input_schema: {
       type: "object",
       additionalProperties: false,
-      required: ["plans", "format"],
+      required: ["plans"],
       properties: {
         plans: {
           type: "array",
@@ -287,7 +287,6 @@ const TOOLS = [
           ],
           description: "The employer's monthly contribution per tier, to add employer/employee split columns. Null for none.",
         },
-        format: { type: "string", enum: ["pdf", "xlsx"], description: "PDF to read, Excel to work with." },
         title: { anyOf: [{ type: "string" }, { type: "null" }], description: "A title for the document, or null for the default." },
       },
     },
@@ -664,10 +663,12 @@ async function runTool(name, input, { data, keep, onStatus, saveMemory, savePick
     let plans = Array.isArray(input.plans) ? input.plans : [];
     if (!plans.length) plans = (data.proposals || []).flatMap((pr) => (pr.plans || []).map((pl) => pl.optionId || pl.name)).slice(0, 12);
     const table = comparisonTable({ group: g, proposals: data.proposals, plans, includeCurrent: input.include_current !== false, contribution: input.contribution || null });
-    const format = input.format === "xlsx" ? "xlsx" : "pdf";
-    const doc = await renderComparison({ format, title: input.title || null, group: g, table });
-    const file = await keep(doc);
-    return `Created ${file.filename} (${format.toUpperCase()}, ${table.rows.length} rows). The client can download it from this message. Its contents:\n${comparisonText(table)}`;
+    // Both formats every time, from the same table: a PDF to read, an Excel
+    // workbook to actually sort and work the rates in - no format question
+    // to ask, and no round trip when the client wanted the other one.
+    const pdf = await keep(await renderComparison({ format: "pdf", title: input.title || null, group: g, table }));
+    const xlsx = await keep(await renderComparison({ format: "xlsx", title: input.title || null, group: g, table }));
+    return `Created ${pdf.filename} and ${xlsx.filename} (${table.rows.length} rows each). The client can download both from this message. Its contents:\n${comparisonText(table)}`;
   }
   if (name === "create_document") {
     onStatus("Writing the document…");
@@ -720,8 +721,9 @@ async function fakeReply(question, ctx) {
   }
   if (/compar|side.by.side|spreadsheet/i.test(q)) {
     const table = comparisonTable({ group: ctx.data.group, proposals: ctx.data.proposals, plans: [], includeCurrent: true });
-    const file = await ctx.keep(await renderComparison({ format: /excel|xlsx|spreadsheet/i.test(q) ? "xlsx" : "pdf", group: ctx.data.group, table }));
-    pieces.push(`Here is a comparison of what is on file - ${file.filename}. `);
+    const pdf = await ctx.keep(await renderComparison({ format: "pdf", group: ctx.data.group, table }));
+    const xlsx = await ctx.keep(await renderComparison({ format: "xlsx", group: ctx.data.group, table }));
+    pieces.push(`Here is a comparison of what is on file - ${pdf.filename} and ${xlsx.filename}. `);
   }
   if (/summar|memo|announce|document|recap|talking points/i.test(q)) {
     const file = await ctx.keep(await renderDocument({ format: /word|docx/i.test(q) ? "docx" : "pdf", title: "Renewal summary", markdown: `# Where ${ctx.data.group.name}'s renewal stands\n\n- ${ctx.data.group.enrolled} enrolled today\n- Canned summary (KENNION_FAKE_AI)`, group: ctx.data.group }));
