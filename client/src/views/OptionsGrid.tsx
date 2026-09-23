@@ -853,18 +853,18 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     )}
                   </div>
                   <div style={{ borderTop: `1px solid ${C.hairline}`, paddingTop: 8 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: C.faint }}>Employee Only Rate</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.3, textTransform: "uppercase", color: C.faint }}>Employee Rate</div>
                     <div style={{ fontSize: 26, fontWeight: 700, color: C.ink, ...num }}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 16 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11.5, color: C.faint }}>Your Company Pays</div>
+                      <div style={{ fontSize: 11.5, color: C.faint }}>Employer Contribution</div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: C.ink, ...num }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                         {sp ? money0(sp.er) : "-"}
                       </div>
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11.5, color: C.faint }}>Total Monthly Bill</div>
+                      <div style={{ fontSize: 11.5, color: C.faint }}>Monthly Bill</div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: C.ink, ...num }}>{p.monthly == null ? "-" : money0(p.monthly)}</div>
                     </div>
                   </div>
@@ -948,9 +948,9 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   ["plan", "Plan", "left", 430],
                   ["ded", "Deductible", "right", 95],
                   ["oop", "OOP Max", "right", 90],
-                  ["ee", "Employee Only Rate", "right", 120],
-                  ["er", "Your Company Pays", "right", 120],
-                  ["total", "Total Monthly Bill", "right", 130],
+                  ["ee", "Employee Rate", "right", 120],
+                  ["er", "Employer Contribution", "right", 120],
+                  ["total", "Monthly Bill", "right", 130],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
