@@ -805,19 +805,19 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
 
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
-        <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
+        <table style={{ width: "100%", minWidth: 1350, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
           <thead>
             <tr>
               {(
                 [
                   ["option", "Option", "left", 64],
                   ["carrier", "Carrier/TPA", "left", 150],
-                  ["plan", "Plan", "left", 240],
+                  ["plan", "Plan", "left", 260],
                   ["ded", "Deductible", "right", 110],
                   ["oop", "OOP Max", "right", 100],
-                  ["ee", "Employee Only Rate", "right", 135],
-                  ["er", "Your Company Pays", "right", 125],
-                  ["total", "Total Monthly Bill", "right", 125],
+                  ["ee", "Employee Only Rate", "right", 175],
+                  ["er", "Your Company Pays", "right", 165],
+                  ["total", "Total Monthly Bill", "right", 175],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
                   [null, "", "left", undefined],
@@ -855,7 +855,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     // its floor and scrolls sideways instead, as it already
                     // does on a phone.
                     // On a phone the table already scrolls sideways (it is
-                    // floored at 1180px wide below), so a few extra pixels on
+                    // floored at 1350px wide below), so a few extra pixels on
                     // the icon columns buys a better tap target there
                     // without touching the desktop layout at all.
                     width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : w,
@@ -864,7 +864,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   }}
                 >
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{h}</span>
-                  {k && sort.key === k ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
                 </th>
               ))}
             </tr>
