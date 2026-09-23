@@ -1017,26 +1017,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
-                  <td style={cell}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 14 }}>{p.plan}</span>
-                      {p.underwritingNote && (
-                        <span aria-hidden style={{ display: "inline-grid", placeItems: "center", flex: "none", width: 15, height: 15, borderRadius: "50%", background: C.amberTint, color: C.amber, fontSize: 9 }}>
-                          ⚑
-                        </span>
-                      )}
-                      {p.underwritingNote && (
-                        <InfoTip text={`Underwriting Required - ${p.underwritingNote}`} color={C.amber} place="below" />
-                      )}
-                    </div>
-                    <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
-                      {/* Level Funded is nearly every row, so it reads as
-                          plain type text rather than a badge repeated down
-                          the whole grid; Fully Insured is the rare case, so
-                          that's the one that earns a colored flag. */}
-                      <span style={{ fontSize: 11.5, color: C.faint }}>{p.type || fundingOf(p)}</span>
-                      {fundingOf(p) === "Fully Insured" && <span style={{ ...pill(C.body, C.hairline, C.border), borderRadius: 10 }}>Fully Insured</span>}
-                    </div>
+                  <td style={cell} title={p.underwritingNote ? `${p.type || fundingOf(p)} - Underwriting Required: ${p.underwritingNote}` : p.type || fundingOf(p)}>
+                    {/* Just the name - carrier, funding, type and rates each
+                        already have their own column; the full detail (and
+                        the Underwriting Required flag) is a click away on
+                        the card, and a hover on the row shows this cell's
+                        title above. */}
+                    <span style={{ fontSize: 14 }}>{p.plan}</span>
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
                   <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
