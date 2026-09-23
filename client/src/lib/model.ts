@@ -1347,8 +1347,6 @@ export interface MarketPartner {
   avgEmployeeOnlyCost: number | null;
   /** Reference-based pricing plans among its plans. */
   rbpPlans: number;
-  /** The fundings this partner quoted, as shown (UnitedHealthcare: Fully Insured and Level Funded). */
-  fundings: string[];
 }
 
 export interface MarketResults {
@@ -1391,7 +1389,6 @@ export function marketResults(plans: MarketPlan[]): MarketResults | null {
       avgEmployeeOnlyPremium: avg,
       avgEmployeeOnlyCost: avg == null ? null : avg * MARKET_RESULTS_EMPLOYER_SHARE,
       rbpPlans: list.filter((p) => networkTypeOf(p) === "RBP").length,
-      fundings: [...new Set(list.map((p) => (/fully/i.test(p.label) ? "Fully Insured" : "Level Funded")))].sort(),
     };
   });
   // Rankings on the unrounded figures.
@@ -1440,13 +1437,14 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function marketResultsSentences(s: MarketResults | null): MarketSentence[] {
   if (!s || !s.totalPlans) return [];
   const out: MarketSentence[] = [];
-  // Each partner with its own count, so the total is accounted for - and
-  // UnitedHealthcare's two fundings are named, since both count as its plans.
+  // Each partner with its own count, so the total is accounted for - every
+  // partner the same shape, UnitedHealthcare included: its two fundings
+  // still both count toward its one plan count, but aren't named here, so
+  // it reads like any other Carrier/TPA rather than a special case.
   const partnerList: MarketSegment[] = [];
   s.partners.forEach((x, i) => {
     if (i > 0) partnerList.push(T(i === s.partners.length - 1 ? " and " : ", "));
-    const fundings = x.fundings.length > 1 ? `, ${x.fundings.map((f) => f.toLowerCase()).join(" and ")}` : "";
-    partnerList.push(V(x.name), T(" ("), V(plural(x.plans, "plan")), T(`${fundings})`));
+    partnerList.push(V(x.name), T(" ("), V(plural(x.plans, "plan")), T(")"));
   });
   out.push([T("Kennion took your group to market and received "), V(plural(s.totalPlans, "plan option")), T(" from "), ...partnerList, T(".")]);
 
