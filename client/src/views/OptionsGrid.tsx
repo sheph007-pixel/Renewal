@@ -880,12 +880,12 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const numCell = { ...cell, textAlign: "right" as const, ...num };
               return (
                 <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
-                  <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
+                  <td style={{ ...cell, whiteSpace: "nowrap", color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
                   <td style={{ ...cell, whiteSpace: "nowrap", color: C.body }}>
                     <CarrierMark name={carrierOf(p)} size={22} fontSize={13} color={C.body} />
                   </td>
                   <td style={cell}>
-                    <div>{p.plan}</div>
+                    <div style={{ fontSize: 14 }}>{p.plan}</div>
                     <div style={{ fontSize: 11.5, color: C.faint }}>
                       {fundingOf(p)}
                       {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
@@ -900,11 +900,11 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
                   <td style={numCell}>{p.oop == null ? "-" : money0(p.oop)}</td>
-                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</td>
-                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
+                  <td style={{ ...numCell, whiteSpace: "nowrap" }}>{p.rates.EE == null ? "-" : money0(p.rates.EE)}</td>
+                  <td style={{ ...numCell, whiteSpace: "nowrap" }} title={sp ? `Employees pay ${money0(sp.ee)} / mo between them` : undefined}>
                     {sp ? money0(sp.er) : "-"}
                   </td>
-                  <td style={{ ...numCell, fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>
+                  <td style={{ ...numCell, whiteSpace: "nowrap" }}>
                     {p.monthly == null ? "-" : money0(p.monthly)}
                   </td>
                   <td className="noprint" style={{ ...cell, padding: "9px 4px", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
