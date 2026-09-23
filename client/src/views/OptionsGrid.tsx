@@ -59,13 +59,6 @@ const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ?
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
 
-/** A colored badge for the funding label, in place of plain grey text -
-    Level Funded is what most quotes are, so it reads in the brand color;
-    Fully Insured (fundingOf's only other value) stays visually distinct. */
-function fundingPillColors(label: string): [string, string, string] {
-  if (/fully\s*insured/i.test(label)) return [C.body, C.hairline, C.border];
-  return [C.blueInk, C.blueTint, C.blueEdge];
-}
 
 /**
  * Every plan's card as one row: the same details the card shows (benefits
@@ -1018,7 +1011,6 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               // place, so the eye can compare magnitudes straight down the
               // column - the standard way a rate table reads.
               const numCell = { ...cell, textAlign: "right" as const, ...num };
-              const [fundFg, fundBg, fundBd] = fundingPillColors(fundingOf(p));
               return (
                 <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ height: 60, background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
@@ -1037,11 +1029,13 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                         <InfoTip text={`Underwriting Required - ${p.underwritingNote}`} color={C.amber} place="below" />
                       )}
                     </div>
-                    <div style={{ marginTop: 3 }}>
-                      <span style={{ ...pill(fundFg, fundBg, fundBd), borderRadius: 10 }}>
-                        {fundingOf(p)}
-                        {p.type && p.type !== p.label && p.type !== fundingOf(p) ? ` · ${p.type}` : ""}
-                      </span>
+                    <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                      {/* Level Funded is nearly every row, so it reads as
+                          plain type text rather than a badge repeated down
+                          the whole grid; Fully Insured is the rare case, so
+                          that's the one that earns a colored flag. */}
+                      <span style={{ fontSize: 11.5, color: C.faint }}>{p.type || fundingOf(p)}</span>
+                      {fundingOf(p) === "Fully Insured" && <span style={{ ...pill(C.body, C.hairline, C.border), borderRadius: 10 }}>Fully Insured</span>}
                     </div>
                   </td>
                   <td style={numCell}>{fmtDed(p.ded)}</td>
