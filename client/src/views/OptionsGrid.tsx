@@ -795,24 +795,24 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         </div>
 
         <div style={{ overflow: "auto", paddingBottom: 10 }}>
-        <table style={{ width: "100%", minWidth: 860, borderCollapse: "collapse", fontSize: 13 }}>
+        <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 13 }}>
           <thead>
             <tr>
               {(
                 [
-                  ["option", "Option"],
-                  ["carrier", "Carrier/TPA"],
-                  ["plan", "Plan"],
-                  ["ded", "Deductible"],
-                  ["oop", "OOP Max"],
-                  ["ee", "Employee Only Rate"],
-                  ["er", "Your Company Pays"],
-                  ["total", "Total Monthly Bill"],
-                  [null, ""],
-                  [null, ""],
-                  [null, ""],
-                ] as [SortKey | null, string][]
-              ).map(([k, h], i) => (
+                  ["option", "Option", "left", 64],
+                  ["carrier", "Carrier/TPA", "left", 150],
+                  ["plan", "Plan", "left", 240],
+                  ["ded", "Deductible", "right", 110],
+                  ["oop", "OOP Max", "right", 100],
+                  ["ee", "Employee Only Rate", "right", 135],
+                  ["er", "Your Company Pays", "right", 125],
+                  ["total", "Total Monthly Bill", "right", 125],
+                  [null, "", "left", undefined],
+                  [null, "", "left", undefined],
+                  [null, "", "left", undefined],
+                ] as [SortKey | null, string, "left" | "right", number | undefined][]
+              ).map(([k, h, align, w], i) => (
                 <th
                   key={i}
                   onClick={k ? () => sortOn(k) : undefined}
@@ -824,16 +824,31 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
                     color: C.onColor,
                     background: C.headerBg,
                     fontWeight: 700,
-                    whiteSpace: "nowrap",
-                    // Every column reads from the left, headings and figures
-                    // alike, on one margin; the digits stay tabular so the
-                    // dollar columns still line up under each other.
-                    textAlign: "left",
+                    // A long label (Employee Only Rate, Your Company Pays)
+                    // wraps to a second line rather than forcing its column
+                    // wide or spilling text over the next one - the fixed
+                    // widths below are sized to the dollar values, not the
+                    // labels.
+                    lineHeight: 1.25,
+                    // A dollar column reads right, its header over it, so the
+                    // digits stack for a glance-down comparison; a text
+                    // column (option, carrier, plan) reads left as prose does.
+                    textAlign: align,
+                    // Deliberate, fixed widths on every column (table-layout:
+                    // fixed) rather than auto-sizing off each header's own
+                    // text length - otherwise a long label like "Employee
+                    // Only Rate" pulls its whole column wide and strands a
+                    // short dollar value at its edge with a ragged gap after
+                    // it. Every column is sized here (none left to "take
+                    // whatever's left"), so a narrow viewport can't starve
+                    // one column to fit the rest - the table just grows past
+                    // its floor and scrolls sideways instead, as it already
+                    // does on a phone.
                     // On a phone the table already scrolls sideways (it is
-                    // floored at 860px wide below), so a few extra pixels on
+                    // floored at 1180px wide below), so a few extra pixels on
                     // the icon columns buys a better tap target there
                     // without touching the desktop layout at all.
-                    width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : i === 0 ? 72 : undefined,
+                    width: i === 8 ? (picks.size ? 58 : 40) + (narrow ? 8 : 0) : i > 8 ? 40 + (narrow ? 8 : 0) : w,
                     cursor: k ? "pointer" : undefined,
                     userSelect: "none",
                   }}
@@ -861,7 +876,10 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
               const heart = !!selected[p.plan];
               const added = inProposal(p.plan);
               const cell = { padding: "9px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
-              const numCell = { ...cell, textAlign: "left" as const, ...num };
+              // Right-aligned: a dollar column's digits stack on their ones
+              // place, so the eye can compare magnitudes straight down the
+              // column - the standard way a rate table reads.
+              const numCell = { ...cell, textAlign: "right" as const, ...num };
               return (
                 <tr key={p.plan} data-plan={p.plan} className={flash === p.plan ? "rowlink row-flash" : "rowlink"} onClick={() => setOpen(p.plan)} style={{ background: heart ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }} title="Click for every detail">
                   <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint, ...num }}>{p.optionId ?? "-"}</td>
