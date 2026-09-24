@@ -990,9 +990,15 @@ export default function Proposals({ token, groups }: Props) {
   };
   const gridRows = sortedGroups
     .map((g) => {
-      const applies = new Set<string>(g.slots || SLOTS);
+      const required = new Set<string>(g.slots || SLOTS);
+      // Angle Scorecard never counts toward "every quote in" (see
+      // slotsForGroup on the server), but it is a real document a group can
+      // have on file, so give it a working grid column instead of always
+      // showing "-" whether or not one is filed.
+      const applies = new Set<string>(required).add("Angle Scorecard");
       const slots = SLOTS.map((s) => (applies.has(s) ? currentBySlot.get(`${g.name}||${s}`) : undefined));
-      return { g, slots, applies, have: slots.filter(Boolean).length, of: applies.size };
+      const have = slots.filter((s, i) => s && required.has(SLOTS[i])).length;
+      return { g, slots, applies, have, of: required.size };
     })
     .filter(({ g, applies, have, of }) => {
       if (q && !`${g.name} ${g.code ?? ""}`.toLowerCase().includes(q)) return false;
