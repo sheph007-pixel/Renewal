@@ -3737,6 +3737,13 @@ const ppoOnly = () => true;
 /** A proposal plan that is an EPO: says so in its network, its type, or its name. */
 const isEpoPlan = (pl) =>
   /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
+/** A reading's stray blank plan: no name, no plan code, no rate - nothing on it at all. */
+const isBlankPlan = (pl) =>
+  !pl ||
+  (!String(pl.name || "").trim() &&
+    !pl.plan_code &&
+    pl.monthly_total == null &&
+    !Object.values(pl.rates || {}).some((v) => v != null));
 /** A UnitedHealthcare menu plan that is an EPO. */
 const isEpoMenu = (m) => String(m.type || "").toUpperCase() === "EPO";
 
@@ -4729,21 +4736,24 @@ async function proposalsChanged() {
         remapped = true;
         continue;
       }
-      // Optimyl always quotes the same 4 standard plans; a reading from
-      // before this was enforced may have stored an exact duplicate
-      // plan_code twice. Collapse it here too, so a proposal already on
-      // file is fixed without waiting on staff to press Re-read.
-      if (Array.isArray(r.extracted && r.extracted.plans) && /optimyl/i.test(r.carrier || (r.extracted && r.extracted.carrier) || "")) {
-        const seen = new Set();
-        const deduped = r.extracted.plans.filter((pl) => {
-          const code = pl.plan_code || "";
-          if (!/^OPTIMYL PLAN /i.test(code)) return true;
-          if (seen.has(code)) return false;
-          seen.add(code);
-          return true;
-        });
-        if (deduped.length !== r.extracted.plans.length) {
-          r.extracted = { ...r.extracted, plans: deduped };
+      // A reading from before this was enforced may have stored a stray
+      // blank plan (no name, no code, no rate), or, for Optimyl, an exact
+      // duplicate plan_code twice. Clean both up here too, so a proposal
+      // already on file is fixed without waiting on staff to press Re-read.
+      if (Array.isArray(r.extracted && r.extracted.plans)) {
+        let plans = r.extracted.plans.filter((pl) => !isBlankPlan(pl));
+        if (/optimyl/i.test(r.carrier || (r.extracted && r.extracted.carrier) || "")) {
+          const seen = new Set();
+          plans = plans.filter((pl) => {
+            const code = pl.plan_code || "";
+            if (!/^OPTIMYL PLAN /i.test(code)) return true;
+            if (seen.has(code)) return false;
+            seen.add(code);
+            return true;
+          });
+        }
+        if (plans.length !== r.extracted.plans.length) {
+          r.extracted = { ...r.extracted, plans };
           await proposalStore.updateProposal(r.id, { extracted: r.extracted });
           remapped = true;
         }
@@ -5015,6 +5025,10 @@ async function runAnalysis(id, file, keepAssignment) {
     // (the reading matches the document) and then left out, so nothing but
     // offered plans is ever stored, numbered or shown.
     const priorPlans = (current && current.extracted && current.extracted.plans) || [];
+    // A reading occasionally trails a blank entry - no name, no plan code,
+    // no rate, nothing - an artifact of the model, never a real plan. Never
+    // stored, whatever the carrier.
+    if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isBlankPlan(pl));
     // Numbers handed out while EPO twins were still stored (an EPO plan
     // holding one, before or in this reading) belong to the old sequence:
     // none is carried over, and the numbering step starts this slot again.
