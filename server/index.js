@@ -4729,6 +4729,25 @@ async function proposalsChanged() {
         remapped = true;
         continue;
       }
+      // Optimyl always quotes the same 4 standard plans; a reading from
+      // before this was enforced may have stored an exact duplicate
+      // plan_code twice. Collapse it here too, so a proposal already on
+      // file is fixed without waiting on staff to press Re-read.
+      if (Array.isArray(r.extracted && r.extracted.plans) && /optimyl/i.test(r.carrier || (r.extracted && r.extracted.carrier) || "")) {
+        const seen = new Set();
+        const deduped = r.extracted.plans.filter((pl) => {
+          const code = pl.plan_code || "";
+          if (!/^OPTIMYL PLAN /i.test(code)) return true;
+          if (seen.has(code)) return false;
+          seen.add(code);
+          return true;
+        });
+        if (deduped.length !== r.extracted.plans.length) {
+          r.extracted = { ...r.extracted, plans: deduped };
+          await proposalStore.updateProposal(r.id, { extracted: r.extracted });
+          remapped = true;
+        }
+      }
       // Cobalt is no longer offered, but a proposal already filed under that
       // slot keeps it rather than being re-derived into an unassigned one.
       if (!r.slot || SLOTS.includes(r.slot) || r.slot === "Cobalt") continue;
@@ -5001,6 +5020,24 @@ async function runAnalysis(id, file, keepAssignment) {
     // none is carried over, and the numbering step starts this slot again.
     const oldRule = priorPlans.some((pl) => isEpoPlan(pl) && pl.option_id) || (Array.isArray(out.plans) && out.plans.some((pl) => isEpoPlan(pl) && pl.option_id));
     if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isEpoPlan(pl)).map((pl) => (oldRule ? { ...pl, option_id: null } : pl));
+    // Optimyl always quotes the same 4 standard plans, numbered by plan_code
+    // ("OPTIMYL PLAN 1".."OPTIMYL PLAN 4"). A misread sometimes doubles one
+    // of them onto two rows - collapse an exact repeat of that plan_code
+    // down to one entry - and anything still left over 4 is flagged for
+    // staff rather than stored silently.
+    if (Array.isArray(out.plans) && /optimyl/i.test(out.carrier || "")) {
+      const seen = new Set();
+      out.plans = out.plans.filter((pl) => {
+        const code = pl.plan_code || "";
+        if (!/^OPTIMYL PLAN /i.test(code)) return true;
+        if (seen.has(code)) return false;
+        seen.add(code);
+        return true;
+      });
+      if (out.plans.length !== 4) {
+        flags.push(`Optimyl always quotes exactly 4 plans; this reading found ${out.plans.length} - re-check the document.`);
+      }
+    }
     const fields = {
       carrier: out.carrier || null,
       // The option IDs the plans carried before this reading ride along, so
