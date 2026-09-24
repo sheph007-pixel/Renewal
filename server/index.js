@@ -4988,6 +4988,38 @@ async function auditInParallel(ids) {
   await Promise.all(workers);
 }
 
+/**
+ * How many proposal reads run against the model at once, across every
+ * caller - a fresh upload, a batch email, resumeOrphanedReads,
+ * backfillPlanBenefits. Uploads fire runAnalysis unawaited per file, so a
+ * batch of many documents (an email with several attachments, a handful of
+ * files dropped on the grid one after another) used to send that many large
+ * PDF reads to the API in the same instant, which is enough on its own to
+ * blow past the org's shared tokens-per-minute limit and fail every one of
+ * them with a 429 - as happened live with 8 UHC Level Funded renewals
+ * uploaded together. Capping it here queues the rest instead.
+ */
+const READ_PARALLEL = Number(process.env.KENNION_READ_PARALLEL || 2);
+let readSlotsInUse = 0;
+const readWaiters = [];
+function withReadSlot(fn) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      readSlotsInUse++;
+      Promise.resolve()
+        .then(fn)
+        .then(resolve, reject)
+        .finally(() => {
+          readSlotsInUse--;
+          const next = readWaiters.shift();
+          if (next) next();
+        });
+    };
+    if (readSlotsInUse < READ_PARALLEL) run();
+    else readWaiters.push(run);
+  });
+}
+
 async function runAnalysis(id, file, keepAssignment) {
   try {
     if (!aiEnabled()) {
@@ -5003,7 +5035,7 @@ async function runAnalysis(id, file, keepAssignment) {
     }
     const roster = liveRoster();
     const prepared = await prepareForModel(file);
-    const out = await analyzeProposal({ filename: file.filename, prepared, context: file.context || null }, roster);
+    const out = await withReadSlot(() => analyzeProposal({ filename: file.filename, prepared, context: file.context || null }, roster));
     const flags = Array.isArray(out.audit_flags) ? [...out.audit_flags] : [];
     // The reader copies the roster name when it can; when it mirrors the
     // paper's spelling instead, or names no roster group at all, the employer

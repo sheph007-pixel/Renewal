@@ -72,7 +72,10 @@ const shape = (who, r) => ({
 });
 
 async function claudeCheck({ filename, prepared, stored }) {
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  // Audits run several at a time (AUDIT_PARALLEL) against the same org-wide
+  // tokens-per-minute budget the proposal reader shares - stretch the SDK's
+  // built-in backoff so a burst retries instead of failing the audit outright.
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 6 }) : new Anthropic({ maxRetries: 6 });
   const content = [];
   if (prepared.kind === "pdf") {
     const { numpages } = await pdfParse(prepared.buffer).catch(() => ({ numpages: 0 }));
