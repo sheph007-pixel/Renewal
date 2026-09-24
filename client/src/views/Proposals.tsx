@@ -767,6 +767,7 @@ function SlotCell({
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const send = async (files: File[]) => {
     if (!files.length) return;
     setBusy(true);
@@ -774,6 +775,17 @@ function SlotCell({
     setBusy(false);
     onChanged();
     if (ref.current) ref.current.value = "";
+  };
+  const del = async () => {
+    if (!current) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/proposals/${current.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) onChanged();
+    } finally {
+      setBusy(false);
+      setConfirmDelete(false);
+    }
   };
   const plans = current?.extracted?.plans?.length || 0;
   const when = current?.extracted?.effective_date || current?.uploaded_at?.slice(0, 10) || "";
@@ -814,11 +826,30 @@ function SlotCell({
             >
               ✓ {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : "on file"}
             </button>
-            <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8 }}>
+            <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span>{when ? fmtDay(when) : ""}</span>
               <button onClick={() => ref.current?.click()} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>
                 {busy ? "…" : "replace"}
               </button>
+              {confirmDelete ? (
+                <>
+                  <button onClick={() => void del()} style={{ ...linkBtn, fontSize: 11, color: C.red, fontWeight: 600 }} disabled={busy}>
+                    delete for good
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>
+                    keep
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  style={{ ...linkBtn, fontSize: 11, color: C.faint }}
+                  disabled={busy}
+                  title={`Remove this ${slot} proposal for ${group}`}
+                >
+                  delete
+                </button>
+              )}
             </div>
           </>
         ) : (
