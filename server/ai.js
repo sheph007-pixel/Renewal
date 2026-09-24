@@ -291,7 +291,13 @@ Your job: identify the carrier, read off the plans and tier rates, and decide wh
 export async function analyzeProposal(file, roster) {
   if (fakeAi()) return fakeReading(file);
   if (!aiEnabled()) throw new Error("AI matching is off: no ANTHROPIC_API_KEY is set.");
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  // A proposal read shares the org's tokens-per-minute budget with every
+  // other caller. The server already caps how many run at once (see
+  // withReadSlot in index.js), but a burst can still catch a 429 waiting for
+  // a slot to free up - the SDK's own backoff (default 2 retries) is worth
+  // stretching here rather than failing the read and making staff click
+  // Re-Read by hand.
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 6 }) : new Anthropic({ maxRetries: 6 });
 
   const rosterText = roster
     .map((g) => `- ${g.name} (${g.enrolled} enrolled, ${g.tpa || "TPA unknown"})`)
