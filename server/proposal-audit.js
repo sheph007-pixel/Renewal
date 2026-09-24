@@ -74,8 +74,10 @@ const shape = (who, r) => ({
 async function claudeCheck({ filename, prepared, stored }) {
   // Audits run several at a time (AUDIT_PARALLEL) against the same org-wide
   // tokens-per-minute budget the proposal reader shares - stretch the SDK's
-  // built-in backoff so a burst retries instead of failing the audit outright.
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 6 }) : new Anthropic({ maxRetries: 6 });
+  // built-in backoff so a burst retries instead of failing the audit
+  // outright, but bound each attempt so a stalled connection can't tie up
+  // one of those slots for the SDK's default 10 minutes per retry.
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 6 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 6 * 60 * 1000 });
   const content = [];
   if (prepared.kind === "pdf") {
     const { numpages } = await pdfParse(prepared.buffer).catch(() => ({ numpages: 0 }));
