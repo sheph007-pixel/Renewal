@@ -141,7 +141,7 @@ const isProposal = (p: Proposal) => p.status !== "container";
  * toward "every quote in" (the server leaves it out of a group's `slots`),
  * but it is still assignable here and shows in SlotChips like any other.
  */
-export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Cobalt", "Optimyl"] as const;
+export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Optimyl"] as const;
 const TRACKED = SLOTS;
 const isCurrent = (p: Proposal) => p.status === "assigned" && !p.superseded_by;
 
@@ -437,7 +437,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
   // Read, but not one of the four medical proposals: an ancillary-only
   // document, or a carrier the portal does not track. Kept, never in a slot.
   const ancillary = isAncillary(p);
-  const untracked = !!x && !p.slot && (ancillary || !/united|uhc|surest|optum|gravie|nationwide|angle|cobalt|optimyl/i.test(p.carrier || x.carrier || ""));
+  const untracked = !!x && !p.slot && (ancillary || !/united|uhc|surest|optum|gravie|nationwide|angle|optimyl/i.test(p.carrier || x.carrier || ""));
 
   // An email wrapper: the subject, who sent it, what came out of it.
   if (p.status === "container") {
@@ -900,7 +900,6 @@ export default function Proposals({ token, groups }: Props) {
   });
   const gridRows = sortedGroups
     .map((g) => {
-      // Cobalt quotes only a handful of groups, so a row's slots are its own.
       const applies = new Set<string>(g.slots || SLOTS);
       const slots = SLOTS.map((s) => (applies.has(s) ? currentBySlot.get(`${g.name}||${s}`) : undefined));
       return { g, slots, applies, have: slots.filter(Boolean).length, of: applies.size };

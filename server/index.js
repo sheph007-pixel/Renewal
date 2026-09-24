@@ -198,33 +198,15 @@ function brokerContact() {
   return b && b.name ? { ...b } : null;
 }
 /**
- * Cobalt quotes a self-funded plan for a handful of groups, not the whole
- * book, so its slot only applies to those - plus any group that already has a
- * Cobalt proposal on file, so nothing uploaded is ever hidden.
- */
-const COBALT_GROUPS = new Set(
-  JSON.parse(fs.readFileSync(path.join(__dirname, "data", "cobalt-groups.json"), "utf8")).list.map(normalizeName),
-);
-function cobaltApplies(name) {
-  const k = normalizeName(name);
-  if (!k) return false;
-  if (COBALT_GROUPS.has(k)) return true;
-  // The list names companies its own way ("Forestry Enviro"), so a single
-  // candidate either way round counts, the same rule an import uses.
-  const hits = [...COBALT_GROUPS].filter((n) => n.startsWith(k) || k.startsWith(n));
-  return hits.length === 1;
-}
-
-/**
  * The slots that apply to one group, in the "carrier this group is being
  * shopped at" sense the Welcome page and the Proposals admin grid use to
- * say a review is complete: Cobalt is no longer offered as a 2027 option,
- * and Angle Scorecard is never a quote to wait on (see SLOTS above), so
- * neither counts toward what a group is still missing - the underlying
- * document, if one is on file, stays stored and is simply not counted.
+ * say a review is complete: Angle Scorecard is never a quote to wait on
+ * (see SLOTS above), so it never counts toward what a group is still
+ * missing - the underlying document, if one is on file, stays stored and
+ * is simply not counted.
  */
 function slotsForGroup(_name) {
-  return SLOTS.filter((sl) => sl !== "Cobalt" && sl !== "Angle Scorecard");
+  return SLOTS.filter((sl) => sl !== "Angle Scorecard");
 }
 
 /**
@@ -445,8 +427,6 @@ async function loadPlanDocuments() {
   planDocuments = new Map(meta.map((d) => [planDocKey(d.carrier, d.planYear, d.planCode, d.docType), d]));
   console.log(`plan documents: ${planDocuments.size} on file (${shipped.length} shipped)`);
 }
-/** group -> { slot: true } for slots that already hold a proposal, so a slot in use is never hidden. */
-let proposalSlotsByGroup = {};
 /** The latest Employee Navigator carrier stats report, for reconciliation. */
 let carrierStats = null;
 /**
@@ -576,7 +556,7 @@ function rebuild() {
     brokerIsSet: !!(meta[g.name] || {}).broker,
     manager: g.manager || null,
     linkToken: g.linkToken || null,
-    /** The proposal slots this group has: Cobalt only where it is quoted. */
+    /** The proposal slots this group has. */
     slots: slotsForGroup(g.name),
     renewal: g.renewal,
     groupStatus: g.groupStatus,
@@ -4416,7 +4396,7 @@ const proposalStore = db
  * this group is shopped at" - slotsForGroup, clientProposals - rather than
  * "a document on file"; see the comments there.
  */
-const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Cobalt", "Optimyl"];
+const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Optimyl"];
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
@@ -4703,7 +4683,6 @@ function slotFor(carrier, funding, quotesMedical, filename) {
   if (/gravie/.test(c)) return "Gravie";
   if (/nationwide/.test(c)) return "Nationwide";
   if (/angle/.test(c)) return "Angle";
-  if (/cobalt/.test(c)) return "Cobalt";
   if (/optimyl/.test(c)) return "Optimyl";
   return null; // not a tracked carrier: kept on file, but it fills no slot
 }
@@ -4744,7 +4723,9 @@ async function proposalsChanged() {
         remapped = true;
         continue;
       }
-      if (!r.slot || SLOTS.includes(r.slot)) continue;
+      // Cobalt is no longer offered, but a proposal already filed under that
+      // slot keeps it rather than being re-derived into an unassigned one.
+      if (!r.slot || SLOTS.includes(r.slot) || r.slot === "Cobalt") continue;
       const x = r.extracted || {};
       const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
       await proposalStore.updateProposal(r.id, { slot });
@@ -4837,9 +4818,6 @@ async function proposalsChanged() {
       }, planCatalogueIndex, carrierName));
     }
     currentProposals = current;
-    proposalSlotsByGroup = Object.fromEntries(
-      Object.entries(current).map(([g, list]) => [g, Object.fromEntries(list.filter((p) => p.slot === "Cobalt").map((p) => [p.slot, true]))]),
-    );
     proposalCounts = counts;
     invoiceByGroup = invoices;
     rebuild();
