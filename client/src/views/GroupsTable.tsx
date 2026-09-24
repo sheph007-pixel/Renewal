@@ -14,7 +14,7 @@ export interface AdminGroup {
   brokerIsSet?: boolean;
   /** The Kennion account manager who looks after the group. */
   manager?: "debbie" | "tracy" | null;
-  /** The proposal slots this group has - Cobalt only where it is quoted. */
+  /** The proposal slots this group has. */
   slots?: string[];
   /** The group's permanent, unguessable address token. */
   linkToken?: string | null;
