@@ -373,6 +373,13 @@ export async function analyzeProposal(file, roster) {
   return readOnce(client, model, content);
 }
 
+/** Whether an error is the SDK's own structured-output validator rejecting
+ * the model's JSON - a live example: a plan list running long enough that the
+ * model wrote a bare trailing decimal point ("1234.") thousands of characters
+ * in. That is a one-off slip in that generation, not a property of the
+ * document, so it is worth a fresh generation rather than failing the read. */
+const isStructuredOutputParseError = (e) => !!e && typeof e.message === "string" && /Failed to parse structured output/i.test(e.message);
+
 /** One reading: the model call, and the structured result out of it. */
 async function readOnce(client, model, content) {
   const params = {
@@ -390,46 +397,57 @@ async function readOnce(client, model, content) {
     messages: [{ role: "user", content }],
   };
 
-  // Streamed, because a long document at this output ceiling would otherwise
-  // sit past the HTTP timeout. Server-side refusal fallback on the beta
-  // endpoint; if that request is refused as malformed (an org without the
-  // beta, say), the same call on the stable endpoint is identical minus it.
-  let response;
-  const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
-  if (beta) {
+  const MAX_PARSE_ATTEMPTS = 2;
+  for (let attempt = 1; attempt <= MAX_PARSE_ATTEMPTS; attempt++) {
+    // Streamed, because a long document at this output ceiling would otherwise
+    // sit past the HTTP timeout. Server-side refusal fallback on the beta
+    // endpoint; if that request is refused as malformed (an org without the
+    // beta, say), the same call on the stable endpoint is identical minus it.
+    let response;
+    const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
     try {
-      response = await client.beta.messages
-        .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
-        .finalMessage();
+      if (beta) {
+        try {
+          response = await client.beta.messages
+            .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+            .finalMessage();
+        } catch (e) {
+          if (!(e instanceof Anthropic.BadRequestError)) throw e;
+          console.warn("beta fallback request rejected, retrying without it:", e.message);
+        }
+      }
+      if (!response) response = await client.messages.stream(params).finalMessage();
     } catch (e) {
-      if (!(e instanceof Anthropic.BadRequestError)) throw e;
-      console.warn("beta fallback request rejected, retrying without it:", e.message);
+      if (isStructuredOutputParseError(e) && attempt < MAX_PARSE_ATTEMPTS) {
+        console.warn(`structured output parse failed, reading again (attempt ${attempt + 1}/${MAX_PARSE_ATTEMPTS}):`, e.message);
+        continue;
+      }
+      throw e;
     }
-  }
-  if (!response) response = await client.messages.stream(params).finalMessage();
 
-  if (response.stop_reason === "refusal") {
-    throw new Error("The model declined to read this document.");
+    if (response.stop_reason === "refusal") {
+      throw new Error("The model declined to read this document.");
+    }
+    if (response.stop_reason === "max_tokens") {
+      throw new Error("This proposal is longer than one reading can hold - the result would be cut off mid-plan.");
+    }
+    // The output format constrains the reply to JSON matching the schema, so the
+    // text blocks concatenate to the object.
+    const text = (response.content || [])
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    let out;
+    try {
+      out = JSON.parse(text);
+    } catch {
+      throw new Error("Could not read a structured result from the document.");
+    }
+    if (!out || typeof out !== "object") {
+      throw new Error("Could not read a structured result from the document.");
+    }
+    return out;
   }
-  if (response.stop_reason === "max_tokens") {
-    throw new Error("This proposal is longer than one reading can hold - the result would be cut off mid-plan.");
-  }
-  // The output format constrains the reply to JSON matching the schema, so the
-  // text blocks concatenate to the object.
-  const text = (response.content || [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  let out;
-  try {
-    out = JSON.parse(text);
-  } catch {
-    throw new Error("Could not read a structured result from the document.");
-  }
-  if (!out || typeof out !== "object") {
-    throw new Error("Could not read a structured result from the document.");
-  }
-  return out;
 }
 
 
