@@ -5081,6 +5081,28 @@ async function runAnalysis(id, file, keepAssignment) {
     };
     // The slot comes from what was read, unless staff already set one.
     if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical, file.filename);
+    // Kennion tracks six medical carriers. A document that fills no slot
+    // because it is ancillary (dental, vision, life, disability - no medical
+    // rates) or because the carrier is not one Kennion shops (a TPA's
+    // billing paperwork, a stray vendor flyer) is never worth keeping on
+    // file: delete it outright rather than storing it in a bucket nobody
+    // reviews. A tracked carrier whose slot just needs a human call - UHC
+    // with funding unclear - keeps its row for staff to assign.
+    //
+    // Only a document's first-ever read is judged this way. A re-read (the
+    // per-row button, the bulk "re-read every proposal", or the benefits
+    // backfill that runs at boot) never discards a row that already made it
+    // onto the roster under the old rules - staff filed those on purpose,
+    // and a re-read is not the moment to second-guess that.
+    if (!fields.slot && !(current && current.extracted)) {
+      const carrierTracked = /united|uhc|surest|optum|gravie|nationwide|angle|optimyl/i.test(String(out.carrier || ""));
+      if (out.quotes_medical === false || !carrierTracked) {
+        const ok = await proposalStore.deleteProposal(id).catch(() => false);
+        console.log(`proposal ${id} discarded: ${out.quotes_medical === false ? "ancillary" : "untracked carrier"} (${out.carrier || "carrier ?"})${ok ? "" : " - delete failed"}`);
+        await proposalsChanged();
+        return;
+      }
+    }
     // Staff may assign a group while the read is still running; that choice stands.
     const staffAssigned = !!(current && current.group_name && current.assigned_by && current.assigned_by !== "ai" && current.assigned_by !== "filename");
     if (keepAssignment || staffAssigned) {
