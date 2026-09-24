@@ -197,16 +197,22 @@ function brokerContact() {
   const b = MANAGER_LIST.broker;
   return b && b.name ? { ...b } : null;
 }
+/** A church (SIC 8661, Religious Organizations) is fully insured with UHC only - never level funded. */
+function isChurch(g) {
+  return !!g && (g.sic === "8661" || /church/i.test(g.name || ""));
+}
+
 /**
  * The slots that apply to one group, in the "carrier this group is being
  * shopped at" sense the Welcome page and the Proposals admin grid use to
  * say a review is complete: Angle Scorecard is never a quote to wait on
  * (see SLOTS above), so it never counts toward what a group is still
  * missing - the underlying document, if one is on file, stays stored and
- * is simply not counted.
+ * is simply not counted. A church never gets a UHC Level Funded slot at
+ * all - UHC Fully Insured is its only UHC option.
  */
-function slotsForGroup(_name) {
-  return SLOTS.filter((sl) => sl !== "Angle Scorecard");
+function slotsForGroup(g) {
+  return SLOTS.filter((sl) => sl !== "Angle Scorecard" && !(sl === "UHC Level Funded" && isChurch(g)));
 }
 
 /**
@@ -557,7 +563,7 @@ function rebuild() {
     manager: g.manager || null,
     linkToken: g.linkToken || null,
     /** The proposal slots this group has. */
-    slots: slotsForGroup(g.name),
+    slots: slotsForGroup(g),
     renewal: g.renewal,
     groupStatus: g.groupStatus,
     effectiveDate: g.effectiveDate,
@@ -1239,7 +1245,7 @@ app.post("/api/signin", async (req, res) => {
     // The carrier proposals on file for this group - plans and tier rates as
     // read off the documents - and this month's billing, counts and rates only.
     proposals: clientProposals(g.name),
-    slots: slotsForGroup(g.name),
+    slots: slotsForGroup(g),
     funding: fundingSnapshot(g.name),
     // This month's invoice, if one is filed: enough to offer the link, not the file.
     invoice: invoice
@@ -2085,7 +2091,7 @@ app.post("/api/group/export", async (req, res) => {
       file = await renderChangesReport({
         group,
         proposals,
-        slots: slotsForGroup(g.name),
+        slots: slotsForGroup(g),
         manager: managerContact(g.manager),
         broker: brokerContact(),
         signup: await latestSignup(g.name).catch(() => null),
@@ -5070,6 +5076,9 @@ app.post(
     if (slot && !SLOTS.includes(slot)) {
       return res.status(400).json({ error: `Slot must be one of: ${SLOTS.join(", ")}.` });
     }
+    if (slot === "UHC Level Funded" && isChurch(groups.find((g) => g.name === group))) {
+      return res.status(400).json({ error: "Churches are fully insured with UHC only - use UHC Fully Insured." });
+    }
     if (slot && !group) {
       return res.status(400).json({ error: "A slot needs a group." });
     }
@@ -5495,13 +5504,14 @@ app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" 
   const id = Number(req.params.id);
   const { group, carrier, confirm, slot, renumber } = req.body || {};
   const fields = {};
+  let current = null;
   // A slot's option IDs drifted out of the clean 1.. sequence - repeated
   // re-reads that never matched a prior plan, most often - so staff can ask
   // for a fresh, compact renumber: the whole prefix in this group is
   // released and handed out again from 1, the same repair an EPO twin's
   // numbers already get automatically.
   if (renumber === true) {
-    const current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    current = (await proposalStore.listProposals()).find((r) => r.id === id);
     if (!current) return res.status(404).json({ error: "No such proposal." });
     fields.extracted = { ...(current.extracted || {}), renumber: true };
   }
@@ -5519,6 +5529,16 @@ app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" 
     fields.group_name = clean;
     fields.status = clean ? "assigned" : "unassigned";
     fields.assigned_by = clean ? req.staffEmail || "staff" : null;
+  }
+  // Churches never get a UHC Level Funded slot, whether the slot or the
+  // group is the field changing on this call.
+  if (slot !== undefined || group !== undefined) {
+    if (!current) current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const finalSlot = fields.slot !== undefined ? fields.slot : current && current.slot;
+    const finalGroup = fields.group_name !== undefined ? fields.group_name : current && current.group_name;
+    if (finalSlot === "UHC Level Funded" && finalGroup && isChurch(groups.find((g) => g.name === finalGroup))) {
+      return res.status(400).json({ error: "Churches are fully insured with UHC only - use UHC Fully Insured." });
+    }
   }
   if (confirm) {
     fields.status = "assigned";

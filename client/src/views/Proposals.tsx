@@ -438,6 +438,11 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
   // document, or a carrier the portal does not track. Kept, never in a slot.
   const ancillary = isAncillary(p);
   const untracked = !!x && !p.slot && (ancillary || !/united|uhc|surest|optum|gravie|nationwide|angle|optimyl/i.test(p.carrier || x.carrier || ""));
+  // A church is fully insured with UHC only, so its own slot list leaves out
+  // UHC Level Funded (see slotsForGroup on the server) - keep it off this
+  // row's dropdown too, whichever group it is currently filed under.
+  const group = groups.find((gr) => gr.name === p.group_name);
+  const slotOptions = SLOTS.filter((s) => s !== "UHC Level Funded" || !group?.slots || group.slots.includes("UHC Level Funded"));
 
   // An email wrapper: the subject, who sent it, what came out of it.
   if (p.status === "container") {
@@ -494,7 +499,7 @@ function ProposalRow({ p, token, groups, onChanged, fixedGroup, children: childC
               style={{ ...selectStyle, maxWidth: 180, borderColor: p.slot ? C.inputEdge : untracked ? C.inputEdge : C.amber }}
             >
               <option value="">{ancillary ? " - ancillary, no slot - " : untracked ? " - not a tracked carrier - " : " - which proposal? - "}</option>
-              {SLOTS.map((s) => (
+              {slotOptions.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
