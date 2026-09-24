@@ -5533,7 +5533,10 @@ app.get("/api/admin/quotes/:carrier/:group", requireStaff, async (req, res) => {
 
 app.get("/api/admin/proposals", requireStaff, async (req, res) => {
   try {
-    let rows = await proposalStore.listProposals();
+    // Invoices share this table but belong to the Funding tab, not here -
+    // its own endpoint (/api/admin/invoices/batch) is how the app actually
+    // shows them; nothing on the Proposals page ever expects one.
+    let rows = (await proposalStore.listProposals()).filter((r) => r.kind !== "invoice");
     const group = String(req.query.group || "").trim();
     if (group) rows = rows.filter((r) => r.group_name === group);
     res.json({ proposals: rows, ai: aiEnabled(), durable: !!db });
