@@ -4730,11 +4730,24 @@ async function proposalsChanged() {
         }
       }
       // An ancillary proposal fills no slot, whichever slot an older reading
-      // gave it: the four are group health.
-      if (r.slot && isAncillaryRow(r)) {
+      // gave it: the four are group health. Angle Scorecard is the one
+      // exception - it always reads ancillary (no rates), but it has its
+      // own slot on purpose (see SLOTS above) and must keep it.
+      if (r.slot && r.slot !== "Angle Scorecard" && isAncillaryRow(r)) {
         await proposalStore.updateProposal(r.id, { slot: null });
         remapped = true;
         continue;
+      }
+      // A scorecard read before that exception existed lost its slot to the
+      // rule above and never got it back on its own; put it back now.
+      if (!r.slot && r.status !== "container") {
+        const x = r.extracted || {};
+        const scorecardSlot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
+        if (scorecardSlot === "Angle Scorecard") {
+          await proposalStore.updateProposal(r.id, { slot: scorecardSlot });
+          remapped = true;
+          continue;
+        }
       }
       // A reading from before this was enforced may have stored a stray
       // blank plan (no name, no code, no rate), or, for Optimyl, an exact
