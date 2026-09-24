@@ -1018,7 +1018,10 @@ export default function Proposals({ token, groups }: Props) {
   // proposal still waiting for a slot (staff say which), an ancillary
   // proposal, and a carrier the portal does not track.
   const slotlessRows = proposals.filter((p) => needsSlot(p) && matches(p));
-  const ancillaryRows = proposals.filter((p) => p.group_name && isAncillary(p) && matches(p));
+  // Angle Scorecard is ancillary-flagged (no rates) but still fills a real
+  // slot - it belongs in the grid/group views, never in this "fills no slot"
+  // overflow bucket.
+  const ancillaryRows = proposals.filter((p) => p.group_name && !p.slot && isAncillary(p) && matches(p));
   const otherRows = proposals.filter(
     (p) => p.group_name && !p.slot && p.status !== "analyzing" && !isAncillary(p) && !needsSlot(p) && matches(p),
   );
