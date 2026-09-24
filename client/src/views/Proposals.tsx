@@ -182,6 +182,34 @@ const gridTh: CSSProperties = {
   whiteSpace: "nowrap",
 };
 
+/** A clickable grid column header: click to sort by it, click again to reverse. */
+function GridTh({
+  k,
+  label,
+  align,
+  sort,
+  dir,
+  onSort,
+}: {
+  k: GridSortKey;
+  label: string;
+  align?: "left";
+  sort: GridSortKey;
+  dir: number;
+  onSort: (k: GridSortKey) => void;
+}) {
+  return (
+    <th
+      onClick={() => onSort(k)}
+      aria-sort={sort === k ? (dir > 0 ? "ascending" : "descending") : "none"}
+      style={{ ...gridTh, textAlign: align || "center", ...(align === "left" ? { paddingLeft: 0 } : {}), cursor: "pointer", userSelect: "none" }}
+    >
+      {label}
+      <span style={{ color: sort === k ? C.blue : "transparent" }}>{dir > 0 ? " ▲" : " ▼"}</span>
+    </th>
+  );
+}
+
 const gridFilter: CSSProperties = {
   padding: "7px 10px",
   fontSize: 13,
@@ -845,6 +873,45 @@ function Bucket({
   );
 }
 
+function download(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+type GridRow = { g: AdminGroup; slots: (Proposal | undefined)[]; applies: Set<string>; have: number; of: number };
+/** Which of a grid row's columns to sort or export by: the group itself, or one of its slots. */
+type GridSortKey = "name" | "manager" | "enrolled" | "filled" | (typeof SLOTS)[number];
+
+/** The grid rows on screen, as a CSV Excel opens cleanly - same search, filters and sort. */
+function gridCsv(rows: GridRow[]): string {
+  const cols: [string, (r: GridRow) => unknown][] = [
+    ["Group", (r) => r.g.name],
+    ["Code", (r) => r.g.code],
+    ["Manager", (r) => (r.g.manager === "debbie" ? "Debbie" : r.g.manager === "tracy" ? "Tracy" : "")],
+    ["Enrolled", (r) => r.g.enrolled ?? 0],
+    ["Filled", (r) => `${r.have} of ${r.of}`],
+    ...SLOTS.map(
+      (sl, i) =>
+        [sl, (r: GridRow) => (!r.applies.has(sl) ? "" : r.slots[i] ? r.slots[i]!.carrier || r.slots[i]!.filename : "Missing")] as [
+          string,
+          (r: GridRow) => unknown,
+        ],
+    ),
+  ];
+  const cell = (v: unknown) => {
+    const t = v == null ? "" : String(v);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const lines = [cols.map(([h]) => cell(h)).join(",")];
+  rows.forEach((r) => lines.push(cols.map(([, f]) => cell(f(r))).join(",")));
+  // BOM so Excel reads the file as UTF-8.
+  return "﻿" + lines.join("\r\n");
+}
+
 interface Props {
   token: string;
   /** Live roster: what a proposal can be assigned to. */
@@ -859,6 +926,8 @@ export default function Proposals({ token, groups }: Props) {
   const [query, setQuery] = useState("");
   const [manager, setManager] = useState<"All" | "debbie" | "tracy">("All");
   const [need, setNeed] = useState<"All" | "missing" | "complete" | string>("All");
+  const [gridSort, setGridSort] = useState<GridSortKey>("name");
+  const [gridDir, setGridDir] = useState(1);
 
   const q = query.trim().toLowerCase();
   const matches = (p: Proposal) =>
@@ -903,6 +972,22 @@ export default function Proposals({ token, groups }: Props) {
   proposals.forEach((p) => {
     if (isCurrent(p) && p.group_name && p.slot) currentBySlot.set(`${p.group_name}||${p.slot}`, p);
   });
+  // A grid column's sort value: the group's own fields, or - for a slot
+  // column - whether that group has a current proposal in it (filled sorts
+  // first), with a slot that does not apply to the group last of all.
+  const gridSortVal = (r: GridRow): string | number => {
+    if (gridSort === "name") return r.g.name.toLowerCase();
+    if (gridSort === "manager") return r.g.manager ? (r.g.manager === "debbie" ? "Debbie" : "Tracy").toLowerCase() : "";
+    if (gridSort === "enrolled") return r.g.enrolled ?? 0;
+    if (gridSort === "filled") return r.of ? r.have / r.of : -1;
+    const i = SLOTS.indexOf(gridSort as (typeof SLOTS)[number]);
+    if (!r.applies.has(gridSort)) return -1;
+    return r.slots[i] ? 1 : 0;
+  };
+  const gridSortBy = (k: GridSortKey) => {
+    setGridDir((d) => (gridSort === k ? -d : 1));
+    setGridSort(k);
+  };
   const gridRows = sortedGroups
     .map((g) => {
       const applies = new Set<string>(g.slots || SLOTS);
@@ -920,6 +1005,12 @@ export default function Proposals({ token, groups }: Props) {
         if (currentBySlot.get(`${g.name}||${need}`)) return false;
       }
       return true;
+    })
+    .sort((a, b) => {
+      const va = gridSortVal(a);
+      const vb = gridSortVal(b);
+      if (va === vb) return a.g.name.localeCompare(b.g.name);
+      return (va > vb ? 1 : -1) * gridDir;
     });
   const filled = gridRows.reduce((n, r) => n + r.have, 0);
   const slotsInPlay = gridRows.reduce((n, r) => n + r.of, 0);
@@ -1040,6 +1131,13 @@ export default function Proposals({ token, groups }: Props) {
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => download(`kennion-proposals-${new Date().toISOString().slice(0, 10)}.csv`, gridCsv(gridRows))}
+                title="Download the rows shown, with the current search, filters and sort, as a CSV for Excel"
+                style={{ padding: "7px 13px", fontSize: 13, borderRadius: 4, cursor: "pointer", color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }}
+              >
+                Export CSV
+              </button>
             </>
           )}
           {layout === "list" && (
@@ -1086,11 +1184,10 @@ export default function Proposals({ token, groups }: Props) {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
                 <thead>
                   <tr>
-                    <th style={{ ...gridTh, textAlign: "left", paddingLeft: 0 }}>Group</th>
+                    <GridTh k="name" label="Group" align="left" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                    <GridTh k="enrolled" label="Enrolled" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
                     {SLOTS.map((sl) => (
-                      <th key={sl} style={gridTh}>
-                        {sl}
-                      </th>
+                      <GridTh key={sl} k={sl} label={sl} sort={gridSort} dir={gridDir} onSort={gridSortBy} />
                     ))}
                   </tr>
                 </thead>
@@ -1102,10 +1199,12 @@ export default function Proposals({ token, groups }: Props) {
                           {g.name}
                         </Link>
                         <div style={{ fontSize: 11.5, color: C.ghost }}>
-                          {g.enrolled} enrolled
-                          {g.manager ? ` · ${g.manager === "debbie" ? "Debbie" : "Tracy"}` : ""}
-                          {` · ${have} of ${of}`}
+                          {g.manager ? `${g.manager === "debbie" ? "Debbie" : "Tracy"} · ` : ""}
+                          {have} of {of}
                         </div>
+                      </td>
+                      <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ink, fontVariantNumeric: "tabular-nums" }}>
+                        {g.enrolled}
                       </td>
                       {SLOTS.map((sl, i) =>
                         applies.has(sl) ? (
