@@ -4916,19 +4916,36 @@ function lacksBenefits(r) {
  * a restart, so any row still "analyzing" at boot is orphaned. Pick each
  * one back up (the file is stored) and, failing that, let staff assign it.
  */
+/**
+ * Work a batch of rows a couple at a time - up to READ_PARALLEL concurrent
+ * runAnalysis calls - instead of one at a time. A plain sequential loop
+ * meant one slow or stuck document (a huge scan still generating output, a
+ * connection that never completes) blocked every row behind it; live
+ * example: a 46-row resume sat at 0 done for 10+ minutes because the very
+ * first row hadn't finished. Splitting the batch across a small worker pool
+ * means a stuck row only ties up one of the two slots - the rest keep moving.
+ */
+async function processRowsInParallel(rows, work) {
+  const queue = [...rows];
+  const workers = Array.from({ length: Math.max(1, Math.min(READ_PARALLEL, queue.length)) }, async () => {
+    while (queue.length) await work(queue.shift());
+  });
+  await Promise.all(workers);
+}
+
 async function resumeOrphanedReads() {
   const rows = await proposalStore.listProposals();
   const stuck = rows.filter((r) => r.status === "analyzing");
   if (!stuck.length) return;
   console.log(`proposals: resuming ${stuck.length} read(s) interrupted by the last restart`);
-  for (const r of stuck) {
+  await processRowsInParallel(stuck, async (r) => {
     const f = await proposalStore.getProposalFile(r.id).catch(() => null);
     if (!f) {
       await proposalStore.updateProposal(r.id, { status: r.group_name ? "assigned" : "unassigned", error: "The file could not be read back after a restart." });
-      continue;
+      return;
     }
     await runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, !!r.group_name);
-  }
+  });
   await proposalsChanged();
 }
 
@@ -4939,14 +4956,14 @@ async function backfillPlanBenefits() {
   const want = rows.filter((r) => r.status !== "container" && r.slot !== "Gravie" && r.kind !== "invoice" && lacksBenefits(r));
   if (!want.length) return;
   console.log(`proposals: re-reading ${want.length} proposal(s) for per-plan benefits`);
-  for (const r of want) {
+  await processRowsInParallel(want, async (r) => {
     const f = await proposalStore.getProposalFile(r.id).catch(() => null);
-    if (!f) continue;
+    if (!f) return;
     // A re-read for benefits never moves a proposal off its group.
     const keep = !!r.group_name;
     await proposalStore.updateProposal(r.id, { status: "analyzing", error: null });
     await runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, keep);
-  }
+  });
   await proposalsChanged();
   console.log(`proposals: benefits re-read done for ${want.length} proposal(s)`);
 }

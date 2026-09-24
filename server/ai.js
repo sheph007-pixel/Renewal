@@ -294,10 +294,13 @@ export async function analyzeProposal(file, roster) {
   // A proposal read shares the org's tokens-per-minute budget with every
   // other caller. The server already caps how many run at once (see
   // withReadSlot in index.js), but a burst can still catch a 429 waiting for
-  // a slot to free up - the SDK's own backoff (default 2 retries) is worth
-  // stretching here rather than failing the read and making staff click
-  // Re-Read by hand.
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 6 }) : new Anthropic({ maxRetries: 6 });
+  // a slot to free up - a couple of retries is worth it rather than failing
+  // the read and making staff click Re-Read by hand. The SDK's own default
+  // (10 minutes) is long enough that a single stalled attempt - a connection
+  // that opens but never finishes - can tie up a read slot for the better
+  // part of an hour once retries stack up; a firmer per-attempt timeout caps
+  // that, and the retry count is bounded to match.
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 6 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 6 * 60 * 1000 });
 
   const rosterText = roster
     .map((g) => `- ${g.name} (${g.enrolled} enrolled, ${g.tpa || "TPA unknown"})`)
