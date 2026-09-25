@@ -24,6 +24,11 @@ export interface AdminGroup {
   groupStatus?: "new" | "existing";
   /** The date this group's elections take effect, as "YYYY-MM-DD". Falls back to the system default when unset. */
   effectiveDate?: string | null;
+  /** The Welcome page's headline and paragraph the group sees: staff's own wording, or the default for its status. */
+  greetingHeadline?: string;
+  greetingBody?: string;
+  /** Whether staff have written the greeting, rather than it following the status default. */
+  greetingIsSet?: boolean;
   /** Carrier proposals filed under this group. */
   proposals?: number;
   /** The newest client invoice filed under this group, if any. */

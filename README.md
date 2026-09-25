@@ -72,7 +72,11 @@ what came in when).
 Clicking a company name opens its own page: access code, ALE bucket, every
 company detail as an editable field, contacts, plans in force, and where the
 data came from. Edits are stored separately from the imported payload and
-override it, so a correction is not undone by the next export. The company name
+override it, so a correction is not undone by the next export. The page also
+holds the group's **Welcome Page Greeting** - the headline and paragraph under
+its name on the Welcome page, live on the group's next page load. An Existing
+group defaults to the 2027 options message; a New group starts blank until
+staff write one. The company name
 is deliberately **not** editable — it is the key an import matches on, so
 renaming would orphan the group.
 

@@ -20,6 +20,9 @@ interface Props {
   effectiveDate?: string;
   /** Renewing prior coverage, or enrolling with Kennion for the first time. */
   groupStatus?: "new" | "existing";
+  /** The headline and paragraph under the effective date, as staff set them on the company page. Blank shows nothing. */
+  greetingHeadline?: string;
+  greetingBody?: string;
 }
 
 /** A small arrow-down-into-tray icon for the download button. */
@@ -71,10 +74,10 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
 }
 
 /**
- * The Welcome tab: one plain welcome panel (copy branches on groupStatus -
- * an existing client already knows Kennion and is being told the program
- * expanded; a new client is being told what the program is), kept to one
- * paragraph so the page fits above the fold, with the year's Program
+ * The Welcome tab: one plain welcome panel - the greeting staff write for
+ * the group on its company page (an existing client defaults to the 2027
+ * options message, a new client to nothing until staff write one; a blank
+ * line between paragraphs starts a new one), with the year's Program
  * Overview one click away. Then How It Works: four numbered boxes in a row
  * (wrapping on a narrow screen), not a stacked list - the natural left-to-
  * right reading order already says 1, 2, 3, 4, and a row takes a fraction
@@ -84,14 +87,15 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
  * beside it keeps the people and the AI Assistant reachable without making
  * a call the next step.
  */
-export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup, effectiveDate, groupStatus }: Props) {
+export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup, effectiveDate, greetingHeadline, greetingBody }: Props) {
   const narrow = useNarrow();
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   const head = { ...h2, marginBottom: 10, fontSize: 18, letterSpacing: "-0.2px" } as const;
   const assistant = assistantHref ? <Link href={assistantHref} style={link}>AI Assistant</Link> : "AI Assistant";
   const submitted = lastSignup ? new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
-  const isNew = groupStatus === "new";
+  const headline = (greetingHeadline || "").trim();
+  const paragraphs = (greetingBody || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
   const eff = { effectiveDate };
   const year = effectiveYear(eff);
 
@@ -115,36 +119,15 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
-          {isNew ? (
-            <>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-                <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
-                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
-              </div>
-              <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
-              <p style={{ ...p, fontWeight: 600, color: C.ink }}>You&rsquo;re joining the Kennion Program.</p>
-              <p style={{ ...p, marginBottom: 0 }}>
-                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the
-                Kennion Program since 2013 - pairing dedicated account management with major national carriers, networks
-                and program partners to build a plan strategy that fits your group.
-              </p>
-            </>
-          ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-                <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
-                <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
-              </div>
-              <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
-              <p style={{ ...p, fontWeight: 600, color: C.ink }}>The Kennion Program is expanding.</p>
-              <p style={{ ...p, marginBottom: 0 }}>
-                Kennion has helped employers with employee benefits for more than 50 years, and we&rsquo;ve operated the Kennion
-                Program since 2013. We&rsquo;re expanding our group health offering through major national partners, networks and
-                programs - more medical plan options, more flexibility, and a better way to evaluate what works for your group,
-                backed by the same Kennion team you already know.
-              </p>
-            </>
-          )}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
+            <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
+            <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
+          </div>
+          <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
+          {headline && <p style={{ ...p, fontWeight: 600, color: C.ink, ...(paragraphs.length ? {} : { marginBottom: 0 }) }}>{headline}</p>}
+          {paragraphs.map((t, i) => (
+            <p key={i} style={{ ...p, whiteSpace: "pre-line", ...(i === paragraphs.length - 1 ? { marginBottom: 0 } : {}) }}>{t}</p>
+          ))}
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
             <p style={{ ...kicker, marginBottom: 8 }}>Program Overview</p>
             <DownloadChanges groupName={groupName} year={year} />
