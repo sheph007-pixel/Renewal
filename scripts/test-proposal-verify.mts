@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import { gridCounts, verifyProposals } from "../server/proposal-verify.js";
 import { applyCorrection, offeredCount, readingVersion, auditProposal, auditForClient, shape } from "../server/proposal-audit.js";
 import { hiddenReason } from "../server/plan-visibility.js";
+import { AUDIT_STANDARD } from "../server/plan-compare.js";
 import { proposalPlans, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 // --- The check's count is the client's count --------------------------------
@@ -26,6 +27,16 @@ assert.deepEqual(counts.unpriced.map((p) => p.name), ["Choice Plus 2000", "Unpri
 const pr = { id: 1, slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans: plans.map((p) => ({ ...p, planType: "PPO" })), uploadedAt: "2026-09-01" } as unknown as GroupProposal;
 const g = { name: "X", tiers } as unknown as Group;
 assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).length, counts.shown, "the check counts exactly the plans the client's grid shows");
+// Two different carrier plans at the same rates are two plans - never
+// collapsed on name and rates. Identity is the carrier's code (or exact name).
+const twins = [
+  { name: "Choice Plus 1000", planCode: "P1000A", identity: "code:P1000A", rates: { EE: 600, ES: 1200, EC: 1100, FAM: 1700 } },
+  { name: "Choice Plus 1000", planCode: "P1000B", identity: "code:P1000B", rates: { EE: 600, ES: 1200, EC: 1100, FAM: 1700 } },
+  { name: "Choice Plus 1000 HSA", planCode: "P1000H", identity: "code:P1000H", rates: { EE: 600, ES: 1200, EC: 1100, FAM: 1700 } },
+];
+assert.equal(gridCounts(twins, "UHC Level Funded", tiers).shown, 3, "same rates, different carrier plans: three rows");
+const prTwins = { ...pr, plans: twins.map((p) => ({ ...p, planType: "PPO" })) } as unknown as GroupProposal;
+assert.equal(proposalPlans({ proposals: [prTwins] } as unknown as KennionData, g).length, 3, "and the client's grid agrees");
 
 // --- The check, pure: Verified needs both auditors on this exact reading --
 const isEpoPlan = (pl: { name?: string }) => /\bEPO\b/.test(pl.name || "");
@@ -42,7 +53,7 @@ const canon = (plans: object[]) => ({
 const plan1 = (over = {}) => ({ name: "Copay 1500 PPO", option_id: "GR1", deductible: "$1,500", oop_max: "$5,000", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 }, source: src, ...over });
 const reading1 = canon([plan1()]);
 const passModel = (model: string, extra = {}) => ({ model, verdict: "pass", plansFoundTotal: 2, epoExcluded: 1, documentPlanCount: 2, confirmed: 2, of: 2, mismatches: [], notes: "", ...extra });
-const dualPass = (extracted = reading1) => ({ status: "pass", completedAt: "2026-09-25T00:00:00Z", version: readingVersion(extracted), mismatches: [], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)")] });
+const dualPass = (extracted = reading1) => ({ status: "pass", completedAt: "2026-09-25T00:00:00Z", version: readingVersion(extracted), standard: AUDIT_STANDARD, mismatches: [], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)")] });
 const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", superseded_by: null, size: 1000, mime: "application/pdf", source_sha: "sha-acme", filename: "acme gravie.pdf", extracted: reading1, audit: { ...dualPass(), sourceSha: "sha-acme" } };
 // What the server serves: every stored plan, each marked with whether the client is shown it.
 const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; network?: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
@@ -61,6 +72,12 @@ assert.equal(cell.stage, "VERIFIED");
 assert.equal(cell.reconciliation.unique_epo, 1);
 assert.deepEqual(cell.hidden.map((h: { name: string }) => h.name), ["Copay 1500 EPO"], "loaded, audited, and hidden from the client - visibly");
 assert.match(cell.steps.grid.note, /1 hidden by rule: EPO/);
+
+// An audit held to the older, rates-only standard is pending a field-by-field one.
+cell = cellOf(run([{ ...good, audit: { ...good.audit, standard: 1 } }], served([good])));
+assert.equal(cell.failedAt, "claude");
+assert.equal(cell.fix, "audit", "re-audited, not re-read");
+assert.match(cell.steps.claude.note, /rates alone/);
 
 // The client being shown a plan the rules hide is caught.
 cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans.map((p: object) => ({ ...p, hidden: null })) }]));
@@ -101,7 +118,7 @@ assert.equal(cell.steps.claude.ok, true);
 const skipped = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)", { verdict: "incomplete", confirmed: 0 }), passModel("ChatGPT (gpt-5)")] } };
 cell = cellOf(run([skipped], served([skipped])));
 assert.equal(cell.failedAt, "claude");
-assert.match(cell.steps.claude.note, /confirmed the rates of 0 of 2/);
+assert.match(cell.steps.claude.note, /returned 0 of 2/);
 
 // An audit of an earlier reading does not count: stale -> audit again.
 const changed = canon([plan1({ rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } })]);
@@ -125,8 +142,15 @@ assert.equal(cellOf(run([shortCount], served([shortCount]))).failedAt, "claude")
 cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [] }]));
 assert.equal(cell.failedAt, "grid");
 assert.equal(cell.fix, "refresh");
-cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [{ name: "Copay 1500 PPO", rates: { EE: 7, ES: 2, EC: 3, FAM: 4 } }] }]));
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans.map((p: { name: string }) => (p.name === "Copay 1500 PPO" ? { ...p, rates: { EE: 7, ES: 2, EC: 3, FAM: 4 } } : p)) }]));
 assert.equal(cell.failedAt, "grid", "the grid showing other rates than the database is caught");
+// One carrier plan served twice to the client, or a BenSync ID on two plans, is caught.
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [...served([good])()[0].plans, served([good])()[0].plans[0]] }]));
+assert.equal(cell.failedAt, "grid");
+assert.match(cell.steps.grid.note, /served to the client twice/);
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans }, { id: 12, slot: "Nationwide", plans: [{ name: "NW 1", optionId: "GR1", rates: { EE: 1, ES: 1, EC: 1, FAM: 1 } }] }]));
+assert.equal(cell.failedAt, "validation", "a BenSync ID another of the group's proposals holds is caught before any audit");
+assert.ok(cell.steps.validation.checks.some((k: { key: string; ok: boolean }) => k.key === "ids" && !k.ok));
 
 // Grid: a plan missing a tier rate the group needs - correct it, unless the
 // document itself leaves that tier unpriced.
@@ -204,15 +228,16 @@ const storedTwo = [
   { name: "A", rates: { EE: 100, ES: 200, EC: 180, FAM: 300 } },
   { name: "B", rates: { EE: 110, ES: 220, EC: 190, FAM: 320 } },
 ];
-const says = (confirmations: object[]) => ({ verdict: "pass", plans_found_total: 2, epo_excluded: 0, document_plan_count: 2, rate_confirmations: confirmations, mismatches: [], notes: "" });
-let sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: true, EE: 110, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
+const says = (confirmations: object[]) => ({ verdict: "pass", plans_found_total: 2, epo_excluded: 0, document_plan_count: 2, plan_confirmations: confirmations, mismatches: [], notes: "" });
+const readA = { index: 0, on_document: true, name: "A", EE: 100, ES: 200, EC: 180, FAM: 300 };
+let sh = shape("ChatGPT (gpt-5)", says([readA, { index: 1, on_document: true, name: "B", EE: 110, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
 assert.equal(sh.verdict, "pass");
-sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: true, EE: 111.5, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
+sh = shape("ChatGPT (gpt-5)", says([readA, { index: 1, on_document: true, name: "B", EE: 111.5, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
 assert.equal(sh.verdict, "issues", "a rate the auditor read differently is a finding even when it said pass");
-assert.deepEqual(sh.mismatches, [{ plan: "B", field: "rate EE", stored: "110", onDocument: "111.5" }]);
-sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }]), storedTwo);
+assert.deepEqual(sh.mismatches, [{ plan: "B", index: 1, optionId: null, planCode: null, field: "rate EE", stored: "110", onDocument: "111.5" }]);
+sh = shape("ChatGPT (gpt-5)", says([readA]), storedTwo);
 assert.equal(sh.verdict, "incomplete", "a plan the auditor did not confirm keeps it from passing");
-sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: false, EE: null, ES: null, EC: null, FAM: null }]), storedTwo);
+sh = shape("ChatGPT (gpt-5)", says([readA, { index: 1, on_document: false, EE: null, ES: null, EC: null, FAM: null }]), storedTwo);
 assert.equal(sh.mismatches[0].field, "missing_plan");
 
 // --- The audit record: both models, counts, version; clients see only a current pass

@@ -26,6 +26,7 @@ const plan = (o) => ({ name: "", plan_code: null, network: "Choice Plus", plan_t
 
 /** What each original page of the stand-in document shows. `pos` is its position in the file sent. */
 function onPage(page, pos) {
+  if (doc === "wide") return [plan({ name: `Grid ${page}`, plan_code: `G${page}`, deductible: "$1,000", oop_max: "$5,000", benefits: bens, rates: rates(page), source_pages: { identity: [pos], benefits: [pos], rates: [pos] } })];
   if (doc === "short" || doc === "encrypted") {
     const out = [plan({ name: `Plan p${page}`, plan_code: `P${page}`, deductible: "$1,000", oop_max: "$5,000", benefits: bens, rates: rates(page), source_pages: { identity: [pos], benefits: [pos], rates: [pos] } })];
     // The headline plan is printed again on the last page.
@@ -175,6 +176,19 @@ assert.deepEqual(seen, ["1-6", "window:1-3", "window:1-2", "window:3", "window:4
 assert.deepEqual(out.plans.map((p) => p.name), ["Plan p1", "Plan p2", "Plan p3", "Plan p4", "Plan p5", "Plan p6"]);
 assert.deepEqual(out.plans[0].source.identity, [1, 5], "page 5's repeat of plan p1 merged, pages as printed");
 assert.deepEqual(out.plans[5].source.rates, [6]);
+
+// 5. A long quote with a plan grid on every page (Adobe HVAC's 300-page UHC
+//    quote): the map finds every page relevant, so the whole document is
+//    read - in 40-page windows from the start, never all at once first.
+doc = "wide";
+seen.length = 0;
+mapSays = { carrier: "UnitedHealthcare", effective_date: "2027-01-01", page_count: 45, document_type: "digital", pages: Array.from({ length: 45 }, (_, i) => ({ page: i + 1, kinds: ["plan_identity", "rates"] })), approx_unique_ppo: 45, approx_unique_epo: 0, notes: "" };
+out = await analyzeProposal({ filename: "wide.pdf", prepared: { kind: "pdf", buffer: await pdfOf(45) }, context: null }, roster);
+assert.equal(seen[0], "map:45");
+assert.equal(seen[1], "1-40", "the first read is a 40-page window, not the whole 45 pages");
+assert.ok(!seen.includes("1-45"), "the whole document is never tried in one read");
+assert.ok(seen.includes("41-45"));
+assert.equal(out.plans.length, 45, "every page's plan, folded from the windows");
 
 server.close();
 console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document - ok");

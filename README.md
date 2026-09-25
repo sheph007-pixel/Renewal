@@ -401,20 +401,44 @@ two models from two different companies before a client is shown it
 (`server/proposal-audit.js`): Claude Sonnet 5 and ChatGPT, independently.
 Each auditor must count the plans on the document - every unique plan
 found, PPO and EPO, every one of which is stored ("19 found, 16 PPO, 3 EPO,
-19 expected") - read all four tier rates
-off the page for **every** stored plan (the server compares them to the
-database in code, so a rate an auditor did not happen to notice is still
-checked), and report every other value the document contradicts. The audit
-**passes** only when both models ran, both confirmed every plan's rates,
-both counts equal the database, and neither has a finding; any finding makes
-it **issues**; a model that is off, failed or skipped a plan leaves it
-**pending** - never a pass on one model's word. Each audit records the exact
-reading it checked (`version`, a hash of the stored plans), so a correction,
-a re-read or a newer upload makes it stale on its own, and a client's plan
-card only ever shows a current pass ("✓ Proposal Audit Completed"); anything
-else reads "under review by Kennion". ChatGPT is called with a 20-minute
-timeout and one retry, since a large PDF can take longer than Node's fetch
-waits.
+19 expected") - and, for **every** stored plan, return what the document
+prints for it: exact name, plan code, network, deductible, out-of-pocket
+max, coinsurance, primary care, specialist, imaging, urgent care, emergency
+room, inpatient hospital, retail Rx by tier, HSA eligibility and the four
+tier rates (EE/ES/EC/FAM). The auditors are told where to find each plan
+(index, BenSync ID, name, code, network, source pages) but **never the
+stored values**, so they cannot copy them. **Server code** then compares
+every value read with the canonical record (`server/plan-compare.js`): a
+wrong copay is a finding even when the auditor answered "pass" and listed
+nothing. Comparison normalizes harmless formatting only - `$1,500` = `1500`,
+`25 %` = `25%`, "No charge" = `$0`, dashes and spacing - and never rewrites a
+stored value; the database keeps the carrier's exact printed name and
+wording. One shared field guide (`FIELD_GUIDE`) tells the reader's schema,
+both auditors and the corrector how to read each field (in-network;
+deductible individual then family; Rx retail tiers in order), so they
+compare like with like.
+
+A proposal with more than 25 stored plans is audited in **deterministic
+batches** (`AUDIT_BATCH`: plans 0-24, 25-49, … by stored index), each batch
+against the whole document, run in order per model with the document
+prompt-cached. Every plan is in exactly one batch for each model; every
+batch names the same reading version and document hash; the audit passes
+only when every batch from both models came back complete and clean. A
+missing plan or a failed batch leaves the model incomplete, so the audit is
+**pending**, never a pass. Document-level findings (a plan the list lacks)
+are counted once per auditor, not once per batch.
+
+The audit **passes** only when both models ran, both returned every plan in
+every batch, every compared field agrees, both counts equal the database,
+and neither reported a problem; any finding makes it **issues**; a model
+that is off, failed or left a plan out leaves it **pending** - never a pass
+on one model's word. Each audit records the exact reading it checked
+(`version`, a hash of the stored plans), the document (`sourceSha`) and the
+audit standard (`standard`, `AUDIT_STANDARD` = 2: every field compared). A
+correction, a re-read, a newer upload or an older standard makes it stale on
+its own: an audit of standard 1 (rates only) is re-audited, not re-read.
+ChatGPT is called with a 20-minute timeout and one retry, since a large PDF
+can take longer than Node's fetch waits.
 
 ### One carrier plan, one canonical record
 
@@ -480,13 +504,39 @@ keep their code parser, which now records each plan's sheet and row.
 
 **Deterministic validation** (`server/plan-validate.js`) runs before either
 AI audit: the reading is of the document version on file; no duplicate
-plans, plan codes, names or BenSync IDs (within the group too); name,
-deductible and out-of-pocket max present; four numeric tier rates (or a tier
-the document is confirmed not to price); source references for identity,
+canonical identities; no plan code on two plans; no exact printed name on two
+plans; no BenSync ID on two plans (within the group too); name, deductible
+and out-of-pocket max present; four numeric tier rates (or a tier the
+document is confirmed not to price); source references for identity,
 benefits and rates; no plan holding data from another plan code; no
 unresolved conflicting appearances; and the counts reconcile - expected
 equals stored, PPO plus EPO equals unique, the reader's unique count equals
 what was stored. No count, uniqueness or version check is left to a model.
+
+**Plan identity is one definition everywhere**: `identityKey()` in
+`server/plan-canonical.js` - the carrier's plan code when printed, else the
+exact printed name on its network. Canonicalization merges on it; validation,
+the audit, correction (`matchCanonical` for an "added" plan), the grid check
+and the client's Medical Plans grid (each served plan carries its
+`identity`) all compare on it. The stored plan count is the canonical list's
+length (`canonicalPlans()`: `extracted.plans` less blank entries) - two
+plans are never taken for one because their rates agree, and nothing
+downstream de-duplicates canonical records again.
+
+**Duplicate names and codes.** A plan printed on several pages is one plan
+with provenance from each page, never a duplicate. A plan code on two plans
+fails ("correct"). The same exact name on two plans where one has no code
+fails ("correct": the same plan read twice). The same exact name on two
+**different** plan codes is never merged and never shown silently: it fails
+with `fix: "review"`; the steward checks the names against the document once
+(a misread name is corrected), then hands the box to a person (NEEDS_REVIEW,
+naming the name and codes). "Confirm the carrier uses this name for these
+plans" (`POST /api/admin/proposals/:id/confirm-shared-names`) records the
+decision on the reading (`shared_names_confirmed`: name, codes, by, at); the
+plans stay separate records with their own BenSync IDs, and a later change
+to those codes flags it again. The grid check also fails if one carrier plan
+is served to the client twice, if a served plan's rates or ID differ from its
+stored record, or if a BenSync ID is on two of the group's plans.
 
 **Versions and stale results.** Each proposal row keeps `source_sha`, the
 SHA-256 of the document as uploaded. Each reading records the hash it was

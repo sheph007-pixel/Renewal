@@ -222,8 +222,8 @@ const SCHEMA = {
               "The network the plan is priced on, where the quote distinguishes them (Choice, Choice Plus, INS-Choice, Options PPO…). Null when only one network is quoted.",
           },
           plan_type: nullable("string"),
-          deductible: nullable("string"),
-          oop_max: nullable("string"),
+          deductible: { ...nullable("string"), description: "The in-network deductible as printed, individual first and then family where both are printed (\"$3,000 / $6,000\")." },
+          oop_max: { ...nullable("string"), description: "The in-network out-of-pocket maximum as printed, individual first and then family where both are printed." },
           source_pages: {
             type: "object",
             additionalProperties: false,
@@ -254,7 +254,7 @@ const SCHEMA = {
               imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
               urgent_care: { type: "string" },
               hospital: { type: "string", description: "Inpatient hospital stay." },
-              rx: { type: "string", description: "Prescription drug copays or coinsurance by tier." },
+              rx: { type: "string", description: "Retail prescription drug copays or coinsurance by tier, in tier order (\"$10 / $40 / $80\"); mail order left out." },
             },
           },
           rates: {
@@ -455,11 +455,17 @@ export async function analyzeProposal(file, roster) {
       console.log(`${file.filename}: relevant-page reading not confident (${doubt}); reading the whole document`);
     }
 
-    // The whole document, halved as needed; past what one reading on the
-    // model holds at all, read in 300-page parts first.
+    // The whole document. A long one is read in windows of RELEVANT_BATCH
+    // pages from the start, rather than all at once and halved on failure:
+    // a reading that runs past one answer is only found out after the model
+    // has written the whole answer (about 15 minutes for a 300-page quote),
+    // so starting whole and halving spent an hour on failures before the
+    // first plan landed (Adobe HVAC's 300-page UHC quote). Windows that are
+    // still too long are halved as before; every window's appearances fold
+    // together by exact plan identity.
     const readings = [];
-    if (numpages > MAX_PDF_PAGES) {
-      for (let i = 0; i < numpages; i += MAX_PDF_PAGES) readings.push(...(await readPages(all.slice(i, i + MAX_PDF_PAGES), numpages)));
+    if (numpages > RELEVANT_BATCH) {
+      for (let i = 0; i < numpages; i += RELEVANT_BATCH) readings.push(...(await readPages(all.slice(i, i + RELEVANT_BATCH), numpages)));
     } else readings.push(...(await readPages(all, numpages)));
     return fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages });
   }

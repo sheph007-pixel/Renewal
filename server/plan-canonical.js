@@ -43,10 +43,43 @@ const normVal = (v) => (v == null ? "" : typeof v === "number" ? v.toFixed(2) : 
 
 export const isEpoPlan = (pl) => /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
 
+/** A reading's stray blank entry - no name, no plan code, no rate, nothing - an artifact of the model, never a plan. */
+export const isBlankPlan = (pl) =>
+  !pl ||
+  (!exactName(pl.name) &&
+    !normCode(pl.plan_code) &&
+    pl.monthly_total == null &&
+    !Object.values(pl.rates || {}).some((v) => v != null));
+
+/**
+ * The canonical plans of a reading: `extracted.plans` less any blank entry.
+ * Once a reading has been canonicalized and validated, each entry IS one
+ * unique carrier plan, so this list's length is the plan count everywhere
+ * (reconciliation, audit, grid) - never re-deduplicated on a weaker key.
+ */
+export const canonicalPlans = (x) => (Array.isArray(x) ? x : Array.isArray(x && x.plans) ? x.plans : []).filter((pl) => !isBlankPlan(pl));
+
 /** A plan's identity key: its code when printed, else its exact name on its network. */
 export function identityKey(pl) {
   const code = normCode(pl.plan_code);
   return code ? `code:${code}` : `name:${exactName(pl.name).toLowerCase()}|${normNet(pl.network)}`;
+}
+
+/**
+ * The canonical plan (index in `plans`) an appearance belongs to, by the same
+ * rules canonicalizePlans merges on: the same identity key; or, for an
+ * appearance with no code, the one coded plan carrying that exact printed
+ * name on a compatible network. -1 when it is a plan of its own.
+ */
+export function matchCanonical(pl, plans) {
+  const key = identityKey(pl);
+  const same = plans.findIndex((c) => c && identityKey(c) === key);
+  if (same >= 0) return same;
+  if (normCode(pl.plan_code)) return -1;
+  const name = exactName(pl.name).toLowerCase();
+  const net = normNet(pl.network);
+  const hits = plans.map((c, i) => [c, i]).filter(([c]) => c && normCode(c.plan_code) && exactName(c.name).toLowerCase() === name && (!net || !normNet(c.network) || normNet(c.network) === net));
+  return hits.length === 1 ? hits[0][1] : -1;
 }
 
 const valueOf = (pl, f) => (TIERS.includes(f) ? (pl.rates ? pl.rates[f] : null) : BENEFIT_KEYS.includes(f) ? (pl.benefits ? pl.benefits[f] : null) : pl[f]);
