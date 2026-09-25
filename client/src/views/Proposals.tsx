@@ -1055,9 +1055,10 @@ function SlotCell({
   // An empty slot - no proposal from that carrier - is blank. It still takes
   // a file: hovering or dragging one over it shows where it will land.
   const [hover, setHover] = useState(false);
+  const [pendingDTQ, setPendingDTQ] = useState(false);
   const reveal = hover || busy;
-  const edge = !filled ? (reveal ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? (reveal ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const edge = !filled ? (reveal || pendingDTQ ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal || pendingDTQ ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
   const tone = isDtq ? C.blue : verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
@@ -1175,23 +1176,39 @@ function SlotCell({
             </div>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 8, visibility: reveal ? "visible" : "hidden" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => ref.current?.click()}
-              disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              disabled={busy || pendingDTQ}
+              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.ghost : C.faint, opacity: pendingDTQ ? 0.5 : 1 }}
               title={`Upload the ${slot} proposal for ${group}`}
             >
               {busy ? "uploading…" : "+ add"}
             </button>
             <button
-              onClick={() => void setDTQ()}
+              onClick={() => {
+                setPendingDTQ(true);
+                void setDTQ();
+              }}
               disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.blue : C.faint, fontWeight: pendingDTQ ? 600 : 400 }}
               title={`Mark as Decline to Quote for ${group}`}
             >
-              DTQ
+              {pendingDTQ ? "✓ DTQ" : "DTQ"}
             </button>
+            {pendingDTQ && (
+              <button
+                onClick={() => {
+                  setPendingDTQ(false);
+                  void removeDTQ();
+                }}
+                disabled={busy}
+                style={{ ...linkBtn, fontSize: 12, color: C.ghost }}
+                title={`Clear DTQ for ${group}`}
+              >
+                delete
+              </button>
+            )}
           </div>
         )}
       </div>
