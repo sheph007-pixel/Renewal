@@ -6168,9 +6168,11 @@ let stewardState = null;
  * Panama City - can now be counted and read in page windows. 2026-09-25c:
  * every plan is stored, EPO included; attempts count when they finish.
  * 2026-09-25d: source coverage is required - every reading without a
- * coverage record is read once more, so each gets a fresh set of attempts.)
+ * coverage record is read once more, so each gets a fresh set of attempts.
+ * 2026-09-25e: every Claude audit had failed on a schema the API refused
+ * (18 nullable fields, limit 16); attempts spent on that are given back.)
  */
-const STEWARD_EPOCH = "2026-09-25d";
+const STEWARD_EPOCH = "2026-09-25e";
 async function loadSteward() {
   if (stewardState) return stewardState;
   stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};

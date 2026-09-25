@@ -925,3 +925,6 @@ export async function explainReconciliation(payload) {
     .join("\n")
     .trim();
 }
+
+/** Every structured-output schema this module sends to Anthropic, for the schema-limit test. */
+export const STRUCTURED_SCHEMAS = () => ({ reader: SCHEMA, map: MAP_SCHEMA });

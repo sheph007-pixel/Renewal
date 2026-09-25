@@ -51,7 +51,6 @@ const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
 const CLAUDE_MODEL = "claude-sonnet-5";
 
 const nullableNumber = { anyOf: [{ type: "number" }, { type: "null" }] };
-const nullableString = { anyOf: [{ type: "string" }, { type: "null" }] };
 
 /**
  * How each value is to be read - the same guide for the auditors and the
@@ -67,8 +66,15 @@ export const FIELD_GUIDE = `How to read each value (in-network, for this plan on
 - rx: the retail prescription cost by tier, in tier order, as printed (e.g. "$10 / $40 / $80"); leave mail order out.
 - hsa_eligible: "yes" when the document says the plan is HSA-eligible / HSA-qualified, "no" when it says it is not.
 - EE, ES, EC, FAM: the monthly rate per tier (employee only, employee + spouse, employee + children, family) as a plain number, e.g. 612.45.
-Use null for any value the document does not state for this plan (for a rate: a tier the document does not price).`;
+Use an empty string for any text value the document does not state for this plan, and null for a rate the document does not price for that tier.`;
 
+// Text values are plain strings, empty where the document does not state
+// the value: Anthropic's structured output allows at most 16 union-typed
+// (nullable) parameters in a schema, and 18 nullable fields here made every
+// Claude audit fail with a 400. The four rates stay nullable numbers (4
+// unions); shape() reads an empty string as "not stated" (null).
+const statedText = { type: "string", description: "As printed; an empty string when the document does not state it for this plan." };
+export const SCHEMA_UNION_LIMIT = 16;
 const CONFIRMATION = {
   type: "object",
   additionalProperties: false,
@@ -76,12 +82,12 @@ const CONFIRMATION = {
   properties: {
     index: { type: "integer" },
     on_document: { type: "boolean", description: "False when this plan is not on the document at all." },
-    name: nullableString,
-    plan_code: nullableString,
-    network: nullableString,
-    deductible: nullableString,
-    oop_max: nullableString,
-    ...Object.fromEntries(BENEFIT_FIELDS.map((k) => [k, nullableString])),
+    name: statedText,
+    plan_code: statedText,
+    network: statedText,
+    deductible: statedText,
+    oop_max: statedText,
+    ...Object.fromEntries(BENEFIT_FIELDS.map((k) => [k, statedText])),
     benefits_belong: { type: "boolean", description: "True when the benefit values you read are unmistakably this plan's own (its own column or page), not a neighbouring plan's." },
     ...Object.fromEntries(TIERS.map((t) => [t, nullableNumber])),
   },
@@ -167,6 +173,20 @@ const findersFor = (stored, indices) => indices.map((index) => {
  * An audit is only good for the reading it names - a correction or a re-read
  * changes the hash, and the old audit no longer counts.
  */
+/** How many union-typed (anyOf / type-array) parameters a JSON schema holds, nested ones included. */
+export function unionParams(schema) {
+  let n = 0;
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (Array.isArray(node.anyOf) || Array.isArray(node.type)) n++;
+    for (const v of Object.values(node)) walk(v);
+  };
+  walk(schema);
+  return n;
+}
+export const AUDIT_SCHEMAS = () => ({ audit: RESULT_SCHEMA, correction: CORRECTION_SCHEMA });
+
 export function readingVersion(extracted) {
   return crypto.createHash("sha256").update(JSON.stringify({ plans: valuesFor(extracted), coverage: coverageSignature(extracted) })).digest("hex").slice(0, 16);
 }
@@ -195,7 +215,9 @@ export function shape(who, r, stored, indices = stored.map((_, i) => i)) {
     ? r.mismatches.slice(0, 80).map((m) => ({ plan: String(m.plan || ""), field: String(m.field || ""), stored: String(m.stored ?? ""), onDocument: String(m.on_document ?? "") }))
     : [];
   const seen = new Set(mismatches.map((m) => `${m.plan}|${m.field}`.toLowerCase()));
-  const conf = new Map((Array.isArray(r && r.plan_confirmations) ? r.plan_confirmations : []).filter((c) => c && Number.isInteger(c.index)).map((c) => [c.index, c]));
+  // An empty string is the schema's "not stated" (see CONFIRMATION): read as null.
+  const unblank = (c) => Object.fromEntries(Object.entries(c).map(([k, v]) => [k, typeof v === "string" && v.trim() === "" ? null : v]));
+  const conf = new Map((Array.isArray(r && r.plan_confirmations) ? r.plan_confirmations : []).filter((c) => c && Number.isInteger(c.index)).map((c) => [c.index, unblank(c)]));
   let confirmed = 0;
   for (const i of indices) {
     const pl = stored[i];
