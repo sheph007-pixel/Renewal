@@ -725,6 +725,17 @@ const rawJsonSchemaFormat = (schema) => {
   return format;
 };
 
+const DROP_RETRIES = 2;
+const DROP_PAUSE_MS = Number(process.env.KENNION_DROP_PAUSE_MS || 20000);
+/** A failure of the connection or the service, not of the document: worth the same request again. */
+export function droppedConnection(e) {
+  if (!e) return false;
+  if (Anthropic.APIConnectionError && e instanceof Anthropic.APIConnectionError) return true;
+  if (e.status === 529 || e.status === 503 || e.status === 502 || e.status === 504) return true;
+  const msg = `${e.message || ""} ${(e.cause && (e.cause.code || e.cause.message)) || ""}`;
+  return /\bterminated\b|ECONNRESET|ETIMEDOUT|EPIPE|socket hang up|other side closed|premature close|overloaded/i.test(msg);
+}
+
 /** One reading: the model call, and the structured result out of it. */
 async function readOnce(client, model, content) {
   const params = {
@@ -747,17 +758,30 @@ async function readOnce(client, model, content) {
     // beta, say), the same call on the stable endpoint is identical minus it.
     let response;
     const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
-    if (beta) {
+    // A long read streams for many minutes; a connection dropped part-way
+    // ("terminated", a reset socket) or an overloaded API is not the
+    // document's fault, so the same read is streamed again - up to
+    // DROP_RETRIES more times, after a pause - before it counts as a failure.
+    for (let drop = 0; ; drop++) {
       try {
-        response = await client.beta.messages
-          .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
-          .finalMessage();
+        if (beta) {
+          try {
+            response = await client.beta.messages
+              .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+              .finalMessage();
+          } catch (e) {
+            if (!(e instanceof Anthropic.BadRequestError)) throw e;
+            console.warn("beta fallback request rejected, retrying without it:", e.message);
+          }
+        }
+        if (!response) response = await client.messages.stream(params).finalMessage();
+        break;
       } catch (e) {
-        if (!(e instanceof Anthropic.BadRequestError)) throw e;
-        console.warn("beta fallback request rejected, retrying without it:", e.message);
+        if (!droppedConnection(e) || drop >= DROP_RETRIES) throw e;
+        console.warn(`reading dropped (${e.message}); streaming it again (${drop + 1}/${DROP_RETRIES})`);
+        await new Promise((r) => setTimeout(r, DROP_PAUSE_MS * (drop + 1)));
       }
     }
-    if (!response) response = await client.messages.stream(params).finalMessage();
 
     if (response.stop_reason === "refusal") {
       throw new Error("The model declined to read this document.");

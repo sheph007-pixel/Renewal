@@ -46,10 +46,20 @@ const expand = (desc) => desc.split(",").flatMap((part) => {
 });
 
 let mapSays = null;
+// Set to N: the next N reads are cut off mid-stream (the connection dropped).
+let dropNext = 0;
 const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (d) => (body += d));
   req.on("end", async () => {
+    if (dropNext > 0) {
+      dropNext--;
+      seen.push("dropped");
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.write(`event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { id: "m", type: "message", role: "assistant", model: "x", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } })}\n\n`);
+      setTimeout(() => res.socket.destroy(), 20);
+      return;
+    }
     const j = JSON.parse(body || "{}");
     const content = j.messages[0].content;
     const text = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
@@ -107,6 +117,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.ANTHROPIC_API_KEY = "test";
+process.env.KENNION_DROP_PAUSE_MS = "10";
 delete process.env.KENNION_FAKE_AI;
 
 const { analyzeProposal } = await import("../server/ai.js");
@@ -213,5 +224,19 @@ assert.ok(seen.includes("41-45"));
 assert.equal(out.plans.length, 45, "every page's plan, folded from the windows");
 assert.deepEqual([out.coverage.total_pages, out.coverage.mapped_pages, out.coverage.deep_read_pages, out.coverage.covered_pages], [45, 45, 45, 45]);
 
+// 6. A read whose connection drops mid-stream is streamed again, not failed:
+//    a dropped connection is not the document's fault. Three drops in a row
+//    (past the two retries) is a real failure.
+doc = "short";
+seen.length = 0;
+dropNext = 2;
+out = await analyzeProposal({ filename: "drop.pdf", prepared: { kind: "pdf", buffer: await pdfOf(2) }, context: null }, roster);
+assert.deepEqual(seen, ["dropped", "dropped", "1-2"], "dropped twice, streamed again, read");
+assert.equal(out.plans.length, 2);
+seen.length = 0;
+dropNext = 3;
+await assert.rejects(analyzeProposal({ filename: "drop.pdf", prepared: { kind: "pdf", buffer: await pdfOf(2) }, context: null }, roster));
+assert.deepEqual(seen, ["dropped", "dropped", "dropped"]);
+
 server.close();
-console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document; page coverage recorded from what was read - ok");
+console.log("split read: dropped streams retried; halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document; page coverage recorded from what was read - ok");
