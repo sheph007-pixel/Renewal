@@ -574,6 +574,29 @@ function rebuild() {
   // Derive a code for every group, then let any staff-assigned one win. Derived
   // codes are computed over the whole roster so they stay collision-free.
   const derived = assignCodes(groups.map((g) => g.name));
+
+  // Old year-based codes (XXXX2027 format) are discarded. Every group gets a
+  // new evergreen code from the derived set, even if it had an old code stored.
+  // This ensures codes are unique and work year-to-year without change.
+  const oldYearFormat = /^[A-Z]{4}\d{4}$/;
+  const codesNeedingUpdate = new Set();
+  Object.entries(meta).forEach(([name, m]) => {
+    if (m && m.companyId && oldYearFormat.test(m.companyId)) {
+      codesNeedingUpdate.add(name);
+      // Delete the old code so it falls through to derived
+      delete m.companyId;
+    }
+  });
+
+  // Persist the deletion asynchronously so old codes are cleared from database
+  if (codesNeedingUpdate.size > 0) {
+    Promise.all(
+      Array.from(codesNeedingUpdate).map((name) =>
+        db ? db.setMeta(name, "companyId", null, "migration: discard old codes") : Promise.resolve()
+      )
+    ).catch((e) => console.error("Code update failed:", e.message));
+  }
+
   const claimed = new Set(
     Object.values(meta).map((m) => m && m.companyId).filter(Boolean),
   );
