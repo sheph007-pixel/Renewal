@@ -1194,7 +1194,7 @@ function SlotCell({
               style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.blue : C.faint, fontWeight: pendingDTQ ? 600 : 400 }}
               title={`Mark as Decline to Quote for ${group}`}
             >
-              {pendingDTQ ? "✓ DTQ" : "DTQ"}
+              {pendingDTQ ? "DTQ (selected)" : "DTQ"}
             </button>
             {pendingDTQ && (
               <button
