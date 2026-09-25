@@ -4701,6 +4701,32 @@ function slotFor(carrier, funding, quotesMedical, filename) {
 }
 
 /**
+ * A slot guessed from the filename alone - carriers this predictable send a
+ * batch named the same way every time ("<Group> WS UHC LF.pdf"), and waiting
+ * on the AI read to say so left a whole batch sitting in "Other Carriers"
+ * with "Carrier unknown" for as long as the read took (or failed outright),
+ * even though the filename already said exactly where it belonged. Applied
+ * only when the file name is unambiguous; the read still runs and still
+ * fills in the real plan and rate data, and a pre-set slot is never
+ * second-guessed by it (the same rule a manual grid upload already gets -
+ * see slotFor's callers).
+ */
+function guessSlotFromFilename(filename) {
+  const f = String(filename || "");
+  if (/scorecard/i.test(f) && /angle/i.test(f)) return "Angle Scorecard";
+  if (/\buhc\b|united\s*health/i.test(f)) {
+    if (/\blf\b|level.?fund/i.test(f)) return "UHC Level Funded";
+    if (/\bfi\b|fully.?insur/i.test(f)) return "UHC Fully Insured";
+    return null; // UnitedHealthcare named, but the funding isn't in the name
+  }
+  if (/gravie/i.test(f)) return "Gravie";
+  if (/nationwide/i.test(f)) return "Nationwide";
+  if (/optimyl/i.test(f)) return "Optimyl";
+  if (/\bangle\b/i.test(f)) return "Angle";
+  return null;
+}
+
+/**
  * Whether a proposal quotes no medical at all - dental, vision, life,
  * disability. Claude says so directly on anything read since the field was
  * added; for an older reading the document itself is the evidence: a file or
@@ -5142,8 +5168,11 @@ async function runAnalysis(id, file, keepAssignment) {
     // per-row button, the bulk "re-read every proposal", or the benefits
     // backfill that runs at boot) never discards a row that already made it
     // onto the roster under the old rules - staff filed those on purpose,
-    // and a re-read is not the moment to second-guess that.
-    if (!fields.slot && !(current && current.extracted)) {
+    // and a re-read is not the moment to second-guess that. A slot set
+    // before this read ran - by hand on the grid, or guessed from the file
+    // name at upload - counts the same as one the read just derived: either
+    // way the row already belongs somewhere, so it is never discarded.
+    if (!fields.slot && !(current && current.slot) && !(current && current.extracted)) {
       const carrierTracked = /united|uhc|surest|optum|gravie|nationwide|angle|optimyl/i.test(String(out.carrier || ""));
       if (out.quotes_medical === false || !carrierTracked) {
         const ok = await proposalStore.deleteProposal(id).catch(() => false);
@@ -5252,8 +5281,27 @@ app.post(
         }
       }
       for (const item of expanded.items) {
-        const row = await proposalStore.addProposal({
+        // A batch upload (an email's attachments, several files at once)
+        // rarely comes in with a group or slot query param - those are for a
+        // single file dropped straight onto the grid. Everything else waited
+        // on the AI read to say where it belonged, which meant a slow or
+        // failed read left the file sitting in "Other Carriers" the whole
+        // time even when the file name already gave it away. Guess from the
+        // name first; the read still runs, still fills in the real data, and
+        // corrects a wrong guess (a mismatch is flagged, never silent).
+        const guessedGroup = base.group_name ? null : matchByFilename(item.filename, item.context || null);
+        const itemGroup = base.group_name || guessedGroup;
+        const groupRow = itemGroup ? groups.find((g) => g.name === itemGroup) : null;
+        let guessedSlot = base.slot ? null : guessSlotFromFilename(item.filename);
+        if (guessedSlot === "UHC Level Funded" && isChurch(groupRow)) guessedSlot = null;
+        const itemFields = {
           ...base,
+          group_name: itemGroup || null,
+          assigned_by: base.assigned_by || (guessedGroup ? "filename" : null),
+          slot: base.slot || guessedSlot,
+        };
+        const row = await proposalStore.addProposal({
+          ...itemFields,
           filename: item.filename,
           mime: item.mime,
           size: item.buffer.length,
@@ -5261,11 +5309,14 @@ app.post(
           kind: item.kind,
           parent_id: parent ? parent.id : null,
           context: item.context || null,
-          status: "analyzing",
+          status: itemFields.group_name ? "assigned" : "analyzing",
         });
         created.push(row);
-        // Read it after replying; the screen polls until it is done.
-        void runAnalysis(row.id, { buffer: item.buffer, mime: item.mime, filename: item.filename, context: item.context || null }, !!group);
+        // Read it after replying; the screen polls until it is done. A group
+        // this call itself is sure of (given explicitly) always stands; one
+        // guessed from the filename stands too unless the read confidently
+        // says otherwise - runAnalysis flags the disagreement either way.
+        void runAnalysis(row.id, { buffer: item.buffer, mime: item.mime, filename: item.filename, context: item.context || null }, !!itemFields.group_name);
       }
       await proposalsChanged();
       res.json({
