@@ -4775,6 +4775,21 @@ async function proposalsChanged() {
           continue;
         }
       }
+      // Filed under a group but still slotless - most often a document too
+      // long for one AI reading to finish (it will never get a slot from the
+      // read, however many times it is tried) - gets the same filename guess
+      // a fresh upload now gets immediately (see guessSlotFromFilename). Only
+      // for a row already on the roster under a group, and never one that
+      // read as ancillary: that slotlessness is correct as it stands.
+      if (!r.slot && r.status === "assigned" && r.group_name && !isAncillaryRow(r)) {
+        let guessedSlot = guessSlotFromFilename(r.filename);
+        if (guessedSlot === "UHC Level Funded" && isChurch(groups.find((g) => g.name === r.group_name))) guessedSlot = null;
+        if (guessedSlot) {
+          await proposalStore.updateProposal(r.id, { slot: guessedSlot });
+          remapped = true;
+          continue;
+        }
+      }
       // A reading from before this was enforced may have stored a stray
       // blank plan (no name, no code, no rate), or, for Optimyl, an exact
       // duplicate plan_code twice. Clean both up here too, so a proposal
