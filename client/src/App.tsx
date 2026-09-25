@@ -18,6 +18,7 @@ import {
   PATHS,
   currentPage,
   groupHome,
+  groupHomeByCode,
   navigate,
   parsePath,
   useRoute,
@@ -239,8 +240,8 @@ export default function App() {
           applyGroup(p);
           // Signed in at one of this group's own addresses: stay there (the
           // bar is rewritten to the short form). Anywhere else: its home.
-          const own = asked.kind === "group" && (asked.token === p.linkToken || asked.slug === p.slug);
-          if (!own) navigate(groupHome(p.group), { replace: true });
+          const own = asked.kind === "group" && (asked.token === p.linkToken || asked.slug === p.slug || asked.code === p.group.code);
+          if (!own) navigate(groupHomeByCode(p.group.code), { replace: true });
         }
       } catch {
         setLoadError(true);
@@ -485,10 +486,13 @@ export default function App() {
    * link (`/g/…/<token>`) that signed the browser in, one minted before the
    * slug existed, or a slug whose company has since been renamed all open;
    * the bar just ends up reading the current way, with no token in it.
+   * Short-code addresses (/ADOB61) are canonical and not rewritten.
    */
   useEffect(() => {
     if (restoring || session !== "group" || !g) return;
     if (page.kind !== "group") return;
+    // Short-code addresses are canonical; do not rewrite them to slug form.
+    if (page.code) return;
     const want = groupHome(g, page.tab, page.thread);
     if (route.path !== want) navigate(want + (route.hash ? `#${route.hash}` : ""), { replace: true });
   }, [restoring, session, g, page, route.path, route.hash]);

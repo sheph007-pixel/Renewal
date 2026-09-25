@@ -53,7 +53,7 @@ export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemen
 
 export type Page =
   | { kind: "signin"; staff: boolean }
-  | { kind: "group"; tab: GroupTab; token?: string; slug?: string; thread?: number }
+  | { kind: "group"; tab: GroupTab; token?: string; slug?: string; code?: string; thread?: number }
   | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources" | "welcome"; group: string | null }
   | { kind: "unknown" };
 
@@ -108,6 +108,13 @@ const SKIP_WORDS = new Set([
   "the", "of", "and", "a", "an",
 ]);
 
+/** A signed-in group's address via short code: /ADOB61, optionally with a tab. */
+export const groupHomeByCode = (code: string, tab: GroupTab = "home", thread?: number | null) => {
+  const head = `/${code.toUpperCase()}`;
+  if (tab === "home") return head;
+  return tab === "assistant" && thread ? `${head}/${tab}/${thread}` : `${head}/${tab}`;
+};
+
 /** A signed-in group's short address: its slug, then the tab. */
 export const groupHome = (group: { name?: string; code?: string | null }, tab: GroupTab = "home", thread?: number | null) => {
   const head = `/${groupSlug(group.name || "", group.code)}`;
@@ -156,6 +163,10 @@ export function parsePath(path: string): Page {
   // readable spelling; nothing it used to reach has moved further than a click.
   const t = path.match(new RegExp(`^\\/g\\/([A-Za-z0-9_-]{8,64})${TAB_TAIL}$`));
   if (t) return { kind: "group", tab: tabOf(t[2]), token: t[1], thread: thread(t[3]) };
+  // Short-code sign-in: four letters and two digits (e.g., /ADOB61), optionally with a tab.
+  // The code is the sign-in credential; the session is a cookie set by the server.
+  const shortCode = path.match(new RegExp(`^\\/([A-Z]{4}\\d{2})${TAB_TAIL}$`));
+  if (shortCode) return { kind: "group", tab: tabOf(shortCode[2]), code: shortCode[1], thread: thread(shortCode[3]) };
   // The short address: the slug alone, the session being a cookie.
   const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})${TAB_TAIL}$`));
   if (g && !RESERVED.has(g[1])) return { kind: "group", tab: tabOf(g[2]), slug: g[1], thread: thread(g[3]) };

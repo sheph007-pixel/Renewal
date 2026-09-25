@@ -1380,15 +1380,20 @@ app.post("/api/signin", async (req, res) => {
 });
 
 /**
- * Short-code sign-in: app.kennion.com/ADOB47 sets the cookie and redirects home.
+ * Short-code sign-in: app.kennion.com/ADOB47 sets the cookie and serves the SPA at that address.
  * The code is evergreen and never changes year-to-year. Throttled like other
  * sign-ins to prevent brute-force guessing.
  */
 // Express 5's path syntax has no inline patterns ("/:code(...)" throws at
 // boot), so the short-link route is a regular expression: four letters and
 // two digits, any case, captured as params[0].
-app.get(/^\/([A-Za-z]{4}\d{2})$/, (req, res) => {
+app.get(/^\/([A-Za-z]{4}\d{2})$/, (req, res, next) => {
   const code = String(req.params[0]).trim().toUpperCase();
+
+  // If the cookie is already set to a valid group, skip signin and serve the SPA.
+  const existingGroup = groupFromCookie(req);
+  if (existingGroup) return next();
+
   const caller = signinKey(req);
 
   if (throttled(caller)) {
@@ -1403,7 +1408,9 @@ app.get(/^\/([A-Za-z]{4}\d{2})$/, (req, res) => {
 
   clearFails(caller);
   setGroupCookie(req, res, g);
-  return res.redirect("/");
+  // Fall through to the SPA to serve the page at this short-code address.
+  // Do not redirect; the browser stays at the canonical short-code URL.
+  return next();
 });
 
 /**
