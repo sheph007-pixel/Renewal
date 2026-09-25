@@ -358,61 +358,60 @@ accepts. Test: `node scripts/test-option-ids.mjs`.
 ### Proposal audit
 
 Every proposal's stored reading is checked against the document itself by
-two models before a client is shown it (`server/proposal-audit.js`). After
-the read, the audit agent's two halves - Claude Sonnet 5 and ChatGPT, two
-model families on purpose - each get the carrier's document and the stored
-plans — name, code, network, deductible, out-of-pocket max, the four tier
-rates, the benefit figures — and report every value the document
-contradicts, structured. Both must find nothing for the audit to **pass**;
-any mismatch is **issues**; a model that is off or fails is recorded, never
-counted as a pass. The result is kept on the row (`kennion.proposals.audit`)
-and shows on the Proposals page as a pill (Audit passed · date, or how many
-things to check, with the mismatch table under Details) and an **Audit**
-button to run it again; `POST /api/admin/proposals/audit` runs it for every
-current proposal not yet audited (`?all=1` for all). On the client's side a
-quoted plan's card ends with **✓ Proposal Audit Completed** and the date —
-nothing about which models checked, and no link to the carrier's document,
-which stays with staff (the raw quote lists EPO twins and options Kennion
-does not offer). A plan whose audit found something reads "under review by
-Kennion" instead.
-The audit runs once per reading; a re-read runs it again.
+two models from two different companies before a client is shown it
+(`server/proposal-audit.js`): Claude Sonnet 5 and ChatGPT, independently.
+Each auditor must count the plans on the document - every option found, the
+EPO plans left out on purpose (Kennion offers PPO only), and the plans that
+remain ("16 found, 2 EPO excluded, 14 expected") - read all four tier rates
+off the page for **every** stored plan (the server compares them to the
+database in code, so a rate an auditor did not happen to notice is still
+checked), and report every other value the document contradicts. The audit
+**passes** only when both models ran, both confirmed every plan's rates,
+both counts equal the database, and neither has a finding; any finding makes
+it **issues**; a model that is off, failed or skipped a plan leaves it
+**pending** - never a pass on one model's word. Each audit records the exact
+reading it checked (`version`, a hash of the stored plans), so a correction,
+a re-read or a newer upload makes it stale on its own, and a client's plan
+card only ever shows a current pass ("✓ Proposal Audit Completed"); anything
+else reads "under review by Kennion". ChatGPT is called with a 20-minute
+timeout and one retry, since a large PDF can take longer than Node's fetch
+waits.
 
-### The four-step check, and the AI that works it
+### Verified: the check, and the AI that works it
 
-Every slot with a proposal in it is held to four steps
-(`server/proposal-verify.js`); an empty slot is just blank:
-**1 On file** (a proposal is filed for the group in that slot), **2
-Scanned** (the document was read for its plans, and the audit counted every
-plan option it prices, EPO twins aside), **3 Database** (the database holds
-exactly that many plans, and both audit models agree every stored value
-matches the page), **4 Grid** (every one of those plans is in the group's
-Medical Plans grid, counted the way `proposalPlans` counts them). The box
-is green with a ✓ and the plan count only when all four pass - the same
-number at every step: 67 on the document, 67 in the database, 67 in the
-grid. The one plan the grid may leave out is one the carrier's document
-does not price for a tier the group has people in, confirmed against the
-page.
+Every slot with a proposal in it is held to one standard
+(`server/proposal-verify.js`); an empty slot is just blank. A box is
+**Verified** - green, "✓ Verified · 14 plans" - only when all of these hold:
+**Source** (the original document is on file), **Extraction** (the read
+finished: plans, each named and rated), **Claude Audit** and **ChatGPT
+Audit** (each passed, of this exact reading, with its plan count equal to
+the database's), and **Grid** (the group's Medical Plans grid shows exactly
+the stored plans - document, database and grid, one number). Hovering the
+box shows "Source ✓ · Extraction ✓ · Claude Audit ✓ · ChatGPT Audit ✓ ·
+Grid ✓" and each step's detail. The one plan the grid may leave out is one
+the carrier's document does not price for a tier the group has people in,
+confirmed against the page. Two independent AI audits sharply cut the risk
+of an error; they are not a mathematical guarantee, and the page says
+"Verified" / "Dual Audit Passed", nothing stronger.
 
 Nobody fixes a box by hand. A server-side **steward** works the check on
 its own - at boot, after every change to the proposals, and every ten
-minutes - and carries out the repair each failing box names: read the
-document again (in parts when long), audit it (count and check), or
-**correct** it: Claude is given the document, the stored plans and the
+minutes, group by group - and carries out the repair each failing box
+names: read the document again (in parts when long), run the dual audit,
+or **correct** it: Claude is given the document, the stored plans and both
 auditors' findings, checks each finding against the page, and returns the
 fixed values, the plans the database is missing (added in full), the tier
 rates it lacks, and anything not on the document (removed); the server
 applies them (`applyCorrection`, every change logged on the row as
-`extracted.corrections`) and both models audit again. A finding the
-corrector shows to be the auditor's own misread, with the counts agreeing,
-is settled by that third reading. Limits per proposal: two reads, two audits
-that could not run, three corrections per reading and then one fresh read
-and three more. Only a box still failing after all of that - a slot holding
-a case summary instead of a quote, say - is shown as needing a person, with
-the reason; "let the AI try these again" gives those another round. The
-grid's panel reads "N of M proposals verified · AI fixing K now".
-`GET /api/admin/proposals/verify` returns the check; `POST
-/api/admin/proposals/fix` wakes the steward. The totals and every box not
-yet green are logged after each pass.
+`extracted.corrections`). A correction is always followed by a fresh audit
+by both models - the corrector never settles a finding on its own word.
+Limits per proposal: two reads, three audits that could not complete, three
+corrections per reading and then one fresh read and three more. Only a box
+still failing after all of that - a slot holding a case summary instead of a
+quote, say - is shown as needing a person, with the reason; "let the AI try
+these again" gives those another round. `GET /api/admin/proposals/verify`
+returns the check; `POST /api/admin/proposals/fix` wakes the steward. The
+totals and every box not yet Verified are logged after each pass.
 
 A newer upload never replaces a proposal that was read until it has plans of
 its own: while it is being read, or if its read fails, the older one stays in
