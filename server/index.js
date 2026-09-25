@@ -36,7 +36,7 @@ import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
 import { validatePlans } from "./plan-validate.js";
 import { hiddenReason } from "./plan-visibility.js";
-import { identityKey, isBlankPlan, exactName, normCode } from "./plan-canonical.js";
+import { identityKey, isBlankPlan, exactName, normCode, foldPlacementDuplicates, isEpoPlan as isEpoCanon } from "./plan-canonical.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -5801,6 +5801,42 @@ async function storeGravieQuote(g, parsed, filename, proposalId, by) {
  * quote is written as rows if it is not there yet or has changed. Runs at
  * boot, so a parser fix reaches every stored workbook without an upload.
  */
+/**
+ * Every current proposal's stored plans, checked for the same carrier plan
+ * stored twice under a reader-added placement label ("P100i10025B" and
+ * "P100i10025B (alt grid base)", identical values). Each copy is folded into
+ * the plan it copies (plan-canonical.js foldPlacementDuplicates): the copy's
+ * BenSync ID is retired, the fold is logged on the reading's corrections, and
+ * the counts follow. The changed reading is audited again. Deterministic, no
+ * AI; runs at boot and after every settle, so no group keeps such a copy.
+ */
+async function foldStoredPlacementDuplicates() {
+  const rows = (await proposalStore.listProposals()).filter((r) => r.group_name && !r.superseded_by && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length > 1);
+  let changed = 0;
+  for (const r of rows) {
+    try {
+      const { plans, folded } = foldPlacementDuplicates(r.extracted.plans);
+      if (!folded.length) continue;
+      const x = r.extracted;
+      const epo = plans.filter((pl) => !isBlankPlan(pl) && isEpoCanon(pl)).length;
+      const n = plans.filter((pl) => !isBlankPlan(pl)).length;
+      const reconciliation = x.reconciliation ? { ...x.reconciliation, unique_plans: n, unique_ppo: n - epo, unique_epo: epo, expected: n } : x.reconciliation;
+      const at = new Date().toISOString();
+      const corrections = [
+        ...(Array.isArray(x.corrections) ? x.corrections : []),
+        ...folded.map((f) => ({ plan: f.plan.name, option_id: f.plan.option_id || null, field: "plan", from: "stored twice", to: `folded into "${f.into.name}"${f.into.option_id ? ` (${f.into.option_id})` : ""}`, page: null, reason: "The same carrier plan under a placement label the reader added; every value the two state is the same.", model: "rule", at })),
+      ];
+      await proposalStore.updateProposal(r.id, { extracted: { ...x, plans, reconciliation, corrections } });
+      await retireOptionIds(r.group_name, folded.map((f) => f.plan));
+      changed++;
+      console.log(`duplicates: #${r.id} ${r.group_name} / ${r.slot}: folded ${folded.map((f) => `${f.plan.option_id || "?"} "${f.plan.name}" into ${f.into.option_id || "?"}`).join("; ")}`);
+    } catch (e) {
+      console.error(`duplicates: could not fold #${r.id}:`, e.message);
+    }
+  }
+  return changed;
+}
+
 async function settleGravieQuotes() {
   const rows = (await proposalStore.listProposals()).filter(
     (r) => r.context && r.context.source === "gravie-workbook" && r.group_name && !r.superseded_by,
@@ -6349,6 +6385,9 @@ async function stewardPass() {
     do {
       stewardAgain = false;
       await loadSteward();
+      // A plan stored twice under a reader-added placement label is folded by
+      // rule before anything is sent to a model.
+      if (await foldStoredPlacementDuplicates()) await proposalsChanged();
       const rowsNow = await proposalStore.listProposals();
       const v = proposalVerification(rowsNow);
       await syncStages(v, rowsNow);
@@ -6716,6 +6755,11 @@ async function boot() {
     await settleGravieQuotes();
   } catch (e) {
     console.error("gravie:", e.message);
+  }
+  try {
+    if (await foldStoredPlacementDuplicates()) await proposalsChanged();
+  } catch (e) {
+    console.error("duplicates:", e.message);
   }
   try {
     await auditInvoices();

@@ -23,7 +23,7 @@ import https from "node:https";
 import { prepareForModel } from "./intake.js";
 import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
-import { TIERS, canonicalPlans, matchCanonical, isEpoPlan } from "./plan-canonical.js";
+import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
 import { AUDIT_STANDARD, BENEFIT_FIELDS, comparePlan } from "./plan-compare.js";
 
 /** The API's page ceiling for the 1M-context model this audits with. */
@@ -751,6 +751,9 @@ export function applyCorrection(extracted, c, meta = {}) {
     // A plan "added" that is already stored - by the same canonical
     // identity rules the reading was folded with - is not a second plan.
     if (matchCanonical(a, kept) >= 0) continue;
+    // Nor is a stored plan under a placement label ("(alt grid base)").
+    const core = placementCore(a.name);
+    if (core && kept.some((k) => exactName(k.name).toLowerCase() === core.toLowerCase() && String(k.network || "").toLowerCase() === String(a.network || "").toLowerCase())) continue;
     const sp = a.source_pages || {};
     const m = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map((p) => mapPage(p, pageMap)).filter(Boolean))].sort((x, y) => x - y);
     const { source_pages, ...plan } = a;
