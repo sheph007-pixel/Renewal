@@ -18,7 +18,7 @@ import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { auditForClient, auditProposal, correctProposal, applyCorrection, offeredCount } from "./proposal-audit.js";
+import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -4963,7 +4963,7 @@ async function proposalsChanged() {
         summary: r.summary || null,
         filename: r.filename,
         uploadedAt: r.uploaded_at,
-        audit: auditForClient(r.audit),
+        audit: auditForClient(r.audit, r.extracted),
       }, planCatalogueIndex, carrierName));
     }
     currentProposals = current;
@@ -5765,6 +5765,7 @@ function proposalVerification(rows) {
     reading: rereading,
     auditing,
     correcting,
+    readingVersion,
     gaveUp: (id) => (stewardState && stewardState[id] && stewardState[id].gaveUp) || null,
   });
 }
@@ -5833,7 +5834,6 @@ async function stewardRead(row) {
 async function runProposalCorrection(id, tiers) {
   if (correcting.has(id)) return;
   correcting.add(id);
-  let reaudit = true;
   try {
     const row = (await proposalStore.listProposals()).find((r) => r.id === id);
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
@@ -5850,16 +5850,9 @@ async function runProposalCorrection(id, tiers) {
     const { extracted, log } = applyCorrection(row.extracted, c);
     const at = new Date().toISOString();
     extracted.corrections = [...(row.extracted.corrections || []), ...log.map((l) => ({ ...l, at }))].slice(-300);
-    if (!log.length && Number.isInteger(c.document_plan_count) && c.document_plan_count === offeredCount(row.extracted) && row.audit) {
-      // Nothing to change, and the document's count is the database's: the
-      // findings were the auditors' own misreads.
-      await proposalStore.updateProposal(id, {
-        audit: { ...row.audit, status: "pass", documentPlanCount: c.document_plan_count, settled: { at, findings: row.audit.mismatches || [], by: "Claude, re-reading the document" }, mismatches: [] },
-      });
-      console.log(`proposal ${id} correction: nothing to change; ${mismatches.length} finding(s) settled against the document`);
-      reaudit = false;
-      return;
-    }
+    // Whatever the corrector concluded - even "the auditors were wrong,
+    // nothing to change" - only a fresh audit by both models can turn the
+    // box green. The corrector never settles a finding on its own word.
     await proposalStore.updateProposal(id, { extracted, audit: null });
     console.log(`proposal ${id} corrected against the document: ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
   } catch (e) {
@@ -5867,8 +5860,7 @@ async function runProposalCorrection(id, tiers) {
   } finally {
     correcting.delete(id);
   }
-  if (reaudit) await runProposalAudit(id);
-  else await proposalsChanged();
+  await runProposalAudit(id);
 }
 
 /** Carry out one box's repair, within the limits. */
@@ -5894,10 +5886,10 @@ async function stewardRepair(cell, tiers) {
   };
   if (cell.fix === "read") return read();
   if (cell.fix === "audit") {
-    if (st.audits >= 2) return giveUp(`The check could not run in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
+    if (st.audits >= 3) return giveUp(`Both auditors could not complete in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
     st.audits++;
     await saveSteward();
-    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: checking against the document (${st.audits}/2)`);
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: dual audit against the document (${st.audits}/3)`);
     return runProposalAudit(row.id);
   }
   if (cell.fix === "correct") {

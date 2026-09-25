@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { gridCounts, verifyProposals } from "../server/proposal-verify.js";
-import { applyCorrection, offeredCount } from "../server/proposal-audit.js";
+import { applyCorrection, offeredCount, readingVersion, auditProposal, auditForClient, shape } from "../server/proposal-audit.js";
 import { proposalPlans, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 // --- The check's count is the client's count --------------------------------
@@ -26,86 +26,92 @@ const pr = { id: 1, slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans
 const g = { name: "X", tiers } as unknown as Group;
 assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).length, counts.shown, "the check counts exactly the plans the client's grid shows");
 
-// --- The four steps, pure ---------------------------------------------------
+// --- The check, pure: Verified needs both auditors on this exact reading --
 const isEpoPlan = (pl: { name?: string }) => /\bEPO\b/.test(pl.name || "");
 const isBlankPlan = (pl: { name?: string }) => !pl || !pl.name;
-const good = {
-  id: 10,
-  group_name: "Acme",
-  slot: "Gravie",
-  status: "assigned",
-  superseded_by: null,
-  filename: "acme gravie.pdf",
-  extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }, { name: "Copay 1500 EPO", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }] },
-  audit: { status: "pass", completedAt: "2026-09-25T00:00:00Z", mismatches: [], documentPlanCount: 1 },
-};
-const served = (rows: typeof good[]) => () => rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.filter((p) => !isEpoPlan(p)).map((p) => ({ name: p.name, optionId: p.option_id, rates: p.rates })) }));
-const run = (rows: unknown[], srv: () => unknown[]) =>
-  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan });
+const reading1 = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }] };
+const passModel = (model: string, extra = {}) => ({ model, verdict: "pass", plansFoundTotal: 2, epoExcluded: 1, documentPlanCount: 1, confirmed: 1, of: 1, mismatches: [], notes: "", ...extra });
+const dualPass = (extracted = reading1) => ({ status: "pass", completedAt: "2026-09-25T00:00:00Z", version: readingVersion(extracted), mismatches: [], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)")] });
+const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", superseded_by: null, size: 1000, filename: "acme gravie.pdf", extracted: reading1, audit: dualPass() };
+const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
+  rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.filter((p) => !isEpoPlan(p)).map((p) => ({ name: p.name, optionId: p.option_id, rates: p.rates, unpriced: p.unpriced })) }));
+const run = (rows: unknown[], srv: () => unknown[], gaveUp: (id: number) => string | null = () => null) =>
+  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, gaveUp });
+const cellOf = (v: ReturnType<typeof run>) => v.groups[0].cells[0];
 
 let v = run([good], served([good]));
-let cell = v.groups[0].cells.find((c: { slot: string }) => c.slot === "Gravie");
+let cell = cellOf(v);
 assert.equal(cell.state, "verified", JSON.stringify(cell.steps));
-assert.equal(cell.plans, 1, "the EPO twin is never counted");
-assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Nationwide").state, "missing");
-assert.deepEqual(cell.counts, { document: 1, stored: 1, grid: 1 }, "one number at every step");
-assert.deepEqual(v.totals, { filed: 1, verified: 1, working: 0, failing: 0, stuck: 0, byStep: { read: 0, audited: 0, loaded: 0 } });
+assert.equal(cell.plans, 1);
+assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.grid], [1, 1, 1], "document, database and grid: one number");
+assert.deepEqual(cell.counts.audit.claude, { found: 2, epoExcluded: 1, expected: 1 }, "the EPO plan left out is on the record");
+assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Nationwide").state, "missing", "an empty slot is just blank");
 
-// Step 2: nobody has counted the plans on the document yet - audit it.
-v = run([{ ...good, audit: null }], served([good]));
-cell = v.groups[0].cells[0];
+// Never one-model green: ChatGPT did not complete -> pending, audit again.
+const oneModel = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)"), { model: "ChatGPT (gpt-5)", verdict: "error", mismatches: [], notes: "fetch failed" }] } };
+cell = cellOf(run([oneModel], served([oneModel])));
 assert.equal(cell.state, "fail");
-assert.equal(cell.failedAt, "read");
+assert.equal(cell.failedAt, "chatgpt");
 assert.equal(cell.fix, "audit");
+assert.equal(cell.steps.claude.ok, true);
 
-// Step 3: a value the document contradicts - correct it against the page.
-v = run([{ ...good, audit: { status: "issues", completedAt: "x", documentPlanCount: 1, mismatches: [{ plan: "Copay 1500 PPO", field: "EE", stored: "1", onDocument: "2", by: "Claude" }] } }], served([good]));
-assert.equal(v.groups[0].cells[0].failedAt, "audited");
-assert.equal(v.groups[0].cells[0].fix, "correct");
+// A model that skipped a plan's rates is pending too.
+const skipped = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)", { verdict: "incomplete", confirmed: 0 }), passModel("ChatGPT (gpt-5)")] } };
+cell = cellOf(run([skipped], served([skipped])));
+assert.equal(cell.failedAt, "claude");
+assert.match(cell.steps.claude.note, /confirmed the rates of 0 of 1/);
 
-// Step 3: the document has more plans than the database - correct (add them).
-v = run([{ ...good, audit: { ...good.audit, documentPlanCount: 3 } }], served([good]));
-assert.equal(v.groups[0].cells[0].failedAt, "audited");
-assert.equal(v.groups[0].cells[0].fix, "correct");
-assert.match(v.groups[0].cells[0].steps.audited.note, /document has 3 plans; the database has 1/);
+// An audit of an earlier reading does not count: stale -> audit again.
+const changed = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } }] };
+const stale = { ...good, extracted: changed, audit: dualPass(reading1) };
+cell = cellOf(run([stale], served([stale])));
+assert.equal(cell.state, "fail");
+assert.equal(cell.fix, "audit");
+assert.match(cell.steps.claude.note, /earlier reading/);
 
-// Step 4: served to the group short of what is stored - rebuild.
-v = run([good], () => [{ id: 10, slot: "Gravie", plans: [] }]);
-assert.equal(v.groups[0].cells[0].failedAt, "loaded");
-assert.equal(v.groups[0].cells[0].fix, "refresh");
+// An open finding - even one model's - is corrected, never waved through.
+const finding = { ...good, audit: { ...dualPass(), status: "issues", mismatches: [{ plan: "Copay 1500 PPO", field: "rate EE", stored: "1", onDocument: "2", by: "ChatGPT (gpt-5)" }], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)", { verdict: "issues" })] } };
+cell = cellOf(run([finding], served([finding])));
+assert.equal(cell.failedAt, "chatgpt");
+assert.equal(cell.fix, "correct");
 
-// Step 4: a plan missing a tier rate the group needs - correct (read the rate),
-// unless the document itself leaves that tier unpriced.
-const noEs = { ...good, extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 } }] } };
-v = run([noEs], served([noEs]));
-assert.equal(v.groups[0].cells[0].failedAt, "loaded");
-assert.equal(v.groups[0].cells[0].fix, "correct");
-const confirmed = { ...good, extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] } };
-v = run([confirmed], () => [{ id: 10, slot: "Gravie", plans: [{ name: "Copay 1500 PPO", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] }]);
-assert.equal(v.groups[0].cells[0].state, "verified", "a tier the carrier does not price is not a failure once confirmed");
+// A count that is not the database's fails the audit step.
+const shortCount = { ...good, audit: { ...dualPass(), models: [passModel("Claude (claude-sonnet-5)", { documentPlanCount: 3 }), passModel("ChatGPT (gpt-5)")] } };
+assert.equal(cellOf(run([shortCount], served([shortCount]))).failedAt, "claude");
 
-// The steward has run out of repairs: the box needs a person, and says why.
-v = verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie"], tiers: {} }], rows: [{ ...good, audit: null }], served: served([good]), isEpoPlan, isBlankPlan, gaveUp: () => "tried twice" });
-assert.equal(v.groups[0].cells[0].state, "stuck");
-assert.equal(v.groups[0].cells[0].stuck, "tried twice");
+// Grid: the page must show this exact reading.
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [] }]));
+assert.equal(cell.failedAt, "grid");
+assert.equal(cell.fix, "refresh");
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [{ name: "Copay 1500 PPO", rates: { EE: 7, ES: 2, EC: 3, FAM: 4 } }] }]));
+assert.equal(cell.failedAt, "grid", "the grid showing other rates than the database is caught");
+
+// Grid: a plan missing a tier rate the group needs - correct it, unless the
+// document itself leaves that tier unpriced.
+const noEsReading = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 } }] };
+const noEs = { ...good, extracted: noEsReading, audit: dualPass(noEsReading) };
+cell = cellOf(run([noEs], served([noEs])));
+assert.equal(cell.failedAt, "grid");
+assert.equal(cell.fix, "correct");
+const confirmedReading = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] };
+const confirmed = { ...good, extracted: confirmedReading, audit: dualPass(confirmedReading) };
+assert.equal(cellOf(run([confirmed], served([confirmed]))).state, "verified", "a tier the carrier does not price is not a failure once confirmed");
 
 // A newer upload that failed to read, waiting beside the good one.
 const failed = { ...good, id: 11, extracted: null, audit: null, error: "This proposal is longer than one reading can hold", filename: "acme gravie v2.pdf" };
-v = run([failed, good], served([good]));
-cell = v.groups[0].cells[0];
+cell = cellOf(run([failed, good], served([good])));
 assert.equal(cell.proposalId, 10, "the good reading stays in force");
-assert.equal(cell.state, "fail");
-assert.equal(cell.failedAt, "read");
+assert.equal(cell.failedAt, "extraction");
 assert.equal(cell.fix, "read");
 assert.equal(cell.fixId, 11);
-assert.equal(cell.waiting.length, 1);
-
-// Only a failed upload in the slot: nothing in force.
-v = run([failed], () => []);
-cell = v.groups[0].cells[0];
+cell = cellOf(run([failed], () => []));
 assert.equal(cell.proposalId, null);
-assert.equal(cell.fix, "read");
 assert.equal(cell.fixId, 11);
+
+// The steward has run out of repairs: the box needs a person, and says why.
+cell = cellOf(run([{ ...good, audit: null }], served([good]), () => "tried three times"));
+assert.equal(cell.state, "stuck");
+assert.equal(cell.stuck, "tried three times");
 
 // --- Corrections: applied exactly, logged, repeats and EPO kept out ---------
 const reading0 = {
@@ -139,6 +145,34 @@ assert.deepEqual(fixed.extracted.plans[0].unpriced, ["FAM"]);
 assert.equal(fixed.extracted.plans[0].option_id, "UH1", "a plan keeps its number through a correction");
 assert.equal(fixed.log.length, 6, "every change logged: 3 values, 1 unpriced tier, 1 removed, 1 added");
 assert.equal(reading0.plans[0].rates.EE, 600, "the stored reading is not mutated");
+
+// --- An auditor's answer is checked in code, not taken on its word ---------
+const storedTwo = [
+  { name: "A", rates: { EE: 100, ES: 200, EC: 180, FAM: 300 } },
+  { name: "B", rates: { EE: 110, ES: 220, EC: 190, FAM: 320 } },
+];
+const says = (confirmations: object[]) => ({ verdict: "pass", plans_found_total: 2, epo_excluded: 0, document_plan_count: 2, rate_confirmations: confirmations, mismatches: [], notes: "" });
+let sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: true, EE: 110, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
+assert.equal(sh.verdict, "pass");
+sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: true, EE: 111.5, ES: 220, EC: 190, FAM: 320 }]), storedTwo);
+assert.equal(sh.verdict, "issues", "a rate the auditor read differently is a finding even when it said pass");
+assert.deepEqual(sh.mismatches, [{ plan: "B", field: "rate EE", stored: "110", onDocument: "111.5" }]);
+sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }]), storedTwo);
+assert.equal(sh.verdict, "incomplete", "a plan the auditor did not confirm keeps it from passing");
+sh = shape("ChatGPT (gpt-5)", says([{ index: 0, on_document: true, EE: 100, ES: 200, EC: 180, FAM: 300 }, { index: 1, on_document: false, EE: null, ES: null, EC: null, FAM: null }]), storedTwo);
+assert.equal(sh.mismatches[0].field, "missing_plan");
+
+// --- The audit record: both models, counts, version; clients see only a current pass
+process.env.KENNION_FAKE_AI = "1";
+const au = await auditProposal({ filename: "x.pdf", mime: "application/pdf", buffer: Buffer.from(""), extracted: reading0 });
+assert.equal(au.status, "pass");
+assert.equal(au.models.length, 2);
+assert.ok(au.models.every((m: { verdict: string; confirmed: number; of: number }) => m.verdict === "pass" && m.confirmed === m.of));
+assert.equal(au.version, readingVersion(reading0));
+assert.equal(au.counts.stored, 3);
+assert.deepEqual(auditForClient(au, reading0), { status: "pass", completedAt: au.completedAt });
+assert.equal(auditForClient(au, fixed.extracted), null, "an audit of another reading is no audit for the client");
+delete process.env.KENNION_FAKE_AI;
 
 // --- End to end: the server keeps the good reading --------------------------
 const PORT = 5091;
@@ -214,7 +248,7 @@ const rows = await list();
 assert.ok(rows.some((r) => r.id === first.id), "the good reading is not deleted by an upload that did not read");
 c = await check();
 assert.equal(c.proposalId, first.id, "and it stays the one in force");
-assert.equal(c.failedAt, "read");
+assert.equal(c.failedAt, "extraction");
 assert.equal(c.waiting.length, 1);
 // The steward reads the unread upload again, twice, then hands it to a person.
 for (let i = 0; i < 80 && c.state !== "stuck"; i++) {
@@ -244,9 +278,9 @@ assert.equal(c.proposalId, third.id);
 assert.equal(c.state, "verified");
 assert.equal(c.plans, 2);
 
-assert.deepEqual(c.counts, { document: 2, stored: 2, grid: 2 });
+assert.deepEqual([c.counts.document, c.counts.stored, c.counts.grid], [2, 2, 2]);
 assert.ok((await fetch(`${base}/api/admin/proposals/fix`, { method: "POST", headers: auth })).ok, "staff can ask the steward to try again");
 assert.equal((await fetch(`${base}/api/admin/proposals/verify`)).status, 401, "staff only");
 
-console.log("proposal verify: four steps per box, one plan count at every step, corrections applied and logged, the steward repairs or hands over, an unread upload never replaces a read one - ok");
+console.log("proposal verify: Verified only on a dual audit of the exact reading on the grid, one plan count at every step, rates checked in code, corrections applied and logged, the steward repairs or hands over, an unread upload never replaces a read one - ok");
 stop();

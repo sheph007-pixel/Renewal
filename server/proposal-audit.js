@@ -1,11 +1,21 @@
-// Proposal audit: two models, Claude and ChatGPT, each independently read
-// the carrier's own document and check every plan the portal stored from it - 
-// name, code, network, deductible, out-of-pocket max, the four tier rates - 
-// against what is printed. Both must find nothing wrong for the audit to
-// pass. It runs once when a proposal is read (and again on demand), and the
-// result rides with the proposal so the client's plan cards can say the
-// figures were checked and when; the document itself stays with staff.
+// Proposal audit: two models from two different companies, Claude and
+// ChatGPT, each independently read the carrier's own document and check every
+// plan the portal stored from it. Each auditor must:
+//   - count the plans on the document: every option found, the EPO plans
+//     left out on purpose (Kennion offers PPO only), and the PPO plans that
+//     remain - the number the database and the grid are held to;
+//   - read all four tier rates off the document for every stored plan,
+//     itself - the server compares them to the database in code, so a rate
+//     an auditor did not happen to notice is still checked;
+//   - report every other value the document contradicts.
+// The audit passes only when BOTH models ran, both confirmed every plan's
+// rates, both counts equal the database, and neither has a finding. A model
+// that is off, failed or skipped a plan leaves the audit pending - never a
+// pass on one model's word. Each audit records the exact reading it checked
+// (`version`), so a later change to the plans makes it stale on its own.
 import Anthropic from "@anthropic-ai/sdk";
+import crypto from "node:crypto";
+import https from "node:https";
 import { prepareForModel } from "./intake.js";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
@@ -24,15 +34,25 @@ const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
  */
 const CLAUDE_MODEL = "claude-sonnet-5";
 
+const nullableNumber = { anyOf: [{ type: "number" }, { type: "null" }] };
+
 const RESULT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "document_plan_count", "mismatches", "notes"],
+  required: ["verdict", "plans_found_total", "epo_excluded", "document_plan_count", "rate_confirmations", "mismatches", "notes"],
   properties: {
-    document_plan_count: {
-      type: "integer",
-      description:
-        "How many distinct plan options the document prices, counted across every page - headline, alternate, illustrative and benchmark grids alike - leaving out EPO plans (Kennion offers PPO only). A plan printed twice at the same rates (in a summary and again on its own page) counts once.",
+    plans_found_total: { type: "integer", description: "Every distinct plan option the document prices, EPO plans included, across every page and grid. A plan printed twice at the same rates counts once." },
+    epo_excluded: { type: "integer", description: "How many of those are EPO plans (Kennion offers PPO only, so these are left out of the portal on purpose)." },
+    document_plan_count: { type: "integer", description: "plans_found_total minus epo_excluded: the plans the portal should hold." },
+    rate_confirmations: {
+      type: "array",
+      description: "One entry for EVERY stored plan, by its index: whether it is on the document, and its four monthly tier rates read off the document yourself (not copied from the stored values). null for a tier the document does not price.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["index", "on_document", "EE", "ES", "EC", "FAM"],
+        properties: { index: { type: "integer" }, on_document: { type: "boolean" }, EE: nullableNumber, ES: nullableNumber, EC: nullableNumber, FAM: nullableNumber },
+      },
     },
     verdict: { type: "string", enum: ["pass", "issues", "unreadable"], description: "pass when every stored value matches the document; issues when any does not; unreadable when the document cannot be checked." },
     mismatches: {
@@ -53,13 +73,15 @@ const RESULT_SCHEMA = {
   },
 };
 
-const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself. The stored plans are given as JSON: for each, the name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family) and the benefit figures the portal shows to the employer.
+const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself. The stored plans are given as a numbered JSON list: for each, its index, the name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family) and the benefit figures the portal shows to the employer.
 
-Names: the stored name should be the plan's name exactly as printed. A stored name that is the printed name with a placement label appended by the portal - "(headline option 2)", "(PPO alternate 32)", "(Essential PDL alternate 30)" - is not a mismatch; mention it in the notes as "name carries a placement label" so staff can re-read the proposal for the exact name. Any other difference in the name is a mismatch.
+1. Count the plans on the document: every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the rest (document_plan_count). A plan printed twice at the same rates counts once.
 
-First count the distinct plan options the document prices (document_plan_count): every page, every grid, EPO plans left out, a plan printed twice at the same rates counted once.
+2. For EVERY stored plan, by index, find it on the document and read its four tier rates off the page yourself (rate_confirmations). Do not copy the stored rates - read the document. If a stored plan is not on the document, set on_document false. Use null only for a tier the document does not price for that plan.
 
-Check every stored plan against the document, value by value. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value that the document contradicts, and for a stored plan you cannot find on the document at all (field missing_plan). Kennion offers PPO plans only, so an EPO plan printed on the document is left out of the portal on purpose: never report one as extra_plan, and never expect one to be stored. The portal is meant to store every non-EPO option the document prices: report each one it is missing (field extra_plan, the plan's printed name in on_document, "not stored" in stored). Ignore values the portal stores as null or empty. Never guess: if a page is unreadable say so in the notes and use verdict unreadable only when nothing can be checked.`;
+3. Check every other stored value against the document. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value the document contradicts. Kennion offers PPO plans only, so an EPO plan printed on the document is left out of the portal on purpose: never report one as extra_plan, and never expect one to be stored. The portal is meant to store every non-EPO option the document prices: report each one it is missing (field extra_plan, the plan's printed name in on_document, "not stored" in stored).
+
+Names: the stored name should be the plan's name exactly as printed. A stored name that is the printed name with a placement label appended by the portal - "(headline option 2)", "(PPO alternate 32)" - is not a mismatch; mention it in the notes. Any other difference in the name is a mismatch. Ignore values the portal stores as null or empty, apart from rates. Never guess: if a page is unreadable say so in the notes and use verdict unreadable only when nothing can be checked.`;
 
 const storedFor = (extracted) => {
   const plans = Array.isArray(extracted && extracted.plans) ? extracted.plans : [];
@@ -75,23 +97,70 @@ const storedFor = (extracted) => {
   }));
 };
 
-const shape = (who, r) => ({
-  model: who,
-  verdict: ["pass", "issues", "unreadable"].includes(r && r.verdict) ? r.verdict : "unreadable",
-  documentPlanCount: Number.isInteger(r && r.document_plan_count) ? r.document_plan_count : null,
-  mismatches: Array.isArray(r && r.mismatches)
-    ? r.mismatches.slice(0, 60).map((m) => ({ plan: String(m.plan || ""), field: String(m.field || ""), stored: String(m.stored ?? ""), onDocument: String(m.on_document ?? "") }))
-    : [],
-  notes: String((r && r.notes) || "").slice(0, 1500),
-});
+/**
+ * The exact reading an audit checked: a hash of every stored plan's values.
+ * An audit is only good for the reading it names - a correction or a re-read
+ * changes the hash, and the old audit no longer counts.
+ */
+export function readingVersion(extracted) {
+  return crypto.createHash("sha256").update(JSON.stringify(storedFor(extracted))).digest("hex").slice(0, 16);
+}
+
+const RATE_TIERS = ["EE", "ES", "EC", "FAM"];
+const sameRate = (a, b) => (a == null && b == null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 0.005);
+
+/**
+ * One model's answer, checked in code: every stored plan must have a rate
+ * confirmation, and each confirmed rate is compared to the database here -
+ * a difference is a finding whether or not the model reported it.
+ */
+export function shape(who, r, stored) {
+  const modelVerdict = ["pass", "issues", "unreadable"].includes(r && r.verdict) ? r.verdict : "unreadable";
+  const mismatches = Array.isArray(r && r.mismatches)
+    ? r.mismatches.slice(0, 80).map((m) => ({ plan: String(m.plan || ""), field: String(m.field || ""), stored: String(m.stored ?? ""), onDocument: String(m.on_document ?? "") }))
+    : [];
+  const seen = new Set(mismatches.map((m) => `${m.plan}|${m.field}`.toLowerCase()));
+  const conf = new Map((Array.isArray(r && r.rate_confirmations) ? r.rate_confirmations : []).filter((c) => Number.isInteger(c.index)).map((c) => [c.index, c]));
+  let confirmed = 0;
+  stored.forEach((pl, i) => {
+    const c = conf.get(i);
+    if (!c) return;
+    confirmed++;
+    if (c.on_document === false) {
+      if (!seen.has(`${pl.name}|missing_plan`.toLowerCase())) mismatches.push({ plan: pl.name, field: "missing_plan", stored: "stored", onDocument: "not on document" });
+      return;
+    }
+    for (const t of RATE_TIERS) {
+      const st = pl.rates ? pl.rates[t] : null;
+      if (sameRate(c[t], st)) continue;
+      const key = `${pl.name}|rate ${t}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      mismatches.push({ plan: pl.name, field: `rate ${t}`, stored: st == null ? "" : String(st), onDocument: c[t] == null ? "not priced" : String(c[t]) });
+    }
+  });
+  const int = (v) => (Number.isInteger(v) ? v : null);
+  const verdict = modelVerdict === "unreadable" ? "unreadable" : confirmed < stored.length ? "incomplete" : mismatches.length || modelVerdict === "issues" ? "issues" : "pass";
+  return {
+    model: who,
+    verdict,
+    plansFoundTotal: int(r && r.plans_found_total),
+    epoExcluded: int(r && r.epo_excluded),
+    documentPlanCount: int(r && r.document_plan_count),
+    confirmed,
+    of: stored.length,
+    mismatches,
+    notes: String((r && r.notes) || "").slice(0, 1500) + (verdict === "incomplete" ? ` Confirmed the rates of ${confirmed} of ${stored.length} plans.` : ""),
+  };
+}
+
+const auditPayload = (stored) => `The stored plans:\n${JSON.stringify(stored.map((pl, index) => ({ index, ...pl })), null, 1)}\n\nAudit them against the document.`;
 
 async function claudeCheck({ filename, prepared, stored }) {
-  // Audits run several at a time (AUDIT_PARALLEL) against the same org-wide
-  // tokens-per-minute budget the proposal reader shares - stretch the SDK's
-  // built-in backoff so a burst retries instead of failing the audit
-  // outright, but bound each attempt so a stalled connection can't tie up
-  // one of those slots for the SDK's default 10 minutes per retry.
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 6 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 6 * 60 * 1000 });
+  // Audits run several at a time against the same org-wide tokens-per-minute
+  // budget the proposal reader shares - stretch the SDK's built-in backoff so
+  // a burst retries instead of failing the audit outright.
+  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 10 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 });
   const content = [];
   if (prepared.kind === "pdf") {
     const { numpages } = await pdfParse(prepared.buffer).catch(() => ({ numpages: 0 }));
@@ -102,26 +171,53 @@ async function claudeCheck({ filename, prepared, stored }) {
   }
   else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
   else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
-  content.push({ type: "text", text: `The stored plans:\n${JSON.stringify(stored, null, 1)}\n\nCheck them against the document.` });
-  // Streamed with room to spare: a 145-plan quote's findings ran past the
-  // old 8,000-token ceiling and came back as cut-off JSON ("Unexpected end
-  // of JSON input" on Lewis Communications' fully insured quote).
+  content.push({ type: "text", text: auditPayload(stored) });
+  // Streamed with room to spare: every plan's four rates come back now, and a
+  // 145-plan quote's findings ran past the old 8,000-token ceiling.
   const response = await client.messages
     .stream({
       model: CLAUDE_MODEL,
-      max_tokens: 32000,
+      max_tokens: 64000,
       output_config: { effort: "high", format: { type: "json_schema", schema: RESULT_SCHEMA } },
       system: INSTRUCTIONS,
       messages: [{ role: "user", content }],
     })
     .finalMessage();
   if (response.stop_reason === "refusal") throw new Error("Claude declined the check.");
-  if (response.stop_reason === "max_tokens") throw new Error("Claude's findings ran past one answer.");
+  if (response.stop_reason === "max_tokens") throw new Error("Claude's audit ran past one answer.");
   const text = response.content
     .filter((b) => b.type === "text")
     .map((b) => b.text)
     .join("");
-  return shape(`Claude (${CLAUDE_MODEL})`, JSON.parse(text));
+  return shape(`Claude (${CLAUDE_MODEL})`, JSON.parse(text), stored);
+}
+
+/**
+ * POST JSON with a long timeout. Node's fetch gives up on a response that
+ * takes more than five minutes to start - which a large PDF audit on
+ * ChatGPT can ("fetch failed" on Lewis Communications' 145-plan quote).
+ */
+function postJson(url, headers, body, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const data = Buffer.from(JSON.stringify(body));
+    const req = https.request(url, { method: "POST", headers: { ...headers, "Content-Type": "application/json", "Content-Length": data.length } }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        let j = {};
+        try {
+          j = JSON.parse(text);
+        } catch {
+          /* not JSON */
+        }
+        resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, json: j, text });
+      });
+    });
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`no answer in ${Math.round(timeoutMs / 60000)} minutes`)));
+    req.on("error", reject);
+    req.end(data);
+  });
 }
 
 async function chatgptCheck({ filename, prepared, stored }) {
@@ -129,66 +225,87 @@ async function chatgptCheck({ filename, prepared, stored }) {
   if (prepared.kind === "pdf") parts.push({ type: "file", file: { filename, file_data: `data:application/pdf;base64,${prepared.buffer.toString("base64")}` } });
   else if (prepared.kind === "image") parts.push({ type: "image_url", image_url: { url: `data:${prepared.mime};base64,${prepared.buffer.toString("base64")}` } });
   else parts.push({ type: "text", text: `The document (${filename}):\n${prepared.text || "(empty)"}` });
-  parts.push({ type: "text", text: `The stored plans:\n${JSON.stringify(stored, null, 1)}\n\nCheck them against the document.` });
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatgptKey()}` },
-    body: JSON.stringify({
-      model: CHATGPT_MODEL(),
-      messages: [
-        { role: "system", content: INSTRUCTIONS },
-        { role: "user", content: parts },
-      ],
-      response_format: { type: "json_schema", json_schema: { name: "proposal_audit", strict: true, schema: RESULT_SCHEMA } },
-    }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(j.error && j.error.message) || r.statusText}`);
-  const text = j.choices && j.choices[0] && j.choices[0].message ? String(j.choices[0].message.content || "") : "";
-  if (!text) throw new Error("ChatGPT returned no text.");
-  return shape(`ChatGPT (${CHATGPT_MODEL()})`, JSON.parse(text));
+  parts.push({ type: "text", text: auditPayload(stored) });
+  const body = {
+    model: CHATGPT_MODEL(),
+    messages: [
+      { role: "system", content: INSTRUCTIONS },
+      { role: "user", content: parts },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "proposal_audit", strict: true, schema: RESULT_SCHEMA } },
+  };
+  let last;
+  // One more try on a network failure or a 429/5xx: a missing ChatGPT audit
+  // holds the proposal back from green, so it is worth the second attempt.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000);
+      if (!r.ok) {
+        last = new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(r.json.error && r.json.error.message) || `HTTP ${r.status}`}`);
+        if (r.status === 429 || r.status >= 500) continue;
+        throw last;
+      }
+      const text = r.json.choices && r.json.choices[0] && r.json.choices[0].message ? String(r.json.choices[0].message.content || "") : "";
+      if (!text) throw new Error("ChatGPT returned no text.");
+      return shape(`ChatGPT (${CHATGPT_MODEL()})`, JSON.parse(text), stored);
+    } catch (e) {
+      last = e;
+      if (attempt === 2 || /HTTP 4\d\d|returned no text/.test(e.message)) break;
+    }
+  }
+  throw last;
 }
 
 /**
- * Run both checks and combine them. `status`: pass when every model that ran
- * found nothing wrong and at least one ran; issues when any mismatch was
- * found; unreadable when nothing could be checked. A model that is not
- * configured or that failed is recorded as such, never counted as a pass.
+ * Run both audits and combine them. `status`:
+ *   pass    - both models ran, both confirmed every plan's rates, both
+ *             counts equal the database, and neither has a finding;
+ *   issues  - a finding (a value the document contradicts, a plan missing
+ *             or extra, or a count that does not match the database);
+ *   pending - no finding, but not both models' full word: one is off,
+ *             failed, or skipped a plan. Never counted as a pass.
+ * `version` names the reading that was checked (see readingVersion).
  */
 export async function auditProposal({ filename, mime, buffer, extracted }) {
   const stored = storedFor(extracted);
   const completedAt = new Date().toISOString();
-  if (!stored.length) return { completedAt, status: "unreadable", models: [], mismatches: [], notes: "No plans stored to check." };
+  const version = readingVersion(extracted);
+  const storedCount = offeredCount(extracted);
+  if (!stored.length) return { completedAt, status: "pending", models: [], mismatches: [], notes: "No plans stored to check.", version, counts: { stored: 0 } };
+  let models;
   if (fakeAi()) {
-    const models = [
-      { model: "Claude (canned)", verdict: "pass", mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." },
-      { model: "ChatGPT (canned)", verdict: "pass", mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." },
-    ];
-    return { completedAt, status: "pass", models, mismatches: [], notes: "", documentPlanCount: offeredCount(extracted) };
+    const canned = (name) => shape(name, { verdict: "pass", plans_found_total: storedCount, epo_excluded: 0, document_plan_count: storedCount, rate_confirmations: stored.map((pl, index) => ({ index, on_document: true, ...(pl.rates || {}) })), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }, stored);
+    models = [canned("Claude (canned)"), canned("ChatGPT (canned)")];
+  } else {
+    const prepared = await prepareForModel({ filename, mime, buffer });
+    models = await Promise.all([
+      apiKey() || process.env.ANTHROPIC_AUTH_TOKEN
+        ? claudeCheck({ filename, prepared, stored }).catch((e) => ({ model: `Claude (${CLAUDE_MODEL})`, verdict: "error", mismatches: [], notes: e.message }))
+        : Promise.resolve({ model: "Claude", verdict: "off", mismatches: [], notes: "No Anthropic key." }),
+      chatgptKey()
+        ? chatgptCheck({ filename, prepared, stored }).catch((e) => ({ model: `ChatGPT (${CHATGPT_MODEL()})`, verdict: "error", mismatches: [], notes: e.message }))
+        : Promise.resolve({ model: "ChatGPT", verdict: "off", mismatches: [], notes: "No ChatGPT key." }),
+    ]);
   }
-  const prepared = await prepareForModel({ filename, mime, buffer });
-  const runs = [];
-  if (apiKey() || process.env.ANTHROPIC_AUTH_TOKEN) runs.push(claudeCheck({ filename, prepared, stored }).catch((e) => ({ model: `Claude (${CLAUDE_MODEL})`, verdict: "error", mismatches: [], notes: e.message })));
-  else runs.push(Promise.resolve({ model: "Claude", verdict: "off", mismatches: [], notes: "No Anthropic key." }));
-  if (chatgptKey()) runs.push(chatgptCheck({ filename, prepared, stored }).catch((e) => ({ model: `ChatGPT (${CHATGPT_MODEL()})`, verdict: "error", mismatches: [], notes: e.message })));
-  else runs.push(Promise.resolve({ model: "ChatGPT", verdict: "off", mismatches: [], notes: "No ChatGPT key." }));
-  const models = await Promise.all(runs);
-  const ran = models.filter((m) => m.verdict === "pass" || m.verdict === "issues");
-  const mismatches = models.flatMap((m) => m.mismatches.map((x) => ({ ...x, by: m.model })));
-  // The plan count: Claude's, the model this portal reads with; ChatGPT's
-  // when Claude's is missing. Two counts that differ are a finding of their
-  // own, for the correction step to settle against the document.
-  const counts = ran.map((m) => m.documentPlanCount).filter((n) => n != null);
-  const documentPlanCount = counts.length ? counts[0] : null;
-  if (counts.length > 1 && counts.some((n) => n !== counts[0])) {
-    mismatches.push({ plan: "(whole document)", field: "plan_count", stored: String(offeredCount(extracted)), onDocument: ran.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} counts ${m.documentPlanCount}`).join(", "), by: "both" });
+  const mismatches = models.flatMap((m) => (m.mismatches || []).map((x) => ({ ...x, by: m.model })));
+  // The plan count, held to the database by each model that gave one.
+  for (const m of models) {
+    if (m.documentPlanCount != null && m.documentPlanCount !== storedCount) {
+      mismatches.push({ plan: "(whole document)", field: "plan_count", stored: String(storedCount), onDocument: `${m.documentPlanCount} (${m.plansFoundTotal ?? "?"} found, ${m.epoExcluded ?? "?"} EPO excluded)`, by: m.model });
+    }
   }
-  const status = mismatches.length ? "issues" : ran.length ? "pass" : "unreadable";
+  const both = models.length === 2 && models.every((m) => m.verdict === "pass");
+  const status = mismatches.length ? "issues" : both ? "pass" : "pending";
   const notes = models
     .filter((m) => m.notes)
     .map((m) => `${m.model}: ${m.notes}`)
     .join(" ");
-  return { completedAt, status, models, mismatches, notes, documentPlanCount };
+  const counts = { stored: storedCount };
+  for (const m of models) {
+    const k = /^claude/i.test(m.model) ? "claude" : "chatgpt";
+    counts[k] = { found: m.plansFoundTotal ?? null, epoExcluded: m.epoExcluded ?? null, expected: m.documentPlanCount ?? null };
+  }
+  return { completedAt, status, models, mismatches, notes, version, counts, documentPlanCount: both && !mismatches.length ? storedCount : null };
 }
 
 const TIERS = ["EE", "ES", "EC", "FAM"];
@@ -372,8 +489,12 @@ export function applyCorrection(extracted, c) {
   return { extracted: { ...(extracted || {}), plans: kept }, log };
 }
 
-/** What a client's page is told: the outcome and when - never the notes, never which models. */
-export function auditForClient(a) {
+/**
+ * What a client's page is told: the outcome and when - never the notes, never
+ * which models. An audit of an earlier reading is no audit of this one.
+ */
+export function auditForClient(a, extracted) {
   if (!a || !a.status) return null;
+  if (extracted !== undefined && a.version !== readingVersion(extracted)) return null;
   return { status: a.status, completedAt: a.completedAt };
 }

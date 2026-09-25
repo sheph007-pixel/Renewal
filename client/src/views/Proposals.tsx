@@ -37,7 +37,7 @@ export interface Proposal {
 
 export interface ProposalAudit {
   completedAt: string;
-  status: "pass" | "issues" | "unreadable";
+  status: "pass" | "issues" | "pending" | "unreadable";
   models: { model: string; verdict: string; mismatches: { plan: string; field: string; stored: string; onDocument: string }[]; notes: string }[];
   mismatches: { plan: string; field: string; stored: string; onDocument: string; by: string }[];
   notes: string;
@@ -51,8 +51,9 @@ function AuditPill({ a }: { a: ProposalAudit | null | undefined }) {
     .filter((m) => m.verdict === "pass" || m.verdict === "issues")
     .map((m) => m.model.replace(/\s*\(.*\)$/, ""))
     .join(" + ");
-  if (a.status === "pass") return <span style={pill(C.green, C.greenTint, C.greenEdge)} title={`${who} agree the stored plans match the document`}>✓ Audit passed · {when}</span>;
+  if (a.status === "pass") return <span style={pill(C.green, C.greenTint, C.greenEdge)} title={`${who} agree the stored plans match the document`}>✓ Dual audit passed · {when}</span>;
   if (a.status === "issues") return <span style={pill(C.amber, C.amberTint, C.amberEdge)} title={a.notes}>⚠ Audit: {a.mismatches.length} to check · {when}</span>;
+  if (a.status === "pending") return <span style={pill(C.faint, "#f2f4f5", "#e0e4e6")} title={a.notes}>Dual audit pending · {when}</span>;
   return <span style={pill(C.red, C.redTint, C.redEdge)} title={a.notes}>Audit could not run</span>;
 }
 
@@ -362,30 +363,50 @@ export interface VerifyCell {
   filename: string | null;
   /** Plans the group's 2027 Medical Plans grid shows from this proposal. */
   plans: number;
-  /** The plan count at each stage: on the document, in the database, in the group's grid. */
-  counts: { document: number | null; stored: number | null; grid: number | null };
+  /** The plan count at each stage: on the document (both auditors agreeing), in the database, in the group's grid. */
+  counts: {
+    document: number | null;
+    stored: number | null;
+    grid: number | null;
+    audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
+  };
   /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
   state: "verified" | "fail" | "working" | "stuck" | "missing";
   stuck?: string;
-  failedAt?: "read" | "audited" | "loaded";
+  failedAt?: "source" | "extraction" | "claude" | "chatgpt" | "grid";
   fix?: "read" | "audit" | "correct" | "refresh" | null;
   fixId?: number;
-  steps: { filed: VerifyStep | null; read: VerifyStep | null; audited: VerifyStep | null; loaded: VerifyStep | null };
+  steps: { source: VerifyStep | null; extraction: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
+}
+/** One auditor's plan count: every option found on the document, the EPO plans left out on purpose, and the rest. */
+export interface AuditCount {
+  found: number | null;
+  epoExcluded: number | null;
+  expected: number | null;
 }
 export interface Verification {
   checkedAt: string;
   groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
-  totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: { read: number; audited: number; loaded: number } };
+  totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: Record<string, number> };
   steward?: { running: boolean; enabled: boolean };
 }
 
 const STEP_NAMES = [
-  ["filed", "Proposal on file"],
-  ["read", "Scanned: every plan on the document counted"],
-  ["audited", "Database matches the document, checked by two models"],
-  ["loaded", "Every plan in the group's Medical Plans grid"],
+  ["source", "Source"],
+  ["extraction", "Extraction"],
+  ["claude", "Claude Audit"],
+  ["chatgpt", "ChatGPT Audit"],
+  ["grid", "Grid"],
 ] as const;
+
+/** "Source ✓ · Extraction ✓ · Claude Audit ✓ · ChatGPT Audit ✓ · Grid ✓", then each step's detail. */
+function checkTitle(c: VerifyCell): string {
+  const mark = (st: VerifyStep | null) => (!st ? "-" : st.ok ? "✓" : st.busy ? "…" : "✗");
+  const line = STEP_NAMES.map(([k, label]) => `${label} ${mark(c.steps[k])}`).join(" · ");
+  const detail = STEP_NAMES.filter(([k]) => c.steps[k]).map(([k, label]) => `${label}: ${c.steps[k]!.note}`);
+  return [line, ...detail, ...(c.stuck ? [`Needs a person: ${c.stuck}`] : [])].join("\n");
+}
 
 /** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
 function useVerify(token: string) {
@@ -407,7 +428,7 @@ function useVerify(token: string) {
   return { v, load };
 }
 
-/** Four small numbered squares: green passed, blue being fixed by the AI, orange needs a person, grey not reached. */
+/** Five small squares, one per step: green passed, blue being fixed by the AI, orange needs a person, grey not reached. */
 function StepStrip({ c }: { c: VerifyCell }) {
   return (
     <span style={{ display: "inline-flex", gap: 2 }}>
@@ -420,7 +441,7 @@ function StepStrip({ c }: { c: VerifyCell }) {
             title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : c.state === "stuck" ? "needs a person" : "the AI is fixing it"}${st ? ` - ${st.note}` : ""}`}
             style={{ width: 13, height: 13, borderRadius: 2, background: bg, color: st ? "#fff" : C.ghost, fontSize: 9, fontWeight: 700, lineHeight: "13px", textAlign: "center" }}
           >
-            {i + 1}
+            {"SECGR"[i]}
           </span>
         );
       })}
@@ -461,11 +482,11 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
         <strong style={{ color: all ? C.green : C.ink }}>
           {all ? "✓ " : ""}
-          {t.verified} of {t.filed} proposals verified
+          {t.verified} of {t.filed} proposals Verified
         </strong>
         {fixing > 0 && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
         {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} a person</span>}
-        <span style={{ color: C.faint }}>Green means the document, the database and the group's Medical Plans grid all hold the same plans, every value checked by two models.</span>
+        <span style={{ color: C.faint }}>Verified: the source, the extraction, a Claude audit and an independent ChatGPT audit of this exact reading, and the group's Medical Plans grid all agree - same plans, same count.</span>
       </div>
       {stuck.length > 0 && (
         <table style={{ marginTop: 8, borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>
@@ -964,7 +985,7 @@ function SlotCell({
           e.preventDefault();
           void send(Array.from(e.dataTransfer.files));
         }}
-        title={check && filled ? STEP_NAMES.map(([k, label], i) => `${i + 1}. ${label}: ${check.steps[k] ? `${check.steps[k]!.ok ? "✓" : check.steps[k]!.busy ? "…" : "✗"} ${check.steps[k]!.note}` : "-"}`).join("\n") : undefined}
+        title={check && filled ? checkTitle(check) : undefined}
         style={{
           border: `${verified ? 2 : 1}px solid ${edge}`,
           background: fill,
@@ -998,15 +1019,16 @@ function SlotCell({
             <button
               onClick={() => void openFile(current.id, token)}
               title={`${current.filename}${quote ? ` · quote ${quote}` : ""}`}
-              style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: tone, textAlign: "left", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
+              style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: tone, textAlign: "left", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
             >
-              {verified ? "✓" : working ? "…" : "⚠"} {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : slot === "Angle Scorecard" ? "on file" : "no plans"}
+              {verified ? "✓ Verified · " : working ? "… " : "⚠ "}
+              {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : slot === "Angle Scorecard" ? "on file" : "no plans"}
             </button>
             {check && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
                 <StepStrip c={check} />
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
-                  {verified ? "verified" : working ? "AI fixing" : "needs a person"}
+                  {verified ? "dual audit passed" : working ? "AI fixing" : "needs a person"}
                 </span>
               </div>
             )}
