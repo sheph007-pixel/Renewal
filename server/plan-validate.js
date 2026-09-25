@@ -16,7 +16,7 @@
 // name on its network. Two plans are never judged the same because their
 // rates happen to agree.
 
-import { TIERS, identityKey, normCode, exactName, isEpoPlan, canonicalPlans } from "./plan-canonical.js";
+import { TIERS, identityKey, normCode, exactName, isEpoPlan, canonicalPlans, bracketCore } from "./plan-canonical.js";
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -57,6 +57,31 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
     const k = identityKey(pl);
     if (seen.has(k)) dupIdentity.push(`"${pl.name}"${pl.plan_code ? ` [${pl.plan_code}]` : ""} is stored twice.`);
     seen.set(k, true);
+  }
+  // The same plan stored twice under two spellings of its name - one with a
+  // bracketed label the other lacks ("P100i10025B" and "P100i10025B (alt
+  // grid base)") - on the same network, with no different codes, and the
+  // same deductible, OOP max and four rates. Settled against the source.
+  const near = new Map();
+  for (const pl of plans) {
+    const core = bracketCore(pl.name);
+    if (!core) continue;
+    const k = `${core}|${String(pl.network || "").replace(/\s+/g, " ").trim().toLowerCase()}|${pl.deductible || ""}|${pl.oop_max || ""}|${TIERS.map((t) => (pl.rates || {})[t] ?? "").join("/")}`;
+    near.set(k, [...(near.get(k) || []), pl]);
+  }
+  for (const group of near.values()) {
+    if (group.length < 2) continue;
+    if (new Set(group.map((pl) => exactName(pl.name).toLowerCase())).size < 2) continue; // exact repeats: the identity/name checks have them
+    const codes = group.map((pl) => normCode(pl.plan_code)).filter(Boolean);
+    if (new Set(codes).size > 1) continue; // different printed codes: different plans
+    dupIdentity.push(`${group.map((pl) => `"${pl.name}"`).join(" and ")} look like one plan stored twice (same network, deductible, out-of-pocket max and rates).`);
+  }
+  // A plan with no code whose printed name is another plan's code: the same plan.
+  const byCode = new Map(plans.filter((pl) => normCode(pl.plan_code)).map((pl) => [normCode(pl.plan_code), pl]));
+  for (const pl of plans) {
+    if (normCode(pl.plan_code)) continue;
+    const twin = byCode.get(normCode(pl.name));
+    if (twin && String(twin.network || "").trim().toLowerCase() === String(pl.network || "").trim().toLowerCase()) dupIdentity.push(`"${pl.name}" is stored without a code and again as "${twin.name}" [${twin.plan_code}].`);
   }
   check("unique", "No duplicate plans", dupIdentity, "correct", "Every plan is stored once.");
 
