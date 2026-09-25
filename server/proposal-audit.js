@@ -35,7 +35,7 @@ import { prepareForModel } from "./intake.js";
 import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
-import { AUDIT_STANDARD, BENEFIT_FIELDS, comparePlan } from "./plan-compare.js";
+import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
 import { recordUsage, anthropicUsage, openaiUsage } from "./ai-usage.js";
 
@@ -853,7 +853,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
     const k = /^claude/i.test(m.model) ? "claude" : "chatgpt";
     counts[k] = { appearances: m.planAppearances ?? null, found: m.plansFoundTotal ?? null, epoExcluded: m.epoExcluded ?? null, expected: m.documentPlanCount ?? null };
   }
-  return { completedAt, status, models, mismatches, notes, version, sourceSha, standard: AUDIT_STANDARD, batches: batches.length, counts, documentPlanCount: both && !mismatches.length ? storedCount : null, jobs: saved };
+  return { completedAt, status, models, mismatches, notes, version, sourceSha, standard: AUDIT_STANDARD, compare: COMPARE_VERSION, batches: batches.length, counts, documentPlanCount: both && !mismatches.length ? storedCount : null, jobs: saved };
 }
 
 /** Pages in a PDF: pdf-parse, else pdf-lib (an encrypted carrier quote pdf-parse cannot open). */
@@ -1078,6 +1078,22 @@ export function applyCorrection(extracted, c, meta = {}) {
     // read a value, and the stored one stays. A plan's name, code or network
     // is never blanked by a correction.
     if (f.value == null || !String(f.value).trim()) continue;
+    // A "fix" that says what is already stored in other words ("$10/$35/$70"
+    // for "$10/$35/$70, 3.0 MO") changes nothing the audit compares: the
+    // stored wording stays, so a correction never flips a value back and
+    // forth between two renderings of the same figures.
+    const stored = BENEFIT_FIELDS.includes(f.field) ? pl.benefits && pl.benefits[f.field] : TIERS.includes(f.field) ? null : pl[f.field];
+    const sameAlready =
+      stored != null &&
+      String(stored).trim() !== "" &&
+      (BENEFIT_FIELDS.includes(f.field) && f.field !== "hsa_eligible" ? sameBenefit(stored, f.value, f.field) : f.field === "network" ? sameNetwork(stored, f.value) : f.field === "deductible" || f.field === "oop_max" ? sameAmount(stored, f.value) : false);
+    if (sameAlready) {
+      if (Array.isArray(pl.conflicts) && pl.conflicts.some((k) => k.field === f.field)) {
+        settle(pl, f.field);
+        entry(pl, f.field, "conflicting appearances", "stored value confirmed against the document", page, f.reason);
+      }
+      continue;
+    }
     let from;
     let to;
     if (TIERS.includes(f.field)) {

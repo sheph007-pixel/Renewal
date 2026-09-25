@@ -22,6 +22,20 @@ import { TIERS, normCode } from "./plan-canonical.js";
  */
 export const AUDIT_STANDARD = 2;
 
+/**
+ * The comparison rules' own version: bumped when a rule below changes how two
+ * renderings are judged (not what is checked). An audit composed under an
+ * older version is composed again from its saved answers - no model call -
+ * so a rule fix reaches every box at once.
+ * 1: figures in order; words exactly.
+ * 2: rx ignores the mail-order part (the reading rule says leave it out);
+ *    word-only values compare their distinct cost-sharing terms with
+ *    inpatient / outpatient labels aside ("D&C" = "OP D&C, IP D&C"); network
+ *    "+" is "plus" (so "Choice +" = "Choice Plus", never "Choice") and the
+ *    carriers' abbreviations INS / NATL read as words.
+ */
+export const COMPARE_VERSION = 2;
+
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
 
@@ -79,12 +93,42 @@ export function figures(v) {
 
 const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-/** Two benefit wordings agree when they state the same figures in the same order (or, with no figures, the same words). */
-export function sameBenefit(a, b) {
-  const fa = figures(a);
-  const fb = figures(b);
+/**
+ * The retail part of a prescription value: the reading rule is "the retail
+ * cost by tier, in tier order; leave mail order out", so a mail-order
+ * multiplier or clause ("2.5 MO", "3x mail order", "Mail order: $25/$100")
+ * is not one of its figures.
+ */
+export function retailRx(v) {
+  return fold(v)
+    .replace(/\d+(?:\.\d+)?\s*x?\s*(?:mo|mail[- ]?order)\b/g, " ")
+    .replace(/mail[- ]?order\b[^;]*/g, " ");
+}
+
+/** Plain cost-sharing wording, one term per listed part: "D&C", "Deductible and coinsurance" -> "dc". */
+const COST_TERMS = [
+  [/\b(?:d\s*&\s*c|ded(?:uctible)?\s*(?:&|and|\/)\s*coins(?:urance)?)\b/g, " dc "],
+];
+const SETTING_LABEL = /^(?:ip|op|inpatient|outpatient|in-patient|out-patient|facility|professional)\b\s*:?\s*/;
+const wordTerms = (v) => {
+  let s = fold(v);
+  for (const [re, to] of COST_TERMS) s = s.replace(re, to);
+  return [...new Set(s.split(/[,;]/).map((part) => part.trim().replace(SETTING_LABEL, "").replace(/[^a-z0-9]+/g, "")).filter(Boolean))].sort();
+};
+
+/**
+ * Two benefit wordings agree when they state the same figures in the same
+ * order, or - with no figures on either side - the same cost-sharing terms
+ * (the setting labels a carrier prints per part aside). `field` "rx" compares
+ * the retail part only.
+ */
+export function sameBenefit(a, b, field = null) {
+  const pa = field === "rx" ? retailRx(a) : a;
+  const pb = field === "rx" ? retailRx(b) : b;
+  const fa = figures(pa);
+  const fb = figures(pb);
   if (fa.length || fb.length) return sameList(fa, fb);
-  return fold(a).replace(/[^a-z0-9]+/g, "") === fold(b).replace(/[^a-z0-9]+/g, "");
+  return sameList(wordTerms(pa), wordTerms(pb));
 }
 
 /**
@@ -108,9 +152,14 @@ const yesNo = (v) => {
 
 const NETWORK_FILLER = new Set(["uhc", "unitedhealthcare", "united", "healthcare", "health", "care", "cigna", "network", "the", "in", "of"]);
 const PLAN_TYPES = new Set(["ppo", "epo", "hmo", "pos"]);
+const NETWORK_ABBREVIATIONS = { ins: "insurance", natl: "national", nat: "national" };
 const networkWords = (v) =>
   fold(v)
+    .replace(/\+/g, " plus ")
     .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .map((w) => NETWORK_ABBREVIATIONS[w] || w)
+    .join(" ")
     .split(" ")
     .filter((w) => w && !NETWORK_FILLER.has(w));
 
@@ -164,7 +213,7 @@ export function comparePlan(stored, read) {
     const doc = read[f];
     if (blank(doc)) continue;
     const st = benefits[f];
-    const ok = f === "hsa_eligible" ? !blank(st) && yesNo(st) === yesNo(doc) : !blank(st) && sameBenefit(st, doc);
+    const ok = f === "hsa_eligible" ? !blank(st) && yesNo(st) === yesNo(doc) : !blank(st) && sameBenefit(st, doc, f);
     if (!ok) diff(`benefit ${f}`, st, doc);
   }
   const rates = stored.rates || {};

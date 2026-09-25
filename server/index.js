@@ -20,7 +20,7 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
 import { withUsage, setUsageSink, memoryUsage, summarize } from "./ai-usage.js";
-import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD } from "./plan-compare.js";
+import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -5361,7 +5361,11 @@ async function runProposalAudit(id) {
     await proposalStore.updateProposal(id, { audit: kept });
     const reused = audit.models.reduce((n, m) => n + (m.document && m.document.reused ? 1 : 0) + (m.batches || []).filter((b) => b.reused).length, 0);
     const targeted = audit.models.reduce((n, m) => n + (m.batches || []).filter((b) => b.source && !b.source.full).length, 0);
-    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings)` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}; ${reused} job(s) reused, ${targeted} batch(es) from targeted packets`);
+    const byField = Object.entries(audit.mismatches.reduce((acc, m) => ((acc[m.field] = (acc[m.field] || 0) + 1), acc), {}))
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k} ${n}`)
+      .join(", ");
+    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings: ${byField})` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}; ${reused} job(s) reused, ${targeted} batch(es) from targeted packets`);
   } catch (e) {
     console.error(`proposal ${id} audit failed:`, e.message);
     await proposalStore.updateProposal(id, { audit: { completedAt: new Date().toISOString(), status: "unreadable", models: [], mismatches: [], notes: `The audit failed: ${e.message}` } }).catch(() => undefined);
@@ -6432,6 +6436,8 @@ async function stewardRepair(cell, tiers) {
   }
 }
 
+/** Groups worked at once. Reads and corrections still share READ_PARALLEL slots; audits run beside them. */
+const STEWARD_PARALLEL = Math.max(1, Number(process.env.KENNION_STEWARD_PARALLEL || 4));
 let stewardRunning = false;
 let stewardAgain = false;
 let stewardTimer = null;
@@ -6478,15 +6484,21 @@ async function stewardPass() {
       // A group with a box that has nothing usable on the grid at all (no
       // reading in force) goes first; then every other group in book order.
       const empty = (c) => c.failedAt === "extraction" && c.proposalId == null ? 0 : c.failedAt === "extraction" && c.fixId === c.proposalId && !(c.counts && c.counts.stored) ? 0 : 1;
+      // Then the quickest repairs first: a grid refresh or an audit of a
+      // reading already on file turns a box green in minutes; a fresh read
+      // of a long document takes an hour. The slow ones still get their turn.
+      const COST = { refresh: 0, audit: 1, review: 2, correct: 2, read: 3 };
+      const cost = (c) => (COST[c.fix] ?? 2);
+      const order = (a, b) => empty(a) - empty(b) || cost(a) - cost(b);
       const byGroup = v.groups
-        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).sort((a, b) => empty(a) - empty(b)) }))
+        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).sort(order) }))
         .filter((x) => x.jobs.length)
-        .sort((a, b) => Math.min(...a.jobs.map(empty)) - Math.min(...b.jobs.map(empty)));
+        .sort((a, b) => order(a.jobs[0], b.jobs[0]));
       if (!byGroup.length) break;
       console.log(`steward: ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) to fix across ${byGroup.length} group(s)`);
       const queue = [...byGroup];
       await Promise.all(
-        Array.from({ length: Math.min(2, queue.length) }, async () => {
+        Array.from({ length: Math.min(STEWARD_PARALLEL, queue.length) }, async () => {
           while (queue.length) {
             const { g, jobs } = queue.shift();
             for (const c of jobs) await stewardRepair(c, tiersOf.get(g.group)).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
@@ -6821,6 +6833,18 @@ async function boot() {
       const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
       if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
       await auditInParallel(rows.map((r) => r.id));
+      // An audit composed under older comparison rules is composed again
+      // from its saved answers: every job is reused, no model is called.
+      const current = (await proposalStore.listProposals().catch(() => [])).filter(
+        (r) => r.status === "assigned" && r.slot && !r.superseded_by && r.audit && r.audit.version && r.extracted && r.audit.version === readingVersion(r.extracted) && (r.audit.compare || 1) !== COMPARE_VERSION,
+      );
+      const recompose = [];
+      for (const r of current) {
+        const p = auditProgress(r.extracted, r.source_sha || null, await auditJobs.list(r.id).catch(() => ({})));
+        if (!p.claude.next && !p.openai.next) recompose.push(r.id);
+      }
+      if (recompose.length) console.log(`proposal audit: ${recompose.length} audit(s) composed again under comparison rules v${COMPARE_VERSION} from their saved answers (no model calls)`);
+      await auditInParallel(recompose);
     })().catch((e) => console.error("proposal audit sweep:", e.message));
   }
   rebuild();

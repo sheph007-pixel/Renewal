@@ -22,11 +22,24 @@ assert.ok(sameBenefit("$10 / $40 / $80", "Tier 1: $10; Tier 2: $40; Tier 3: $80"
 assert.ok(!sameBenefit("$10 / $40 / $80", "$10 / $45 / $80"), "a different copay is a different value");
 assert.ok(!sameBenefit("20%", "30%"));
 assert.ok(!sameBenefit("$30 copay", "$40 copay"));
+// Comparison rules v2: the reading rule for rx is "retail, leave mail order out".
+assert.ok(sameBenefit("$10/$35/$75/$250, 2.5 MO (AdvSMCS PDL), Natl", "$10/$35/$75/$250", "rx"), "a mail-order multiplier is not a retail copay");
+assert.ok(sameBenefit("$10 / $40 / $80; Mail order: $25 / $100 / $200", "$10/$40/$80", "rx"));
+assert.ok(!sameBenefit("$10/$35/$70", "$10/$35/$80, 3.0 MO", "rx"), "a different retail copay is still a finding");
+assert.ok(!sameBenefit("$10/$35/$75/$250, 2.5 MO", "$10/$35/$75/$250"), "outside rx, every figure counts");
+// Word-only cost sharing: the terms, with the setting labels a carrier prints per part aside.
+assert.ok(sameBenefit("D&C", "OP D&C, IP D&C"));
+assert.ok(sameBenefit("Deductible and coinsurance", "D&C"));
+assert.ok(!sameBenefit("D&C", "IP D&C, OP $250 copay"), "a figure on one side is compared as a figure");
+assert.ok(!sameBenefit("Not covered", "D&C"));
 assert.deepEqual(figures("$3,000 / $6,000"), ["3000", "6000"]);
 assert.ok(sameAmount("$3,000", "$3,000 / $6,000"), "the individual figure agrees; the stored value states no family figure");
 assert.ok(!sameAmount("$3,000 / $6,000", "$3,000 / $7,000"), "a family figure both state must agree");
 assert.ok(!sameAmount("$2,500", "$3,000"));
 assert.ok(sameNetwork("Choice Plus", "UHC Choice Plus Network"));
+assert.ok(sameNetwork("Insurance Choice +", "INS-Choice +"), "UHC's INS abbreviation and + for plus");
+assert.ok(sameNetwork("Choice Plus", "Choice +"));
+assert.ok(!sameNetwork("Choice", "Choice +"), "Choice is never Choice Plus, spelled either way");
 assert.ok(!sameNetwork("Choice", "Choice Plus"), "Choice is never Choice Plus");
 assert.equal(nameForCompare(`Option 1 ${String.fromCharCode(0x2013)} EZ2I  (Open Access HSA)`), nameForCompare("option 1 - EZ2I (Open Access HSA)"));
 
