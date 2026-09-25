@@ -1057,13 +1057,15 @@ function SlotCell({
   const [hover, setHover] = useState(false);
   const [pendingDTQ, setPendingDTQ] = useState(false);
   const reveal = hover || busy;
-  const edge = !filled ? (reveal || pendingDTQ ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? (reveal || pendingDTQ ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
-  const tone = isDtq ? C.blue : verified ? C.green : working ? "#2f6db3" : C.amber;
+  const edge = !filled ? (reveal || pendingDTQ ? C.border : "transparent") : isDtq ? C.inputEdge : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal || pendingDTQ ? "#fff" : "transparent") : isDtq ? "#f1f3f5" : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const tone = isDtq ? C.muted : verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
   return (
-    <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
+    // height: 1px lets the box below fill the row (height: 100%), so every
+    // filled slot in a row - a proposal or a DTQ - is the same size.
+    <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top", height: 1 }}>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -1083,7 +1085,10 @@ function SlotCell({
           background: fill,
           borderRadius: 4,
           padding: "6px 8px",
-          minHeight: 40,
+          // A filled slot is the height of a full proposal card, even when
+          // it is only a DTQ, so the grid's boxes line up.
+          minHeight: filled ? 78 : 40,
+          height: filled ? "100%" : undefined,
           opacity: busy ? 0.6 : 1,
         }}
       >
