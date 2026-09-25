@@ -411,7 +411,7 @@ export interface Verification {
   checkedAt: string;
   groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
   totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: Record<string, number> };
-  steward?: { running: boolean; enabled: boolean };
+  steward?: { running: boolean; enabled: boolean; paused?: { provider: string; until: string | null; since: string } | null };
 }
 
 const STEP_NAMES = [
@@ -498,6 +498,7 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
   if (!v) return null;
   const t = v.totals;
   const fixing = t.working + t.failing;
+  const paused = v.steward?.paused || null;
   const stuck = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "stuck").map((c) => ({ group: g.group, c })));
   const all = t.filed > 0 && t.verified === t.filed;
   const again = async () => {
@@ -532,7 +533,13 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
           {all ? "✓ " : ""}
           {t.verified} of {t.filed} proposals Verified
         </strong>
-        {fixing > 0 && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
+        {fixing > 0 && !paused && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
+        {fixing > 0 && paused && (
+          <span style={{ color: C.amber, fontWeight: 600 }} title={`Since ${new Date(paused.since).toLocaleString()}; the AI tries again every half hour.`}>
+            AI paused: the {paused.provider === "anthropic" ? "Claude (Anthropic)" : paused.provider === "openai" ? "OpenAI" : paused.provider} account reached its API spending limit
+            {paused.until ? ` (the provider says until ${new Date(paused.until).toLocaleDateString()})` : ""} - {fixing} waiting. Raise the limit in the provider's console to resume.
+          </span>
+        )}
         {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} review</span>}
         <span style={{ color: C.faint }}>Verified: the source (every page, sheet or line inspected), the extraction, every deterministic check (no duplicates, four rates, plan/rate pairing, counts reconciled), a Claude audit and an independent OpenAI audit of this exact reading, and the group's Medical Plans grid all agree.</span>
       </div>

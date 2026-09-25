@@ -89,6 +89,48 @@ export function openaiUsage(json) {
   };
 }
 
+/**
+ * A provider's spending limit, as its error says: Anthropic's "your
+ * organization has crossed its monthly API usage threshold ... You will
+ * regain access on 2026-10-01 at 00:00 UTC", a credit balance too low, or
+ * OpenAI's "insufficient_quota". Not a rate limit that clears in a minute:
+ * nothing that calls that provider can succeed until someone raises the
+ * limit or the date passes.
+ */
+const QUOTA_ERROR = /usage limits|monthly API usage threshold|credit balance is too low|insufficient_quota|exceeded your current quota|billing/i;
+export const isQuotaError = (msg) => QUOTA_ERROR.test(String(msg || ""));
+let quotaErrors = 0;
+let quotaBlock = null; // { provider, at, until, message }
+/** How many quota errors have been seen (a caller compares before and after a step). */
+export const quotaErrorCount = () => quotaErrors;
+/**
+ * The current block, while one is in force. It is re-tested every
+ * QUOTA_PROBE_MS: the next call is let through, and a success ends it (the
+ * limit may be raised before the date the error names).
+ */
+const QUOTA_PROBE_MS = Number(process.env.KENNION_QUOTA_PROBE_MS || 30 * 60 * 1000);
+export function aiQuotaBlock(now = Date.now()) {
+  if (!quotaBlock) return null;
+  if (quotaBlock.until && now >= new Date(quotaBlock.until).getTime()) return null;
+  if (now - new Date(quotaBlock.at).getTime() >= QUOTA_PROBE_MS) return null;
+  return quotaBlock;
+}
+/** The last block seen, in force or being re-tested (what the page shows). */
+export const lastQuotaBlock = () => quotaBlock;
+function noteQuota(r, error) {
+  if (r.ok !== false && !error) {
+    // A call to the blocked provider that worked: the limit is lifted.
+    if (quotaBlock && r.provider === quotaBlock.provider) quotaBlock = null;
+    return;
+  }
+  if (!isQuotaError(error)) return;
+  quotaErrors++;
+  const m = /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{2}:\d{2}))?/i.exec(String(error));
+  const until = m ? new Date(`${m[1]}T${m[2] || "00:00"}:00Z`).toISOString() : null;
+  if (!quotaBlock) console.error(`ai usage: ${r.provider} spending limit reached${until ? ` until ${until}` : ""} - AI repairs pause until it is lifted`);
+  quotaBlock = { provider: r.provider || "?", at: new Date().toISOString(), until, message: String(error).slice(0, 300) };
+}
+
 let sink = null;
 const memory = [];
 const MEMORY_MAX = 5000;
@@ -137,6 +179,7 @@ export function recordUsage(r) {
       ok: r.ok !== false,
       error: r.error ? String(r.error).slice(0, 300) : null,
     };
+    noteQuota(r, rec.error);
     rec.costUsd = estimateCost(rec.servedModel, { ...u, cacheWrite5mTokens: u.cacheWrite5mTokens || 0 });
     memory.push(rec);
     if (memory.length > MEMORY_MAX) memory.splice(0, memory.length - MEMORY_MAX);
