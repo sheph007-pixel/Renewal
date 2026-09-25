@@ -1297,8 +1297,6 @@ export default function Proposals({ token, groups }: Props) {
   }, [checkRunning, loadProposals]);
   const checkOf = new Map<string, VerifyCell>();
   (verify?.groups || []).forEach((g) => g.cells.forEach((c) => checkOf.set(`${g.group}||${c.slot}`, c)));
-  const [view, setView] = useState<"all" | "queue" | "assigned">("all");
-  const [layout, setLayout] = useState<"grid" | "list" | "groups">("grid");
   const [query, setQuery] = useState("");
   const [manager, setManager] = useState<"All" | "debbie" | "tracy">("All");
   const [need, setNeed] = useState<"All" | "missing" | "complete" | string>("All");
@@ -1311,12 +1309,6 @@ export default function Proposals({ token, groups }: Props) {
     `${p.filename} ${p.carrier || ""} ${p.group_name || ""} ${p.summary || ""} ${p.context?.subject || ""} ${p.context?.from || ""}`
       .toLowerCase()
       .includes(q);
-  const rows = items.filter(
-    (p) =>
-      (view === "all" ||
-        (view === "queue" ? isProposal(p) && p.status !== "assigned" : p.status === "assigned")) &&
-      matches(p),
-  );
   const proposals = items.filter(isProposal);
   const counts = {
     health: proposals.filter((p) => !isAncillary(p) && (!!p.slot || !!p.extracted)).length,
@@ -1476,33 +1468,7 @@ export default function Proposals({ token, groups }: Props) {
             aria-label="Search proposals"
             style={{ flex: "1 1 240px", minWidth: 200, padding: "8px 11px", fontSize: 13.5, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 4, outline: "none" }}
           />
-          <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Layout">
-            {(
-              [
-                ["grid", "Grid"],
-                ["list", "List"],
-                ["groups", "By group"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setLayout(k)}
-                aria-pressed={layout === k}
-                style={{
-                  padding: "7px 13px",
-                  fontSize: 13,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  ...(layout === k
-                    ? { color: "#fff", background: C.headerBg, border: `1px solid ${C.headerBg}`, fontWeight: 500 }
-                    : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {layout === "grid" && (
+          {(
             <>
               <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
                 <option value="All">All managers</option>
@@ -1530,42 +1496,13 @@ export default function Proposals({ token, groups }: Props) {
               </button>
             </>
           )}
-          {layout === "list" && (
-            <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Which proposals">
-              {(
-                [
-                  ["all", `All (${proposals.length})`],
-                  ["queue", `To assign (${counts.queue + counts.reading})`],
-                  ["assigned", `Assigned (${counts.assigned})`],
-                ] as const
-              ).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setView(k)}
-                  aria-pressed={view === k}
-                  style={{
-                    padding: "7px 13px",
-                    fontSize: 13,
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    ...(view === k
-                      ? { color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }
-                      : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
         {error && (
           <div role="alert" style={{ margin: "12px 0", fontSize: 13, color: C.red }}>
             {error}
           </div>
         )}
-        {layout === "grid" ? (
-          <div>
+        <div>
             <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
             <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
               {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
@@ -1693,14 +1630,6 @@ export default function Proposals({ token, groups }: Props) {
               </section>
             )}
           </div>
-        ) : !rows.length ? (
-          <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>
-            {items.length ? "Nothing matches." : "No proposals yet. Drop the first batch above."}
-          </div>
-        ) : (
-          rows.map((p) => (
-            <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} children={childCounts[p.id]} />
-          ))
         )}
       </div>
     </>
