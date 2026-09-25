@@ -984,12 +984,15 @@ export function createDb(url) {
     },
 
     async deleteProposal(id) {
-      // An email takes its attachments with it.
-      const { rowCount } = await pool.query(
-        "DELETE FROM kennion.proposals WHERE id = $1 OR parent_id = $1",
+      // An email takes its attachments with it, and a proposal takes every
+      // row read from it: a Gravie workbook's quote rows go too, so nothing
+      // is left in the database from a proposal no longer on file.
+      const { rows } = await pool.query(
+        "DELETE FROM kennion.proposals WHERE id = $1 OR parent_id = $1 RETURNING id",
         [id],
       );
-      return rowCount > 0;
+      if (rows.length) await pool.query("DELETE FROM kennion.carrier_quotes WHERE proposal_id = ANY($1::bigint[])", [rows.map((r) => r.id)]);
+      return rows.length > 0;
     },
 
     /** Keep a carrier stats report. Returns it in the shape the client uses. */
@@ -1107,6 +1110,11 @@ export function createDb(url) {
       } finally {
         client.release();
       }
+    },
+
+    /** Drop one group's quote from a carrier (its plans go with it). */
+    async deleteCarrierQuote(carrier, groupName) {
+      await pool.query("DELETE FROM kennion.carrier_quotes WHERE carrier = $1 AND group_name = $2", [carrier, groupName]);
     },
 
     /** Every stored quote, one row per carrier and group, without the plans. */

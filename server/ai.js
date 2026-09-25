@@ -302,7 +302,7 @@ const SYSTEM = `You read insurance carrier proposals for Kennion Benefit Advisor
 
 Your job: identify the carrier, read off the plans and tier rates, and decide which group on Kennion's roster the proposal is for. Match by the employer name on the document against the roster names. Treat legal-form words (LLC, Inc., Co., Corporation, Holdings) and punctuation loosely, but do not match on a shared common word alone - "Birmingham Steel" is not "Birmingham-Toledo". When two roster groups could both fit, pick neither and say so in the flags. Copy the matched roster name exactly as listed. Say whether the quote is fully insured or level funded. UnitedHealthcare sends one of each for a group, in separate documents, and Kennion tracks them as separate proposals, so decide from the document in front of you and say which - a UHC quote whose funding you cannot tell is worth an audit flag. A quote runs to many pages and often dozens of plan options: read every page and list every option, including the alternate, illustrative and benchmark grids that follow the headline plans - they are quotable options and Kennion prices from them. Give each one the name exactly as printed - the carrier's wording, nothing added, no placement labels of your own - and the plan or benefit code printed on it, the network it is priced on where the quote distinguishes them, and its own tier rates. Two plans that differ only by network or by deductible are two plans. Never summarise a grid as "and other options"; list them. Surest is a UnitedHealthcare product, not a separate carrier: report a Surest quote with carrier "UnitedHealthcare" and say which funding it is, so it files under the group's UnitedHealthcare proposal. Kennion tracks seven medical proposals per group - UnitedHealthcare fully insured, UnitedHealthcare level funded, Gravie, Nationwide, Angle Health, Cobalt (a self-funded quote) and Optimyl Health (a self-funded, reference-based-pricing quote) - so set quotes_medical false for an ancillary-only document (dental, vision, life, disability) even when it comes from one of those carriers. Rates are monthly composite amounts per tier: EE (employee only), ES (employee + spouse), EC (employee + children), FAM (family). Leave a value null rather than guessing. Optimyl Health always quotes the same 4 standard plans - its Proposal Summary table numbers them 1 through 4 in a "Plan Number" row and nothing else names or codes them - so for an Optimyl proposal set each plan's plan_code from that row exactly as the schema says ("OPTIMYL PLAN 1" .. "OPTIMYL PLAN 4"); every Optimyl proposal has exactly these 4 plans, never more or fewer.
 
-One plan, one entry. A proposal shows the same plan many times - an overview page, a comparison table, a detailed benefit page, a rate page, an appendix. Those are appearances of ONE plan: list it once, and record every page it appears on in source_pages (identity, benefits, rates), counting all of them in plan_appearances. Never list a plan twice because it is printed twice, and never merge two plans because they look alike: a different plan code, network or printed name is a different plan. Keep each plan's benefits and its four rates together: pair a rate row with a plan by the plan name and code printed with it, the section heading and the table it sits in - not by row order alone - and never give one plan the benefits or rates of another. Copy every name and code exactly as printed; never shorten, rename, normalise or invent one. If two appearances of the same plan show different values, report the one on the page that is the plan's own benefit or rate table and add an audit flag naming both pages. List EPO plans too, with EPO in the network or plan type as printed (Kennion leaves them out later, and counts them).`;
+One plan, one entry. A proposal shows the same plan many times - an overview page, a comparison table, a detailed benefit page, a rate page, an appendix. Those are appearances of ONE plan: list it once, and record every page it appears on in source_pages (identity, benefits, rates), counting all of them in plan_appearances. Never list a plan twice because it is printed twice, and never merge two plans because they look alike: a different plan code, network or printed name is a different plan. Keep each plan's benefits and its four rates together: pair a rate row with a plan by the plan name and code printed with it, the section heading and the table it sits in - not by row order alone - and never give one plan the benefits or rates of another. Copy every name and code exactly as printed; never shorten, rename, normalise or invent one. If two appearances of the same plan show different values, report the one on the page that is the plan's own benefit or rate table and add an audit flag naming both pages. List EPO plans too, with EPO in the network or plan type as printed: every plan on the proposal is stored, and Kennion decides separately which ones a client sees.`;
 
 /**
  * Read one proposal. `file` is { filename, prepared, context } where `prepared`
@@ -524,7 +524,7 @@ async function excerptPdf(buffer, pages) {
 
 /**
  * Fold one or more readings into one result whose plans are canonical: every
- * appearance merged by exact identity, EPO plans moved to `excluded`, and the
+ * appearance merged by exact identity (EPO plans included - every plan is stored), and the
  * count reconciliation on the result. `extraction` records how it was read.
  */
 function fold(readings, extraction) {
@@ -538,7 +538,7 @@ function fold(readings, extraction) {
     reportedUnique: one && Number.isInteger(one.unique_plans_found) ? one.unique_plans_found : null,
     reportedEpo: one && Number.isInteger(one.unique_epo_found) ? one.unique_epo_found : null,
   });
-  const out = { ...base, plans: canon.plans, excluded: canon.excluded, reconciliation: canon.reconciliation, extraction: { ...extraction, model: PROPOSAL_MODEL, parts: readings.length, at: new Date().toISOString() } };
+  const out = { ...base, plans: canon.plans, reconciliation: canon.reconciliation, extraction: { ...extraction, model: PROPOSAL_MODEL, parts: readings.length, at: new Date().toISOString() } };
   delete out._pageMap;
   delete out.plan_appearances;
   delete out.unique_plans_found;
@@ -623,7 +623,7 @@ const mapSummary = (map) => ({ documentType: map.document_type, approxPpo: map.a
  * or nothing at all sends the reading back to the whole document.
  */
 function mappedDoubt(out, map) {
-  const plans = [...(out.plans || []), ...(out.excluded || [])];
+  const plans = out.plans || [];
   if (!plans.length) return "no plans";
   const unpaired = (out.plans || []).filter((pl) => !["EE", "ES", "EC", "FAM"].some((t) => pl.rates && pl.rates[t] != null) || !(pl.deductible || pl.oop_max));
   if (unpaired.length) return `${unpaired.length} plan(s) without both benefits and rates`;

@@ -278,11 +278,13 @@ export function auditGroup({ g, admin = {}, split = null, proposals = [], billin
         if (!pl.length) problems.push(`${pr.carrier || pr.slot} has no plans read off it`);
         else if (noRates.length) problems.push(`${pr.carrier || pr.slot}: ${noRates.length} of ${pl.length} plans have no rates`);
         if (pr.enrolledOnDocument != null && enrolled && !close(pr.enrolledOnDocument, enrolled, 0.1, 2)) problems.push(`${pr.carrier || pr.slot} is priced on ${pr.enrolledOnDocument} enrolled; the group has ${enrolled}`);
-        // Kennion offers PPO plans only: no EPO twin belongs on any quote,
-        // and every group's Gravie quote is the same 67 PPO designs.
+        // These are the plans the client is shown. Every plan is stored (EPO
+        // included), but Kennion offers PPO plans only, so no EPO twin may
+        // reach a client, and every group's Gravie quote shows the same 67
+        // PPO designs.
         const epo = pl.filter((x) => /\bEPO\b/i.test(`${x.network || ""} ${x.planType || ""} ${x.name || ""}`)).length;
-        if (epo) problems.push(`${pr.carrier || pr.slot}: ${epo} EPO plan${epo === 1 ? "" : "s"} stored - Kennion offers PPO only; re-read the proposal`);
-        if (pr.slot === "Gravie" && pl.length && pl.length - epo !== GRAVIE_PPO_PLANS) problems.push(`Gravie: ${pl.length - epo} PPO plans stored; every group's Gravie quote is the same ${GRAVIE_PPO_PLANS} designs`);
+        if (epo) problems.push(`${pr.carrier || pr.slot}: ${epo} EPO plan${epo === 1 ? "" : "s"} shown to the client - Kennion offers PPO only`);
+        if (pr.slot === "Gravie" && pl.length && pl.length - epo !== GRAVIE_PPO_PLANS) problems.push(`Gravie: ${pl.length - epo} PPO plans shown; every group's Gravie quote is the same ${GRAVIE_PPO_PLANS} designs`);
       }
       add("quotes", problems.length ? "warn" : "ok", `${summary.join(", ")}.${problems.length ? ` ${problems.join("; ")}.` : ""}`);
     }

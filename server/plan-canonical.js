@@ -22,8 +22,10 @@
 // plan (`conflicts`), which fails validation until the correction step has
 // settled it against the source.
 //
-// EPO plans are identified here and moved to `excluded` with the reason, so
-// the reconciliation can say "19 unique plans: 16 PPO, 3 EPO excluded".
+// Every unique plan is kept - PPO and EPO alike - and counted in the
+// reconciliation ("31 appearances -> 19 unique plans: 16 PPO, 3 EPO"). Which
+// of them a client is shown is decided separately (server/plan-visibility.js);
+// nothing is dropped here.
 //
 // Pure code: no model call, deterministic, and the same answer every time.
 
@@ -69,7 +71,7 @@ function pagesOf(pl, pageMap) {
  * in the file read), `source_sheet`, `source_rows`, and `_pageMap` (see
  * pagesOf) set by the caller for the part it came from. `reportedAppearances`
  * is the reader's own count of plan appearances in the document.
- * Returns { plans, excluded, reconciliation }.
+ * Returns { plans, reconciliation } - every unique plan, EPO included.
  */
 export function canonicalizePlans(appearances, { reportedAppearances = null, reportedUnique = null, reportedEpo = null } = {}) {
   const list = (Array.isArray(appearances) ? appearances : []).filter((pl) => pl && (exactName(pl.name) || normCode(pl.plan_code)));
@@ -155,21 +157,17 @@ export function canonicalizePlans(appearances, { reportedAppearances = null, rep
     if (!c.conflicts.length) delete c.conflicts;
     return c;
   });
-  // An excluded plan keeps any BenSync number an older reading gave it, so the
-  // numbering step can tell a slot was numbered under the old rule.
-  const excluded = all.filter(isEpoPlan).map((c) => ({ name: c.name, plan_code: c.plan_code, network: c.network, source: c.source, reason: "EPO - Kennion offers PPO plans only", ...(c.option_id ? { option_id: c.option_id } : {}) }));
-  const plans = all.filter((c) => !isEpoPlan(c));
+  const epo = all.filter(isEpoPlan).length;
   return {
-    plans,
-    excluded,
+    plans: all,
     reconciliation: {
       plan_appearances: Number.isInteger(reportedAppearances) ? reportedAppearances : list.length,
       appearances_read: list.length,
       unique_plans: all.length,
-      unique_ppo: plans.length,
-      unique_epo: excluded.length,
-      excluded: excluded.length,
-      expected: plans.length,
+      unique_ppo: all.length - epo,
+      unique_epo: epo,
+      // Every unique plan is stored: the expected count is all of them.
+      expected: all.length,
       reader_unique_plans: Number.isInteger(reportedUnique) ? reportedUnique : null,
       reader_unique_epo: Number.isInteger(reportedEpo) ? reportedEpo : null,
     },

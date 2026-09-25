@@ -131,7 +131,6 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
     for (const k of Array.isArray(pl.conflicts) ? pl.conflicts : []) {
       mixed.push(`"${pl.name}": its appearances disagree on ${k.field} (${k.values.map((v) => `${v.value}${v.pages && v.pages.length ? ` p${[...new Set(v.pages)].join(",")}` : ""}`).join(" vs ")}).`);
     }
-    if (isEpoPlan(pl)) mixed.push(`"${pl.name}" is an EPO plan stored as offered.`);
   }
   check("pairing", "Plan, benefit and rate pairing", mixed, "correct", "Every plan's benefits and rates come from that plan alone.");
 
@@ -143,8 +142,8 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   else {
     if (rc.unique_ppo + rc.unique_epo !== rc.unique_plans) recon.push(`Unique plans ${rc.unique_plans} is not PPO ${rc.unique_ppo} + EPO ${rc.unique_epo}.`);
     if (rc.expected !== plans.length) recon.push(`Expected ${rc.expected} plans; the database holds ${plans.length}.`);
-    const excludedCount = Array.isArray(x.excluded) ? x.excluded.length : 0;
-    if (excludedCount !== rc.excluded) recon.push(`${rc.excluded} EPO plans counted as excluded, ${excludedCount} listed.`);
+    const epoStored = plans.filter(isEpoPlan).length;
+    if (epoStored !== rc.unique_epo) recon.push(`${rc.unique_epo} EPO plans counted, ${epoStored} stored.`);
     if (rc.reader_unique_plans != null && rc.reader_unique_plans !== rc.unique_plans) recon.push(`The reader counted ${rc.reader_unique_plans} unique plans on the document; ${rc.unique_plans} were stored.`);
   }
   check(
@@ -152,7 +151,7 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
     "Plan count reconciles",
     recon,
     rc ? "correct" : "read",
-    rc ? `${rc.plan_appearances} appearances → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO excluded) → ${rc.expected} expected, ${plans.length} stored.` : "",
+    rc ? `${rc.plan_appearances} appearances → ${rc.unique_plans} unique plans (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO) → ${plans.length} stored.` : "",
   );
 
   const failed = checks.filter((c) => !c.ok);

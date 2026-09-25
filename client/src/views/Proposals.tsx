@@ -368,7 +368,11 @@ export interface VerifyCell {
   /** The plan count at each stage: on the document (both auditors agreeing), in the database, in the group's grid. */
   counts: {
     document: number | null;
+    /** Every unique plan loaded, EPO included. */
     stored: number | null;
+    /** Of those, the ones the visibility rules let the client see, and the ones they hide. */
+    visible?: number | null;
+    hidden?: number | null;
     grid: number | null;
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
@@ -381,7 +385,8 @@ export interface VerifyCell {
   stageReason?: string | null;
   /** Appearances -> unique plans -> EPO excluded -> expected, as the canonical reading counts them. */
   reconciliation?: { plan_appearances: number; unique_plans: number; unique_ppo: number; unique_epo: number; expected: number } | null;
-  excluded?: { name: string; plan_code: string | null; reason: string }[];
+  /** Stored and audited, but not shown to the client - and why (server/plan-visibility.js). */
+  hidden?: { id: string | null; name: string; plan_code: string | null; reason: string }[];
   fix?: "read" | "audit" | "correct" | "refresh" | null;
   fixId?: number;
   steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
@@ -419,9 +424,11 @@ function checkTitle(c: VerifyCell): string {
     ...(c.steps[k]!.checks || []).map((ck) => `   ${ck.ok ? "✓" : "✗"} ${ck.label}${ck.ok ? "" : ` - ${ck.note}`}`),
   ]);
   const rc = c.reconciliation;
-  const counts = rc ? [`Plans: ${rc.plan_appearances} appearances → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO excluded) → ${rc.expected} expected · database ${c.counts.stored ?? "-"} · grid ${c.counts.grid ?? "-"}`] : [];
-  const excluded = c.excluded && c.excluded.length ? [`Excluded on purpose: ${c.excluded.map((e) => `${e.name}${e.plan_code ? ` [${e.plan_code}]` : ""}`).join("; ")}`] : [];
-  return [line, ...(c.stage ? [`State: ${c.stage}`] : []), ...counts, ...excluded, ...detail, ...(c.stuck ? [`Needs review: ${c.stuck}`] : [])].join("\n");
+  const counts = rc
+    ? [`Plans: ${rc.plan_appearances} appearances on the document → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO) → ${c.counts.stored ?? "-"} loaded in the database → ${c.counts.visible ?? "-"} shown to the client (grid ${c.counts.grid ?? "-"})`]
+    : [];
+  const hidden = c.hidden && c.hidden.length ? [`Loaded but hidden from the client (${c.hidden.length}): ${[...new Set(c.hidden.map((h) => h.reason))].join("; ")}`] : [];
+  return [line, ...(c.stage ? [`State: ${c.stage}`] : []), ...counts, ...hidden, ...detail, ...(c.stuck ? [`Needs review: ${c.stuck}`] : [])].join("\n");
 }
 
 /** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
@@ -1064,6 +1071,11 @@ function SlotCell({
                 </span>
               </div>
             )}
+            {check && check.counts.hidden ? (
+              <div style={{ fontSize: 10.5, color: C.faint }} title={checkTitle(check)}>
+                {check.counts.visible} shown to client · {check.counts.hidden} hidden
+              </div>
+            ) : null}
             <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span>{when ? fmtDay(when) : ""}</span>
               <button onClick={() => ref.current?.click()} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>

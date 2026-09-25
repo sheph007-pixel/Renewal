@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { gridCounts, verifyProposals } from "../server/proposal-verify.js";
 import { applyCorrection, offeredCount, readingVersion, auditProposal, auditForClient, shape } from "../server/proposal-audit.js";
+import { hiddenReason } from "../server/plan-visibility.js";
 import { proposalPlans, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 // --- The check's count is the client's count --------------------------------
@@ -30,19 +31,22 @@ assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).len
 const isEpoPlan = (pl: { name?: string }) => /\bEPO\b/.test(pl.name || "");
 const isBlankPlan = (pl: { name?: string }) => !pl || !pl.name;
 const src = { identity: [2], benefits: [3], rates: [9], sheet: "", rows: "", appearances: 3, codes: [] };
+// Every reading carries an EPO twin: stored and audited like any plan, hidden
+// from the client by the visibility rules.
+const epoTwin = { name: "Copay 1500 EPO", network: "Cigna OAP (EPO)", option_id: "GR9", deductible: "$1,500", oop_max: "$5,000", rates: { EE: 1, ES: 2, EC: 3, FAM: 3.5 }, source: { identity: [4], benefits: [4], rates: [10], sheet: "", rows: "", appearances: 2, codes: [] } };
 const canon = (plans: object[]) => ({
-  plans,
-  excluded: [{ name: "Copay 1500 EPO", plan_code: null, network: null, reason: "EPO - Kennion offers PPO plans only" }],
-  reconciliation: { plan_appearances: plans.length * 3 + 1, unique_plans: plans.length + 1, unique_ppo: plans.length, unique_epo: 1, excluded: 1, expected: plans.length, reader_unique_plans: plans.length + 1 },
+  plans: [...plans, epoTwin],
+  reconciliation: { plan_appearances: plans.length * 3 + 2, unique_plans: plans.length + 1, unique_ppo: plans.length, unique_epo: 1, expected: plans.length + 1, reader_unique_plans: plans.length + 1 },
   extraction: { sourceSha: "sha-acme" },
 });
 const plan1 = (over = {}) => ({ name: "Copay 1500 PPO", option_id: "GR1", deductible: "$1,500", oop_max: "$5,000", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 }, source: src, ...over });
 const reading1 = canon([plan1()]);
-const passModel = (model: string, extra = {}) => ({ model, verdict: "pass", plansFoundTotal: 2, epoExcluded: 1, documentPlanCount: 1, confirmed: 1, of: 1, mismatches: [], notes: "", ...extra });
+const passModel = (model: string, extra = {}) => ({ model, verdict: "pass", plansFoundTotal: 2, epoExcluded: 1, documentPlanCount: 2, confirmed: 2, of: 2, mismatches: [], notes: "", ...extra });
 const dualPass = (extracted = reading1) => ({ status: "pass", completedAt: "2026-09-25T00:00:00Z", version: readingVersion(extracted), mismatches: [], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)")] });
 const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", superseded_by: null, size: 1000, mime: "application/pdf", source_sha: "sha-acme", filename: "acme gravie.pdf", extracted: reading1, audit: { ...dualPass(), sourceSha: "sha-acme" } };
-const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
-  rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.filter((p) => !isEpoPlan(p)).map((p) => ({ name: p.name, optionId: p.option_id, rates: p.rates, unpriced: p.unpriced })) }));
+// What the server serves: every stored plan, each marked with whether the client is shown it.
+const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; network?: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
+  rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.map((p) => ({ name: p.name, network: p.network, optionId: p.option_id, rates: p.rates, unpriced: p.unpriced, hidden: hiddenReason(p) })) }));
 const run = (rows: unknown[], srv: () => unknown[], gaveUp: (id: number) => string | null = () => null) =>
   verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, gaveUp });
 const cellOf = (v: ReturnType<typeof run>) => v.groups[0].cells[0];
@@ -50,12 +54,17 @@ const cellOf = (v: ReturnType<typeof run>) => v.groups[0].cells[0];
 let v = run([good], served([good]));
 let cell = cellOf(v);
 assert.equal(cell.state, "verified", JSON.stringify(cell.steps));
-assert.equal(cell.plans, 1);
-assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.grid], [1, 1, 1], "document, database and grid: one number");
-assert.deepEqual(cell.counts.audit.claude, { found: 2, epoExcluded: 1, expected: 1 }, "the EPO plan left out is on the record");
+assert.equal(cell.plans, 2, "the box counts every plan loaded");
+assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.visible, cell.counts.grid], [2, 2, 1, 1], "document = database; the client's grid = what the rules show");
+assert.deepEqual(cell.counts.audit.claude, { found: 2, epoExcluded: 1, expected: 2 }, "both auditors hold every plan to the document, EPO included");
 assert.equal(cell.stage, "VERIFIED");
 assert.equal(cell.reconciliation.unique_epo, 1);
-assert.equal(cell.excluded[0].name, "Copay 1500 EPO", "the EPO exclusion is visible, not silent");
+assert.deepEqual(cell.hidden.map((h: { name: string }) => h.name), ["Copay 1500 EPO"], "loaded, audited, and hidden from the client - visibly");
+assert.match(cell.steps.grid.note, /1 hidden by rule: EPO/);
+
+// The client being shown a plan the rules hide is caught.
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans.map((p: object) => ({ ...p, hidden: null })) }]));
+assert.equal(cell.failedAt, "grid");
 assert.ok(cell.steps.validation.checks.every((k: { ok: boolean }) => k.ok));
 
 // Validation runs before either audit: a duplicate, a conflict or a missing
@@ -92,7 +101,7 @@ assert.equal(cell.steps.claude.ok, true);
 const skipped = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)", { verdict: "incomplete", confirmed: 0 }), passModel("ChatGPT (gpt-5)")] } };
 cell = cellOf(run([skipped], served([skipped])));
 assert.equal(cell.failedAt, "claude");
-assert.match(cell.steps.claude.note, /confirmed the rates of 0 of 1/);
+assert.match(cell.steps.claude.note, /confirmed the rates of 0 of 2/);
 
 // An audit of an earlier reading does not count: stale -> audit again.
 const changed = canon([plan1({ rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } })]);
@@ -170,13 +179,13 @@ const fixed = applyCorrection(reading0, {
   remove: [2],
   unpriced: [{ index: 0, tier: "FAM" }],
 });
-assert.deepEqual(fixed.extracted.plans.map((p) => p.name), ["Choice Plus 1000", "Choice Plus 2000", "Choice Plus 3000"], "wrong plan out, missing plan in, EPO and repeats never added");
+assert.deepEqual(fixed.extracted.plans.map((p) => p.name), ["Choice Plus 1000", "Choice Plus 2000", "Choice Plus 3000", "Choice Plus 3000 EPO"], "wrong plan out, missing plans in (EPO included - every plan is stored), a repeat never added");
 assert.equal(fixed.extracted.plans[0].rates.EE, 612.45);
 assert.equal(fixed.extracted.plans[0].deductible, "$1,500");
 assert.equal(fixed.extracted.plans[0].benefits.rx, "$15");
 assert.deepEqual(fixed.extracted.plans[0].unpriced, ["FAM"]);
 assert.equal(fixed.extracted.plans[0].option_id, "UH1", "a plan keeps its number through a correction");
-assert.equal(fixed.log.length, 6, "every change logged: 3 values, 1 unpriced tier, 1 removed, 1 added");
+assert.equal(fixed.log.length, 7, "every change logged: 3 values, 1 unpriced tier, 1 removed, 2 added");
 assert.equal(reading0.plans[0].rates.EE, 600, "the stored reading is not mutated");
 
 // A plan "removed and added" under the same carrier code is one plan renamed

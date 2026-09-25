@@ -1,7 +1,7 @@
 // One unique carrier plan = one canonical record: repeated appearances merge
 // by exact identity (code, else exact name on the same network), conflicting
-// appearances are flagged rather than silently resolved, EPO plans are
-// counted and excluded, and deterministic validation catches duplicates,
+// appearances are flagged rather than silently resolved, every plan (EPO
+// included) is stored and counted, and deterministic validation catches duplicates,
 // missing rates, missing provenance, plan mixing and count drift.
 import assert from "node:assert/strict";
 import { canonicalizePlans, identityKey } from "../server/plan-canonical.js";
@@ -72,7 +72,8 @@ assert.equal(p.conflicts.length, 1);
 assert.equal(p.conflicts[0].field, "FAM");
 assert.deepEqual(p.conflicts[0].values.map((v) => v.value), [1842.17, 1824.17]);
 
-// EPO plans are counted and excluded, never silently dropped.
+// Every unique plan is stored - EPO included - and counted; what a client
+// sees is decided separately (plan-visibility.js).
 c = canonicalizePlans(
   [
     { name: "Choice Plus 1000", plan_code: "P1", network: "Choice Plus" },
@@ -82,13 +83,15 @@ c = canonicalizePlans(
   ],
   { reportedAppearances: 7, reportedUnique: 3, reportedEpo: 1 },
 );
-assert.equal(c.plans.length, 2);
-assert.equal(c.excluded.length, 1);
-assert.match(c.excluded[0].reason, /EPO/);
+assert.deepEqual(c.plans.map((p) => p.plan_code), ["P1", "E1", "P2"], "the EPO plan is stored like any other");
+assert.equal(c.excluded, undefined);
 assert.deepEqual(
   { a: c.reconciliation.plan_appearances, u: c.reconciliation.unique_plans, ppo: c.reconciliation.unique_ppo, epo: c.reconciliation.unique_epo, exp: c.reconciliation.expected },
-  { a: 7, u: 3, ppo: 2, epo: 1, exp: 2 },
+  { a: 7, u: 3, ppo: 2, epo: 1, exp: 3 },
 );
+const { clientPlans, hiddenReason } = await import("../server/plan-visibility.js");
+assert.deepEqual(clientPlans(c.plans).map((p) => p.plan_code), ["P1", "P2"], "the client is shown the PPO plans");
+assert.match(hiddenReason(c.plans[1]), /EPO/);
 assert.notEqual(identityKey({ plan_code: "P1" }), identityKey({ name: "P1" }));
 
 // --- Deterministic validation ------------------------------------------------
@@ -146,9 +149,11 @@ assert.match(v.failures[0], /1842\.17 p10 vs 1824\.17 p40/);
 const drift = reading([good()]);
 drift.reconciliation = { ...drift.reconciliation, expected: 2 };
 assert.deepEqual(failing(run(drift)), ["reconciliation"], "expected count is not what is stored");
+const epoMiscount = reading([good(), good({ name: "Plan A EPO", plan_code: "A1E", network: "Core EPO", option_id: "UH2", source: { ...good().source, codes: ["A1E"] } })]);
+assert.deepEqual(failing(run(epoMiscount)), ["reconciliation"], "an EPO plan stored but not counted");
 const readerCount = reading([good()]);
 readerCount.reconciliation = { ...readerCount.reconciliation, reader_unique_plans: 3 };
 assert.deepEqual(failing(run(readerCount)), ["reconciliation"], "the reader saw more plans than were stored");
 assert.equal(run({ ...reading([good()]), reconciliation: undefined }).fix, "read");
 
-console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, EPO counted and excluded, deterministic validation - ok");
+console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation - ok");
