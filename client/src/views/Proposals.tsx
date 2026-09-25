@@ -259,10 +259,16 @@ async function uploadFiles(
       });
       const j = await r.json().catch(() => ({ error: `Server returned ${r.status}.` }));
       const n = Array.isArray(j.proposals) ? j.proposals.filter((p: Proposal) => p.status !== "container").length : 1;
+      const proposal = j.proposal as Proposal | undefined;
+      // Say where it actually landed right here, rather than a bare
+      // "uploaded" that leaves staff to go find it in the grid - the file
+      // name alone often already says the group and slot (see
+      // guessSlotFromFilename on the server), so this is usually known
+      // immediately, before the AI read even finishes.
+      const placed = proposal?.group_name && proposal?.slot ? `✓ ${proposal.group_name} · ${proposal.slot}` : proposal?.group_name ? `✓ ${proposal.group_name} · reading for a slot…` : "uploaded · reading…";
       const note = r.ok
-        ? (j.proposals?.some((p: Proposal) => p.kind === "email")
-            ? `email opened · ${n} attachment${n === 1 ? "" : "s"} to read`
-            : "uploaded") + (j.skipped?.length ? ` · skipped ${j.skipped.join(", ")}` : "")
+        ? (j.proposals?.some((p: Proposal) => p.kind === "email") ? `email opened · ${n} attachment${n === 1 ? "" : "s"} to read` : placed) +
+          (j.skipped?.length ? ` · skipped ${j.skipped.join(", ")}` : "")
         : j.error;
       onEach(f.name, r.ok, note);
     } catch (e) {
