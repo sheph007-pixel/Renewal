@@ -156,4 +156,60 @@ readerCount.reconciliation = { ...readerCount.reconciliation, reader_unique_plan
 assert.deepEqual(failing(run(readerCount)), ["reconciliation"], "the reader saw more plans than were stored");
 assert.equal(run({ ...reading([good()]), reconciliation: undefined }).fix, "read");
 
-console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation - ok");
+// --- Unique name / unique code standard ---------------------------------------
+// A plan printed on page 4 (summary), 12 (benefits) and 31 (rates) is ONE
+// canonical plan with provenance from all three - never three plans.
+c = canonicalizePlans([
+  { name: "Choice Plus 2500", plan_code: "P2500", network: "Choice Plus", source_pages: pages([4]) },
+  { name: "Choice Plus 2500", plan_code: "P2500", network: "Choice Plus", deductible: "$2,500", oop_max: "$6,000", source_pages: pages([12], [12]) },
+  { name: "Choice Plus 2500", plan_code: "P2500", network: "Choice Plus", rates: rates(500, 1000, 900, 1400), source_pages: pages([31], [], [31]) },
+]);
+assert.equal(c.plans.length, 1);
+assert.deepEqual([c.plans[0].source.identity, c.plans[0].source.benefits, c.plans[0].source.rates], [[4, 12, 31], [12], [31]]);
+const second = good({ name: "Plan B", plan_code: "B1", option_id: "UH2", source: { ...good().source, codes: ["B1"] } });
+// Two plans with the same rates are two plans: nothing collapses them.
+v = run(reading([good(), { ...second, rates: good().rates }]));
+assert.equal(v.ok, true, "identical rates never make two carrier plans one");
+const { offeredCount } = await import("../server/proposal-audit.js");
+assert.equal(offeredCount(reading([good(), { ...second, rates: good().rates }])), 2, "the stored count is the canonical list's length");
+// A duplicate carrier plan code fails.
+v = run(reading([good(), { ...second, plan_code: "A1", source: { ...second.source, codes: ["A1"] } }]));
+assert.ok(failing(v).includes("codes"));
+assert.equal(v.fix, "correct");
+// The same exact name with nothing printed to tell them apart: settled against the source.
+v = run(reading([good({ plan_code: null, source: { ...good().source, codes: [] } }), { ...second, name: "Plan A", plan_code: null, network: "Choice", source: { ...second.source, codes: [] } }]));
+assert.deepEqual(failing(v), ["names"]);
+assert.equal(v.fix, "correct");
+// The same exact name on two DIFFERENT plan codes: never merged, never shown
+// twice silently - flagged for a person.
+const shared = reading([good(), { ...second, name: "plan  a" }]);
+v = run(shared);
+assert.deepEqual(failing(v), ["names"]);
+assert.equal(v.fix, "review", "a person confirms whether the carrier uses one name for two plans");
+assert.match(v.failures[0], /"Plan A" is on 2 different plan codes \(A1, B1\)/);
+// Once a person confirms exactly those codes share the name, it passes; a
+// change to the codes flags it again.
+assert.equal(run({ ...shared, shared_names_confirmed: [{ name: "Plan A", codes: ["A1", "B1"], by: "hunter@kennion.com" }] }).ok, true);
+assert.deepEqual(failing(run({ ...shared, shared_names_confirmed: [{ name: "Plan A", codes: ["A1", "B9"] }] })), ["names"]);
+
+// A correction keeps the reconciliation on the canonical list (EPO counted
+// once, the document's count taken as it is), and an "added" plan that is
+// already stored under the same identity is not added twice.
+const { applyCorrection } = await import("../server/proposal-audit.js");
+const epoReading = {
+  plans: [good(), good({ name: "Plan A EPO", plan_code: "A1E", network: "Core EPO", option_id: "UH2", source: { ...good().source, codes: ["A1E"] } })],
+  reconciliation: { plan_appearances: 6, unique_plans: 2, unique_ppo: 1, unique_epo: 1, expected: 2, reader_unique_plans: 2 },
+  extraction: { sourceSha: "sha1" },
+};
+const corrected = applyCorrection(epoReading, { document_plan_count: 3, fixes: [], remove: [], unpriced: [], add: [
+  { name: "Plan A", plan_code: "a1", rates: rates(1, 2, 3, 4) },
+  { name: "Plan C", plan_code: "C1", network: "Choice Plus", deductible: "$1", oop_max: "$2", rates: rates(1, 2, 3, 4), source_pages: pages([5], [5], [5]) },
+] });
+assert.deepEqual(corrected.extracted.plans.map((p) => p.plan_code), ["A1", "A1E", "C1"], "A1 is already stored (same code, case aside); C1 is new");
+assert.deepEqual(
+  { u: corrected.extracted.reconciliation.unique_plans, ppo: corrected.extracted.reconciliation.unique_ppo, epo: corrected.extracted.reconciliation.unique_epo, exp: corrected.extracted.reconciliation.expected, reader: corrected.extracted.reconciliation.reader_unique_plans },
+  { u: 3, ppo: 2, epo: 1, exp: 3, reader: 3 },
+  "the document's count is not inflated by the EPO plans it already includes",
+);
+
+console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation, unique names and codes enforced - ok");

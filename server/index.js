@@ -35,6 +35,7 @@ import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
 import { validatePlans } from "./plan-validate.js";
 import { hiddenReason } from "./plan-visibility.js";
+import { identityKey, isBlankPlan, exactName, normCode } from "./plan-canonical.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -3899,13 +3900,6 @@ const ppoOnly = () => true;
 /** A proposal plan that is an EPO: says so in its network, its type, or its name. */
 const isEpoPlan = (pl) =>
   /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
-/** A reading's stray blank plan: no name, no plan code, no rate - nothing on it at all. */
-const isBlankPlan = (pl) =>
-  !pl ||
-  (!String(pl.name || "").trim() &&
-    !pl.plan_code &&
-    pl.monthly_total == null &&
-    !Object.values(pl.rates || {}).some((v) => v != null));
 /** A UnitedHealthcare menu plan that is an EPO. */
 const isEpoMenu = (m) => String(m.type || "").toUpperCase() === "EPO";
 
@@ -5096,6 +5090,10 @@ async function proposalsChanged() {
         plans: Array.isArray(x.plans)
           ? x.plans.map((pl) => ({
               optionId: pl.option_id || null,
+              // The canonical carrier identity (plan-canonical.js identityKey),
+              // computed from the stored record: what the grid and the check
+              // tell two plans apart by - never name and rates.
+              identity: identityKey(pl),
               name: pl.name,
               planCode: pl.plan_code || null,
               network: networkLabel(pl.network),
@@ -6136,19 +6134,19 @@ async function runProposalCorrection(id) {
     // What to settle: the current audit's findings, what deterministic
     // validation found, and any conflict between two appearances of a plan.
     const auditCurrent = row.audit && row.audit.version === startVersion;
-    const findings = auditCurrent ? (row.audit.mismatches || []).map((m) => ({ plan: m.plan, field: m.field, stored: m.stored, on_document: m.onDocument, by: m.by })) : [];
+    const findings = auditCurrent ? (row.audit.mismatches || []).map((m) => ({ ...(Number.isInteger(m.index) ? { index: m.index } : {}), plan: m.plan, ...(m.planCode ? { plan_code: m.planCode } : {}), field: m.field, stored: m.stored, on_document: m.onDocument, by: m.by })) : [];
     const val = validatePlans({ extracted: x, sourceSha: row.source_sha, textSource });
-    for (const c of val.checks) if (!c.ok && c.fix === "correct") findings.push({ plan: "(deterministic validation)", field: c.key, stored: "", on_document: c.note, by: "validation" });
+    for (const c of val.checks) if (!c.ok && (c.fix === "correct" || c.fix === "review")) findings.push({ plan: "(deterministic validation)", field: c.key, stored: "", on_document: c.note, by: "validation" });
     const conflicts = plans.flatMap((pl, index) => (Array.isArray(pl.conflicts) ? pl.conflicts : []).map((k) => ({ index, plan: pl.name, plan_code: pl.plan_code || null, field: k.field, values: k.values })));
     // Targeted: when every finding is about a value on a named plan whose
     // pages are known, only those pages go to the corrector. A missing,
     // extra or duplicated plan, or a count problem, needs the whole document.
     const structural =
       findings.some((m) => /missing_plan|extra_plan|plan_count|duplicate/.test(m.field) || (m.plan && !m.plan.startsWith("(") && !plans.some((pl) => pl.name === m.plan))) ||
-      val.checks.some((c) => !c.ok && ["unique", "codes", "reconciliation", "plans"].includes(c.key));
+      val.checks.some((c) => !c.ok && ["unique", "codes", "names", "reconciliation", "plans"].includes(c.key));
     let pages = null;
     if (!structural && !textSource) {
-      const affected = plans.filter((pl, index) => findings.some((m) => m.plan === pl.name) || conflicts.some((k) => k.index === index) || missingRates.some((mr) => mr.index === index));
+      const affected = plans.filter((pl, index) => findings.some((m) => (Number.isInteger(m.index) ? m.index === index : m.plan === pl.name)) || conflicts.some((k) => k.index === index) || missingRates.some((mr) => mr.index === index));
       const pgs = [...new Set(affected.flatMap((pl) => (pl.source ? [...(pl.source.identity || []), ...(pl.source.benefits || []), ...(pl.source.rates || [])] : [])))].sort((a, b) => a - b);
       if (affected.length && pgs.length && affected.every((pl) => pl.source && (pl.source.rates || []).length)) pages = pgs;
     }
@@ -6244,6 +6242,18 @@ async function stewardRepair(cell, tiers) {
     st.corrections++;
     return saveSteward();
   }
+  if (cell.fix === "review") {
+    // The carrier's document prints one plan name for two plan codes. One
+    // correction first - a misread name is fixed against the source; if the
+    // document really does print it twice, a person decides: the box goes to
+    // NEEDS_REVIEW with the names and codes, and "Confirm shared name"
+    // (POST /api/admin/proposals/:id/confirm-shared-names) records the answer.
+    if ((st.nameChecks || 0) >= 1) return giveUp(cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : "The same plan name is on two plan codes.");
+    st.nameChecks = (st.nameChecks || 0) + 1;
+    await saveSteward();
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: one plan name on two plan codes - checking the names against the document`);
+    return runProposalCorrection(row.id);
+  }
   if (cell.fix === "refresh") {
     if (st.refresh >= 2) return giveUp(`The group's grid does not match the database after a rebuild: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);
     st.refresh++;
@@ -6336,6 +6346,36 @@ app.post("/api/admin/proposals/fix", requireStaff, async (req, res) => {
   await saveSteward();
   scheduleSteward(0);
   res.json({ ok: true });
+});
+
+/**
+ * A person confirms that the carrier really does print one plan name for
+ * several different plan codes (validation's "Plan names unique" check
+ * flags it and the steward will not decide it alone). Recorded on the
+ * reading with the exact codes, by whom and when; a later change to those
+ * codes flags it again. The plans stay separate records with their own IDs.
+ */
+app.post("/api/admin/proposals/:id/confirm-shared-names", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  if (!row || !row.extracted) return res.status(404).json({ error: "No such proposal." });
+  const plans = Array.isArray(row.extracted.plans) ? row.extracted.plans : [];
+  const byName = new Map();
+  for (const pl of plans) {
+    const k = exactName(pl.name).toLowerCase();
+    if (k && normCode(pl.plan_code)) byName.set(k, [...(byName.get(k) || []), pl]);
+  }
+  const shared = [...byName.values()].filter((g) => g.length > 1 && new Set(g.map((pl) => normCode(pl.plan_code))).size === g.length);
+  if (!shared.length) return res.status(400).json({ error: "No plan name on this proposal is shared by different plan codes." });
+  const at = new Date().toISOString();
+  const confirmed = shared.map((g) => ({ name: g[0].name, codes: g.map((pl) => pl.plan_code), by: req.staffEmail || null, at }));
+  await proposalStore.updateProposal(id, { extracted: { ...row.extracted, shared_names_confirmed: confirmed } });
+  await loadSteward();
+  if (stewardState[id]) stewardState[id].gaveUp = null;
+  await saveSteward();
+  console.log(`proposal ${id}: shared plan name(s) confirmed by ${req.staffEmail || "staff"} - ${confirmed.map((c) => `"${c.name}" (${c.codes.join(", ")})`).join("; ")}`);
+  await proposalsChanged();
+  res.json({ ok: true, confirmed });
 });
 
 /** Assign, reassign, confirm, or relabel a proposal. */

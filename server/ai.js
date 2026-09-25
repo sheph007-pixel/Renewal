@@ -222,8 +222,8 @@ const SCHEMA = {
               "The network the plan is priced on, where the quote distinguishes them (Choice, Choice Plus, INS-Choice, Options PPO…). Null when only one network is quoted.",
           },
           plan_type: nullable("string"),
-          deductible: nullable("string"),
-          oop_max: nullable("string"),
+          deductible: { ...nullable("string"), description: "The in-network deductible as printed, individual first and then family where both are printed (\"$3,000 / $6,000\")." },
+          oop_max: { ...nullable("string"), description: "The in-network out-of-pocket maximum as printed, individual first and then family where both are printed." },
           source_pages: {
             type: "object",
             additionalProperties: false,
@@ -254,7 +254,7 @@ const SCHEMA = {
               imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
               urgent_care: { type: "string" },
               hospital: { type: "string", description: "Inpatient hospital stay." },
-              rx: { type: "string", description: "Prescription drug copays or coinsurance by tier." },
+              rx: { type: "string", description: "Retail prescription drug copays or coinsurance by tier, in tier order (\"$10 / $40 / $80\"); mail order left out." },
             },
           },
           rates: {

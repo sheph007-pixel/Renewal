@@ -32,18 +32,36 @@
 
 import { validatePlans } from "./plan-validate.js";
 import { hiddenReason } from "./plan-visibility.js";
+import { TIERS, identityKey, canonicalPlans } from "./plan-canonical.js";
+import { AUDIT_STANDARD } from "./plan-compare.js";
 
-const TIERS = ["EE", "ES", "EC", "FAM"];
+// Plan identity everywhere below is the canonical carrier identity
+// (identityKey: the plan code when printed, else the exact printed name on
+// its network). A served plan carries the key the server computed from its
+// stored record (`identity`), so stored and served are compared on the one
+// definition. Counts are the canonical list's length: once a reading is
+// canonicalized and validated, each entry IS one carrier plan - two are
+// never taken for one because their rates agree.
+const servedKey = (pl) => pl.identity || identityKey({ plan_code: pl.planCode ?? pl.plan_code, name: pl.name, network: pl.network });
 
-const normName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
-const planKey = (pl) => `${normName(pl.name)}|${TIERS.map((t) => (pl.rates && pl.rates[t] != null ? pl.rates[t] : "")).join(",")}`;
+/** Keys held by more than one plan in a list. */
+const repeated = (keys) => {
+  const seen = new Set();
+  const dup = new Set();
+  for (const k of keys) {
+    if (k == null) continue;
+    if (seen.has(k)) dup.add(k);
+    seen.add(k);
+  }
+  return [...dup];
+};
 
 /**
  * How the client's proposalPlans (client/src/lib/model.ts) treats a group's
  * served plans, reduced to counts: shown in the grid, dropped as a repeat of
- * a plan already shown, or dropped for want of a rate on a tier the group
- * has people in. Kept in step with that function; test-proposal-verify
- * checks the two agree.
+ * a carrier plan already shown (the same canonical identity), or dropped for
+ * want of a rate on a tier the group has people in. Kept in step with that
+ * function; test-proposal-verify checks the two agree.
  */
 export function gridCounts(plans, slot, tiers) {
   const counts = tiers || {};
@@ -57,7 +75,7 @@ export function gridCounts(plans, slot, tiers) {
       unpriced.push(pl);
       continue;
     }
-    const k = `${slot}|${normName(pl.name)}|${TIERS.map((t) => rates[t] ?? "").join(",")}`;
+    const k = `${slot}|${servedKey(pl)}`;
     if (seen.has(k)) {
       repeats++;
       continue;
@@ -154,8 +172,8 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       const x = row.extracted || {};
       // Every unique plan is stored, EPO included; the client is shown the
       // ones the visibility rules allow.
-      const stored = (Array.isArray(x.plans) ? x.plans : []).filter((pl) => !isBlankPlan(pl));
-      const storedDistinct = new Set(stored.map(planKey)).size;
+      const stored = canonicalPlans(x).filter((pl) => !isBlankPlan(pl));
+      const storedDistinct = stored.length;
       const hiddenPlans = stored.filter((pl) => hiddenReason(pl));
       cell.counts.stored = storedDistinct;
       cell.counts.hidden = hiddenPlans.length;
@@ -224,16 +242,18 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
         settle("claude", null, row.id, true);
         continue;
       }
-      const current = !!(a && a.version && readingVersion && a.version === readingVersion(x) && (!a.sourceSha || a.sourceSha === row.source_sha));
+      // Current: of this exact reading, of this exact document, and held to
+      // today's audit standard (every field compared, not rates alone).
+      const current = !!(a && a.version && readingVersion && a.version === readingVersion(x) && (!a.sourceSha || a.sourceSha === row.source_sha) && (a.standard || 1) >= AUDIT_STANDARD);
       const auditStep = (re) => {
         if (!a) return { ok: false, note: "Not audited yet." };
-        if (!current) return { ok: false, note: "Audited an earlier reading - pending a fresh audit of this one." };
+        if (!current) return { ok: false, note: (a.standard || 1) < AUDIT_STANDARD && a.version === (readingVersion ? readingVersion(x) : null) ? "Audited on rates alone - pending a field-by-field audit." : "Audited an earlier reading - pending a fresh audit of this one." };
         const m = (a.models || []).find((mm) => re.test(mm.model));
         if (!m) return { ok: false, note: "Did not run." };
         const c = m.plansFoundTotal != null ? `${m.planAppearances != null ? `${m.planAppearances} appearances, ` : ""}${m.plansFoundTotal} unique plans on the document (${m.epoExcluded ?? 0} EPO); database ${storedDistinct}` : null;
-        if (m.verdict === "pass" && m.documentPlanCount === storedDistinct) return { ok: true, note: `Pass. ${c}; all ${m.of} plans' rates confirmed against the document.` };
+        if (m.verdict === "pass" && m.documentPlanCount === storedDistinct) return { ok: true, note: `Pass. ${c}; all ${m.of} plans read off the document${m.batches && m.batches.length > 1 ? ` in ${m.batches.length} batches` : ""} - name, code, network, deductible, out-of-pocket max, benefits and four rates compared in code.` };
         if (m.verdict === "off" || m.verdict === "error") return { ok: false, note: `Pending - ${m.verdict === "off" ? "not configured" : "did not complete"}: ${m.notes || ""}` };
-        if (m.verdict === "incomplete") return { ok: false, note: `Pending - confirmed the rates of ${m.confirmed} of ${m.of} plans.` };
+        if (m.verdict === "incomplete") return { ok: false, note: `Pending - returned ${m.confirmed} of ${m.of} plans${m.batches && m.batches.length > 1 ? ` (${m.batches.filter((b) => b.verdict !== "pass" && b.verdict !== "issues").length} of ${m.batches.length} batches incomplete)` : ""}.` };
         if (m.verdict === "unreadable") return { ok: false, note: `Could not read the document: ${m.notes || ""}` };
         const n = (a.mismatches || []).filter((mm) => mm.by === m.model).length;
         return { ok: false, note: `${n} finding${n === 1 ? "" : "s"}${c ? ` (${c})` : ""}.`, mismatches: (a.mismatches || []).filter((mm) => mm.by === m.model).slice(0, 12) };
@@ -255,21 +275,44 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       // Grid: the served proposal is this exact reading (every stored plan),
       // and the client is shown exactly the ones the visibility rules allow.
       const servedAll = sv ? sv.plans || [] : [];
-      const sameSetOf = (a, b) => {
-        const ka = new Set(a.map(planKey));
-        const kb = new Set(b.map(planKey));
-        return ka.size === kb.size && [...ka].every((k) => kb.has(k));
+      // Same set, by canonical identity, and the same number: a served list
+      // holding one carrier plan twice is not the stored list.
+      const sameSetOf = (served, st) => {
+        const ka = served.map(servedKey);
+        const kb = new Set(st.map(identityKey));
+        return ka.length === kb.size && new Set(ka).size === ka.length && ka.every((k) => kb.has(k));
       };
       const sentPlans = servedAll.filter((pl) => !pl.hidden);
       const sameSet = sameSetOf(servedAll, stored) && sameSetOf(sentPlans, stored.filter((pl) => !hiddenReason(pl)));
+      // No two client-facing plans are one carrier plan, and no BenSync ID
+      // is on two of the group's served plans (any slot).
+      const dupShown = repeated(sentPlans.map(servedKey));
+      const dupIds = repeated(list.filter((pp) => pp.slot !== "Cobalt").flatMap((pp) => (pp.plans || []).map((pl) => pl.optionId || null)));
+      const mineIds = new Set(servedAll.map((pl) => pl.optionId).filter(Boolean));
+      const dupIdsHere = dupIds.filter((id) => mineIds.has(id));
       const g4 = gridCounts(sentPlans, slot, g.tiers);
       const confirmedUnpriced = g4.unpriced.filter((pl) => Array.isArray(pl.unpriced) && TIERS.some((t) => g.tiers && g.tiers[t] && pl.rates && pl.rates[t] == null && pl.unpriced.includes(t)));
       const unexplained = g4.unpriced.length - confirmedUnpriced.length;
-      const visibleDistinct = new Set(stored.filter((pl) => !hiddenReason(pl)).map(planKey)).size;
+      const visibleDistinct = stored.filter((pl) => !hiddenReason(pl)).length;
       const expected = visibleDistinct - confirmedUnpriced.length;
       cell.counts.visible = visibleDistinct;
       cell.counts.grid = g4.shown;
-      if (!sv || sv.id !== row.id || !sameSet) {
+      if (dupShown.length || dupIdsHere.length) {
+        steps.grid = { ok: false, note: `${dupShown.length ? `${dupShown.length} carrier plan${dupShown.length === 1 ? " is" : "s are"} served to the client twice.` : ""}${dupIdsHere.length ? ` BenSync ID${dupIdsHere.length === 1 ? "" : "s"} ${dupIdsHere.join(", ")} on two of the group's plans.` : ""}`.trim() };
+        settle("grid", "refresh", row.id, false);
+        continue;
+      }
+      // Each served plan carries its stored record's values: matched by
+      // identity, then compared - the four rates and the BenSync ID.
+      const byIdentity = new Map(stored.map((pl) => [identityKey(pl), pl]));
+      const drifted = servedAll.filter((pl) => {
+        const st = byIdentity.get(servedKey(pl));
+        if (!st) return false;
+        const r = pl.rates || {};
+        const q = st.rates || {};
+        return TIERS.some((t) => (r[t] ?? null) !== (q[t] ?? null)) || (pl.optionId !== undefined && (pl.optionId || null) !== (st.option_id || null));
+      });
+      if (!sv || sv.id !== row.id || !sameSet || drifted.length) {
         steps.grid = { ok: false, note: "The group's page is not showing this exact reading yet." };
         settle("grid", "refresh", row.id, false);
         continue;

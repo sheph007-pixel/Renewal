@@ -7,10 +7,16 @@
 // Each check returns { key, label, ok, note, fix } where `fix` is the repair
 // the steward should run: "read" (extract again from the source), "correct"
 // (settle against the source, targeted), or "refresh" (rebuild what is
-// served). No arithmetic, count matching, uniqueness or version checking is
-// left to AI.
+// served) or "review" (a person must decide - the one case: a carrier
+// printing the same plan name for two different plan codes). No arithmetic,
+// count matching, uniqueness or version checking is left to AI.
+//
+// Identity everywhere is the canonical carrier identity (identityKey in
+// plan-canonical.js): the plan code when printed, else the exact printed
+// name on its network. Two plans are never judged the same because their
+// rates happen to agree.
 
-import { TIERS, identityKey, normCode, exactName, isEpoPlan } from "./plan-canonical.js";
+import { TIERS, identityKey, normCode, exactName, isEpoPlan, canonicalPlans } from "./plan-canonical.js";
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -23,7 +29,7 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
  */
 export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textSource = false }) {
   const x = extracted || {};
-  const plans = (Array.isArray(x.plans) ? x.plans : []).filter((pl) => pl && (exactName(pl.name) || normCode(pl.plan_code)));
+  const plans = canonicalPlans(x);
   const checks = [];
   const check = (key, label, failures, fix, okNote) => checks.push({ key, label, ok: !failures.length, note: failures.length ? failures.slice(0, 4).join(" ") + (failures.length > 4 ? ` (+${failures.length - 4} more)` : "") : okNote || "", fix: failures.length ? fix : null });
 
@@ -47,6 +53,7 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   }
   check("unique", "No duplicate plans", dupIdentity, "correct", "Every plan is stored once.");
 
+  // No carrier plan code on two plans.
   const codes = new Map();
   const dupCodes = [];
   for (const pl of plans) {
@@ -55,16 +62,39 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
     if (codes.has(c)) dupCodes.push(`Plan code ${pl.plan_code} is on two plans.`);
     codes.set(c, true);
   }
-  // The same exact name twice is a duplicate unless a distinct plan code (or
-  // network) tells the two apart - a code the carrier printed, not a guess.
-  const names = new Map();
+  check("codes", "Plan codes unique", dupCodes, "correct", "No plan code is on two plans.");
+
+  // No exact printed name on two plans. Where one of them has no code,
+  // nothing printed tells them apart: the same plan read twice - settled
+  // against the source. Where every one has its own code, the carrier prints
+  // one name for two different plans: never merged, never shown twice
+  // silently - flagged for a person to confirm (`review`), unless one has
+  // already confirmed exactly these codes share the name
+  // (extracted.shared_names_confirmed).
+  const byName = new Map();
   for (const pl of plans) {
-    const k = `${exactName(pl.name).toLowerCase()}|${String(pl.network || "").trim().toLowerCase()}`;
-    const prev = names.get(k);
-    if (prev && (!normCode(pl.plan_code) || !normCode(prev.plan_code))) dupCodes.push(`"${pl.name}" appears twice with nothing printed to tell them apart.`);
-    names.set(k, pl);
+    const k = exactName(pl.name).toLowerCase();
+    if (!k) continue;
+    byName.set(k, [...(byName.get(k) || []), pl]);
   }
-  check("codes", "Exact names and codes unique", dupCodes, "correct", "No plan code or name is shared.");
+  const confirmed = Array.isArray(x.shared_names_confirmed) ? x.shared_names_confirmed : [];
+  const nameFailures = [];
+  let nameFix = null;
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    const codesOf = group.map((pl) => normCode(pl.plan_code));
+    if (codesOf.some((c) => !c)) {
+      nameFailures.push(`"${group[0].name}" appears ${group.length} times with nothing printed to tell them apart.`);
+      nameFix = "correct";
+      continue;
+    }
+    if (new Set(codesOf).size < codesOf.length) continue; // a repeated code: the codes check has it
+    const ok = confirmed.some((cf) => exactName(cf.name).toLowerCase() === exactName(group[0].name).toLowerCase() && Array.isArray(cf.codes) && [...cf.codes].map(normCode).sort().join("|") === [...codesOf].sort().join("|"));
+    if (ok) continue;
+    nameFailures.push(`The document's plan name "${group[0].name}" is on ${group.length} different plan codes (${group.map((pl) => pl.plan_code).join(", ")}) - confirm the carrier uses one name for these plans.`);
+    nameFix = nameFix || "review";
+  }
+  check("names", "Plan names unique", nameFailures, nameFix || "correct", "No plan name is on two plans.");
 
   const ids = new Map();
   const idProblems = [];
@@ -134,8 +164,9 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   }
   check("pairing", "Plan, benefit and rate pairing", mixed, "correct", "Every plan's benefits and rates come from that plan alone.");
 
-  // Reconciliation: appearances fold into unique plans, EPO exclusions are
-  // counted, and what is stored is exactly what is expected.
+  // Reconciliation: appearances fold into unique plans, PPO and EPO are
+  // counted, and what is stored - the canonical list, one entry per carrier
+  // plan - is exactly what is expected.
   const rc = x.reconciliation || null;
   const recon = [];
   if (!rc) recon.push("No plan count reconciliation on the reading.");
@@ -156,8 +187,10 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
 
   const failed = checks.filter((c) => !c.ok);
   // Which repair first: a stale or unsourced reading is extracted again; a
-  // duplicate, conflict or count problem is settled against the source; an
-  // ID problem is rebuilt.
-  const fix = failed.some((c) => c.fix === "read") ? "read" : failed.some((c) => c.fix === "correct") ? "correct" : failed.length ? "refresh" : null;
+  // duplicate, conflict or count problem is settled against the source; a
+  // name the carrier genuinely prints for two plans goes to a person; an ID
+  // problem is rebuilt.
+  const order = ["read", "correct", "review", "refresh"];
+  const fix = order.find((f) => failed.some((c) => c.fix === f)) || null;
   return { ok: !failed.length, checks, fix, failures: failed.map((c) => `${c.label}: ${c.note}`) };
 }

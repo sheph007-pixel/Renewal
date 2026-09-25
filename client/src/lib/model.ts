@@ -242,6 +242,8 @@ export interface GroupSplit {
 export interface ProposalPlan {
   /** The short handle everyone uses for the plan - UH3, GR1 - given once and kept. */
   optionId?: string | null;
+  /** The canonical carrier identity the server computed (plan code, else exact name on its network): one per carrier plan. */
+  identity?: string | null;
   name: string;
   /** The carrier's code for the plan, where one is printed. */
   planCode?: string | null;
@@ -1066,9 +1068,11 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       // The name is the carrier's, exactly as printed on the quote: it is what
       // the client will ask about by name, and what the audit checks.
       const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
-      // A quote that lists the same plan twice at the same rates (headline
-      // grid and again among the alternates) is one plan, one row.
-      const dupKey = `${pr.slot}|${planName.toLowerCase()}|${TIERS.map((t) => rates[t.key] ?? "").join(",")}`;
+      // One carrier plan, one row. The server has already folded a plan
+      // printed several times into one canonical record and sends its
+      // carrier identity (plan code, else exact name on its network); two
+      // different plans are never collapsed because their rates agree.
+      const dupKey = `${pr.slot}|${pl.identity || `${pl.planCode ? `code:${pl.planCode.trim().toUpperCase()}` : `name:${pl.name.toLowerCase()}|${(pl.network || "").toLowerCase()}`}`}`;
       if (seen.has(dupKey)) continue;
       seen.add(dupKey);
       const underwritingNote = pr.slot === "Optimyl" && g.sizeCategory === "2-50" ? OPTIMYL_UNDERWRITING_NOTE : null;

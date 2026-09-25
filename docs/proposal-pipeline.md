@@ -18,6 +18,11 @@ Railway Postgres, audited, and shown on each group's Medical Plans grid.
 - **The AI repairs; people are asked only when it can't.** A server-side
   "steward" fixes failures on its own.
 
+**Plan identity.** One definition is used everywhere: `identityKey()` in
+`server/plan-canonical.js`, meaning the plan code when printed, otherwise the
+exact printed name on its network. The plan count is the length of the
+canonical list. Nothing downstream de-duplicates on name + rates.
+
 ## 2. Where the data lives
 
 | Table / field | Holds |
@@ -53,27 +58,54 @@ same records: `currentProposals` → `clientProposals`.
      the disagreement is recorded as a `conflict`.
 4. **Validate** (`server/plan-validate.js`, pure code, before any AI audit):
    - the reading is of the current file version;
-   - no duplicate plans, codes or BenSync IDs;
+   - no duplicate canonical identities, no plan code on two plans, no exact
+     printed name on two plans, no BenSync ID on two plans;
    - required fields are present;
    - all four tier rates are numeric;
    - every plan has source references;
    - no data comes from another plan's code;
    - there are no unresolved conflicts;
    - the counts reconcile.
+
+   One printed name on two *different* plan codes is flagged for a person
+   (`fix: "review"`), never merged or shown twice silently. The steward checks
+   the names against the document once. If the document really prints one
+   name for both, staff confirm it with the button in the NEEDS_REVIEW list
+   (`POST /api/admin/proposals/:id/confirm-shared-names`).
 5. **Dual audit** (`server/proposal-audit.js`). Claude and OpenAI each audit
-   the document against the stored plans, independently.
-   - Each must report the plan count and read all four rates of every plan
-     off the page.
-   - The server compares the rates to the database in code.
-   - Each audit is tied to the exact reading version and file hash.
+   independently. For every stored plan, each returns what the document
+   prints:
+   - name, plan code, network;
+   - deductible, out-of-pocket max, coinsurance;
+   - PCP, specialist, imaging, urgent care, ER, hospital;
+   - retail Rx by tier, HSA eligibility;
+   - EE / ES / EC / FAM rates.
+
+   The auditors get only what's needed to find each plan, never the stored
+   values. Server code (`server/plan-compare.js`) compares each value with the
+   database. Formatting is normalized for the comparison only ($1,500 = 1500);
+   stored values are never rewritten.
+
+   Proposals with more than 25 plans are audited in deterministic batches of
+   25 (every plan exactly once per model, all tied to the same reading and
+   file hash). A missing or failed batch means Pending, never Verified. Each
+   audit records `standard: 2`; an older rates-only audit is re-audited.
 6. **Correct** (only when something fails). Claude re-reads just the pages
-   involved and returns fixes with page references.
+   involved (findings name the plan's index) and returns fixes with page
+   references.
    - The fixes are applied and logged in `corrections[]`.
-   - Validation runs again, then both models audit again. The corrector never
-     settles a finding on its own word.
-7. **Grid check** (`server/proposal-verify.js`). The plans served for the
-   group must equal the stored plans, and the plans the client sees must
-   equal the stored plans the visibility rules leave in.
+   - An "added" plan already stored under the same identity is not added
+     twice.
+   - The reconciliation is recomputed from the canonical list.
+   - Validation runs again, then both models audit again.
+7. **Grid check** (`server/proposal-verify.js`). Everything is compared by
+   canonical identity:
+   - the plans served for the group equal the stored plans, each with the
+     same rates and BenSync ID;
+   - the plans the client sees equal the stored plans the visibility rules
+     leave in;
+   - no carrier plan is served twice;
+   - no BenSync ID is on two of the group's plans.
 8. **Verified.** Stages run `UPLOADED → MAPPING → EXTRACTING → EXTRACTED →
    VALIDATING → AUDITING → (CORRECTING) → VERIFIED`, or `NEEDS_REVIEW` with a
    reason.
@@ -133,6 +165,8 @@ export const VISIBILITY_RULES = [
 
 - `GET /api/admin/proposals/verify`: the full check for every group and slot.
 - `POST /api/admin/proposals/fix`: wakes the steward now.
+- `POST /api/admin/proposals/:id/confirm-shared-names`: a person confirms
+  that the carrier prints one plan name for several plan codes.
 - `DELETE /api/admin/proposals/:id`: removes a proposal and everything read
   from it.
 
@@ -156,3 +190,6 @@ The main tests for this pipeline, in `scripts/`:
 - `test-option-ids.mjs`
 - `test-proposal-delete.mjs`
 - `test-proposal-audit.mjs`
+- `test-field-audit.mjs` (field-by-field comparison, batching)
+- `test-shared-names.mjs` (one name on two codes: flag, review, confirm)
+- `test-option-ids-reread.mjs`

@@ -387,7 +387,8 @@ export interface VerifyCell {
   reconciliation?: { plan_appearances: number; unique_plans: number; unique_ppo: number; unique_epo: number; expected: number } | null;
   /** Stored and audited, but not shown to the client - and why (server/plan-visibility.js). */
   hidden?: { id: string | null; name: string; plan_code: string | null; reason: string }[];
-  fix?: "read" | "audit" | "correct" | "refresh" | null;
+  /** review: a person decides (the carrier prints one plan name for several plan codes). */
+  fix?: "read" | "audit" | "correct" | "review" | "refresh" | null;
   fixId?: number;
   steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
@@ -490,6 +491,15 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
     setBusy(false);
     onChanged();
   };
+  // The one decision the AI leaves to a person: the carrier's document
+  // prints the same plan name for different plan codes. Confirming keeps
+  // them as separate plans and records who confirmed it.
+  const confirmShared = async (id: number) => {
+    setBusy(true);
+    await fetch(`/api/admin/proposals/${id}/confirm-shared-names`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    setBusy(false);
+    onChanged();
+  };
   return (
     <div
       style={{
@@ -523,7 +533,19 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
                 <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
                   <StepStrip c={c} />
                 </td>
-                <td style={{ padding: "4px 0", color: C.amber }}>{c.stuck}</td>
+                <td style={{ padding: "4px 0", color: C.amber }}>
+                  {c.stuck}
+                  {c.fix === "review" && c.fixId != null && (
+                    <button
+                      onClick={() => void confirmShared(c.fixId as number)}
+                      disabled={busy}
+                      style={{ ...linkBtn, fontSize: 12, marginLeft: 8 }}
+                      title="The document really does print this name for each of these plan codes: keep them as separate plans"
+                    >
+                      confirm the carrier uses this name for these plans
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
