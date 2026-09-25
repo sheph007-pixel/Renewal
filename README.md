@@ -372,6 +372,31 @@ does not offer). A plan whose audit found something reads "under review by
 Kennion" instead.
 The audit runs once per reading; a re-read runs it again.
 
+### The four-step check
+
+Every filled box on the Proposals grid is taken through four steps
+(`server/proposal-verify.js`): **1 Filed** (a proposal is on file for the
+group in that slot), **2 Read** (the read finished, every plan named, rated
+and numbered, and no newer upload stuck beside it), **3 Audited** (both
+models found nothing), **4 Loaded** (the plans stored are the plans the
+group's Medical Plans grid shows, counted the way `proposalPlans` counts
+them: a plan missing a rate for a tier the group has people in fails it).
+The box is green with a ✓ and the plan count only when all four pass;
+otherwise four numbered squares show which step failed, and the box offers
+the fix: audit it, or read it again. A panel above the grid gives the
+totals, lists every box that is not verified with the reason, and has
+**Fix all**. It is arithmetic over what is stored, so it runs instantly:
+`GET /api/admin/proposals/verify`; `POST /api/admin/proposals/fix` (one box,
+or every failing one); the totals and each failing box are logged at boot.
+
+A newer upload never replaces a proposal that was read until it has plans of
+its own: while it is being read, or if its read fails, the older one stays in
+force and the box says so. (A re-upload of Boss Logistics' UHC Level Funded
+quote that failed to read once deleted the good reading it was replacing.)
+A quote with more plans than one answer holds is read in halves, down to a
+single page, and merged. Tests: `node --experimental-strip-types
+scripts/test-proposal-verify.mts`, `node scripts/test-split-read.mjs`.
+
 ### Gravie rate workbooks
 
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
