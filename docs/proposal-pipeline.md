@@ -10,8 +10,17 @@ Railway Postgres, audited, and shown on each group's Medical Plans grid.
   one four-tier rate set (EE / ES / EC / FAM).
 - **Every plan on a proposal is stored.** PPO and EPO alike. If the document
   has 100 unique plans, the database holds 100 and the count shows 100.
-- **What a client sees is a separate layer.** Rules can hide stored plans
-  from the client; nothing is deleted to hide it.
+- **Canonical data is only what the proposal says.** Nothing is invented,
+  inferred, renamed or borrowed into a canonical plan field. A blank stays
+  blank (null), and screens show "Not stated". See section 1a.
+- **Carrier-neutral.** Every carrier's plans are normalized into the same
+  canonical plan record. Carrier-specific logic lives only in intake,
+  parsing and extraction. Each proposal is its own source and audit boundary,
+  and plans are never merged across proposals.
+- **What a client sees is a separate layer.** Every Verified plan in each
+  proposal slot that is ON for the group is shown. There is no auto-hiding
+  by EPO, network or plan type. Turning a slot OFF hides its plans without
+  deleting anything.
 - **Nothing is green on one model's word.** "Verified" requires code checks
   plus two independent AI audits (Claude and OpenAI) of the exact version
   on the grid.
@@ -23,6 +32,37 @@ Railway Postgres, audited, and shown on each group's Medical Plans grid.
 exact printed name on its network. The plan count is the length of the
 canonical list. Nothing downstream de-duplicates on name + rates.
 
+## 1a. Data integrity: source, normalized, supplemental
+
+The canonical plan in Postgres represents only what the Carrier/TPA
+proposal states. Every value falls into one of these categories, and none
+may overwrite another:
+
+| Category | What | Where it lives |
+|---|---|---|
+| SOURCE | Exact name, plan code, network, plan type, deductible, OOP max, benefits and the four tier rates, as printed | `extracted.plans[]` |
+| NORMALIZED | Deterministic, meaning-preserving forms of a source value: Gravie's `0.2` → `"20%"`, "$1,500" read as 1500 for sorting, HSA "yes"/"no" → true/false | The canonical field. The source cell is kept in `raw` where the form changes |
+| SUPPLEMENTAL | A carrier's standard plan design: Kennion's plan catalogue (Angle, Optimyl) and Gravie's Benefits Grid | Served beside the plan under `design`, with a `source` label. Never written to the canonical plan |
+| DERIVED | Network type (PPO/EPO/RBP) for filtering, monthly cost at the census, recommendations | Computed on read, never stored as a plan field |
+| DISPLAY | Option label ("Angle Health Option AN1"), "Not stated", the "(standard design)" mark | Client only |
+| SYSTEM / BUSINESS | BenSync ID, slot, verification, slot ON/OFF, funding by slot | Their own fields and tables |
+
+Rules:
+
+- **Proposal first.** A screen may show a supplemental value only where the
+  proposal is blank. It is always marked "(standard design)" and names its
+  source. Where the two disagree, the proposal wins and
+  `design.disagreements` lists the difference.
+- **Null is better than invented.** A missing network reads "Not stated". It
+  is never filled with the network the carrier usually uses. The same goes
+  for a missing plan type: it is never taken from the name. HSA eligibility
+  counts only when the proposal states it.
+- **The name is exact.** No "Surest" prefix or any other decoration is added
+  to a stored or served plan name.
+- **Audits and corrections use the proposal only.** Auditors compare stored
+  proposal fields against the document. The corrector changes a value only
+  to what the page prints; otherwise the plan goes to review.
+
 ## 2. Where the data lives
 
 | Table / field | Holds |
@@ -32,10 +72,21 @@ canonical list. Nothing downstream de-duplicates on name + rates.
 | `proposals.extracted.reconciliation` | `plan_appearances → unique_plans (unique_ppo + unique_epo) → expected`, plus the reader's own counts |
 | `proposals.extracted.corrections[]` | A log of every automated fix: field, old → new value, source page, reason, model, time |
 | `proposals.audit` | Claude and OpenAI audit results, each tied to the reading `version` (hash of the stored values) and `sourceSha` |
-| `kennion.carrier_quotes` / `carrier_quote_plans` | Gravie workbooks, also stored as rows (one plan per row) |
+| `proposals.extracted.plans[].raw` | Source cells kept before a normalization (Gravie: the coinsurance fraction, the sheet header's printed network, sheet and row) |
+| `kennion.carrier_quotes` / `carrier_quote_plans` | Gravie workbooks, also stored as rows (one plan per row); `network` is the header's printed network |
+| `kennion.proposal_slot_visibility` | Per group and slot: `client_enabled`, `updated_by`, `updated_at`. Kept apart from proposal data, so a re-read never changes it |
+| `kennion.carrier_plan_designs` | The plan catalogue (supplemental standard designs), keyed by carrier, plan year and plan code |
 
 The client grid, plan cards, documents and the AI Assistant all read the
-same records: `currentProposals` → `clientProposals`.
+same records: `currentProposals` → `clientAvailablePlans(group)`.
+
+Every served plan has the same fields whatever the carrier:
+- `optionId`, `identity`, `name` (exact), `planCode`, `network` (exact), `planType`
+- `deductible`, `oopMax`, `benefits`, `rates` (EE/ES/EC/FAM)
+- `source` (pages, or sheet and rows) and `raw`
+- `design` (supplemental, labelled), when the plan is a known standard design
+
+Each proposal also carries its `slot`, `carrier`, `funding` and `verified`.
 
 ## 3. The steps for each proposal
 
@@ -146,24 +197,25 @@ Admin (`/admin/proposals`):
 So each group's database holds exactly the plans of the proposals currently
 on file, and nothing else.
 
-## 5. What the client sees (visibility layer)
+## 5. What the client sees
 
-`server/plan-visibility.js`:
+`clientAvailablePlans(group)` in `server/index.js` is the one resolver. It
+feeds the grid, cards, comparison, pricing, documents, the AI Assistant and
+plan selection.
 
-```js
-export const VISIBILITY_RULES = [
-  { key: "epo", reason: "EPO - Kennion offers PPO plans only", hides: (pl) => isEpoPlan(pl) },
-];
-```
-
-- A plan that any rule hides stays in the database and is marked `hidden`.
-- It is left out of the client grid, plan cards, printed documents and the
-  AI Assistant.
-- BenSync IDs are given to shown plans first, so the client's numbers run
-  without gaps. Hidden plans are numbered after them.
-- To add per-group or per-carrier show/exclude choices later, add a rule to
-  this list (it receives the group). Extraction, storage and the audit are
-  unaffected.
+- It returns every plan of every Verified proposal in a slot that is ON for
+  the group. EPO, LocalPlus, HMO, any deductible or rate: these are
+  attributes to filter and sort on, never reasons to hide a plan.
+- The only control is the slot, per group: `POST /api/admin/proposal-slots
+  { group, slot, clientEnabled }`, stored in
+  `kennion.proposal_slot_visibility`. OFF shows none of the slot's plans;
+  they stay stored, audited and Verified.
+- `KENNION_CLIENT_VERIFIED_ONLY=0` also shows proposals that are not yet
+  Verified (for rollout while the steward catches up).
+- Plan-level exceptions (`server/plan-visibility.js`, `VISIBILITY_RULES`)
+  are technically possible but empty, and are not a normal workflow.
+- On the page, a plan's key (favorites, comparison, Sign Up) is its BenSync
+  ID, never its name: two plans can share a name.
 
 ## 6. Admin endpoints
 
@@ -198,3 +250,6 @@ The main tests for this pipeline, in `scripts/`:
 - `test-shared-names.mjs` (one name on two codes: flag, review, confirm)
 - `test-option-ids-reread.mjs`
 - `test-source-coverage.mjs` (CSV sections, workbook sheets, truncation, Gravie sheets, the coverage check)
+- `test-client-plans.mts` (100 quoted = 100 stored = 100 audited = 100 on the grid; slot OFF shows 0; the common plan record)
+- `test-plan-catalogue.mjs` (catalogue as a separate standard-design layer; the proposal wins; disagreements listed)
+- `test-market-plans.mts` (proposal values first, standard design only in gaps and marked, "Not stated", no invented network or type)

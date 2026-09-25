@@ -21,9 +21,9 @@ const plans = [
   { name: "Unpriced", rates: { EE: null, ES: null, EC: null, FAM: null } },
 ];
 const counts = gridCounts(plans, "UHC Level Funded", tiers);
-assert.equal(counts.shown, 2);
+assert.equal(counts.shown, 4, "every plan is shown - priced for every tier or not (an unpriced one shows without a monthly figure)");
 assert.equal(counts.repeats, 1);
-assert.deepEqual(counts.unpriced.map((p) => p.name), ["Choice Plus 2000", "Unpriced"]);
+assert.deepEqual(counts.unpriced.map((p) => p.name), ["Choice Plus 2000", "Unpriced"], "the plans with no figure for this group's tiers are named, never dropped");
 const pr = { id: 1, slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans: plans.map((p) => ({ ...p, planType: "PPO" })), uploadedAt: "2026-09-01" } as unknown as GroupProposal;
 const g = { name: "X", tiers } as unknown as Group;
 assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).length, counts.shown, "the check counts exactly the plans the client's grid shows");
@@ -67,12 +67,23 @@ let v = run([good], served([good]));
 let cell = cellOf(v);
 assert.equal(cell.state, "verified", JSON.stringify(cell.steps));
 assert.equal(cell.plans, 2, "the box counts every plan loaded");
-assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.visible, cell.counts.grid], [2, 2, 1, 1], "document = database; the client's grid = what the rules show");
+assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.visible, cell.counts.grid, cell.counts.client], [2, 2, 2, 2, 2], "document = database = grid = client: every plan, the EPO one too");
+assert.equal(cell.clientEnabled, true, "a slot is ON unless Kennion turns it OFF");
 assert.deepEqual(cell.counts.audit.claude, { found: 2, epoExcluded: 1, expected: 2 }, "both auditors hold every plan to the document, EPO included");
 assert.equal(cell.stage, "VERIFIED");
 assert.equal(cell.reconciliation.unique_epo, 1);
-assert.deepEqual(cell.hidden.map((h: { name: string }) => h.name), ["Copay 1500 EPO"], "loaded, audited, and hidden from the client - visibly");
-assert.match(cell.steps.grid.note, /1 hidden by rule: EPO/);
+assert.deepEqual(cell.hidden, [], "no plan is hidden by network or plan type");
+assert.match(cell.steps.grid.note, /client ON: all 2 shown/);
+
+// A slot turned OFF for the group: still Verified (the source, database and
+// audits are the same), and the client count is zero.
+const runOff = (rows: unknown[], srv: () => unknown[]) =>
+  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, slotEnabled: (group: string, slot: string) => !(group === "Acme" && slot === "Gravie") });
+cell = runOff([good], served([good])).groups[0].cells[0];
+assert.equal(cell.state, "verified", "turning a slot OFF is a presentation choice: the proposal stays Verified");
+assert.equal(cell.clientEnabled, false);
+assert.deepEqual([cell.counts.stored, cell.counts.grid, cell.counts.client], [2, 2, 0], "all plans stored and checked; none shown to the client");
+assert.match(cell.steps.grid.note, /client OFF: none shown/);
 
 // Source coverage: a reading that left pages uninspected is never Verified,
 // whatever both audits said - it is read again.
@@ -93,8 +104,8 @@ assert.equal(cell.failedAt, "claude");
 assert.equal(cell.fix, "audit", "re-audited, not re-read");
 assert.match(cell.steps.claude.note, /rates alone/);
 
-// The client being shown a plan the rules hide is caught.
-cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans.map((p: object) => ({ ...p, hidden: null })) }]));
+// A served list missing one of the stored plans is caught.
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans.slice(0, 1) }]));
 assert.equal(cell.failedAt, "grid");
 assert.ok(cell.steps.validation.checks.every((k: { ok: boolean }) => k.ok));
 

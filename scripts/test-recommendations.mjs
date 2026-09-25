@@ -91,7 +91,7 @@ writeFileSync(
   ]),
 );
 
-const server = spawn("node", ["server/index.js"], { env: { ...process.env, PORT: String(PORT), ADMIN_CODE: CODE, KENNION_FAKE_AI: "1", DATABASE_URL: "", KENNION_SEED_PROPOSALS: seed }, stdio: ["ignore", "pipe", "pipe"] });
+const server = spawn("node", ["server/index.js"], { env: { ...process.env, PORT: String(PORT), ADMIN_CODE: CODE, KENNION_FAKE_AI: "1", DATABASE_URL: "", KENNION_SEED_PROPOSALS: seed, KENNION_CLIENT_VERIFIED_ONLY: "0" }, stdio: ["ignore", "pipe", "pipe"] });
 const stop = () => server.kill();
 process.on("exit", stop);
 server.stderr.on("data", (d) => process.stderr.write(d));

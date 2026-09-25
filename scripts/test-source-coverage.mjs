@@ -106,7 +106,8 @@ const gwb = (extra) => {
 };
 let gx = gravieExtracted(parseGravieWorkbook(gwb()));
 assert.deepEqual([gx.coverage.total_sheets, gx.coverage.inspected_sheets], [4, 4]);
-assert.deepEqual(gx.coverage.sheets.map((sh) => `${sh.name}:${sh.status}:${sh.plans}`), ["PPO:parsed:1", "EPO:parsed:1", "Narrow Network:not a quote sheet:0", "Benefits Grid (static):not a quote sheet:0"]);
+assert.deepEqual(gx.coverage.sheets.map((sh) => `${sh.name}:${sh.status}:${sh.plans}`), ["PPO:parsed:1", "EPO:parsed:1", "Narrow Network:parsed:1", "Benefits Grid (static):not a quote sheet:0"], "the Narrow Network (LocalPlus) sheet is parsed like the others");
+assert.equal(gx.plans.length, 3, "PPO + EPO + LocalPlus: every quoted plan");
 assert.ok(ok(gx.coverage));
 gx = gravieExtracted(parseGravieWorkbook(gwb("Dental Rates")));
 const [fail, fix] = coverageCheck(gx.coverage, null);

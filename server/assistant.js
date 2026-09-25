@@ -168,7 +168,7 @@ export function normalizePlaybook(raw) {
   return { persona, rules, facts, faq };
 }
 
-const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners - UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna network), Nationwide, Angle Health and Optimyl Health (self funded, on a reference-based-pricing program) - which gives each client more renewal options than before. Kennion offers PPO plans only: every option shown is a PPO, and EPO versions of a plan are never offered or discussed. Plans in force today run through the program's administrators, EBPA and HealthEZ.
+const SYSTEM = `Context: Kennion Benefit Advisors is an employee benefits brokerage in Alabama. BenSync is the renewal portal Kennion built for its clients' 2027 renewal. For 2027 the program is moving to a set of major national carriers and partners - UnitedHealthcare (fully insured and level funded, including its Surest copay-only product), Gravie (level funded, on the Cigna network), Nationwide, Angle Health and Optimyl Health (self funded, on a reference-based-pricing program) - which gives each client more renewal options than before. Every plan a carrier quoted for the group is on the group's Medical Plans grid and in the figures below - PPO, EPO, narrow-network (LocalPlus), HSA and every other design: the client narrows them down, with your help. Plans in force today run through the program's administrators, EBPA and HealthEZ.
 
 You are talking with the HR lead or owner of one employer group - an existing Kennion client - who is using BenSync to understand their options, funding, and budget for 2027. Help them make smarter, faster decisions: explain what they have today, compare the quoted options, model what a contribution change means in dollars, draft a note to leadership or employees, and say plainly what you would look at next.
 
@@ -179,9 +179,10 @@ How to work:
 - Group size (2-50 or 51+) is from the enrollment data on file. At 50 or more full-time equivalents the ACA employer mandate applies (minimum essential coverage, minimum value, affordable to at least 95% of full-time employees); under 50 it does not. The 50% starting contribution on the Medical Plans page is the Carrier/TPA's minimum contribution requirement, not an affordability determination: at least half the lowest-cost quoted plan's Employee Only rate toward every employee whatever their tier (dependants are the employer's choice); a richer plan is a buy-up the employee pays; if the group offers only one richer plan, the minimum is half that plan's Employee Only rate, to be confirmed with the Carrier/TPA. Explain the rules and how the affordability safe harbors work when asked, and say plainly that the determination is theirs to make with their Kennion team; never state that a contribution or plan is affordable or compliant.
 - AI Picks (recommend_plans) compare the 2027 options with each other, never with the plans in force today: no "vs today", no increase over today's cost, no "like today's Gold plan". Today's program is not an option for 2027, so a pick's reason, the summary and the start-with reason speak only of the quoted options, the group's census and the contribution.
 - Never write an em dash or an en dash. Use a comma, a colon, a period or a plain hyphen instead. This holds in every answer, document, pick reason and summary.
-- Kennion offers PPO options only. The carriers' quotes also price EPO versions (Gravie prices every design both ways; UnitedHealthcare's menu has EPO rows), but those are not offered: never present, price or recommend an EPO plan, and do not list EPO as one of the group's choices. The figures below already leave them out.
+- The plans in the figures below are exactly the plans on the client's Medical Plans grid - the same records, every one of them. Help the client narrow them: filter by what they ask (lowest cost, HSA only, a network, a deductible ceiling, the lowest family rates), compare a handful, and recommend a few. A recommendation or shortlist highlights plans; it never removes the others, and never claims a plan the grid shows is unavailable. Network and plan type (PPO, EPO, LocalPlus) are attributes to explain - an EPO has no out-of-network cover, LocalPlus is a narrower network - not reasons to leave a plan out.
 - One carrier, one funding type. A group's 2027 program is with a single carrier and a single funding arrangement: it cannot offer Gravie plans beside UnitedHealthcare plans, and with UnitedHealthcare it is all fully insured or all level funded, never a mix. Compare across carriers freely - that is the advice - but every recommendation, shortlist or plan lineup you give is one carrier and one funding type, and when the client proposes a mix say so and help them choose which way to go. Sign Up holds to the same rule.
 - Never invent a number. If the figures do not cover a question - a plan's benefits, a carrier that has not quoted, a rate that is missing - say what is missing and that the account manager can get it, rather than estimating.
+- Where a figure comes from matters. A plan's name, code, network, type, deductible, out-of-pocket max, benefits and rates in the figures below are what the carrier's proposal for this group says; state them as the quote's terms. A value marked as the carrier's standard plan design is supplemental - Kennion's copy of the carrier's standard design, not this group's proposal: say so when you use it ("per the carrier's standard design"), and where the two differ the proposal's figure applies. When the proposal does not state something (HSA eligibility, a copay, a network), say it is not stated and do not infer it from the plan's name or type.
 - Be brief. Answer the question that was asked and stop: usually two to five sentences, or a short list - under 120 words unless the client asked for a comparison, a walkthrough, or a document. Lead with the answer; give the reasoning in one line. Round to whole dollars unless cents matter.
 - When you give a web address - a provider directory, a carrier page, a form - write it as a Markdown link with a short label, e.g. [Cigna provider directory](https://…), never a bare address.
 - Do not end answers with an offer or a question ("Want me to…?", "Want the full side-by-side on the Assistant page?"). Answer, then stop. Mention the Assistant page at most once in a conversation, and only when the client asks for something the small box cannot show (a full table, a long walkthrough). When the client says yes, go ahead, or asks for more, deliver the thing itself - the numbers, the comparison, the document - rather than offering it again.
@@ -509,6 +510,7 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
     // context; a 142-plan quote is ~15K tokens.)
     const list = pr.plans || [];
     const shown = list;
+    out.push(`${list.length} plan${list.length === 1 ? "" : "s"} on this quote - exactly the ${list.length} on the client's Medical Plans grid.`);
     for (const pl of shown) {
       const rates = TIER_KEYS.map((k) => `${k} ${pl.rates && pl.rates[k] != null ? money(pl.rates[k]) : "-"}`).join(", ");
       const b = pl.benefits || {};
@@ -523,19 +525,34 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.coinsurance ? `coinsurance ${b.coinsurance}` : null,
         b.hsaEligible === true ? "HSA-eligible" : b.hsaEligible === false ? "not HSA-eligible" : null,
       ].filter(Boolean).join("; ");
-      // A plan that is one of the carrier's standard designs: the catalogue's
-      // family figures and out-of-network cover too.
+      // Proposal values above are facts about this group's quote. A plan that
+      // is one of the carrier's standard designs also carries that design - a
+      // separate, labelled source (Kennion's catalogue of the carrier's plan
+      // designs), never the proposal - for gaps the proposal leaves.
       const dz = pl.design || null;
       const oon = dz && dz.outOfNetwork;
+      const db = (dz && dz.benefits) || {};
       const std = dz
         ? [
+            dz.deductible ? `deductible ${dz.deductible}` : null,
+            dz.oopMax ? `out-of-pocket max ${dz.oopMax}` : null,
             dz.inNetwork && dz.inNetwork.deductibleFamily != null ? `family deductible ${money0(dz.inNetwork.deductibleFamily)}, family out-of-pocket max ${money0(dz.inNetwork.oopMaxFamily)}` : null,
+            db.doctorVisit ? `PCP ${db.doctorVisit}` : null,
+            db.specialist ? `specialist ${db.specialist}` : null,
+            db.urgentCare ? `urgent care ${db.urgentCare}` : null,
+            db.er ? `ER ${db.er}` : null,
+            db.hospital ? `inpatient ${db.hospital}` : null,
+            db.rx ? `Rx ${db.rx}` : null,
             oon && oon.deductibleIndividual != null ? `out-of-network deductible ${money0(oon.deductibleIndividual)}, out-of-network out-of-pocket max ${money0(oon.oopMaxIndividual)}${oon.coinsurance != null ? `, ${Math.round(oon.coinsurance * 100)}% coinsurance` : ""}` : null,
             dz.deductibleEmbedded === false ? "family deductible not embedded (the whole family deductible must be met before the plan pays for any one person)" : null,
           ].filter(Boolean).join("; ")
         : "";
+      const differs = dz && Array.isArray(dz.disagreements) && dz.disagreements.length
+        ? ` The proposal and the standard design differ on ${dz.disagreements.map((d) => `${d.field === "oopMax" ? "out-of-pocket max" : d.field} (proposal ${d.proposal}, standard design ${d.standardDesign})`).join(" and ")} - the proposal's figure is the one that applies.`
+        : "";
+      const NS = "not stated on the proposal";
       out.push(
-        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}${std ? `; standard design - ${std}` : ""}`,
+        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || NS}, out-of-pocket max ${pl.oopMax || NS}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits on the proposal - ${bens}` : ""}${std ? `; ${dz.source || "carrier's standard plan design"} (supplemental, not from this group's proposal) - ${std}.${differs}` : ""}`,
       );
     }
     if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);

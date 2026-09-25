@@ -2,9 +2,16 @@
 // that carrier draws on. Angle Health quotes the same designs to every
 // group - ANG TRAD 5000 7000, ANG HDHP 3500 3500 and so on - and only the
 // rates differ, so the designs are loaded once, keyed by carrier and plan
-// code, and every quoted plan whose name is a catalogue code takes its
-// deductibles, out-of-pocket maximums and every service line from here
-// rather than from whatever the reader made of the carrier's PDF.
+// code.
+//
+// The catalogue is SUPPLEMENTAL data, never proposal data. A quoted plan
+// whose code is a catalogue design carries the design alongside it, under
+// `design`, labelled with where it came from; the plan's own deductible,
+// out-of-pocket maximum, plan type and benefits stay exactly what the
+// group's proposal says (null where it says nothing). A screen may show a
+// design value in a gap the proposal leaves, marked as the carrier's
+// standard design; where the two disagree the proposal wins and the
+// disagreement is listed. Nothing here is written to the canonical plan.
 //
 // A catalogue arrives as a workbook with two sheets, the shape Kennion keeps
 // its Angle Health catalogue in (server/data/plan-docs):
@@ -167,11 +174,36 @@ export function lookupDesign(index, carrier, plan) {
   return null;
 }
 
+/** The individual in-network figure a proposal prints ("$5,000 / $10,000" -> 5000); null when it cannot be read. */
+const firstAmount = (v) => {
+  const m = /\$?\s*([\d,]+(?:\.\d+)?)/.exec(String(v ?? ""));
+  return m ? Number(m[1].replace(/,/g, "")) : null;
+};
+
 /**
- * The plans of one proposal, each that is a catalogue design carrying the
- * catalogue's figures: the six benefit rows, the deductible and OOP max,
- * the design family as its plan type where the reader gave none, and the
- * whole design under `design` for the card. A plan the catalogue does not
+ * Where the proposal and the carrier's standard design state different
+ * figures for the same thing. The proposal wins; this only says so.
+ */
+export function designDisagreements(pl, d) {
+  const out = [];
+  const pairs = [
+    ["deductible", pl.deductible, d.inNetwork && d.inNetwork.deductibleIndividual],
+    ["oopMax", pl.oopMax, d.inNetwork && d.inNetwork.oopMaxIndividual],
+  ];
+  for (const [field, stated, standard] of pairs) {
+    const a = firstAmount(stated);
+    if (a == null || standard == null) continue;
+    if (Math.abs(a - standard) > 0.5) out.push({ field, proposal: String(stated), standardDesign: money0(standard) });
+  }
+  return out;
+}
+
+/**
+ * The plans of one proposal, each that is a catalogue design carrying that
+ * design under `design` - a separate, labelled layer: its source, its own
+ * deductible, OOP max, family and benefit rows, every service line, and any
+ * figure where it disagrees with the proposal. The plan's own values are
+ * left exactly as the proposal states them. A plan the catalogue does not
  * know is returned as it was.
  */
 export function applyCatalogue(proposal, index, carrier) {
@@ -183,19 +215,21 @@ export function applyCatalogue(proposal, index, carrier) {
     touched = true;
     return {
       ...pl,
-      planType: pl.planType || d.familyName || null,
-      deductible: designDeductible(d) || pl.deductible || null,
-      oopMax: designOopMax(d) || pl.oopMax || null,
-      benefits: designBenefits(d),
       design: {
+        kind: "catalogue",
+        source: `${d.carrier} standard plan design ${d.planCode} (Kennion's ${d.carrier} plan catalogue, plan year ${d.planYear})`,
         planCode: d.planCode,
         planId: d.planId,
         family: d.familyName,
         planYear: d.planYear,
+        deductible: designDeductible(d),
+        oopMax: designOopMax(d),
+        benefits: designBenefits(d),
         inNetwork: d.inNetwork,
         outOfNetwork: d.outOfNetwork,
         deductibleEmbedded: d.deductibleEmbedded,
         services: d.services.map((s) => ({ label: s.label, costShare: s.costShare, deductibleApplies: s.deductibleApplies, text: serviceText(s) })),
+        disagreements: designDisagreements(pl, d),
         // Whether the carrier's actual SBC/SOB PDF is on file for this design
         // (server/plan-documents.js), so a plan card can offer "View SBC"/"View
         // SOB" only where there is something to open.

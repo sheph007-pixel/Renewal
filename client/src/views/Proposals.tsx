@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { C, money0, panel } from "@/lib/importui";
 import { h3, pill } from "@/lib/ui";
-import { networkLabel } from "@/lib/model";
 import Link from "@/lib/Link";
 import { PATHS, groupPath } from "@/lib/router";
 import type { AdminGroup } from "@/views/GroupsTable";
@@ -374,6 +373,8 @@ export interface VerifyCell {
     visible?: number | null;
     hidden?: number | null;
     grid: number | null;
+    /** Plans the client is shown: the grid's count when the slot is ON, 0 when OFF. */
+    client?: number | null;
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
   /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
@@ -385,6 +386,8 @@ export interface VerifyCell {
   stageReason?: string | null;
   /** Appearances -> unique plans -> EPO excluded -> expected, as the canonical reading counts them. */
   reconciliation?: { plan_appearances: number; unique_plans: number; unique_ppo: number; unique_epo: number; expected: number } | null;
+  /** Kennion's per-group switch: ON shows every Verified plan of this slot to the client, OFF none. */
+  clientEnabled?: boolean;
   /** What of the source the reading covered: pages (PDF), sheets (workbook) or lines (CSV / text). */
   coverage?: { kind: string; total_pages: number | null; mapped_pages: number | null; deep_read_pages: number | null; covered_pages: number | null; total_sheets: number | null; inspected_sheets: number | null; total_lines: number | null; scanned_lines: number | null } | null;
   /** Stored and audited, but not shown to the client - and why (server/plan-visibility.js). */
@@ -428,7 +431,7 @@ function checkTitle(c: VerifyCell): string {
   ]);
   const rc = c.reconciliation;
   const counts = rc
-    ? [`Plans: ${rc.plan_appearances} appearances on the document → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO) → ${c.counts.stored ?? "-"} loaded in the database → ${c.counts.visible ?? "-"} shown to the client (grid ${c.counts.grid ?? "-"})`]
+    ? [`Plans: ${rc.plan_appearances} appearances on the document → ${rc.unique_plans} unique → ${c.counts.stored ?? "-"} in the database → grid ${c.counts.grid ?? "-"} → client ${c.clientEnabled === false ? "OFF (0 shown)" : `ON (${c.counts.grid ?? c.counts.stored ?? "-"} shown)`}`]
     : [];
   const cv = c.coverage;
   const coverage = !cv
@@ -621,7 +624,7 @@ function Extracted({ x }: { x: Extraction }) {
                     {p.plan_type && <span style={{ color: C.ghost }}> · {p.plan_type}</span>}
                     {p.plan_code && <div style={{ fontSize: 11.5, color: C.ghost }}>{p.plan_code}</div>}
                   </td>
-                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{networkLabel(p.network) || "-"}</td>
+                  <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.network || "-"}</td>
                   <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.deductible || "-"}</td>
                   <td style={{ padding: "5px 8px 5px 0", color: C.body, borderBottom: `1px solid ${C.hairline}` }}>{p.oop_max || "-"}</td>
                   {(["EE", "ES", "EC", "FAM"] as const).map((t) => (
@@ -998,6 +1001,13 @@ function SlotCell({
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  /** Turn this proposal slot ON or OFF for the group's client. */
+  const setClientEnabled = async (clientEnabled: boolean) => {
+    setBusy(true);
+    await fetch("/api/admin/proposal-slots", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group, slot, clientEnabled }) }).catch(() => undefined);
+    setBusy(false);
+    onChanged();
+  };
   const send = async (files: File[]) => {
     if (!files.length) return;
     setBusy(true);
@@ -1103,11 +1113,18 @@ function SlotCell({
                 </span>
               </div>
             )}
-            {check && check.counts.hidden ? (
-              <div style={{ fontSize: 10.5, color: C.faint }} title={checkTitle(check)}>
-                {check.counts.visible} shown to client · {check.counts.hidden} hidden
-              </div>
-            ) : null}
+            {check && slot !== "Angle Scorecard" && slot !== "Cobalt" && (
+              // The one client control: this proposal slot ON (every Verified
+              // plan shown) or OFF (none shown) for this group. Storage, checks
+              // and audits are the same either way.
+              <label
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: check.clientEnabled === false ? C.amber : C.faint, cursor: "pointer" }}
+                title={check.clientEnabled === false ? "Client: OFF - none of this proposal's plans are shown to the group. Click to turn ON." : `Client: ON - ${check.counts.stored ?? plans} plan(s) shown to the group once Verified. Click to turn OFF.`}
+              >
+                <input type="checkbox" checked={check.clientEnabled !== false} disabled={busy} onChange={(e) => void setClientEnabled(e.target.checked)} style={{ margin: 0 }} />
+                Client {check.clientEnabled === false ? "OFF" : "ON"}
+              </label>
+            )}
             <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span>{when ? fmtDay(when) : ""}</span>
               <button onClick={() => ref.current?.click()} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>

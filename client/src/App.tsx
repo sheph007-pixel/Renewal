@@ -572,10 +572,13 @@ export default function App() {
    */
   const submitSignup = async (fields: RenewalElectionFields) => {
     // Each plan goes over with its option ID in front (UH3 · P4000i8021B),
-    // the handle Kennion and the client both use for it.
+    // the handle Kennion and the client both use for it. Sign Up already
+    // sends it that way; a bare name is looked up only when it is unique.
     const known = data && g ? marketPlans(data, g) : [];
     const plans = fields.plans.map((name) => {
-      const id = known.find((mp) => mp.plan === name)?.optionId;
+      if (name.includes(" · ")) return name;
+      const same = known.filter((mp) => mp.plan === name);
+      const id = same.length === 1 ? same[0].optionId : null;
       return id ? `${id} · ${name}` : name;
     });
     if (signupBusy) return;

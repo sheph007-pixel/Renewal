@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FREQS, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, planDocumentUrl, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
+import { FREQS, NOT_STATED, TIERS, networkDirectory, networkTypeOf, pbmOf, splitCopays, costSplit, fmtDed, money, money0, planDocumentUrl, tierSplit, type MarketPlan, type TierKey, ILLUSTRATIVE_QUOTE, RATE_NOTICE_SHORT } from "@/lib/model";
 import Link from "@/lib/Link";
 import { C, num } from "@/lib/ui";
 import CarrierMark, { CarrierSiteLink } from "@/views/CarrierMark";
@@ -38,7 +38,16 @@ export interface CardModel {
   underwritingNote?: string | null;
   /** Where to open the carrier's actual SBC and SOB for this design; null where it is not a catalogue design or the document is not on file. */
   documents: { sbc: string | null; sob: string | null };
+  /**
+   * Set when a row shows a value from the carrier's standard plan design
+   * because the proposal does not state it: which source, and where the
+   * proposal and the design differ. Null when every value is the proposal's.
+   */
+  standardNote: string | null;
 }
+
+/** The mark on a value that comes from the carrier's standard design, not the proposal. */
+export const STANDARD_MARK = " (standard design)";
 
 export const TIER_NAMES: Record<TierKey, string> = { EE: "Employee Only", ES: "Employee + Spouse", EC: "Employee + Children", FAM: "Employee + Family" };
 
@@ -60,20 +69,34 @@ export const basisOf = (_p: MarketPlan) => ILLUSTRATIVE_QUOTE;
 
 export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, counts: Record<TierKey, number>): CardModel {
   const sp = costSplit(p, contribution, counts);
+  // Every value is the proposal's; one the proposal leaves blank may show the
+  // carrier's standard design, marked as such on the row itself.
+  const std = new Set(p.standard?.fields || []);
+  const mark = (key: string, v: string | null | undefined) => (v && std.has(key) ? `${v}${STANDARD_MARK}` : v);
   const benefits: [string, string | null | undefined][] = [
-    ["Deductible", p.ded == null ? null : fmtDed(p.ded)],
-    ["Out-of-pocket max", p.oop == null ? null : money0(p.oop)],
-    ["Doctor visit", p.pcp ?? splitCopays(p.copays)[0]],
-    ["Specialist", p.specialist ?? splitCopays(p.copays)[1]],
-    ["Imaging", p.imaging],
-    ["Urgent care", p.uc],
-    ["Emergency room", p.er],
-    ["Hospital", p.hospital],
-    ["Prescription drugs", p.rx],
-    ["Network type", networkTypeOf(p)],
-    ["Network", p.network],
+    ["Deductible", mark("ded", p.ded == null ? null : fmtDed(p.ded))],
+    ["Out-of-pocket max", mark("oop", p.oop == null ? null : money0(p.oop))],
+    ["Doctor visit", mark("pcp", p.pcp ?? splitCopays(p.copays)[0])],
+    ["Specialist", mark("specialist", p.specialist ?? splitCopays(p.copays)[1])],
+    ["Imaging", mark("imaging", p.imaging)],
+    ["Urgent care", mark("uc", p.uc)],
+    ["Emergency room", mark("er", p.er)],
+    ["Hospital", mark("hospital", p.hospital)],
+    ["Prescription drugs", mark("rx", p.rx === NOT_STATED ? null : p.rx)],
+    ["Network type", networkTypeOf({ ...p, network: p.networkExact || p.network })],
+    ["Network", p.networkExact || null],
     ["Pharmacy (PBM)", pbmOf(p.carrier)?.name ?? null],
   ];
+  // Kennion's own rows (a derived network type, the PBM) read "-" when
+  // blank; a row the proposal is the source for reads "Not stated".
+  const kennionRows = new Set(["Network type", "Pharmacy (PBM)"]);
+  const diffs = (p.standard?.disagreements || []).map((d) => `${d.field === "oopMax" ? "out-of-pocket max" : d.field} (proposal ${d.proposal}, standard design ${d.standardDesign ?? "-"})`);
+  const standardNote = p.standard && (std.size || diffs.length)
+    ? [
+        std.size ? `Values marked "standard design" are not stated on this group's proposal; they are from ${p.standard.source}.` : null,
+        diffs.length ? `The proposal and the carrier's standard design differ on ${diffs.join(" and ")}; the proposal's figure is shown.` : null,
+      ].filter(Boolean).join(" ")
+    : null;
   const type = p.type && p.type !== p.label && p.type !== fundingOf(p) ? p.type : null;
   return {
     optionId: p.optionId ?? null,
@@ -87,7 +110,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     quoted: !!p.quoted,
     monthly: p.monthly,
     // The same rows on every plan, so cards read alike; "-" where the carrier's document (or Kennion's links) does not say.
-    benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== "On the proposal" ? v : "-"]),
+    benefits: benefits.map(([k, v]): [string, string] => [k, v && v !== NOT_STATED ? v : kennionRows.has(k) ? "-" : NOT_STATED]),
     tiers: TIERS.map((t) => {
       const s = tierSplit(p, contribution, t.key);
       return { key: t.key, label: TIER_NAMES[t.key], count: counts[t.key] || 0, rate: s?.rate ?? null, er: s?.er ?? null, ee: s?.ee ?? null };
@@ -101,6 +124,7 @@ export function cardModel(p: MarketPlan, contribution: Record<TierKey, number>, 
     documents: p.design
       ? { sbc: planDocumentUrl(carrierOf(p), p.design, "sbc"), sob: planDocumentUrl(carrierOf(p), p.design, "sob") }
       : { sbc: null, sob: null },
+    standardNote,
   };
 }
 
@@ -117,7 +141,7 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   const foot = { display: "flex", flexWrap: "wrap" as const, alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 };
   if (a && a.status === "pass") {
     return (
-      <div className="noprint" style={foot} title="The plan name, benefits and rates shown here passed two independent audits against the carrier's own quote">
+      <div className="noprint" style={foot} title="Every value taken from the carrier's proposal - the plan name, network, benefits and rates - passed two independent audits against it. Values marked standard design are not from the proposal and are not part of that audit.">
         <span style={{ color: C.green, fontWeight: 600 }}>✓ Verified · Dual Audit Passed</span>
         {a.completedAt && <span>{when(a.completedAt)}</span>}
       </div>
@@ -429,6 +453,7 @@ export default function PlanCard({ m, actions, compact, wide, disclaimersHref }:
       </table>
         </>
       )}
+      {!compact && m.standardNote && <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4 }}>{m.standardNote}</div>}
       {!compact && <DocumentLinks documents={m.documents} />}
       {m.source && <AuditFoot source={m.source} />}
       {m.underwritingNote && <UnderwritingFoot note={m.underwritingNote} />}

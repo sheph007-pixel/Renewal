@@ -254,10 +254,18 @@ export interface ProposalPlan {
   oopMax: string | null;
   /** In-network member cost per service, as printed; null until the reader has seen the document. */
   benefits?: PlanBenefits | null;
-  /** The carrier's standard design this plan is, from the plan catalogue; absent when the plan is not a catalogue design. */
+  /**
+   * The carrier's standard plan design this plan is (Kennion's plan catalogue,
+   * or Gravie's Benefits Grid): SUPPLEMENTAL, a separate labelled source,
+   * never the group's proposal. Absent when the plan is not a known design.
+   */
   design?: PlanDesign | null;
   rates: Record<TierKey, number | null>;
   monthlyTotal: number | null;
+  /** Where on the proposal the plan was read: pages, or sheet and rows. */
+  source?: { pages: { identity: number[]; benefits: number[]; rates: number[] }; sheet: string | null; rows: string | null } | null;
+  /** Source cells kept before a deterministic normalization (Gravie's coinsurance fraction, the sheet's printed network). */
+  raw?: Record<string, unknown> | null;
 }
 
 export interface PlanBenefits {
@@ -285,19 +293,31 @@ export interface DesignLimits {
 }
 
 /**
- * A carrier's standard plan design, the same for every group it quotes:
- * the catalogue row the server matched the quoted plan to by its code.
+ * A carrier's standard plan design, the same for every group it quotes -
+ * SUPPLEMENTAL data, kept apart from the proposal: a catalogue row the
+ * server matched the quoted plan to by its code ("catalogue"), or the
+ * family's row of Gravie's Benefits Grid ("benefits-grid"). One shape for
+ * every carrier; the catalogue's extra figures are present only on it.
  */
 export interface PlanDesign {
-  planCode: string;
-  planId: string | null;
+  kind?: "catalogue" | "benefits-grid";
+  /** Where the design comes from, as a reader should be told ("Gravie standard plan design, Copay family (...)"). */
+  source?: string;
   family: string | null;
-  planYear: number;
-  inNetwork: DesignLimits;
-  outOfNetwork: DesignLimits;
-  deductibleEmbedded: boolean | null;
+  deductible?: string | null;
+  oopMax?: string | null;
+  benefits?: Partial<PlanBenefits> | null;
+  /** Figures the proposal states differently: the proposal's apply. */
+  disagreements?: { field: string; proposal: string; standardDesign: string | null }[];
+  notes?: string[];
+  planCode?: string;
+  planId?: string | null;
+  planYear?: number;
+  inNetwork?: DesignLimits;
+  outOfNetwork?: DesignLimits;
+  deductibleEmbedded?: boolean | null;
   /** Every service line the carrier lists, in its order, with the member cost as the card reads it. */
-  services: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
+  services?: { label: string; costShare: string | null; deductibleApplies: boolean; text: string | null }[];
   /** Whether the carrier's actual Summary of Benefits and Coverage / Summary of Benefits PDF is on file for this design. */
   documents?: { sbc: boolean; sob: boolean } | null;
 }
@@ -308,7 +328,7 @@ const carrierDocSlug = (carrier: string) => carrier.toLowerCase().replace(/[^a-z
 
 /** The URL for a design's SBC or SOB PDF; null when it is not on file. */
 export function planDocumentUrl(carrier: string, d: PlanDesign, kind: "sbc" | "sob"): string | null {
-  if (!d.documents || !d.documents[kind]) return null;
+  if (!d.documents || !d.documents[kind] || !d.planCode) return null;
   return `/api/carriers/${carrierDocSlug(carrier)}/plan-documents/${planCodeSlug(d.planCode)}/${kind}?year=${d.planYear}`;
 }
 
@@ -813,8 +833,21 @@ export interface MarketPlan {
   indicative: boolean;
   /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
   optionId?: string | null;
-  /** The carrier's standard design, from the plan catalogue, where the quoted plan is one. */
+  /** The carrier's plan code, exactly as printed; null when the plan has none. */
+  planCode?: string | null;
+  /** The network exactly as the proposal prices the plan on ("Cigna LocalPlus (PPO)"); `network` is its display label. */
+  networkExact?: string | null;
+  /** HSA-eligible, as the proposal states it; null when it does not say. */
+  hsa?: boolean | null;
+  /** The carrier's standard design (catalogue or benefits grid), where the quoted plan is one. */
   design?: PlanDesign | null;
+  /**
+   * The standard design's part in what this row shows: its source label, and
+   * the fields (pcp, specialist, uc, er, imaging, hospital, rx, ded, oop)
+   * filled from it because the proposal does not state them. Every other
+   * value on the row is the proposal's. Null when no design is attached.
+   */
+  standard?: { source: string; fields: string[]; disagreements: { field: string; proposal: string; standardDesign: string | null }[]; notes: string[] } | null;
   /** Read off a proposal the carrier sent for this group. */
   quoted?: { slot: string; date: string | null; proposalId: number; audit?: ProposalAudit | null };
   /**
@@ -840,23 +873,27 @@ export function moneyNum(v: string | number | null | undefined): number | null {
 }
 
 /**
- * How a proposal slot is shown: the carrier column, the funding label and
- * the network. Funding is one of two things: UnitedHealthcare quotes both
- * fully insured and level funded, in separate slots; every other carrier
- * and partner is level funded. A plan's design family (Traditional, HDHP,
- * Value) is its type, never its funding.
+ * How a proposal slot is shown: the carrier column and the funding label -
+ * Kennion's classification of the slot the proposal was filed in. Funding is
+ * one of two things: UnitedHealthcare quotes both fully insured and level
+ * funded, in separate slots; every other carrier and partner is level funded
+ * (Optimyl and Cobalt self funded). A plan's design family (Traditional,
+ * HDHP, Value) is its type, never its funding. The network is never set
+ * here: it is what the proposal prices each plan on.
  */
-function slotPresentation(slot: string, carrier: string | null): { carrier: string; label: string; network: string } {
-  if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured", network: "United Choice Plus" };
-  if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
-  if (slot === "Surest") return { carrier: "UnitedHealthcare", label: "Level Funded", network: "United Choice Plus" };
-  if (slot === "Gravie") return { carrier: "Gravie", label: "Level Funded", network: CIGNA_NETWORK };
-  if (slot === "Nationwide") return { carrier: "Nationwide", label: "Level Funded", network: "Nationwide" };
-  if (slot === "Angle") return { carrier: "Angle Health", label: "Level Funded", network: CIGNA_NETWORK };
-  if (slot === "Cobalt") return { carrier: "Cobalt", label: "Self Funded", network: "On the proposal" };
-  if (slot === "Optimyl") return { carrier: "Optimyl Health", label: "Self Funded", network: "RBP Full" };
-  return { carrier: carrier || "Other", label: "Level Funded", network: "On the proposal" };
+function slotPresentation(slot: string, carrier: string | null): { carrier: string; label: string } {
+  if (slot === "UHC Fully Insured") return { carrier: "UnitedHealthcare", label: "Fully Insured" };
+  if (slot === "UHC Level Funded") return { carrier: "UnitedHealthcare", label: "Level Funded" };
+  if (slot === "Gravie") return { carrier: "Gravie", label: "Level Funded" };
+  if (slot === "Nationwide") return { carrier: "Nationwide", label: "Level Funded" };
+  if (slot === "Angle") return { carrier: "Angle Health", label: "Level Funded" };
+  if (slot === "Cobalt") return { carrier: "Cobalt", label: "Self Funded" };
+  if (slot === "Optimyl") return { carrier: "Optimyl Health", label: "Self Funded" };
+  return { carrier: carrier || "Other", label: "Level Funded" };
 }
+
+/** What a screen shows where the proposal does not state a value: never a value borrowed from elsewhere. */
+export const NOT_STATED = "Not stated";
 
 /**
  * Optimyl's rate is preliminary, not firm, for a 2-50 enrolled group: per
@@ -934,15 +971,6 @@ export function planLimitSummary(carrier: string): { carrier: string; rest: stri
 export const ANGLE_HEALTH_NO_PLAN_CAP =
   "Angle Health has confirmed it places no limit on how many plans a group may offer its employees - a group may select as many Angle Health plans as fit its needs.";
 
-/**
- * Gravie and Angle Health both run on Cigna's network, and every
- * UnitedHealthcare plan (Fully Insured, Level Funded, or Surest) is on the
- * United Choice Plus network - a fixed rule, not something a carrier's own
- * proposal document gets to override with a differently-worded network name
- * ("Cigna OAP", "Cigna Open Access Plus", "Angle / Cigna PPO" are all Cigna).
- */
-const FIXED_NETWORK_SLOTS = new Set(["UHC Fully Insured", "UHC Level Funded", "Surest", "Gravie", "Angle"]);
-
 /** The one name every Cigna network reads as, site-wide. */
 export const CIGNA_NETWORK = "Cigna";
 /** Cigna's public provider search: the lookup for every plan on a Cigna network, Gravie's and Angle Health's alike. */
@@ -969,10 +997,10 @@ export function networkLabel(network: string | null | undefined): string | null 
  * PPO (in and out of network, the carrier's contracted rates), EPO (in
  * network only) or RBP (reference-based pricing - no network; claims paid at
  * a multiple of Medicare, which is how Cobalt's self-funded plans work). Read
- * off what the proposal says - the plan's name, its type, the network it is
- * priced on - with the carrier as the fallback rule: UnitedHealthcare's Choice
- * Plus and Cigna Open Access Plus are PPO networks; Gravie's EPO sheet says
- * EPO; Cobalt is RBP. Null when nothing on the quote says.
+ * off what the proposal prints - the plan's name, its type, the network it is
+ * priced on - for filtering (DERIVED, never stored): "EPO" in any of them is
+ * EPO; PPO, POS, Choice Plus or Open Access Plus is PPO; Cobalt is RBP. Null
+ * when nothing on the quote says.
  */
 export type NetworkType = "PPO" | "EPO" | "RBP";
 export const NETWORK_TYPES: NetworkType[] = ["PPO", "EPO", "RBP"];
@@ -980,9 +1008,9 @@ export function networkTypeOf(p: { plan?: string | null; type?: string | null; n
   const text = [p.plan, p.type, p.planType, p.network].filter(Boolean).join(" ");
   if (/\bRBP\b|reference[\s-]?based/i.test(text) || /cobalt/i.test(p.carrier || "")) return "RBP";
   if (/\bEPO\b/i.test(text)) return "EPO";
-  // Cigna's network is a PPO wherever it appears - Gravie's Cigna OAP, Angle
-  // Health's Cigna - so a quote that names only "Cigna" still reads PPO.
-  if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b|cigna/i.test(text)) return "PPO";
+  // DERIVED, for filtering: only from words the proposal prints. A network
+  // named only "Cigna" says nothing about its type, so it reads as unknown.
+  if (/\bPPO\b|\bPOS\b|choice\s*plus|open\s*access\s*plus|\bOAP\b/i.test(text)) return "PPO";
   return null;
 }
 
@@ -1025,82 +1053,119 @@ export function optionSortKey(id?: string | null): [string, number] {
 }
 
 /**
- * The plans on a group's proposals, priced at its census. A plan with no rate
- * on any tier is left out; one missing a tier that has people in it has no
- * monthly figure.
+ * One plan's key on the page - favorites, the comparison, the open card, a
+ * row's React key: its option ID, else its proposal and carrier identity.
+ * Never the plan's name alone: one proposal can price the same design name
+ * on two networks, and two proposals can use the same name.
+ */
+export function planKey(p: MarketPlan): string {
+  return p.optionId || `${p.quoted?.proposalId ?? p.carrier}|${p.planCode || p.plan}|${p.networkExact || ""}`;
+}
+
+/**
+ * The plans on a group's proposals, priced at its census: every plan the
+ * server sends, each with exactly the values its proposal states. One
+ * missing a rate for a tier that has people in it has no monthly figure.
  */
 export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
   const counts = censusCounts(g);
   const out: MarketPlan[] = [];
   const seen = new Set<string>();
   for (const pr of data.proposals || []) {
-    // Cobalt is not offered for 2027, and Kennion offers PPO plans only: the
-    // server already keeps both out of the payload; this holds the line if
-    // an older payload or a new source ever carries them.
+    // Cobalt is not offered for 2027: the server keeps it out of the
+    // payload; this holds the line if an older payload ever carries it.
     if (pr.slot === "Cobalt") continue;
+    // Every plan the server sends is shown: the server's one resolver
+    // (clientAvailablePlans) has already applied the only client control -
+    // a proposal slot ON or OFF. EPO, narrow-network, any plan type, any
+    // rate: attributes to filter and sort on, never reasons to drop a plan.
     for (const pl of pr.plans || []) {
-      if (networkTypeOf({ plan: pl.name, planType: pl.planType, network: pl.network }) === "EPO") continue;
       const rates = {} as Record<TierKey, number | null>;
       TIERS.forEach((t) => {
         const v = pl.rates?.[t.key];
         rates[t.key] = v == null ? null : v;
       });
-      if (!TIERS.some((t) => rates[t.key] != null)) continue;
-      let monthly: number | null = 0;
+      // A plan the carrier did not price for a tier this group has people
+      // in is still shown - with no monthly figure rather than a partial one.
+      let monthly: number | null = TIERS.some((t) => rates[t.key] != null) ? 0 : null;
       TIERS.forEach((t) => {
         if (!counts[t.key]) return;
         const v = rates[t.key];
         if (v == null) monthly = null;
         else if (monthly != null) monthly += v * counts[t.key];
       });
-      // A plan the carrier did not price for every tier this group has
-      // people in cannot be priced for the group: it is not shown, rather
-      // than shown with a partial figure beside a blank one.
-      if (monthly == null) continue;
       const show = slotPresentation(pr.slot, pr.carrier);
-      // Gravie's benefits are by plan family and the same for every group.
-      const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
-      const gb = fam ? GRAVIE_BENEFITS[fam] : null;
+      // Every value below is what the proposal states for this plan. A
+      // carrier standard design (catalogue or benefits grid), where the plan
+      // is one, is a separate labelled source: it fills only a field the
+      // proposal leaves blank, and the field is listed in `standard.fields`
+      // so every screen marks it. It never replaces a proposal value.
       const pb = pl.benefits || null;
-      // Surest is UnitedHealthcare's own copay-only product, not a separate
-      // company - the carrier reads "UnitedHealthcare", so the plan name is
-      // where "Surest" has to show up.
-      // The name is the carrier's, exactly as printed on the quote: it is what
-      // the client will ask about by name, and what the audit checks.
-      const planName = pr.slot === "Surest" && !/surest/i.test(pl.name) ? `Surest ${pl.name}` : pl.name;
+      const d = pl.design || null;
+      const db = d?.benefits || null;
+      const fromStd: string[] = [];
+      const pick = (key: string, own: string | null | undefined, std: string | null | undefined): string | null => {
+        if (own != null && String(own).trim() !== "") return own;
+        if (std != null && String(std).trim() !== "") {
+          fromStd.push(key);
+          return std;
+        }
+        return null;
+      };
+      const pcp = pick("pcp", pb?.doctorVisit, db?.doctorVisit);
+      const specialist = pick("specialist", pb?.specialist, db?.specialist);
+      const rx = pick("rx", pb?.rx, db?.rx);
+      const ownDed = pl.deductible ? moneyNum(pl.deductible) ?? pl.deductible : null;
+      const ownOop = moneyNum(pl.oopMax);
+      const ded = ownDed ?? (d?.deductible ? (fromStd.push("ded"), moneyNum(d.deductible)) : null);
+      const oop = ownOop ?? (d?.oopMax ? (fromStd.push("oop"), moneyNum(d.oopMax)) : null);
       // One carrier plan, one row. The server has already folded a plan
       // printed several times into one canonical record and sends its
       // carrier identity (plan code, else exact name on its network); two
       // different plans are never collapsed because their rates agree.
-      const dupKey = `${pr.slot}|${pl.identity || `${pl.planCode ? `code:${pl.planCode.trim().toUpperCase()}` : `name:${pl.name.toLowerCase()}|${(pl.network || "").toLowerCase()}`}`}`;
+      // Identity is scoped to the proposal: plans from two proposals are
+      // two rows however alike they look.
+      const dupKey = `${pr.id}|${pl.identity || `${pl.planCode ? `code:${pl.planCode.trim().toUpperCase()}` : `name:${pl.name.toLowerCase()}|${(pl.network || "").toLowerCase()}`}`}`;
       if (seen.has(dupKey)) continue;
       seen.add(dupKey);
       const underwritingNote = pr.slot === "Optimyl" && g.sizeCategory === "2-50" ? OPTIMYL_UNDERWRITING_NOTE : null;
-      out.push({
+      const row: MarketPlan = {
         optionId: pl.optionId ?? null,
+        planCode: pl.planCode ?? null,
+        networkExact: pl.network ?? null,
+        // Only what the proposal states: never guessed from the plan's name.
+        hsa: pb?.hsaEligible ?? null,
         carrier: show.carrier,
         label: show.label,
-        plan: planName,
-        type: pl.planType || show.label,
-        ded: moneyNum(pl.deductible) ?? pl.deductible ?? null,
-        oop: moneyNum(pl.oopMax),
-        copays: gb ? `${gb.pcp} / ${gb.specialist}` : pb?.doctorVisit || pb?.specialist ? `${pb.doctorVisit ?? "-"} / ${pb.specialist ?? "-"}` : "On the proposal",
-        rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : pb?.rx || "On the proposal",
+        // The carrier's name for the plan, exactly as printed on the quote.
+        plan: pl.name,
+        // The plan type the proposal prints; blank when it prints none.
+        type: pl.planType || "",
+        ded,
+        oop,
+        copays: pcp || specialist ? `${pcp ?? "-"} / ${specialist ?? "-"}` : NOT_STATED,
+        rx: rx || NOT_STATED,
         coins: pb?.coinsurance ?? null,
-        pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
-        specialist: gb ? gb.specialist : pb?.specialist ?? null,
-        uc: gb ? gb.uc : pb?.urgentCare ?? null,
-        er: gb ? gb.er : pb?.er ?? null,
-        imaging: gb ? (gb.basicLabs === gb.advancedLabs ? gb.basicLabs : `${gb.basicLabs} basic · ${gb.advancedLabs} advanced`) : pb?.imaging ?? null,
-        hospital: gb ? gb.hospital : pb?.hospital ?? null,
-        network: FIXED_NETWORK_SLOTS.has(pr.slot) ? show.network : networkLabel(pl.network) || show.network,
+        pcp,
+        specialist,
+        uc: pick("uc", pb?.urgentCare, db?.urgentCare),
+        er: pick("er", pb?.er, db?.er),
+        imaging: pick("imaging", pb?.imaging, db?.imaging),
+        hospital: pick("hospital", pb?.hospital, db?.hospital),
+        // The network exactly as the proposal prices the plan on; never a
+        // network the carrier usually uses.
+        network: pl.network || NOT_STATED,
         rates,
         monthly,
         indicative: false,
-        design: pl.design ?? null,
+        design: d,
+        standard: d
+          ? { source: d.source || "Carrier standard plan design", fields: fromStd, disagreements: d.disagreements || [], notes: d.notes || [] }
+          : null,
         quoted: { slot: pr.slot, date: pr.effectiveDate || pr.uploadedAt.slice(0, 10), proposalId: pr.id, audit: pr.audit || null },
         underwritingNote,
-      });
+      };
+      out.push(row);
     }
   }
   return out;
@@ -1256,125 +1321,6 @@ export function costSplit(
   return any ? { er: +er.toFixed(2), ee: +ee.toFixed(2), total: +total.toFixed(2) } : null;
 }
 
-// ---- Gravie benefits by plan family -------------------------------------
-// (Kept in this file rather than its own module so the model stays runnable
-// under node --experimental-strip-types for scripts/test-market-plans.mts.)
-/**
- * Gravie's benefits by plan family - the static "Benefits Grid" sheet that
- * is the same in every rate workbook, transcribed once. A plan's family
- * (Comfort, ComfortFit, Copay, QHDHP, HDHP) is in its name and plan type;
- * its deductible and out-of-pocket max are on the rate row. In-network
- * benefits; EPO versions cover nothing out of network. Teladoc visits are
- * free on QHDHP, Copay, Comfort and ComfortFit plans.
- */
-export interface GravieBenefits {
-  preventive: string;
-  pcp: string;
-  specialist: string;
-  uc: string;
-  er: string;
-  basicLabs: string;
-  advancedLabs: string;
-  hospital: string;
-  rxGeneric: string;
-  rxPreferredBrand: string;
-  rxNonPreferredBrand: string;
-  rxNonPreferredSpecialty: string;
-}
-
-export type GravieFamily = "Comfort" | "ComfortFit" | "Copay" | "QHDHP" | "HDHP";
-
-const COINS = "0-20% coins after ded";
-
-export const GRAVIE_BENEFITS: Record<GravieFamily, GravieBenefits> = {
-  Comfort: {
-    preventive: "No cost",
-    pcp: "No cost",
-    specialist: "No cost",
-    uc: "No cost",
-    er: "$500 copay",
-    basicLabs: "No cost",
-    advancedLabs: "No cost",
-    hospital: "No cost after OOPM",
-    rxGeneric: "No cost",
-    rxPreferredBrand: "$75 copay",
-    rxNonPreferredBrand: "$100 copay",
-    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $250 copay",
-  },
-  ComfortFit: {
-    preventive: "No cost",
-    pcp: "No cost",
-    specialist: "No cost",
-    uc: "No cost",
-    er: "$950 copay",
-    basicLabs: "No cost",
-    advancedLabs: "No cost after OOPM",
-    hospital: "No cost after OOPM",
-    rxGeneric: "No cost",
-    rxPreferredBrand: "$75 copay",
-    rxNonPreferredBrand: "$150 copay",
-    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $500 copay",
-  },
-  Copay: {
-    preventive: "No cost",
-    pcp: "No cost through Teladoc; otherwise $25 copay",
-    specialist: "$75 copay",
-    uc: "No cost through Teladoc; otherwise $75 copay",
-    er: "$500 copay",
-    basicLabs: COINS,
-    advancedLabs: COINS,
-    hospital: "0-30% coins after ded",
-    rxGeneric: "$10 copay",
-    rxPreferredBrand: "$50 copay",
-    rxNonPreferredBrand: "$125 copay",
-    rxNonPreferredSpecialty: "No cost if enrolled in SaveOn; otherwise $350 copay",
-  },
-  QHDHP: {
-    preventive: "No cost",
-    pcp: `No cost through Teladoc; otherwise ${COINS}`,
-    specialist: COINS,
-    uc: `No cost through Teladoc; otherwise ${COINS}`,
-    er: COINS,
-    basicLabs: COINS,
-    advancedLabs: COINS,
-    hospital: COINS,
-    rxGeneric: COINS,
-    rxPreferredBrand: COINS,
-    rxNonPreferredBrand: "0-50% coins after ded",
-    rxNonPreferredSpecialty: COINS,
-  },
-  HDHP: {
-    preventive: "No cost",
-    pcp: "No cost after ded",
-    specialist: "No cost after ded",
-    uc: "No cost after ded",
-    er: "No cost after ded",
-    basicLabs: "No cost after ded",
-    advancedLabs: "No cost after ded",
-    hospital: "No cost after ded",
-    rxGeneric: "No cost after ded",
-    rxPreferredBrand: "No cost after ded",
-    rxNonPreferredBrand: "No cost after ded",
-    rxNonPreferredSpecialty: "No cost if enrolled in SaveOnSP; otherwise no cost after ded",
-  },
-};
-
-export const GRAVIE_BENEFIT_NOTES = [
-  "In-network benefits. EPO versions of Gravie plans do not cover out-of-network services.",
-  "Teladoc visits are free on QHDHP, Copay, Comfort and ComfortFit plans.",
-];
-
-/** The family a Gravie plan belongs to, from its plan type or, failing that, its name. */
-export function gravieFamily(planType: string | null | undefined, name: string): GravieFamily | null {
-  const t = `${planType || ""} ${name}`;
-  if (/\bQHDHP\b/i.test(t)) return "QHDHP";
-  if (/\bHDHP\b/i.test(t)) return "HDHP";
-  if (/Comfort\s?Fit/i.test(t)) return "ComfortFit";
-  if (/\bComfort\b/i.test(t)) return "Comfort";
-  if (/\bCopay\b/i.test(t)) return "Copay";
-  return null;
-}
-
 /**
  * "Your Market Results": what Kennion got back after taking this group to
  * market, summed up from the full set of quoted plans - never the filtered
@@ -1426,7 +1372,7 @@ export interface MarketResults {
 const marketPartnerOf = (p: MarketPlan) => p.carrier.replace(" (UnitedHealthcare)", "");
 
 /** A network name that names a network: the placeholder for "not on the quote" does not. */
-const isNamedNetwork = (s: string | null) => !!s && !/^on the proposal$/i.test(s) && s !== "-";
+const isNamedNetwork = (s: string | null) => !!s && !/^(on the proposal|not stated)$/i.test(s) && s !== "-";
 
 export function marketResults(plans: MarketPlan[]): MarketResults | null {
   if (!plans.length) return null;

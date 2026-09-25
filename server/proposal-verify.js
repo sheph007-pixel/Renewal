@@ -58,10 +58,12 @@ const repeated = (keys) => {
 
 /**
  * How the client's proposalPlans (client/src/lib/model.ts) treats a group's
- * served plans, reduced to counts: shown in the grid, dropped as a repeat of
- * a carrier plan already shown (the same canonical identity), or dropped for
- * want of a rate on a tier the group has people in. Kept in step with that
- * function; test-proposal-verify checks the two agree.
+ * served plans, reduced to counts: shown in the grid - every plan, priced or
+ * not for this group's tiers (an unpriced one shows with no monthly figure,
+ * never hidden) - or dropped as a repeat of a carrier plan already shown
+ * (the same canonical identity; never happens with a validated reading).
+ * `unpriced` lists the plans with no rate for a tier the group has people
+ * in. Kept in step with that function; test-proposal-verify checks it.
  */
 export function gridCounts(plans, slot, tiers) {
   const counts = tiers || {};
@@ -71,10 +73,7 @@ export function gridCounts(plans, slot, tiers) {
   const unpriced = [];
   for (const pl of plans || []) {
     const rates = pl.rates || {};
-    if (!TIERS.some((t) => rates[t] != null) || TIERS.some((t) => counts[t] && rates[t] == null)) {
-      unpriced.push(pl);
-      continue;
-    }
+    if (!TIERS.some((t) => rates[t] != null) || TIERS.some((t) => counts[t] && rates[t] == null)) unpriced.push(pl);
     const k = `${slot}|${servedKey(pl)}`;
     if (seen.has(k)) {
       repeats++;
@@ -111,7 +110,7 @@ function stageOf(c, row, correcting) {
  * `correcting`: ids with that step in flight. `gaveUp(id)`: the steward's
  * note when it has run out of repairs to try on a proposal.
  */
-export function verifyProposals({ groups, rows, served, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null }) {
+export function verifyProposals({ groups, rows, served, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null, slotEnabled = () => true }) {
   const out = [];
   for (const g of groups) {
     const mine = rows.filter((r) => r.group_name === g.name && r.status !== "container" && r.kind !== "invoice" && r.kind !== "email");
@@ -130,7 +129,10 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
         proposalId: row ? row.id : null,
         filename: row ? row.filename : null,
         plans: 0,
-        counts: { document: null, stored: null, visible: null, hidden: null, grid: null, audit: null },
+        counts: { document: null, stored: null, visible: null, hidden: null, grid: null, client: null, audit: null },
+        // Kennion's per-group switch: ON shows every Verified plan of this
+        // slot to the client, OFF shows none. Verification is the same either way.
+        clientEnabled: slotEnabled(g.name, slot),
         steps,
         waiting: waiting.map((r) => ({ id: r.id, filename: r.filename, reading: busyRow(r, reading), error: r.error || null })),
       };
@@ -296,10 +298,13 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       const g4 = gridCounts(sentPlans, slot, g.tiers);
       const confirmedUnpriced = g4.unpriced.filter((pl) => Array.isArray(pl.unpriced) && TIERS.some((t) => g.tiers && g.tiers[t] && pl.rates && pl.rates[t] == null && pl.unpriced.includes(t)));
       const unexplained = g4.unpriced.length - confirmedUnpriced.length;
+      // Every stored plan is shown when the slot is ON (an advanced per-plan
+      // exception is the only thing that could hold one back; there are none).
       const visibleDistinct = stored.filter((pl) => !hiddenReason(pl)).length;
-      const expected = visibleDistinct - confirmedUnpriced.length;
+      const expected = visibleDistinct;
       cell.counts.visible = visibleDistinct;
       cell.counts.grid = g4.shown;
+      cell.counts.client = cell.clientEnabled ? g4.shown : 0;
       if (dupShown.length || dupIdsHere.length) {
         steps.grid = { ok: false, note: `${dupShown.length ? `${dupShown.length} carrier plan${dupShown.length === 1 ? " is" : "s are"} served to the client twice.` : ""}${dupIdsHere.length ? ` BenSync ID${dupIdsHere.length === 1 ? "" : "s"} ${dupIdsHere.join(", ")} on two of the group's plans.` : ""}`.trim() };
         settle("grid", "refresh", row.id, false);
@@ -332,7 +337,7 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       }
       steps.grid = {
         ok: true,
-        note: `Document ${cell.counts.document}, database ${storedDistinct}; client grid ${g4.shown}${hiddenPlans.length ? ` (${hiddenPlans.length} hidden by rule: ${[...new Set(hiddenPlans.map((pl) => hiddenReason(pl)))].join("; ")})` : ""}${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in)` : ""}.`,
+        note: `Document ${cell.counts.document}, database ${storedDistinct}, grid ${g4.shown}; ${cell.clientEnabled ? `client ON: all ${g4.shown} shown` : "client OFF: none shown (the slot is turned off for this group)"}${hiddenPlans.length ? ` (${hiddenPlans.length} held back by an advanced exception: ${[...new Set(hiddenPlans.map((pl) => hiddenReason(pl)))].join("; ")})` : ""}${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in: shown without a monthly figure)` : ""}.`,
       };
       cell.state = "verified";
     }
