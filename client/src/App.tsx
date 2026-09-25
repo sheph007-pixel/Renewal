@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   contributionByTier,
   effectiveDateLabel,
+  shownName,
   groupSizeLabel,
   marketPlans,
   minimumContribution,
@@ -509,7 +510,7 @@ export default function App() {
   useEffect(() => {
     let t = SITE;
     if (page.kind === "signin") t = `${page.staff ? "Staff sign in" : "Sign in"} - ${SITE}`;
-    else if (page.kind === "group" && g) t = `${TAB_LABEL[page.tab]} - ${g.name}`;
+    else if (page.kind === "group" && g) t = `${TAB_LABEL[page.tab]} - ${shownName(g)}`;
     else if (page.kind === "admin")
       t = `${
         page.group
@@ -524,7 +525,11 @@ export default function App() {
                   ? "Assistant"
                   : page.tab === "data"
                     ? "Data Check"
-                    : "Import"
+                    : page.tab === "welcome"
+                      ? "Welcome Page"
+                      : page.tab === "resources"
+                        ? "Resources"
+                        : "Import"
       } - Rate Administration`;
     document.title = t;
   }, [page, g]);
@@ -833,7 +838,7 @@ export default function App() {
           }
           homeHref={hrefFor("home")}
           resourcesHref={hrefFor("resources")}
-          groupName={g.name}
+          groupName={shownName(g)}
           manager={manager}
           onExit={signOut}
         />
@@ -976,8 +981,9 @@ export default function App() {
                 lastSignup={data.signup || null}
                 effectiveDate={g.effectiveDate}
                 groupStatus={g.groupStatus}
-                greetingHeadline={g.greetingHeadline}
-                greetingBody={g.greetingBody}
+                shownName={shownName(g)}
+                effectiveDateLabel={g.effectiveDateLabel}
+                welcome={g.welcome}
               />
             ) : tab === "current" ? (
               <Current
@@ -1029,7 +1035,7 @@ export default function App() {
               />
             )}
 
-            <Footer disclaimersHref={hrefFor("disclaimers")} />
+            <Footer disclaimersHref={hrefFor("disclaimers")} text={g.welcome?.footer} />
           </div>
         </div>
         {assistantOn && tab !== "assistant" && <ChatWidget page={tab} assistantHref={assistantHref} />}

@@ -31,6 +31,7 @@ import { useEffect, useState, type MouseEvent } from "react";
  *   /admin/assistant     Rate Administration - Assistant (conversations, playbook)
  *   /admin/data          Rate Administration - Data Check (every group's figures, checked)
  *   /admin/resources     Rate Administration - Resources (upload vendor marketing material)
+ *   /admin/welcome       Rate Administration - Welcome Page (the copy every group reads, by status)
  *
  * The slug in a group address is the company and its plan-year code - say
  * `johnson-storage-moving-jsmh2027` - so the address says whose page it is.
@@ -53,7 +54,7 @@ export type GroupTab = "home" | "assistant" | "current" | "options" | "supplemen
 export type Page =
   | { kind: "signin"; staff: boolean }
   | { kind: "group"; tab: GroupTab; token?: string; slug?: string; thread?: number }
-  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources"; group: string | null }
+  | { kind: "admin"; tab: "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources" | "welcome"; group: string | null }
   | { kind: "unknown" };
 
 export const PATHS = {
@@ -70,6 +71,7 @@ export const PATHS = {
   assistantAdmin: "/admin/assistant",
   data: "/admin/data",
   resourcesAdmin: "/admin/resources",
+  welcomeAdmin: "/admin/welcome",
 } as const;
 
 export const groupPath = (name: string) => `${PATHS.groups}/${encodeURIComponent(name)}`;
@@ -157,9 +159,9 @@ export function parsePath(path: string): Page {
   // The short address: the slug alone, the session being a cookie.
   const g = path.match(new RegExp(`^\\/([a-z0-9][a-z0-9-]{1,79})${TAB_TAIL}$`));
   if (g && !RESERVED.has(g[1])) return { kind: "group", tab: tabOf(g[2]), slug: g[1], thread: thread(g[3]) };
-  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data|resources)(?:\/(.+))?$/);
+  const m = path.match(/^\/admin\/(groups|rates|proposals|import|assistant|data|resources|welcome)(?:\/(.+))?$/);
   if (m) {
-    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources";
+    const tab = m[1] as "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources" | "welcome";
     return { kind: "admin", tab, group: tab === "groups" && m[2] ? safeDecode(m[2]) : null };
   }
   return { kind: "unknown" };

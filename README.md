@@ -49,6 +49,7 @@ as a link, and a reload comes back to the same place.
 | `/admin/import` | Rate Administration — Import |
 | `/admin/assistant` | Rate Administration — Assistant: conversations, playbook, try it as a group |
 | `/admin/data` | Rate Administration — Data Check: every group's figures checked, and what the assistant is told |
+| `/admin/welcome` | Rate Administration — Welcome Page: the Welcome page copy every group reads (one set for Existing, one for New), and the name and effective date each group is shown |
 
 Sections within a page are `#hash` anchors — `/options#shortlist`, say — and
 each group page lists its sections under the heading as "On this page" links.
@@ -72,13 +73,18 @@ what came in when).
 Clicking a company name opens its own page: access code, ALE bucket, every
 company detail as an editable field, contacts, plans in force, and where the
 data came from. Edits are stored separately from the imported payload and
-override it, so a correction is not undone by the next export. The page also
-holds the group's **Welcome Page Greeting** - the headline and paragraph under
-its name on the Welcome page, live on the group's next page load. An Existing
-group defaults to the 2027 options message; a New group starts blank until
-staff write one. The company name
+override it, so a correction is not undone by the next export. The company name
 is deliberately **not** editable — it is the key an import matches on, so
 renaming would orphan the group.
+
+The **Welcome Page** tab holds the words on every group's Welcome page,
+written once: one set for Existing groups and one for New, with the same
+fields (headline, intro, the four How It Works steps, the closing section, the
+team card's note and the page footer). Saving pushes it to every group of that
+status on its next page load. Below it, each group's **name and effective date
+shown** can be reworded for its own pages without touching the official
+company name (what imports match on) or the effective date Sign Up and the
+PDFs use.
 
 A group can be **archived**: it drops out of the list and its access code is
 refused at sign-in, but nothing is deleted and it can be restored at any time.

@@ -3,10 +3,12 @@ import Link from "@/lib/Link";
 import { C } from "@/lib/ui";
 
 /**
- * Site-wide disclaimer. Deliberately NOT marked `noprint` - it has to appear on
- * the printed reports too, which are what actually get handed around.
+ * Site-wide disclaimer. On a group's pages the words come from the admin
+ * Welcome Page tab (one per status); elsewhere the standard notice.
+ * Deliberately NOT marked `noprint` - it has to appear on the printed
+ * reports too, which are what actually get handed around.
  */
-export default function Footer({ disclaimersHref }: { disclaimersHref?: string }) {
+export default function Footer({ disclaimersHref, text }: { disclaimersHref?: string; text?: string }) {
   return (
     <div
       style={{
@@ -26,7 +28,8 @@ export default function Footer({ disclaimersHref }: { disclaimersHref?: string }
           textWrap: "pretty",
         }}
       >
-        {RATE_NOTICE_SHORT}
+        {/* Staff's footer from the Welcome Page tab when set; the standard notice otherwise. */}
+        {text || RATE_NOTICE_SHORT}
         {disclaimersHref && (
           <>
             {" "}
