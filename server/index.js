@@ -1357,6 +1357,30 @@ app.post("/api/signin", async (req, res) => {
 });
 
 /**
+ * Short-code sign-in: app.kennion.com/ADOB47 sets the cookie and redirects home.
+ * The code is evergreen and never changes year-to-year. Throttled like other
+ * sign-ins to prevent brute-force guessing.
+ */
+app.get("/:code(^[A-Z]{4}\\d{2}$)", (req, res) => {
+  const code = String(req.params.code).trim().toUpperCase();
+  const caller = signinKey(req);
+
+  if (throttled(caller)) {
+    return res.status(429).redirect("/");
+  }
+
+  const g = byCode.get(code);
+  if (!g) {
+    noteFail(caller);
+    return res.redirect("/");
+  }
+
+  clearFails(caller);
+  setGroupCookie(req, res, g);
+  return res.redirect("/");
+});
+
+/**
  * A group's own invoice, the PDF itself, opened in a new tab from Your 2026
  * Medical Plans. The session cookie is the only credential accepted, so the
  * address carries nothing secret and can be a plain link.
