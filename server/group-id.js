@@ -99,3 +99,20 @@ export function normalizeName(name) {
     .join(" ")
     .trim();
 }
+
+/**
+ * A company name as a client reads it: the legal form at the end dropped,
+ * with the comma before it. "Boss Logistics, LLC" -> "Boss Logistics",
+ * "Atlas Welding Supply Co, Inc." -> "Atlas Welding Supply". Only trailing
+ * words go, and never the last one left, so "Company" alone survives.
+ */
+const TRAILING_LEGAL = /[\s,]+(l\.?l\.?c\.?|inc\.?|incorporated|corp\.?|corporation|co\.?|company|ltd\.?|limited|l\.?l\.?p\.?|l\.?p\.?|p\.?c\.?|p\.?l\.?l\.?c\.?|plc|p\.?a\.?)$/i;
+export function shortName(name) {
+  let s = String(name || "").trim();
+  for (;;) {
+    const next = s.replace(TRAILING_LEGAL, "").replace(/[\s,]+$/, "");
+    if (next === s || !next) break;
+    s = next;
+  }
+  return s;
+}

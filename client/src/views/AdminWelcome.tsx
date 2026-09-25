@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { C, chip, h2, h3, panel, primaryBtn, textInput, th, td } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { groupPath } from "@/lib/router";
-import { effectiveDateLabel, type WelcomeCopy } from "@/lib/model";
+import { effectiveDateLabel, shortName, type WelcomeCopy } from "@/lib/model";
 import type { AdminGroup } from "@/views/GroupsTable";
 
 type Status = "existing" | "new";
@@ -224,6 +224,22 @@ export default function AdminWelcome({
 }
 
 /**
+ * Generate dropdown options for first-of-month dates from 1/1/27 through 12/31/28.
+ */
+function generateMonthOptions(): { value: string; label: string }[] {
+  const options: { value: string; label: string }[] = [];
+  for (let year = 2027; year <= 2028; year++) {
+    for (let month = 1; month <= 12; month++) {
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-01`;
+      const date = new Date(`${dateStr}T00:00:00Z`);
+      const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+      options.push({ value: dateStr, label });
+    }
+  }
+  return options;
+}
+
+/**
  * The name and effective date each group is shown on its own pages, when the
  * official ones read badly ("Johnson Storage & Moving" for the full legal
  * name). Copy only: the name an import matches on, and the date Sign Up and
@@ -242,8 +258,10 @@ function ShownNames({
 }) {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState("");
   const [error, setError] = useState("");
+  const monthOptions = useMemo(() => generateMonthOptions(), []);
 
   const shown = groups
     .filter((g) => !query.trim() || `${g.name} ${g.displayName || ""}`.toLowerCase().includes(query.trim().toLowerCase()))
@@ -251,39 +269,45 @@ function ShownNames({
 
   async function save(group: string, field: "displayName" | "effectiveDateLabel", value: string, key: string) {
     setError("");
-    const r = await fetch("/api/admin/group-meta", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ group, field, value: value.trim() || null }),
-    });
-    const j = await r.json().catch(() => ({ error: `Server returned ${r.status}.` }));
-    if (!r.ok) {
-      setError(j.error || "Could not save.");
-      return;
+    setSaving((s) => ({ ...s, [key]: true }));
+    try {
+      const r = await fetch("/api/admin/group-meta", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ group, field, value: value.trim() || null }),
+      });
+      const j = await r.json().catch(() => ({ error: `Server returned ${r.status}.` }));
+      if (!r.ok) {
+        setError(j.error || "Could not save.");
+        return;
+      }
+      onChanged(j.groups);
+      setDraft((d) => {
+        const n = { ...d };
+        delete n[key];
+        return n;
+      });
+      setSaved(key);
+      setTimeout(() => setSaved(""), 1500);
+    } finally {
+      setSaving((s) => ({ ...s, [key]: false }));
     }
-    onChanged(j.groups);
-    setDraft((d) => {
-      const n = { ...d };
-      delete n[key];
-      return n;
-    });
-    setSaved(key);
-    setTimeout(() => setSaved(""), 1500);
   }
 
-  const cell = (g: AdminGroup, fieldName: "displayName" | "effectiveDateLabel", placeholder: string) => {
-    const key = `${g.name}|${fieldName}`;
-    const current = g[fieldName] || "";
+  const nameCell = (g: AdminGroup) => {
+    const key = `${g.name}|displayName`;
+    const current = g.displayName || "";
+    const placeholder = shortName(g.name);
     return (
       <input
         value={draft[key] ?? current}
         placeholder={placeholder}
-        aria-label={`${fieldName === "displayName" ? "Name shown" : "Effective date shown"} for ${g.name}`}
+        aria-label={`Name shown for ${g.name}`}
         onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
         onBlur={() => {
           const v = draft[key];
           if (v == null || v.trim() === current) return;
-          void save(g.name, fieldName, v, key);
+          void save(g.name, "displayName", v, key);
         }}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         style={{
@@ -296,6 +320,58 @@ function ShownNames({
           background: saved === key ? C.greenTint : "#fff",
         }}
       />
+    );
+  };
+
+  const dateCell = (g: AdminGroup, officialLabel: string) => {
+    const key = `${g.name}|effectiveDateLabel`;
+    const current = g.effectiveDateLabel || "";
+    const draftValue = draft[key];
+    const isDirty = draftValue != null && draftValue !== current;
+    return (
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <select
+          value={draftValue ?? current}
+          aria-label={`Effective date shown for ${g.name}`}
+          onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+          style={{
+            flex: 1,
+            padding: "6px 9px",
+            fontSize: 13,
+            border: `1px solid ${saved === key ? C.greenEdge : C.inputEdge}`,
+            background: saved === key ? C.greenTint : "#fff",
+            borderRadius: 4,
+            fontFamily: "inherit",
+          }}
+        >
+          <option value="">{officialLabel}</option>
+          {monthOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {isDirty && (
+          <button
+            onClick={() => void save(g.name, "effectiveDateLabel", draftValue, key)}
+            disabled={saving[key]}
+            style={{
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "#fff",
+              background: C.blue,
+              border: "none",
+              borderRadius: 4,
+              cursor: saving[key] ? "default" : "pointer",
+              opacity: saving[key] ? 0.6 : 1,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {saving[key] ? "Saving…" : "Save"}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -333,9 +409,9 @@ function ShownNames({
                   <td style={{ ...td, color: C.ink }}>
                     <Link href={groupPath(g.name)}>{g.name}</Link>
                   </td>
-                  <td style={td}>{cell(g, "displayName", g.name)}</td>
+                  <td style={td}>{nameCell(g)}</td>
                   <td style={{ ...td, color: C.muted, whiteSpace: "nowrap" }}>{official}</td>
-                  <td style={td}>{cell(g, "effectiveDateLabel", official)}</td>
+                  <td style={td}>{dateCell(g, official)}</td>
                 </tr>
               );
             })}

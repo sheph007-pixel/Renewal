@@ -484,6 +484,18 @@ export interface WelcomeCopy {
 /** The group's name as its own pages show it: staff's display name when set, else the official one. */
 export const shownName = (g: Pick<Group, "name" | "displayName">): string => g.displayName || g.name;
 
+/** Remove trailing legal suffixes from a company name for display. */
+export function shortName(name: string | null | undefined): string {
+  const TRAILING_LEGAL = /[\s,]+(l\.?l\.?c\.?|inc\.?|incorporated|corp\.?|corporation|co\.?|company|ltd\.?|limited|l\.?l\.?p\.?|l\.?p\.?|p\.?c\.?|p\.?l\.?l\.?c\.?|plc|p\.?a\.?)$/i;
+  let s = String(name || "").trim();
+  for (;;) {
+    const next = s.replace(TRAILING_LEGAL, "").replace(/[\s,]+$/, "");
+    if (next === s || !next) break;
+    s = next;
+  }
+  return s;
+}
+
 /** Text split into paragraphs on blank lines. */
 export const paragraphsOf = (text: string | null | undefined): string[] =>
   String(text || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
