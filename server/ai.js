@@ -373,12 +373,25 @@ export async function analyzeProposal(file, roster) {
   return readOnce(client, model, content);
 }
 
-/** Whether an error is the SDK's own structured-output validator rejecting
- * the model's JSON - a live example: a plan list running long enough that the
- * model wrote a bare trailing decimal point ("1234.") thousands of characters
- * in. That is a one-off slip in that generation, not a property of the
- * document, so it is worth a fresh generation rather than failing the read. */
-const isStructuredOutputParseError = (e) => !!e && typeof e.message === "string" && /Failed to parse structured output/i.test(e.message);
+/**
+ * The schema for output_config.format, without the SDK helper's own `.parse`
+ * callback. With `.parse` present, `.finalMessage()` auto-parses the reply
+ * and, on invalid JSON, THROWS instead of resolving - which loses the
+ * response entirely, `stop_reason` included. That mattered here: several
+ * live "Failed to parse structured output: ... Unterminated string" failures
+ * turned out to be ordinary max_tokens truncations (the same handful of
+ * documents failed at a similar cutoff point on every attempt, retries
+ * included) wearing a misleading error, because the thrown parse error hid
+ * the very stop_reason that would have named the real cause. Dropping
+ * `.parse` makes `.finalMessage()` always resolve with the raw message, so
+ * the stop_reason check below runs first and a genuinely oversized document
+ * gets the accurate "too long" error instead of a cryptic parse failure that
+ * a retry could never fix.
+ */
+const rawJsonSchemaFormat = (schema) => {
+  const { parse, ...format } = jsonSchemaOutputFormat(schema);
+  return format;
+};
 
 /** One reading: the model call, and the structured result out of it. */
 async function readOnce(client, model, content) {
@@ -392,8 +405,8 @@ async function readOnce(client, model, content) {
     // the intelligence-sensitive part everywhere it is accepted.
     output_config:
       model === PROPOSAL_MODEL
-        ? { format: jsonSchemaOutputFormat(SCHEMA) }
-        : { effort: "high", format: jsonSchemaOutputFormat(SCHEMA) },
+        ? { format: rawJsonSchemaFormat(SCHEMA) }
+        : { effort: "high", format: rawJsonSchemaFormat(SCHEMA) },
     messages: [{ role: "user", content }],
   };
 
@@ -405,25 +418,17 @@ async function readOnce(client, model, content) {
     // beta, say), the same call on the stable endpoint is identical minus it.
     let response;
     const beta = client.beta && client.beta.messages && typeof client.beta.messages.stream === "function";
-    try {
-      if (beta) {
-        try {
-          response = await client.beta.messages
-            .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
-            .finalMessage();
-        } catch (e) {
-          if (!(e instanceof Anthropic.BadRequestError)) throw e;
-          console.warn("beta fallback request rejected, retrying without it:", e.message);
-        }
+    if (beta) {
+      try {
+        response = await client.beta.messages
+          .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
+          .finalMessage();
+      } catch (e) {
+        if (!(e instanceof Anthropic.BadRequestError)) throw e;
+        console.warn("beta fallback request rejected, retrying without it:", e.message);
       }
-      if (!response) response = await client.messages.stream(params).finalMessage();
-    } catch (e) {
-      if (isStructuredOutputParseError(e) && attempt < MAX_PARSE_ATTEMPTS) {
-        console.warn(`structured output parse failed, reading again (attempt ${attempt + 1}/${MAX_PARSE_ATTEMPTS}):`, e.message);
-        continue;
-      }
-      throw e;
     }
+    if (!response) response = await client.messages.stream(params).finalMessage();
 
     if (response.stop_reason === "refusal") {
       throw new Error("The model declined to read this document.");
@@ -440,7 +445,13 @@ async function readOnce(client, model, content) {
     let out;
     try {
       out = JSON.parse(text);
-    } catch {
+    } catch (e) {
+      // Not a length problem (stop_reason wasn't max_tokens above) - a genuine
+      // one-off malformed generation, worth a fresh reading before giving up.
+      if (attempt < MAX_PARSE_ATTEMPTS) {
+        console.warn(`structured output was not valid JSON, reading again (attempt ${attempt + 1}/${MAX_PARSE_ATTEMPTS}):`, e.message);
+        continue;
+      }
       throw new Error("Could not read a structured result from the document.");
     }
     if (!out || typeof out !== "object") {
