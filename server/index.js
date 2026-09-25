@@ -489,18 +489,78 @@ const DEFAULT_EFFECTIVE_DATE = "2027-01-01";
 /** "2027-01-01" -> "January 1, 2027", parsed as UTC so the server's own timezone never shifts the day. */
 const fmtEffectiveDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-// The Welcome page's headline and paragraph when staff have not written one
-// for the group. Existing clients are told about the 2027 options; a New
-// group starts blank, and staff write its greeting as they bring it on.
-const DEFAULT_GREETING = {
+/**
+ * The Welcome page's copy, written once for every group of a status - one
+ * set for Existing clients, one for New - on the admin Welcome Page tab and
+ * kept in kennion.settings under WELCOME_KEY. Only the words live here; what
+ * is dynamic (the group's name and effective date, its team, where each step
+ * links, when it last submitted) still comes from the group. A field staff
+ * have not saved falls back to these defaults, so a field added later reads
+ * sensibly before anyone has written it.
+ */
+const WELCOME_KEY = "welcomeCopy";
+const WELCOME_STATUSES = ["existing", "new"];
+const WELCOME_SHARED = {
+  headline: "",
+  steps: [
+    { title: "Compare Your\nMedical Plan Options", body: "Review the medical options Kennion obtained for your group." },
+    { title: "Explore Your\nSupplemental Benefits", body: "Review your dental, vision, life and other supplemental options." },
+    { title: "Build Your\nBenefits Strategy", body: "Work with Kennion and the AI Assistant to compare plans and model contributions." },
+    { title: "Confirm Your\nGroup Selections", body: "Confirm the plans and benefits you want to offer." },
+  ],
+  closingHeading: "We Handle The Rest",
+  closingBody:
+    "Once your selections are finalized, Kennion coordinates Employee Navigator setup, carrier implementation, employee communications, open enrollment, and first-month premium setup.\n\nYour support continues year-round, with a dedicated team to help employees navigate their benefits and lighten HR’s workload.",
+  closingTagline: "The right benefits for your team. Support every step of the way.",
+  teamNote: "Questions along the way? Your Kennion team is here throughout the process.",
+  footer:
+    "Noted rates and benefits are obtained from carrier's available information not specifically provided for this tool, and are for discussion only. All rates are determined by the carrier and are not final until the group is enrolled with the carrier.",
+};
+const DEFAULT_WELCOME = {
   existing: {
-    headline: "Options For 2027",
-    body:
+    ...WELCOME_SHARED,
+    intro:
       "As you prepare for your upcoming renewal, you will notice our medical program has evolved. Kennion's recent growth has unlocked new partnerships with major national Carriers and TPAs. Rather than a standard renewal, we shopped the market to bring these upgraded options directly to your group. We have paired your trusted Kennion team with intelligent technology to simplify complexity, improve decision-making, and ensure you find the best fit for your employees.",
   },
-  new: { headline: "", body: "" },
+  // A New group's intro starts blank; staff write it as they bring groups on.
+  new: { ...WELCOME_SHARED, intro: "" },
 };
-const defaultGreeting = (status) => DEFAULT_GREETING[status] || DEFAULT_GREETING.existing;
+/** What staff have saved, by status. Whatever is missing reads from DEFAULT_WELCOME. */
+let welcomeCopy = { existing: {}, new: {} };
+async function loadWelcomeCopy() {
+  if (!db) return;
+  try {
+    const stored = await db.getSetting(WELCOME_KEY);
+    if (stored && typeof stored === "object") welcomeCopy = { existing: stored.existing || {}, new: stored.new || {} };
+  } catch (e) {
+    console.error("could not read the Welcome page copy:", e.message);
+  }
+}
+/** The Welcome copy a group of this status reads: what staff saved, over the defaults. */
+function welcomeFor(status) {
+  const key = WELCOME_STATUSES.includes(status) ? status : "existing";
+  const saved = welcomeCopy[key] || {};
+  const base = DEFAULT_WELCOME[key];
+  const out = {};
+  for (const k of Object.keys(base)) out[k] = saved[k] !== undefined ? saved[k] : base[k];
+  return out;
+}
+const WELCOME_LIMITS = { headline: 200, intro: 4000, closingHeading: 200, closingBody: 4000, closingTagline: 400, teamNote: 400, footer: 2000 };
+/** Staff's form, cleaned: only known fields, strings trimmed, four steps. An error string when it will not do. */
+function cleanWelcome(input) {
+  if (!input || typeof input !== "object") return "Nothing to save.";
+  const text = (v) => String(v == null ? "" : v).replace(/\r\n?/g, "\n").trim();
+  const out = {};
+  for (const [k, max] of Object.entries(WELCOME_LIMITS)) {
+    out[k] = text(input[k]);
+    if (out[k].length > max) return `Keep the ${k} under ${max} characters.`;
+  }
+  const steps = Array.isArray(input.steps) ? input.steps : [];
+  if (steps.length !== 4) return "How It Works needs exactly four steps.";
+  out.steps = steps.map((st) => ({ title: text(st && st.title).slice(0, 120), body: text(st && st.body).slice(0, 600) }));
+  if (out.steps.some((st) => !st.title)) return "Every How It Works step needs a title.";
+  return out;
+}
 
 function rebuild() {
   const base = data.groups.filter((g) => (g.plans || []).length > 0);
@@ -548,11 +608,10 @@ function rebuild() {
     // Existing is the safe default; staff flip a group to New by hand.
     g.groupStatus = m.groupStatus || "existing";
     g.effectiveDate = m.effectiveDate || DEFAULT_EFFECTIVE_DATE;
-    // The Welcome greeting: staff's own wording when set (an empty string
-    // included - blank on purpose), else the default for the group status.
-    const greeting = defaultGreeting(g.groupStatus);
-    g.greetingHeadline = m.greetingHeadline != null ? m.greetingHeadline : greeting.headline;
-    g.greetingBody = m.greetingBody != null ? m.greetingBody : greeting.body;
+    // How the name and date read on the group's own pages - copy only, set
+    // on the admin Welcome Page tab. The official values above are untouched.
+    g.displayName = m.displayName || null;
+    g.effectiveDateLabel = m.effectiveDateLabel || null;
     // Archived, or not on a program carrier: the row stays for staff, but the
     // code is refused at sign-in.
     if (!g.archived && g.eligible) {
@@ -586,9 +645,8 @@ function rebuild() {
     renewal: g.renewal,
     groupStatus: g.groupStatus,
     effectiveDate: g.effectiveDate,
-    greetingHeadline: g.greetingHeadline,
-    greetingBody: g.greetingBody,
-    greetingIsSet: (meta[g.name] || {}).greetingHeadline != null || (meta[g.name] || {}).greetingBody != null,
+    displayName: g.displayName,
+    effectiveDateLabel: g.effectiveDateLabel,
     proposals: proposalCounts[g.name] || 0,
     invoice: invoiceByGroup[g.name] || null,
     address1: g.address1 || null,
@@ -2496,10 +2554,10 @@ const CLIENT_GROUP_FIELDS = [
   // grid, dental/vision/supplemental) reads the same regardless.
   "groupStatus",
   "effectiveDate",
-  // The headline and paragraph at the top of the Welcome page, as staff set
-  // them on the company page (or the default for the group status).
-  "greetingHeadline",
-  "greetingBody",
+  // How the name and effective date read on the group's pages, when staff
+  // have written something other than the official values.
+  "displayName",
+  "effectiveDateLabel",
   // Dental, vision, life, disability … - the same shape the Groups page
   // shows staff, with no member detail: benefit, carrier, plan, enrolled,
   // monthly. Present only once an Employee Navigator export has been read
@@ -2522,6 +2580,8 @@ function clientGroupView(g) {
   for (const k of CLIENT_GROUP_FIELDS) if (g[k] !== undefined) out[k] = g[k];
   out.tiers = members ? tiers : g.tiers;
   out.planTiers = planTiers;
+  // The Welcome page's words for this group's status, as staff last saved them.
+  out.welcome = welcomeFor(g.groupStatus);
   // The census as aggregates - the same profile the assistant is briefed
   // with - so the page can show what the picks were weighed on. No name and
   // no one person's age.
@@ -3644,7 +3704,7 @@ const EDITABLE_FIELDS = new Set([
 app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
   const { group, field, value } = req.body || {};
   const isCompanyField = EDITABLE_FIELDS.has(field);
-  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager", "groupStatus", "effectiveDate", "greetingHeadline", "greetingBody"].includes(field) || isCompanyField)) {
+  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager", "groupStatus", "effectiveDate", "displayName", "effectiveDateLabel"].includes(field) || isCompanyField)) {
     return res.status(400).json({ error: "group and a valid field are required" });
   }
   if (!groups.some((g) => g.name === group)) {
@@ -3667,24 +3727,6 @@ app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }),
     meta[group] = { ...(meta[group] || {}), archived: !!value };
     try {
       if (db) await db.setMeta(group, "archived", !!value, req.staffEmail || null);
-    } catch (e) {
-      return res.status(500).json({ error: "Could not save: " + e.message });
-    }
-    rebuild();
-    return res.json({ ok: true, groups: adminGroups });
-  }
-
-  if (field === "greetingHeadline" || field === "greetingBody") {
-    // null goes back to the default for the group status; any string,
-    // empty included, is what the Welcome page shows.
-    const text = value == null ? null : String(value).replace(/\r\n?/g, "\n").trim();
-    const max = field === "greetingHeadline" ? 200 : 4000;
-    if (text && text.length > max) {
-      return res.status(400).json({ error: `Keep the ${field === "greetingHeadline" ? "headline" : "paragraph"} under ${max} characters.` });
-    }
-    meta[group] = { ...(meta[group] || {}), [field]: text };
-    try {
-      if (db) await db.setMeta(group, field, text, req.staffEmail || null);
     } catch (e) {
       return res.status(500).json({ error: "Could not save: " + e.message });
     }
@@ -3719,6 +3761,12 @@ app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }),
   }
   if (field === "effectiveDate" && clean && !/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
     return res.status(400).json({ error: "Effective date must be YYYY-MM-DD." });
+  }
+  if (field === "displayName" && clean && clean.length > 200) {
+    return res.status(400).json({ error: "Keep the name shown under 200 characters." });
+  }
+  if (field === "effectiveDateLabel" && clean && clean.length > 80) {
+    return res.status(400).json({ error: "Keep the effective date shown under 80 characters." });
   }
 
   meta[group] = { ...(meta[group] || {}), [field]: clean };
@@ -4208,6 +4256,34 @@ app.post("/api/admin/market-rules", requireStaff, express.json({ limit: "4kb" })
   marketRules = next;
   console.warn(`market rules: networks=${networks} by ${req.staffEmail}`);
   res.json(next);
+});
+
+/** The Welcome page copy for both statuses, and the defaults a reset goes back to. */
+app.get("/api/admin/welcome-copy", requireStaff, (req, res) => {
+  res.json({ copy: { existing: welcomeFor("existing"), new: welcomeFor("new") }, defaults: DEFAULT_WELCOME, savedAt: welcomeCopy.at || null, savedBy: welcomeCopy.by || null });
+});
+
+/**
+ * Save one status's Welcome copy - every group of that status reads it on its
+ * next page load. `reset: true` drops what staff saved, back to the defaults.
+ */
+app.post("/api/admin/welcome-copy", requireStaff, express.json({ limit: "64kb" }), async (req, res) => {
+  const { status, copy, reset } = req.body || {};
+  if (!WELCOME_STATUSES.includes(status)) return res.status(400).json({ error: "status must be existing or new" });
+  let entry = {};
+  if (!reset) {
+    const cleaned = cleanWelcome(copy);
+    if (typeof cleaned === "string") return res.status(400).json({ error: cleaned });
+    entry = cleaned;
+  }
+  const next = { ...welcomeCopy, [status]: entry, by: req.staffEmail || null, at: new Date().toISOString() };
+  try {
+    if (db) await db.setSetting(WELCOME_KEY, next, req.staffEmail || null);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  welcomeCopy = next;
+  res.json({ copy: { existing: welcomeFor("existing"), new: welcomeFor("new") }, defaults: DEFAULT_WELCOME, savedAt: next.at, savedBy: next.by });
 });
 
 app.get("/api/admin/rates-lock", requireStaff, (req, res) => {
@@ -6178,6 +6254,7 @@ async function boot() {
   markAdminCodeReady();
   await loadRatesLock();
   await loadMarketRules();
+  await loadWelcomeCopy();
   await loadGroupCookieSecret();
   await loadPlaybook();
   await loadXmlVerify();

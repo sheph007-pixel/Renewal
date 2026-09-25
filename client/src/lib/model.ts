@@ -110,9 +110,12 @@ export interface Group {
   groupStatus?: "new" | "existing";
   /** The date this group's elections take effect, as "YYYY-MM-DD"; falls back to the system default when unset. */
   effectiveDate?: string;
-  /** The Welcome page's headline and paragraph, as staff set them (or the default for the group status). Blank shows nothing. */
-  greetingHeadline?: string;
-  greetingBody?: string;
+  /** How the group's name reads on its own pages, when staff set one on the Welcome Page tab. Copy only; `name` stays the official key. */
+  displayName?: string | null;
+  /** How the effective date reads on the group's pages, when staff set one. Copy only; `effectiveDate` stays the official date. */
+  effectiveDateLabel?: string | null;
+  /** The Welcome page's words for this group's status, from the admin Welcome Page tab. */
+  welcome?: WelcomeCopy;
   tpa: string;
   enrolled: number;
   /**
@@ -456,8 +459,36 @@ export function fmtDate(s: string | undefined): string {
 /** The date almost every group's elections take effect, when a group has none of its own on file. Matches the server's own fallback. */
 export const DEFAULT_EFFECTIVE_DATE = "2027-01-01";
 
-/** A group's effective date, as "2027-01-01" -> "January 1, 2027" - parsed as UTC so the browser's own timezone never shifts the day. */
-export function effectiveDateLabel(g: Pick<Group, "effectiveDate">): string {
+/**
+ * The Welcome page copy staff write once per status (Existing, New) on the
+ * admin Welcome Page tab. Words only: where each step links, the group's
+ * name and date, and its team all stay dynamic.
+ */
+export interface WelcomeCopy {
+  headline: string;
+  intro: string;
+  steps: { title: string; body: string }[];
+  closingHeading: string;
+  closingBody: string;
+  closingTagline: string;
+  teamNote: string;
+  footer: string;
+}
+
+/** The group's name as its own pages show it: staff's display name when set, else the official one. */
+export const shownName = (g: Pick<Group, "name" | "displayName">): string => g.displayName || g.name;
+
+/** Text split into paragraphs on blank lines. */
+export const paragraphsOf = (text: string | null | undefined): string[] =>
+  String(text || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * A group's effective date as its pages show it: staff's wording when set on
+ * the Welcome Page tab, else "2027-01-01" -> "January 1, 2027", parsed as UTC
+ * so the browser's own timezone never shifts the day.
+ */
+export function effectiveDateLabel(g: Pick<Group, "effectiveDate" | "effectiveDateLabel">): string {
+  if (g.effectiveDateLabel) return g.effectiveDateLabel;
   const iso = g.effectiveDate || DEFAULT_EFFECTIVE_DATE;
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }

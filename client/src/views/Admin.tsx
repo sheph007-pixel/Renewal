@@ -28,6 +28,7 @@ import RatesAudit from "@/views/RatesAudit";
 import AdminAssistant from "@/views/AdminAssistant";
 import DataAudit from "@/views/DataAudit";
 import AdminResources from "@/views/AdminResources";
+import AdminWelcome from "@/views/AdminWelcome";
 
 interface Props {
   data: KennionData;
@@ -74,7 +75,7 @@ const cellBase = {
 };
 
 
-export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources";
+export type AdminTab = "groups" | "rates" | "proposals" | "import" | "assistant" | "data" | "resources" | "welcome";
 
 const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "groups", label: "Groups", href: PATHS.groups },
@@ -84,6 +85,7 @@ const TABS: { key: AdminTab; label: string; href: string }[] = [
   { key: "assistant", label: "Assistant", href: PATHS.assistantAdmin },
   { key: "data", label: "Data Check", href: PATHS.data },
   { key: "resources", label: "Resources", href: PATHS.resourcesAdmin },
+  { key: "welcome", label: "Welcome Page", href: PATHS.welcomeAdmin },
 ];
 
 export interface ImportRecord {
@@ -561,6 +563,14 @@ export default function Admin({
         {tab === "data" && <DataAudit token={token} ai={ai} />}
 
         {tab === "resources" && <AdminResources token={token} />}
+
+        {tab === "welcome" && (
+          <AdminWelcome
+            token={token}
+            groups={(data.groups as unknown as AdminGroup[]).filter((g) => !g.archived && g.eligible !== false)}
+            onChanged={(gs) => onImported(gs as unknown[])}
+          />
+        )}
 
         {tab === "proposals" && (
           <Proposals

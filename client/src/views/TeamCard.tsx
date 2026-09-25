@@ -18,7 +18,8 @@ export interface AssistantMember {
 interface Props {
   people: (AccountManager | null | undefined)[];
   assistant?: AssistantMember | null;
-  note: string;
+  /** The line at the card's foot; hidden when blank. */
+  note?: string;
 }
 
 /**
@@ -118,7 +119,7 @@ export default function TeamCard({ people, assistant, note }: Props) {
         </div>
       ))}
 
-      <div style={{ padding: "12px 20px 14px", borderTop: `1px solid ${C.rule}`, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>{note}</div>
+      {note && <div style={{ padding: "12px 20px 14px", borderTop: `1px solid ${C.rule}`, fontSize: 12.5, color: C.faint, lineHeight: 1.6 }}>{note}</div>}
     </div>
   );
 }

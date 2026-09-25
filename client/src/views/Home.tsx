@@ -2,7 +2,7 @@ import { useState } from "react";
 import { C, ctaLink, h2, h3, kicker, Logo, panel, primaryBtn } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { exportChangesPdf, setChatOpen } from "@/lib/chat";
-import { effectiveDateLabel, effectiveYear, type AccountManager, type GroupSignup } from "@/lib/model";
+import { effectiveDateLabel, effectiveYear, paragraphsOf, type AccountManager, type GroupSignup, type WelcomeCopy } from "@/lib/model";
 import TeamCard from "@/views/TeamCard";
 import { useNarrow } from "@/lib/narrow";
 
@@ -20,9 +20,12 @@ interface Props {
   effectiveDate?: string;
   /** Renewing prior coverage, or enrolling with Kennion for the first time. */
   groupStatus?: "new" | "existing";
-  /** The headline and paragraph under the effective date, as staff set them on the company page. Blank shows nothing. */
-  greetingHeadline?: string;
-  greetingBody?: string;
+  /** The group's name as its pages show it (a display name staff set, or the official one). */
+  shownName?: string;
+  /** Staff's wording for the effective date, when set. Copy only. */
+  effectiveDateLabel?: string | null;
+  /** The page's words for this group's status, from the admin Welcome Page tab. */
+  welcome?: WelcomeCopy;
 }
 
 /** A small arrow-down-into-tray icon for the download button. */
@@ -74,11 +77,12 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
 }
 
 /**
- * The Welcome tab: one plain welcome panel - the greeting staff write for
- * the group on its company page (an existing client defaults to the 2027
- * options message, a new client to nothing until staff write one; a blank
- * line between paragraphs starts a new one), with the year's Program
- * Overview one click away. Then How It Works: four numbered boxes in a row
+ * The Welcome tab. Its words - headline, intro, the four How It Works steps,
+ * the closing section and the team card's note - are written once per status
+ * (Existing, New) on the admin Welcome Page tab; a blank field shows nothing,
+ * and a blank line starts a new paragraph. What stays dynamic is the group's
+ * own: its name and effective date, where each step links, when it last
+ * submitted, and its team. The year's Program Overview is one click away. Then How It Works: four numbered boxes in a row
  * (wrapping on a narrow screen), not a stacked list - the natural left-to-
  * right reading order already says 1, 2, 3, 4, and a row takes a fraction
  * of the height four stacked rows would. No sales carousel, no separate
@@ -87,46 +91,56 @@ function DownloadChanges({ groupName, year }: { groupName: string; year: string 
  * beside it keeps the people and the AI Assistant reachable without making
  * a call the next step.
  */
-export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup, effectiveDate, greetingHeadline, greetingBody }: Props) {
+export default function Home({ groupName, optionsHref, supplementalHref, signUpHref, assistantHref, manager, lastSignup, effectiveDate, shownName, effectiveDateLabel: dateLabel, welcome }: Props) {
   const narrow = useNarrow();
   const p = { margin: "0 0 14px", fontSize: 15, lineHeight: 1.7, color: C.body, textWrap: "pretty" as const } as const;
   const link = { color: C.blue, fontWeight: 600, textDecoration: "none" } as const;
   const head = { ...h2, marginBottom: 10, fontSize: 18, letterSpacing: "-0.2px" } as const;
-  const assistant = assistantHref ? <Link href={assistantHref} style={link}>AI Assistant</Link> : "AI Assistant";
   const submitted = lastSignup ? new Date(lastSignup.submittedAt).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : null;
-  const headline = (greetingHeadline || "").trim();
-  const paragraphs = (greetingBody || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
-  const eff = { effectiveDate };
+  const headline = (welcome?.headline || "").trim();
+  const intro = paragraphsOf(welcome?.intro);
+  const closing = paragraphsOf(welcome?.closingBody);
+  const tagline = (welcome?.closingTagline || "").trim();
+  const eff = { effectiveDate, effectiveDateLabel: dateLabel };
   const year = effectiveYear(eff);
 
-  const steps: { title: string; href: string; body: React.ReactNode }[] = [
-    { title: "Compare Your\nMedical Plan Options", href: optionsHref, body: <>Review the medical options Kennion obtained for your group.</> },
-    { title: "Explore Your\nSupplemental Benefits", href: supplementalHref, body: <>Review your dental, vision, life and other supplemental options.</> },
-    { title: "Build Your\nBenefits Strategy", href: optionsHref, body: <>Work with Kennion and the {assistant} to compare plans and model contributions.</> },
-    {
-      title: "Confirm Your\nGroup Selections",
-      href: signUpHref,
-      body: (
-        <>
-          Confirm the plans and benefits you want to offer.
-          {submitted && <> Submitted {submitted}; send an update any time.</>}
-        </>
-      ),
-    },
-  ];
+  // "AI Assistant" in a step's words links to the assistant when it is on.
+  const withAssistant = (text: string): React.ReactNode => {
+    const at = text.indexOf("AI Assistant");
+    if (!assistantHref || at < 0) return text;
+    return (
+      <>
+        {text.slice(0, at)}
+        <Link href={assistantHref} style={link}>AI Assistant</Link>
+        {text.slice(at + "AI Assistant".length)}
+      </>
+    );
+  };
+  // Where each step goes is fixed; only its words come from the copy.
+  const hrefs = [optionsHref, supplementalHref, optionsHref, signUpHref];
+  const steps: { title: string; href: string; body: React.ReactNode }[] = (welcome?.steps || []).slice(0, 4).map((st, i) => ({
+    title: st.title,
+    href: hrefs[i],
+    body: (
+      <>
+        {withAssistant(st.body)}
+        {i === 3 && submitted && <> Submitted {submitted}; send an update any time.</>}
+      </>
+    ),
+  }));
 
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "flex-start" }}>
       <div style={{ flex: "1 1 520px", minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ ...panel, padding: narrow ? "20px 18px 18px" : "28px 34px 24px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14 }}>
-            <h2 style={{ ...head, fontSize: 20 }}>Welcome, {groupName}</h2>
+            <h2 style={{ ...head, fontSize: 20 }}>Welcome, {shownName || groupName}</h2>
             <img src={Logo} alt="Kennion Benefit Advisors" style={{ flex: "none", height: 28, marginTop: 2 }} />
           </div>
           <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: C.ink }}>Effective Date: {effectiveDateLabel(eff)}</p>
-          {headline && <p style={{ ...p, fontWeight: 600, color: C.ink, ...(paragraphs.length ? {} : { marginBottom: 0 }) }}>{headline}</p>}
-          {paragraphs.map((t, i) => (
-            <p key={i} style={{ ...p, whiteSpace: "pre-line", ...(i === paragraphs.length - 1 ? { marginBottom: 0 } : {}) }}>{t}</p>
+          {headline && <p style={{ ...p, fontWeight: 600, color: C.ink, ...(intro.length ? {} : { marginBottom: 0 }) }}>{headline}</p>}
+          {intro.map((t, i) => (
+            <p key={i} style={{ ...p, whiteSpace: "pre-line", ...(i === intro.length - 1 ? { marginBottom: 0 } : {}) }}>{t}</p>
           ))}
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
             <p style={{ ...kicker, marginBottom: 8 }}>Program Overview</p>
@@ -197,16 +211,15 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
               </li>
             ))}
           </ol>
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
-            <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>We Handle The Rest</h3>
-            <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
-              Once your selections are finalized, Kennion coordinates Employee Navigator setup, carrier implementation, employee communications, open enrollment, and first-month premium setup.
-            </p>
-            <p style={{ ...p, fontSize: 14, marginBottom: 6 }}>
-              Your support continues year-round, with a dedicated team to help employees navigate their benefits and lighten HR&rsquo;s workload.
-            </p>
-            <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>The right benefits for your team. Support every step of the way.</p>
-          </div>
+          {(welcome?.closingHeading || closing.length > 0 || tagline) && (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.rule}` }}>
+              {welcome?.closingHeading && <h3 style={{ ...h3, marginBottom: 6, fontSize: 15.5 }}>{welcome.closingHeading}</h3>}
+              {closing.map((t, i) => (
+                <p key={i} style={{ ...p, fontSize: 14, marginBottom: i === closing.length - 1 && !tagline ? 0 : 6, whiteSpace: "pre-line" }}>{t}</p>
+              ))}
+              {tagline && <p style={{ ...p, fontSize: 14, fontWeight: 600, color: C.ink, marginBottom: 0 }}>{tagline}</p>}
+            </div>
+          )}
         </div>
       </div>
 
@@ -214,7 +227,7 @@ export default function Home({ groupName, optionsHref, supplementalHref, signUpH
         <TeamCard
           people={[manager]}
           assistant={assistantHref ? { href: assistantHref, onOpen: () => setChatOpen(true) } : null}
-          note="Questions along the way? Your Kennion team is here throughout the process."
+          note={welcome?.teamNote || undefined}
         />
       </div>
     </div>

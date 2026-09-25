@@ -138,97 +138,6 @@ function ClientLink({
   );
 }
 
-/**
- * The headline and paragraph at the top of the group's Welcome page. Saved on
- * blur and live for the client on their next page load. Until staff write
- * one, an Existing group shows the 2027 options message and a New group shows
- * nothing; clearing a field keeps it blank on purpose, and Reset hands it back
- * to that default.
- */
-function GreetingEditor({
-  group,
-  save,
-  saved,
-}: {
-  group: AdminGroup;
-  save: (field: string, value: unknown) => Promise<boolean>;
-  saved: string;
-}) {
-  const [draft, setDraft] = useState<{ greetingHeadline?: string; greetingBody?: string }>({});
-  const isNew = group.groupStatus === "new";
-  const field = (k: "greetingHeadline" | "greetingBody") => ({
-    value: draft[k] ?? group[k] ?? "",
-    onChange: (e: { target: { value: string } }) => setDraft((p) => ({ ...p, [k]: e.target.value })),
-    onBlur: async () => {
-      const v = draft[k];
-      if (v == null || v.trim() === (group[k] ?? "")) {
-        setDraft((p) => ({ ...p, [k]: undefined }));
-        return;
-      }
-      if (await save(k, v)) setDraft((p) => ({ ...p, [k]: undefined }));
-    },
-    style: {
-      width: "100%",
-      boxSizing: "border-box" as const,
-      padding: "8px 10px",
-      fontSize: 13.5,
-      fontFamily: "inherit",
-      lineHeight: 1.6,
-      color: C.ink,
-      border: `1px solid ${saved === k ? C.greenEdge : C.inputEdge}`,
-      background: saved === k ? C.greenTint : "#fff",
-      borderRadius: 4,
-      outline: "none",
-    },
-  });
-  const headline = field("greetingHeadline");
-  const body = field("greetingBody");
-  return (
-    <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
-      <h3 style={h3}>Welcome Page Greeting</h3>
-      <div style={{ marginTop: 4, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-        What this group reads under its name and effective date on the Welcome page. Changes save
-        when you leave the field and are live on the group's next page load.
-      </div>
-      <label htmlFor="greeting-headline" style={{ display: "block", fontSize: 12.5, color: C.body, margin: "14px 0 5px" }}>
-        Headline
-      </label>
-      <input
-        id="greeting-headline"
-        {...headline}
-        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-        style={{ ...headline.style, fontWeight: 600 }}
-      />
-      <label htmlFor="greeting-body" style={{ display: "block", fontSize: 12.5, color: C.body, margin: "12px 0 5px" }}>
-        Paragraph
-      </label>
-      <textarea id="greeting-body" rows={6} {...body} style={{ ...body.style, resize: "vertical" }} />
-      <div style={{ marginTop: 6, fontSize: 11.5, color: C.ghost, lineHeight: 1.6 }}>
-        {group.greetingIsSet ? (
-          <>
-            Written for this group.{" "}
-            <button
-              onClick={async () => {
-                if (await save("greetingHeadline", null)) await save("greetingBody", null);
-                setDraft({});
-              }}
-              style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, color: C.blue, cursor: "pointer" }}
-            >
-              Reset to the {isNew ? "New" : "Existing"} default
-            </button>
-            {isNew ? " (blank)" : ""}
-          </>
-        ) : isNew ? (
-          "Blank by default for a New group - nothing shows until you write one."
-        ) : (
-          "The default for an Existing group. Edit it to write this group its own."
-        )}{" "}
-        Leave a blank line between paragraphs to start a new one.
-      </div>
-    </div>
-  );
-}
-
 export default function GroupDetail({ group, token, onChanged, onBack, onOpenRates, fundingMonth, onOverrides }: Props) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
@@ -600,8 +509,6 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
           </div>
         </div>
       </div>
-
-      <GreetingEditor group={group} save={save} saved={saved} />
 
       {!!group.contacts?.length && (
         <div style={{ ...panel, marginTop: 16, padding: "18px 22px" }}>
