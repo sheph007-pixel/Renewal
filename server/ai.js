@@ -6,6 +6,7 @@
 // the plans and tier rates, and the roster group it matches with a confidence.
 // Nothing here is authoritative: the staff can reassign any proposal, and the
 // extracted figures are stored for review, not pushed into the rate tables.
+import { recordUsage, anthropicUsage } from "./ai-usage.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
@@ -385,7 +386,7 @@ export async function analyzeProposal(file, roster) {
       } else content = pdfContent(p.buffer, windowNote(pages, total));
     }
     try {
-      const r = await readOnce(client, model, content);
+      const r = await readOnce(client, model, content, { source: { full: whole, pages: whole ? null : pages, of: total } });
       r._pageMap = pageMap;
       for (const n of pages) deep.add(n);
       return [r];
@@ -410,7 +411,8 @@ export async function analyzeProposal(file, roster) {
       { type: "text", text: ask(`${part}${SECTIONS_NOTE}`) },
     ];
     try {
-      const r = await readOnce(client, model, content);
+      const nums = lines.filter((l) => l.n != null).map((l) => l.n);
+      const r = await readOnce(client, model, content, { source: { full: !part, lines: part ? nums : null, of: null } });
       for (const l of lines) if (l.n != null) scanned.add(l.n);
       return [r];
     } catch (e) {
@@ -654,6 +656,7 @@ const MAP_SYSTEM = `You map a carrier's medical proposal so it can be read in se
 
 /** Map a long PDF: which pages carry medical plan identities, benefits and rates. */
 async function mapDocument(client, buffer, filename, numpages) {
+  const started = Date.now();
   const response = await client.messages
     .stream({
       model: PROPOSAL_MODEL,
@@ -671,6 +674,7 @@ async function mapDocument(client, buffer, filename, numpages) {
       ],
     })
     .finalMessage();
+  recordUsage({ purpose: "source-map", provider: "anthropic", model: PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
   if (response.stop_reason !== "end_turn") throw new Error(`map ended ${response.stop_reason}`);
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   const map = JSON.parse(text);
@@ -737,14 +741,17 @@ export function droppedConnection(e) {
 }
 
 /** One reading: the model call, and the structured result out of it. */
-async function readOnce(client, model, content) {
+async function readOnce(client, model, content, meta = {}) {
   const params = {
     model,
     // A carrier quote can list dozens of plans over many pages, and every one
     // of them is written out here: Sonnet 5's full 128K of output (streamed),
     // so only a truly enormous book has to be read in parts.
     max_tokens: 128000,
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
+    // The reader's instructions are the same bytes on every read: cached for
+    // an hour (Anthropic prompt caching, ttl "1h"), so every read in a
+    // steward session reads them from the cache.
+    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }],
     // Reading rate grids off scanned pages is the intelligence-sensitive part.
     output_config: { effort: "high", format: rawJsonSchemaFormat(SCHEMA) },
     messages: [{ role: "user", content }],
@@ -762,7 +769,10 @@ async function readOnce(client, model, content) {
     // ("terminated", a reset socket) or an overloaded API is not the
     // document's fault, so the same read is streamed again - up to
     // DROP_RETRIES more times, after a pause - before it counts as a failure.
+    const started = Date.now();
+    let drops = 0;
     for (let drop = 0; ; drop++) {
+      drops = drop;
       try {
         if (beta) {
           try {
@@ -777,12 +787,21 @@ async function readOnce(client, model, content) {
         if (!response) response = await client.messages.stream(params).finalMessage();
         break;
       } catch (e) {
-        if (!droppedConnection(e) || drop >= DROP_RETRIES) throw e;
+        if (!droppedConnection(e) || drop >= DROP_RETRIES) {
+          recordUsage({ purpose: "extraction", provider: "anthropic", model, durationMs: Date.now() - started, retries: drop, ok: false, error: e.message, ...meta });
+          throw e;
+        }
         console.warn(`reading dropped (${e.message}); streaming it again (${drop + 1}/${DROP_RETRIES})`);
         await new Promise((r) => setTimeout(r, DROP_PAUSE_MS * (drop + 1)));
       }
     }
 
+    // The model that actually served the read (response.model): a request
+    // declined by Sonnet's safety classifier is re-run server-side on the
+    // fallback model ("fallbacks": "default" routes to Claude Opus), which
+    // shows here and in the usage record - never silently as Sonnet.
+    recordUsage({ purpose: "extraction", provider: "anthropic", model, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries: drops, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
+    if (response.model && response.model !== model) console.warn(`reading served by ${response.model}, not ${model} (server-side fallback)`);
     if (response.stop_reason === "refusal") {
       throw new Error("The model declined to read this document.");
     }
@@ -828,6 +847,7 @@ export async function explainAudit(payload) {
   if (fakeAi()) return "Canned audit read (KENNION_FAKE_AI).";
   if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  const started = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 4000,
@@ -836,6 +856,7 @@ export async function explainAudit(payload) {
       "You are a benefits data analyst auditing a brokerage's renewal portal, which holds a snapshot in time built from three Employee Navigator files: the XML export (every company's enrollments and premiums), the Carrier Stats report (Employee Navigator's own count and plan cost per carrier, counting every line a carrier writes, distinct employees, every company including archived ones), and the month's funding workbook (what each group was actually billed by the two captives, EBPA and HealthEZ, per participant per product - Blue Cross of Alabama plans are billed elsewhere and are outside the workbook, so the billing check compares captive medical only). The payload has: where the month's whole medical billing sits (billing.coverage: `live` = invoices filed under a group the portal shows, `archived` = filed under a company archived or out of the program, `unfiled` = invoices with no group yet) - the Groups page tile counts live groups on the XML basis, so it sits below the workbook's total by the archived and unfiled parts, and that is expected, not a discrepancy; per carrier, the report's figure against the portal's on the same basis, with the difference; per group, the XML's enrolled and medical premium against the month's billed participants and premium; the import diagnostics (what the parser left out and why, medical and other lines, and company records it could not use); and the invoices not filed under any group. Write for a benefits advisor in plain language, no code, under 350 words: first a one-sentence overall verdict on whether the snapshot can be trusted for client renewals; then, for each carrier off by more than about 1% and for the groups whose billing differs from the XML, the most likely cause, citing the specific bucket or group and the numbers; then what, if anything, a person should do. Where a gap is explained by a known cause (companies not in the export, a group that has left, a plan renewed since the export), say so plainly rather than raising alarm.",
     messages: [{ role: "user", content: JSON.stringify(payload) }],
   });
+  recordUsage({ purpose: "admin-explain-snapshot-audit", provider: "anthropic", model: MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: true });
   if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
   return response.content
     .filter((b) => b.type === "text")
@@ -857,6 +878,7 @@ export async function explainDataCheck(payload) {
   if (fakeAi()) return "Canned data check read (KENNION_FAKE_AI).";
   if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  const started = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 4000,
@@ -864,6 +886,7 @@ export async function explainDataCheck(payload) {
     system: DATA_CHECK_SYSTEM,
     messages: [{ role: "user", content: JSON.stringify(payload) }],
   });
+  recordUsage({ purpose: "admin-explain-data-check", provider: "anthropic", model: MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: true });
   if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
   return response.content
     .filter((b) => b.type === "text")
@@ -910,6 +933,7 @@ export async function explainReconciliation(payload) {
   if (fakeAi()) return "Canned explanation (KENNION_FAKE_AI).";
   if (!aiEnabled()) throw new Error("AI is off: no ANTHROPIC_API_KEY is set.");
   const client = apiKey() ? new Anthropic({ apiKey: apiKey() }) : new Anthropic();
+  const started = Date.now();
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 4000,
@@ -918,6 +942,7 @@ export async function explainReconciliation(payload) {
       "You are a benefits data analyst helping a brokerage reconcile its own import of an Employee Navigator XML export against Employee Navigator's Carrier Stats report. The report's 'Enrolled Employees' and 'Plan Costs' per carrier are the reference. The import's rules: an employee is skipped when their employment status says terminated/inactive/deceased; a medical enrollment counts when its EndDate is nil, absent or in the future; waived elections are skipped; an enrollment with no PlanCost adds nothing to premium. The diagnostics say how many enrollments each rule left out, by carrier program, with the premium they carried. Write for a benefits advisor: plain language, no code. For each carrier that differs by more than about 1%, say what most likely explains the difference, citing the specific exclusion bucket and numbers, and whether a rule should change to match Employee Navigator's counting - be concrete about which rule. If the gap cannot be explained by the buckets, say what to look at next. Keep it under 300 words.",
     messages: [{ role: "user", content: JSON.stringify(payload) }],
   });
+  recordUsage({ purpose: "admin-explain-reconciliation", provider: "anthropic", model: MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: true });
   if (response.stop_reason === "refusal") throw new Error("The model declined this request.");
   return response.content
     .filter((b) => b.type === "text")
