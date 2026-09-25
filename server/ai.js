@@ -31,24 +31,6 @@ const PROPOSAL_MODEL = "claude-sonnet-5";
  */
 const MAX_PDF_PAGES = 300;
 
-/** Cut a PDF into readable parts of at most `size` pages (MAX_PDF_PAGES by default). */
-async function splitPdf(buffer, size = MAX_PDF_PAGES) {
-  const src = await PDFDocument.load(buffer);
-  const total = src.getPageCount();
-  const parts = [];
-  for (let start = 0; start < total; start += size) {
-    const end = Math.min(start + size, total);
-    const doc = await PDFDocument.create();
-    const pages = await doc.copyPages(
-      src,
-      Array.from({ length: end - start }, (_, i) => start + i),
-    );
-    for (const pg of pages) doc.addPage(pg);
-    parts.push({ buffer: Buffer.from(await doc.save()), first: start + 1, last: end, total });
-  }
-  return parts;
-}
-
 /** Thrown by readOnce when the model's answer ran past max_tokens. */
 class TooLongError extends Error {}
 
@@ -372,29 +354,42 @@ export async function analyzeProposal(file, roster) {
   ];
   const excerptNote = (pageMap, total) =>
     `\n\nThis file is an excerpt of a ${total}-page proposal: its pages are the original pages ${describePages(pageMap)}, in that order. List only the plans printed in this excerpt; other excerpts are read separately and merged with yours by exact plan name and code. Report source_pages as positions within THIS file (1 = its first page).`;
+  const windowNote = (pages, total) =>
+    `\n\nThis is the whole ${total}-page proposal, but read ONLY pages ${describePages(pages)}: list only the plans printed on those pages, with the benefits and rates printed on those pages. The other pages are read separately and merged with yours by exact plan name and code. Report source_pages as page numbers of this document (1 = its first page).`;
   /**
-   * Read a run of pages. `pageMap[i]` is the original page number of the
-   * file's page i+1, so every page a plan is read from is recorded as the
-   * page it is on in the carrier's document. When the answer would not fit
-   * in one reading, the run is cut in half and each half read - down to a
+   * Read a set of the document's pages (original page numbers, in order).
+   * All of them: the document itself. Some: an excerpt PDF holding just
+   * those pages - or, when the PDF cannot be cut (an encrypted carrier
+   * quote, which pdf-lib will not rewrite), the whole document with an
+   * instruction to read only those pages. Every page a plan is read from is
+   * recorded as its original page number. When the answer would not fit in
+   * one reading, the set is cut in half and each half read - down to a
    * single page - and the halves' appearances are folded back together by
    * exact plan identity, so a plan whose benefits sit in one half and its
    * rates in the other is still one plan with both.
    */
-  const readPages = async (buf, pageMap, total, depth = 0) => {
-    const whole = pageMap.length === total && pageMap.every((n, i) => n === i + 1);
+  const readPages = async (pages, total, depth = 0) => {
+    const whole = pages.length === total && pages.every((n, i) => n === i + 1);
+    let content;
+    let pageMap = null;
+    if (whole) content = pdfContent(p.buffer, "");
+    else {
+      const excerpt = await excerptPdf(p.buffer, pages).catch(() => null);
+      if (excerpt) {
+        content = pdfContent(excerpt, excerptNote(pages, total));
+        pageMap = pages;
+      } else content = pdfContent(p.buffer, windowNote(pages, total));
+    }
     try {
-      const r = await readOnce(client, model, pdfContent(buf, whole ? "" : excerptNote(pageMap, total)));
+      const r = await readOnce(client, model, content);
       r._pageMap = pageMap;
       return [r];
     } catch (e) {
       if (!(e instanceof TooLongError)) throw e;
-      if (pageMap.length <= 1 || depth >= 6) throw new Error(`Page ${pageMap[0]} alone is longer than one reading can hold.`);
-      const halves = await splitPdf(buf, Math.ceil(pageMap.length / 2));
-      console.log(`${file.filename}: pages ${describePages(pageMap)} too long for one reading, reading in ${halves.length} parts`);
-      const out = [];
-      for (const h of halves) out.push(...(await readPages(h.buffer, pageMap.slice(h.first - 1, h.last), total, depth + 1)));
-      return out;
+      if (pages.length <= 1 || depth >= 8) throw new Error(`Page ${pages[0]} alone is longer than one reading can hold.`);
+      const mid = Math.ceil(pages.length / 2);
+      console.log(`${file.filename}: pages ${describePages(pages)} too long for one reading, reading in 2 parts`);
+      return [...(await readPages(pages.slice(0, mid), total, depth + 1)), ...(await readPages(pages.slice(mid), total, depth + 1))];
     }
   };
   /** The same for a text document (a flattened spreadsheet, say): halve it by lines. */
@@ -424,45 +419,49 @@ export async function analyzeProposal(file, roster) {
   };
 
   if (p.kind === "pdf") {
-    const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
-    const all = Array.from({ length: numpages }, (_, i) => i + 1);
+    // How many pages: pdf-parse, else pdf-lib (which counts an encrypted
+    // carrier quote that pdf-parse cannot open), else the map's own count.
+    let numpages = await countPdfPages(p.buffer);
+    let map = null;
+    const wantMap = !numpages || (numpages > MAP_MIN_PAGES && numpages <= MAX_PDF_PAGES);
 
     // A long proposal is mapped first: which pages carry plan names, benefits
     // and rates, and which are ancillary or boilerplate. The map only steers
     // the reading; it is never taken as plan data. The relevant pages are read
-    // as excerpts and merged by exact plan identity; if that cannot
-    // reconstruct the proposal with confidence, the whole document is read.
-    if (numpages > MAP_MIN_PAGES && numpages <= MAX_PDF_PAGES) {
+    // and merged by exact plan identity; if that cannot reconstruct the
+    // proposal with confidence, the whole document is read.
+    if (wantMap) {
       stage("MAPPING");
-      const map = await mapDocument(client, p.buffer, file.filename, numpages).catch((e) => {
+      map = await mapDocument(client, p.buffer, file.filename, numpages).catch((e) => {
         console.warn(`${file.filename}: mapping failed (${e.message}); reading the whole document`);
         return null;
       });
-      stage("EXTRACTING");
-      const relevant = map ? relevantPages(map, numpages) : [];
-      if (map && relevant.length && relevant.length < numpages) {
-        const readings = [];
-        for (let i = 0; i < relevant.length; i += RELEVANT_BATCH) {
-          const pages = relevant.slice(i, i + RELEVANT_BATCH);
-          readings.push(...(await readPages(await excerptPdf(p.buffer, pages), pages, numpages)));
-        }
-        const out = fold(readings, { method: "mapped", pages: numpages, relevantPages: relevant, map: mapSummary(map) });
-        const doubt = mappedDoubt(out, map);
-        if (!doubt) return out;
-        console.log(`${file.filename}: relevant-page reading not confident (${doubt}); reading the whole document`);
-      }
-    } else stage("EXTRACTING");
+      if (!numpages && map && Number.isInteger(map.page_count) && map.page_count > 0) numpages = map.page_count;
+    }
+    stage("EXTRACTING");
+    if (!numpages) {
+      // Nothing could count the pages: one reading of the whole document.
+      console.warn(`${file.filename}: page count unknown; reading the whole document in one pass`);
+      return fold([await readOnce(client, model, pdfContent(p.buffer, ""))], { method: "full", pages: null });
+    }
+    const all = Array.from({ length: numpages }, (_, i) => i + 1);
+    const relevant = map && numpages > MAP_MIN_PAGES ? relevantPages(map, numpages) : [];
+    if (map && relevant.length && relevant.length < numpages) {
+      const readings = [];
+      for (let i = 0; i < relevant.length; i += RELEVANT_BATCH) readings.push(...(await readPages(relevant.slice(i, i + RELEVANT_BATCH), numpages)));
+      const out = fold(readings, { method: "mapped", pages: numpages, relevantPages: relevant, map: mapSummary(map) });
+      const doubt = mappedDoubt(out, map);
+      if (!doubt) return out;
+      console.log(`${file.filename}: relevant-page reading not confident (${doubt}); reading the whole document`);
+    }
 
     // The whole document, halved as needed; past what one reading on the
     // model holds at all, read in 300-page parts first.
-    if (numpages > 0) {
-      const readings = [];
-      if (numpages > MAX_PDF_PAGES) {
-        for (const part of await splitPdf(p.buffer)) readings.push(...(await readPages(part.buffer, all.slice(part.first - 1, part.last), numpages)));
-      } else readings.push(...(await readPages(p.buffer, all, numpages)));
-      return fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages });
-    }
-    return fold([await readOnce(client, model, pdfContent(p.buffer, ""))], { method: "full", pages: null });
+    const readings = [];
+    if (numpages > MAX_PDF_PAGES) {
+      for (let i = 0; i < numpages; i += MAX_PDF_PAGES) readings.push(...(await readPages(all.slice(i, i + MAX_PDF_PAGES), numpages)));
+    } else readings.push(...(await readPages(all, numpages)));
+    return fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages });
   }
   stage("EXTRACTING");
   if (p.kind === "image") {
@@ -500,7 +499,21 @@ function describePages(pages) {
   return out.join(", ");
 }
 
-/** A PDF holding just these pages of `buffer`, in order. */
+/**
+ * The page count of a PDF: pdf-parse, else pdf-lib with encryption ignored -
+ * carriers often send owner-password-encrypted quotes that open without a
+ * password but that pdf-parse cannot read ("bad XRef entry"). 0 when neither
+ * can say.
+ */
+async function countPdfPages(buffer) {
+  const viaParse = await pdfParse(buffer).then((r) => r.numpages || 0).catch(() => 0);
+  if (viaParse) return viaParse;
+  return PDFDocument.load(buffer, { ignoreEncryption: true, updateMetadata: false })
+    .then((d) => d.getPageCount())
+    .catch(() => 0);
+}
+
+/** A PDF holding just these pages of `buffer`, in order. Throws for a PDF pdf-lib cannot rewrite (encrypted). */
 async function excerptPdf(buffer, pages) {
   const src = await PDFDocument.load(buffer);
   const doc = await PDFDocument.create();
@@ -579,7 +592,7 @@ async function mapDocument(client, buffer, filename, numpages) {
           role: "user",
           content: [
             { type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") }, title: filename },
-            { type: "text", text: `This proposal has ${numpages} pages. Map every page.` },
+            { type: "text", text: numpages ? `This proposal has ${numpages} pages. Map every page.` : "Map every page of this proposal, and give its page count." },
           ],
         },
       ],

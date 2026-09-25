@@ -1361,8 +1361,11 @@ app.post("/api/signin", async (req, res) => {
  * The code is evergreen and never changes year-to-year. Throttled like other
  * sign-ins to prevent brute-force guessing.
  */
-app.get("/:code(^[A-Z]{4}\\d{2}$)", (req, res) => {
-  const code = String(req.params.code).trim().toUpperCase();
+// Express 5's path syntax has no inline patterns ("/:code(...)" throws at
+// boot), so the short-link route is a regular expression: four letters and
+// two digits, any case, captured as params[0].
+app.get(/^\/([A-Za-z]{4}\d{2})$/, (req, res) => {
+  const code = String(req.params[0]).trim().toUpperCase();
   const caller = signinKey(req);
 
   if (throttled(caller)) {
@@ -6023,9 +6026,23 @@ async function logProposalCheck() {
 
 const STEWARD_KEY = "proposals.steward";
 let stewardState = null;
+/**
+ * Bumped when a change to the reader or the check makes earlier give-ups
+ * worth another try: on the first load after a deploy that carries a new
+ * epoch, every box the steward gave up on is tried again from scratch.
+ * (2026-09-25b: encrypted carrier PDFs - Boss Logistics, Adobe HVAC, Taz
+ * Panama City - can now be counted and read in page windows.)
+ */
+const STEWARD_EPOCH = "2026-09-25b";
 async function loadSteward() {
   if (stewardState) return stewardState;
   stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};
+  if (stewardState.__epoch !== STEWARD_EPOCH) {
+    const n = Object.keys(stewardState).filter((k) => k !== "__epoch").length;
+    stewardState = { __epoch: STEWARD_EPOCH };
+    if (db) await db.setSetting(STEWARD_KEY, stewardState, "steward").catch(() => undefined);
+    if (n) console.log(`steward: new epoch ${STEWARD_EPOCH} - ${n} proposal(s) get a fresh round of repairs`);
+  }
   return stewardState;
 }
 async function saveSteward() {
@@ -6269,7 +6286,7 @@ app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
 /** Run the steward now, and give every box it gave up on one more round. */
 app.post("/api/admin/proposals/fix", requireStaff, async (req, res) => {
   await loadSteward();
-  for (const k of Object.keys(stewardState)) delete stewardState[k];
+  for (const k of Object.keys(stewardState)) if (k !== "__epoch") delete stewardState[k];
   await saveSteward();
   scheduleSteward(0);
   res.json({ ok: true });
