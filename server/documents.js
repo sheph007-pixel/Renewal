@@ -967,14 +967,14 @@ const slotName = (slot, carrier) => {
  * network) - never by name and rates, and never across proposals. A plan
  * the carrier did not price for a tier the group has people in is still an
  * option, with no monthly figure. The name and network are the proposal's,
- * exactly as printed. Cobalt is not offered.
+ * exactly as printed. Cobalt, Nationwide and the Angle Scorecard are not offered.
  */
 function optionRows(g, proposals) {
   const counts = g.tiers || { EE: 0, ES: 0, EC: 0, FAM: 0 };
   const seen = new Set();
   const out = [];
   for (const pr of proposals || []) {
-    if (pr.slot === "Cobalt") continue;
+    if (["Cobalt", "Nationwide", "Angle Scorecard"].includes(pr.slot)) continue;
     for (const pl of pr.plans || []) {
       const rates = {};
       TIER_KEYS.forEach((k) => (rates[k] = pl.rates && pl.rates[k] != null ? Number(pl.rates[k]) : null));

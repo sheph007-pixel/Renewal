@@ -60,7 +60,7 @@ const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", s
 const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; network?: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
   rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.map((p) => ({ name: p.name, network: p.network, optionId: p.option_id, rates: p.rates, unpriced: p.unpriced, hidden: hiddenReason(p) })) }));
 const run = (rows: unknown[], srv: () => unknown[], gaveUp: (id: number) => string | null = () => null) =>
-  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, gaveUp });
+  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Angle"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, gaveUp });
 const cellOf = (v: ReturnType<typeof run>) => v.groups[0].cells[0];
 
 let v = run([good], served([good]));
@@ -78,7 +78,7 @@ assert.match(cell.steps.grid.note, /client ON: all 2 shown/);
 // A slot turned OFF for the group: still Verified (the source, database and
 // audits are the same), and the client count is zero.
 const runOff = (rows: unknown[], srv: () => unknown[]) =>
-  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Nationwide"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, slotEnabled: (group: string, slot: string) => !(group === "Acme" && slot === "Gravie") });
+  verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie", "Angle"], tiers: { EE: 1, ES: 1, EC: 1, FAM: 1 } }], rows, served: srv, isEpoPlan, isBlankPlan, readingVersion, slotEnabled: (group: string, slot: string) => !(group === "Acme" && slot === "Gravie") });
 cell = runOff([good], served([good])).groups[0].cells[0];
 assert.equal(cell.state, "verified", "turning a slot OFF is a presentation choice: the proposal stays Verified");
 assert.equal(cell.clientEnabled, false);
@@ -129,7 +129,7 @@ assert.equal(cell.fix, "read", "a reading without provenance is extracted again"
 cell = cellOf(run([{ ...good, audit: { ...good.audit, sourceSha: "sha-older" } }], served([good])));
 assert.equal(cell.failedAt, "claude");
 assert.equal(cell.fix, "audit");
-assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Nationwide").state, "missing", "an empty slot is just blank");
+assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Angle").state, "missing", "an empty slot is just blank");
 
 // Never one-model green: ChatGPT did not complete -> pending, audit again.
 const oneModel = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)"), { model: "ChatGPT (gpt-5)", verdict: "error", mismatches: [], notes: "fetch failed" }] } };
@@ -173,7 +173,7 @@ assert.equal(cell.failedAt, "grid", "the grid showing other rates than the datab
 cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: [...served([good])()[0].plans, served([good])()[0].plans[0]] }]));
 assert.equal(cell.failedAt, "grid");
 assert.match(cell.steps.grid.note, /served to the client twice/);
-cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans }, { id: 12, slot: "Nationwide", plans: [{ name: "NW 1", optionId: "GR1", rates: { EE: 1, ES: 1, EC: 1, FAM: 1 } }] }]));
+cell = cellOf(run([good], () => [{ id: 10, slot: "Gravie", plans: served([good])()[0].plans }, { id: 12, slot: "Angle", plans: [{ name: "NW 1", optionId: "GR1", rates: { EE: 1, ES: 1, EC: 1, FAM: 1 } }] }]));
 assert.equal(cell.failedAt, "validation", "a BenSync ID another of the group's proposals holds is caught before any audit");
 assert.ok(cell.steps.validation.checks.some((k: { key: string; ok: boolean }) => k.key === "ids" && !k.ok));
 
@@ -303,7 +303,7 @@ const auth = { Authorization: `Bearer ${staff.token}` };
 const mine = staff.groups.find((x: { archived?: boolean; eligible?: boolean }) => !x.archived && x.eligible !== false);
 
 const reading = (ee: number, n = 1) => ({
-  carrier: "Nationwide",
+  carrier: "Angle",
   funding: "level funded",
   quotes_medical: true,
   matched_group: mine.name,
@@ -311,12 +311,12 @@ const reading = (ee: number, n = 1) => ({
   effective_date: "2027-01-01",
   proposal_type: "renewal",
   enrolled_on_document: mine.enrolled,
-  plans: Array.from({ length: n }, (_, i) => ({ name: `Nationwide PPO ${i + 1}`, plan_code: `NW${i + 1}`, network: "Cigna", plan_type: "PPO", deductible: "$1,000", oop_max: "$5,000", benefits: {}, rates: { EE: ee + i, ES: ee * 2, EC: ee * 2, FAM: ee * 3 }, monthly_total: null })),
+  plans: Array.from({ length: n }, (_, i) => ({ name: `Angle PPO ${i + 1}`, plan_code: `NW${i + 1}`, network: "Cigna", plan_type: "PPO", deductible: "$1,000", oop_max: "$5,000", benefits: {}, rates: { EE: ee + i, ES: ee * 2, EC: ee * 2, FAM: ee * 3 }, monthly_total: null })),
   total_monthly: null,
-  summary: "Canned Nationwide quote.",
+  summary: "Canned Angle quote.",
 });
 const upload = async (filename: string, body: unknown) => {
-  const r = await fetch(`${base}/api/admin/proposals?filename=${encodeURIComponent(filename)}&group=${encodeURIComponent(mine.name)}&slot=Nationwide`, {
+  const r = await fetch(`${base}/api/admin/proposals?filename=${encodeURIComponent(filename)}&group=${encodeURIComponent(mine.name)}&slot=Angle`, {
     method: "POST",
     headers: { ...auth, "Content-Type": "text/plain" },
     body: JSON.stringify(body),
@@ -334,9 +334,14 @@ const settle = async (filename: string, audited = true) => {
 };
 const check = async () => {
   const v = await (await fetch(`${base}/api/admin/proposals/verify`, { headers: auth })).json();
-  return v.groups.find((x: { group: string }) => x.group === mine.name).cells.find((c: { slot: string }) => c.slot === "Nationwide");
+  return v.groups.find((x: { group: string }) => x.group === mine.name).cells.find((c: { slot: string }) => c.slot === "Angle");
 };
 
+// Nationwide and the Angle Scorecard are no longer slots.
+for (const retired of ["Nationwide", "Angle Scorecard"]) {
+  const r = await fetch(`${base}/api/admin/proposals?filename=x.json&group=${encodeURIComponent(mine.name)}&slot=${encodeURIComponent(retired)}`, { method: "POST", headers: { ...auth, "Content-Type": "text/plain" }, body: JSON.stringify(reading(500)) });
+  assert.equal(r.status, 400, `${retired} is not a slot`);
+}
 await upload("nw v1.json", reading(500, 3));
 const first = await settle("nw v1.json");
 let c = await check();
@@ -365,7 +370,7 @@ assert.equal(c.proposalId, first.id, "the good reading is still in force");
 // The group's own page still carries the good plans.
 const cookie = ((await fetch(`${base}/api/signin`, { method: "POST", headers: json, body: JSON.stringify({ code: mine.code }) })).headers.get("set-cookie") || "").split(";")[0];
 const page = await (await fetch(`${base}/api/signin`, { method: "POST", headers: { ...json, cookie }, body: "{}" })).json();
-const nw = (page.proposals || []).find((p: { slot: string }) => p.slot === "Nationwide");
+const nw = (page.proposals || []).find((p: { slot: string }) => p.slot === "Angle");
 assert.equal(nw.id, first.id);
 assert.equal(nw.plans.length, 3);
 

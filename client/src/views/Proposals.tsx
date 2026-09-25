@@ -131,17 +131,15 @@ const ACCEPT =
 /** Rows that are proposals in their own right - not an email wrapper. */
 const isProposal = (p: Proposal) => p.status !== "container";
 
-/** The slots a group can hold; the first four are the ones tracked per group. */
 /**
  * The medical proposals a group can hold, one per slot, and nothing else.
  * Surest is a UnitedHealthcare product, so a Surest quote is that group's UHC
  * proposal; an ancillary-only document fills no slot. A newer proposal in a
- * slot replaces the older one, which is kept for the record. Angle Scorecard
- * is Angle Health's companion document, not a rate quote - it never counts
- * toward "every quote in" (the server leaves it out of a group's `slots`),
- * but it is still assignable here and shows in SlotChips like any other.
+ * slot replaces the older one, which is kept for the record. Nationwide and
+ * the Angle Scorecard are no longer slots (a document already filed under
+ * one stays stored, off the grid).
  */
-export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Optimyl"] as const;
+export const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Angle", "Optimyl"] as const;
 const TRACKED = SLOTS;
 const isCurrent = (p: Proposal) => p.status === "assigned" && !p.superseded_by;
 
@@ -1099,9 +1097,7 @@ function SlotCell({
             >
               {plans
                 ? `${verified ? "✓ Verified · " : working ? "… " : "⚠ "}${plans} plan${plans === 1 ? "" : "s"}`
-                : slot === "Angle Scorecard"
-                  ? `${verified ? "✓ " : ""}on file`
-                  : working
+                : working
                     ? "Reading proposal…"
                     : "⚠ no plans read"}
             </button>
@@ -1113,7 +1109,7 @@ function SlotCell({
                 </span>
               </div>
             )}
-            {check && slot !== "Angle Scorecard" && slot !== "Cobalt" && (
+            {check && (
               // The one client control: this proposal slot ON (every Verified
               // plan shown) or OFF (none shown) for this group. Storage, checks
               // and audits are the same either way.
@@ -1339,11 +1335,7 @@ export default function Proposals({ token, groups }: Props) {
   const gridRows = sortedGroups
     .map((g) => {
       const required = new Set<string>(g.slots || SLOTS);
-      // Angle Scorecard never counts toward "every quote in" (see
-      // slotsForGroup on the server), but it is a real document a group can
-      // have on file, so give it a working grid column instead of always
-      // showing "-" whether or not one is filed.
-      const applies = new Set<string>(required).add("Angle Scorecard");
+      const applies = required;
       const slots = SLOTS.map((s) => (applies.has(s) ? currentBySlot.get(`${g.name}||${s}`) : undefined));
       const have = slots.filter((s, i) => s && required.has(SLOTS[i])).length;
       return { g, slots, applies, have, of: required.size };
@@ -1377,9 +1369,6 @@ export default function Proposals({ token, groups }: Props) {
   // proposal still waiting for a slot (staff say which), an ancillary
   // proposal, and a carrier the portal does not track.
   const slotlessRows = proposals.filter((p) => needsSlot(p) && matches(p));
-  // Angle Scorecard is ancillary-flagged (no rates) but still fills a real
-  // slot - it belongs in the grid/group views, never in this "fills no slot"
-  // overflow bucket.
   const ancillaryRows = proposals.filter((p) => p.group_name && !p.slot && isAncillary(p) && matches(p));
   const otherRows = proposals.filter(
     (p) => p.group_name && !p.slot && p.status !== "analyzing" && !isAncillary(p) && !needsSlot(p) && matches(p),
