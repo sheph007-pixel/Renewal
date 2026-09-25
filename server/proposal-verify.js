@@ -110,7 +110,7 @@ function stageOf(c, row, correcting) {
  * `correcting`: ids with that step in flight. `gaveUp(id)`: the steward's
  * note when it has run out of repairs to try on a proposal.
  */
-export function verifyProposals({ groups, rows, served, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null, slotEnabled = () => true }) {
+export function verifyProposals({ groups, rows, served, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null, slotEnabled = () => true, isDtq = () => false }) {
   const out = [];
   for (const g of groups) {
     const mine = rows.filter((r) => r.group_name === g.name && r.status !== "container" && r.kind !== "invoice" && r.kind !== "email");
@@ -148,6 +148,13 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
           cell.stuck = why;
         }
       };
+
+      // Check if this slot is marked as Decline to Quote
+      if (isDtq(g.name, slot)) {
+        cell.state = "dtq";
+        cell.dtq = true;
+        continue;
+      }
 
       // 1. On file. An empty slot is simply blank - nothing to check.
       if (!row && !waiting.length) {

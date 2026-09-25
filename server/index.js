@@ -2734,6 +2734,12 @@ const slotEnabled = (groupName, slot) => {
   const v = slotVisibility.get(`${groupName}||${slot}`);
   return v ? v.clientEnabled !== false : true;
 };
+
+const isDtq = (groupName, slot) => {
+  const v = slotVisibility.get(`${groupName}||${slot}`);
+  return v ? v.dtq === true : false;
+};
+
 /**
  * Whether a client is shown only Verified proposals. On by default: the
  * client sees a proposal once the whole check has passed. Set
@@ -6139,6 +6145,7 @@ function proposalVerification(rows) {
     isEpoPlan,
     isBlankPlan,
     slotEnabled,
+    isDtq,
     reading: rereading,
     auditing,
     correcting,
@@ -6564,6 +6571,21 @@ app.post("/api/admin/proposal-slots", requireStaff, express.json({ limit: "4kb" 
   const slot = String(b.slot || "");
   if (!groups.some((g) => g.name === groupName)) return res.status(404).json({ error: "No such group." });
   if (!SLOTS.includes(slot)) return res.status(400).json({ error: "No such proposal slot." });
+
+  // Handle DTQ (Decline to Quote)
+  if (b.dtq !== undefined) {
+    try {
+      if (db) await db.setSlotDTQ(groupName, slot, b.dtq, req.staffEmail || null);
+    } catch (e) {
+      return res.status(500).json({ error: "Could not save: " + e.message });
+    }
+    console.log(`proposal slot ${groupName} / ${slot}: ${b.dtq ? "marked DTQ" : "removed DTQ"} (${req.staffEmail || "staff"})`);
+    await proposalsChanged();
+    res.json({ ok: true, dtq: b.dtq });
+    return;
+  }
+
+  // Handle client visibility
   if (typeof b.clientEnabled !== "boolean") return res.status(400).json({ error: "clientEnabled must be true or false." });
   const row = { groupName, slot, clientEnabled: b.clientEnabled, updatedBy: req.staffEmail || null, updatedAt: new Date().toISOString() };
   try {

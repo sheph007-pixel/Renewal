@@ -32,6 +32,8 @@ export interface Proposal {
   context?: { subject?: string; from?: string; date?: string | null; body?: string; emailFilename?: string } | null;
   /** The two-model check of the stored reading against the document. */
   audit?: ProposalAudit | null;
+  /** Set when the group has declined to quote for this slot. */
+  dtq?: boolean;
 }
 
 export interface ProposalAudit {
@@ -376,7 +378,7 @@ export interface VerifyCell {
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
   /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
-  state: "verified" | "fail" | "working" | "stuck" | "missing";
+  state: "verified" | "fail" | "working" | "stuck" | "missing" | "dtq";
   stuck?: string;
   failedAt?: "source" | "extraction" | "validation" | "claude" | "chatgpt" | "grid";
   /** Processing state: UPLOADED, MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED, NEEDS_REVIEW. */
@@ -395,6 +397,8 @@ export interface VerifyCell {
   fixId?: number;
   steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
+  /** Whether this slot has been marked as Decline to Quote. */
+  dtq?: boolean;
 }
 /** One auditor's plan count: every option found on the document, the EPO plans left out on purpose, and the rest. */
 export interface AuditCount {
@@ -1006,6 +1010,18 @@ function SlotCell({
     setBusy(false);
     onChanged();
   };
+  const setDTQ = async () => {
+    setBusy(true);
+    await fetch("/api/admin/proposal-slots", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group, slot, dtq: true }) }).catch(() => undefined);
+    setBusy(false);
+    onChanged();
+  };
+  const removeDTQ = async () => {
+    setBusy(true);
+    await fetch("/api/admin/proposal-slots", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group, slot, dtq: false }) }).catch(() => undefined);
+    setBusy(false);
+    onChanged();
+  };
   const send = async (files: File[]) => {
     if (!files.length) return;
     setBusy(true);
@@ -1031,17 +1047,18 @@ function SlotCell({
   const when = current?.extracted?.effective_date || current?.uploaded_at?.slice(0, 10) || "";
   const quote = current?.extracted?.quote_id;
   const state = check ? check.state : current ? "verified" : "missing";
+  const isDtq = state === "dtq";
   const verified = state === "verified";
   // Queued or in hand: either way the AI is on it.
   const working = state === "working" || state === "fail";
-  const filled = !!current || state !== "missing";
+  const filled = !!current || state !== "missing" || isDtq;
   // An empty slot - no proposal from that carrier - is blank. It still takes
   // a file: hovering or dragging one over it shows where it will land.
   const [hover, setHover] = useState(false);
   const reveal = hover || busy;
-  const edge = !filled ? (reveal ? C.border : "transparent") : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? (reveal ? "#fff" : "transparent") : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
-  const tone = verified ? C.green : working ? "#2f6db3" : C.amber;
+  const edge = !filled ? (reveal ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const tone = isDtq ? C.blue : verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
   return (
@@ -1078,7 +1095,17 @@ function SlotCell({
           onChange={(e) => void send(Array.from(e.target.files || []))}
           style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden" }}
         />
-        {!current && filled && check ? (
+        {isDtq ? (
+          // Decline to Quote marked for this slot
+          <>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }}>DTQ · Declined</div>
+            <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>
+              <button onClick={() => void removeDTQ()} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>
+                {busy ? "…" : "undo"}
+              </button>
+            </div>
+          </>
+        ) : !current && filled && check ? (
           // Only an upload that has not read yet - nothing in force in this slot.
           <>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
@@ -1148,14 +1175,24 @@ function SlotCell({
             </div>
           </>
         ) : (
-          <button
-            onClick={() => ref.current?.click()}
-            disabled={busy}
-            style={{ ...linkBtn, fontSize: 12, color: C.faint, visibility: reveal ? "visible" : "hidden" }}
-            title={`Upload the ${slot} proposal for ${group}`}
-          >
-            {busy ? "uploading…" : "+ add"}
-          </button>
+          <div style={{ display: "flex", gap: 8, visibility: reveal ? "visible" : "hidden" }}>
+            <button
+              onClick={() => ref.current?.click()}
+              disabled={busy}
+              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              title={`Upload the ${slot} proposal for ${group}`}
+            >
+              {busy ? "uploading…" : "+ add"}
+            </button>
+            <button
+              onClick={() => void setDTQ()}
+              disabled={busy}
+              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              title={`Mark as Decline to Quote for ${group}`}
+            >
+              DTQ
+            </button>
+          </div>
         )}
       </div>
     </td>

@@ -289,6 +289,8 @@ ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS source_sha text;
 -- for NEEDS_REVIEW, exactly why.
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage text;
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage_reason text;
+-- Decline to Quote: set when a group explicitly declines a quote for a slot.
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS dtq bool DEFAULT false;
 
 -- Employee Navigator's Carrier Stats report, one row per upload. The latest
 -- one is the independent check the XML import is reconciled against.
@@ -347,10 +349,12 @@ CREATE TABLE IF NOT EXISTS kennion.proposal_slot_visibility (
   group_name     text NOT NULL,
   slot           text NOT NULL,
   client_enabled boolean NOT NULL,
+  dtq            boolean DEFAULT false,
   updated_by     text,
   updated_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (group_name, slot)
 );
+ALTER TABLE kennion.proposal_slot_visibility ADD COLUMN IF NOT EXISTS dtq boolean DEFAULT false;
 -- Every completed proposal-audit job (a model's document reconciliation or
 -- one field batch), keyed to the exact source, standard and stored data it
 -- covers: an audit resumes at the first job missing, and never pays twice
@@ -812,8 +816,8 @@ export function createDb(url) {
 
     /** Every proposal-slot visibility Kennion has set: [{ groupName, slot, clientEnabled, updatedBy, updatedAt }]. */
     async listSlotVisibility() {
-      const { rows } = await pool.query("SELECT group_name, slot, client_enabled, updated_by, updated_at FROM kennion.proposal_slot_visibility");
-      return rows.map((r) => ({ groupName: r.group_name, slot: r.slot, clientEnabled: r.client_enabled, updatedBy: r.updated_by, updatedAt: r.updated_at }));
+      const { rows } = await pool.query("SELECT group_name, slot, client_enabled, dtq, updated_by, updated_at FROM kennion.proposal_slot_visibility");
+      return rows.map((r) => ({ groupName: r.group_name, slot: r.slot, clientEnabled: r.client_enabled, dtq: r.dtq || false, updatedBy: r.updated_by, updatedAt: r.updated_at }));
     },
 
     /** Turn a group's proposal slot ON or OFF for its client. */
@@ -824,6 +828,16 @@ export function createDb(url) {
          ON CONFLICT (group_name, slot) DO UPDATE SET
            client_enabled = EXCLUDED.client_enabled, updated_by = EXCLUDED.updated_by, updated_at = now()`,
         [groupName, slot, !!clientEnabled, by || null],
+      );
+    },
+
+    async setSlotDTQ(groupName, slot, dtq, by) {
+      await pool.query(
+        `INSERT INTO kennion.proposal_slot_visibility (group_name, slot, client_enabled, dtq, updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, now())
+         ON CONFLICT (group_name, slot) DO UPDATE SET
+           dtq = EXCLUDED.dtq, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [groupName, slot, !dtq, dtq, by || null],
       );
     },
 
