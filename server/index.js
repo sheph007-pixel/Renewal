@@ -5334,6 +5334,8 @@ async function runAnalysis(id, file, keepAssignment) {
       analyzeProposal({ filename: file.filename, prepared, context: file.context || null, onStage: (st) => void setStage(id, st) }, roster),
     );
     out.extraction = { ...(out.extraction || {}), sourceSha: startSha };
+    // The coverage record is of this version of the document, and no other.
+    if (out.coverage) out.coverage = { ...out.coverage, sourceSha: startSha };
     const after = (await proposalStore.listProposals()).find((r) => r.id === id);
     if (!after) return;
     if (after.source_sha && startSha && after.source_sha !== startSha) {
@@ -5808,14 +5810,15 @@ async function settleGravieQuotes() {
  * row provenance), tied to the workbook version it was parsed from, and -
  * on a re-parse - the numbers its plans held, so every design keeps its ID.
  */
-/** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too. */
-const GRAVIE_PARSER = "gravie-v2";
+/** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too; v3 records every sheet (source coverage). */
+const GRAVIE_PARSER = "gravie-v3";
 function gravieReading(parsed, groupName, sourceSha, priorPlans) {
   const x = gravieExtracted(parsed);
   return {
     ...x,
     matched_group: groupName,
     extraction: { ...(x.extraction || {}), sourceSha: sourceSha || null, parser: GRAVIE_PARSER },
+    ...(x.coverage ? { coverage: { ...x.coverage, sourceSha: sourceSha || null } } : {}),
     ...(priorPlans && priorPlans.length ? { previous_plan_ids: priorPlans.filter((p) => p.option_id).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })) } : {}),
   };
 }
@@ -6073,9 +6076,11 @@ let stewardState = null;
  * epoch, every box the steward gave up on is tried again from scratch.
  * (2026-09-25b: encrypted carrier PDFs - Boss Logistics, Adobe HVAC, Taz
  * Panama City - can now be counted and read in page windows. 2026-09-25c:
- * every plan is stored, EPO included; attempts count when they finish.)
+ * every plan is stored, EPO included; attempts count when they finish.
+ * 2026-09-25d: source coverage is required - every reading without a
+ * coverage record is read once more, so each gets a fresh set of attempts.)
  */
-const STEWARD_EPOCH = "2026-09-25c";
+const STEWARD_EPOCH = "2026-09-25d";
 async function loadSteward() {
   if (stewardState) return stewardState;
   stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};
@@ -6241,6 +6246,11 @@ async function stewardRepair(cell, tiers) {
     await runProposalCorrection(row.id);
     st.corrections++;
     return saveSteward();
+  }
+  if (cell.fix === "review" && !((cell.steps.validation && cell.steps.validation.checks) || []).some((k) => k.key === "names" && !k.ok)) {
+    // A source a code parser cannot fully account for (a workbook sheet no
+    // rule covers): nothing an AI repair can settle - a person looks.
+    return giveUp(cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : "The source could not be fully accounted for.");
   }
   if (cell.fix === "review") {
     // The carrier's document prints one plan name for two plan codes. One

@@ -111,6 +111,7 @@ const reading = (plans, extra = {}) => ({
   excluded: [],
   reconciliation: { plan_appearances: plans.length * 3, unique_plans: plans.length, unique_ppo: plans.length, unique_epo: 0, excluded: 0, expected: plans.length, reader_unique_plans: plans.length },
   extraction: { sourceSha: "sha1" },
+  coverage: { kind: "pdf", total_pages: 10, mapped_pages: 10, deep_read_pages: 4, covered_pages: 10, uncovered: "", sourceSha: "sha1" },
   ...extra,
 });
 const run = (x, over = {}) => validatePlans({ extracted: x, sourceSha: "sha1", ...over });
@@ -119,7 +120,7 @@ const failing = (v) => v.checks.filter((k) => !k.ok).map((k) => k.key);
 let v = run(reading([good(), good({ name: "Plan B", plan_code: "B1", option_id: "UH2", source: { ...good().source, codes: ["B1"] } })]));
 assert.equal(v.ok, true, JSON.stringify(v.failures));
 
-assert.deepEqual(failing(run(reading([good()]), { sourceSha: "sha2" })), ["version"], "a reading of another version of the document");
+assert.deepEqual(failing(run(reading([good()]), { sourceSha: "sha2" })), ["version", "coverage"], "a reading of another version of the document - and its coverage record is of that version too");
 assert.equal(run(reading([good()]), { sourceSha: "sha2" }).fix, "read");
 
 v = run(reading([good(), good({ option_id: "UH2" })]));

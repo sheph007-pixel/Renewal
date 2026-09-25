@@ -229,6 +229,9 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
         ? { ok: true, note: (val.checks.find((c) => c.key === "reconciliation") || {}).note || "Every check passed.", checks: val.checks }
         : { ok: false, busy: correcting.has(row.id), note: val.failures.join(" "), checks: val.checks };
       cell.reconciliation = x.reconciliation || null;
+      // What of the source the reading covered (pages / sheets / lines), for the hover.
+      const cov = x.coverage || null;
+      cell.coverage = cov ? { kind: cov.kind, total_pages: cov.total_pages ?? null, mapped_pages: cov.mapped_pages ?? null, deep_read_pages: cov.deep_read_pages ?? null, covered_pages: cov.covered_pages ?? null, total_sheets: cov.total_sheets ?? null, inspected_sheets: cov.inspected_sheets ?? null, total_lines: cov.total_lines ?? null, scanned_lines: cov.scanned_lines ?? null } : null;
       if (!val.ok) {
         settle("validation", val.fix, row.id, correcting.has(row.id));
         continue;

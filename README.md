@@ -513,6 +513,31 @@ unresolved conflicting appearances; and the counts reconcile - expected
 equals stored, PPO plus EPO equals unique, the reader's unique count equals
 what was stored. No count, uniqueness or version check is left to a model.
 
+**Source coverage** (the "Source coverage" validation check,
+`coverageCheck` in `server/plan-validate.js`): a proposal cannot be Verified
+unless its whole source was inspected. The reader records coverage from what
+it actually did (`extracted.coverage`), tied to the document's SHA-256:
+
+- **PDF**: `total_pages`, `mapped_pages` (pages the page map inspected),
+  `deep_read_pages` / `deep_read` (pages a deep extraction came back from),
+  `covered_pages` and `uncovered`. Every page must be mapped or deep-read.
+  A PDF over 20 pages is mapped whole (every page classified) and only its
+  medical pages are deep-read; any page the map skipped is deep-read. A
+  short PDF is deep-read whole.
+- **Workbook**: every sheet enumerated (`total_sheets`, `sheets[]` with
+  status read / empty / parsed / not a quote sheet / unrecognized) and
+  `inspected_sheets`; the Gravie parser classifies every sheet, and one it
+  does not recognize sends the workbook to a person.
+- **CSV / text**: `total_lines`, `scanned_lines` (every line a read came back
+  from, across split parts) and the sections (blank-line blocks, repeated
+  header rows) with `sections_read`. A file cut at the 300,000-character
+  limit can never pass.
+
+Coverage is part of the reading's version hash (`readingVersion`), so an
+audit is only good for a reading of that exact coverage, and coverage of an
+older file version fails the check. A reading with no coverage record is
+read again (a Gravie workbook is simply re-parsed, parser `gravie-v3`).
+
 **Plan identity is one definition everywhere**: `identityKey()` in
 `server/plan-canonical.js` - the carrier's plan code when printed, else the
 exact printed name on its network. Canonicalization merges on it; validation,

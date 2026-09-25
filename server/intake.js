@@ -200,15 +200,55 @@ export async function expandUpload({ buffer, mime, filename }) {
   return { email, items, skipped, bodyOnly: items.length === 0 };
 }
 
-/** Spreadsheet → CSV text, one block per sheet. */
+/**
+ * Spreadsheet → CSV text, one block per sheet, and every sheet enumerated:
+ * its name, its row count, and the lines of the text it occupies (1-based),
+ * or `empty` when the sheet holds nothing. The reader's coverage record
+ * (server/ai.js) checks that every sheet's lines were read.
+ */
 function sheetToText(buffer) {
   const wb = XLSX.read(buffer, { type: "buffer" });
   const parts = [];
+  const sheets = [];
+  let line = 1;
   for (const name of wb.SheetNames) {
-    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false });
-    if (csv.trim()) parts.push(`## Sheet: ${name}\n${csv}`);
+    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false }).replace(/\n+$/, "");
+    if (!csv.trim()) {
+      sheets.push({ name, rows: 0, empty: true });
+      continue;
+    }
+    const block = `## Sheet: ${name}\n${csv}`;
+    const n = block.split("\n").length;
+    if (parts.length) line += 1; // the blank line between blocks
+    sheets.push({ name, rows: n - 1, empty: false, lineFrom: line, lineTo: line + n - 1 });
+    parts.push(block);
+    line += n;
   }
-  return parts.join("\n\n");
+  return { text: parts.join("\n\n"), sheets };
+}
+
+/**
+ * The sections of a text or CSV file, for the coverage record: blocks
+ * separated by blank lines, and a new section wherever a header line
+ * repeats (two carrier tables pasted one under the other). 1-based lines.
+ */
+export function textSections(text) {
+  const lines = String(text || "").split("\n");
+  const out = [];
+  let cur = null;
+  lines.forEach((l, i) => {
+    const n = i + 1;
+    if (!l.trim()) {
+      cur = null;
+      return;
+    }
+    if (cur && l.trim() === cur.header) cur = null; // a repeated header starts a new table
+    if (!cur) {
+      cur = { from: n, to: n, header: l.trim().slice(0, 120) };
+      out.push(cur);
+    } else cur.to = n;
+  });
+  return out;
 }
 
 /** Word document → plain text, paragraph per line. */
@@ -230,7 +270,21 @@ async function docxToText(buffer) {
 }
 
 const MAX_TEXT = 300_000;
-const capped = (text) => ({ kind: "text", text: text.slice(0, MAX_TEXT), ...(text.length > MAX_TEXT ? { truncated: true } : {}) });
+/**
+ * The text the model reads, and what the source held: the file's total
+ * lines and characters, so the coverage record can prove every line was
+ * read. Text past MAX_TEXT is cut - and the cut shows (`truncated`, fewer
+ * lines kept than the file has), so the reading can never be Verified.
+ */
+const capped = (text, coverage = {}) => {
+  const kept = text.slice(0, MAX_TEXT);
+  return {
+    kind: "text",
+    text: kept,
+    ...(text.length > MAX_TEXT ? { truncated: true } : {}),
+    coverage: { total_chars: text.length, total_lines: text ? text.split("\n").length : 0, kept_lines: kept ? kept.split("\n").length : 0, ...coverage },
+  };
+};
 
 /**
  * What the model gets for one item:
@@ -245,21 +299,22 @@ export async function prepareForModel(item) {
       return { kind: "image", mime: c.mime, buffer: item.buffer };
     // Text past MAX_TEXT is cut - and the cut is said out loud (`truncated`),
     // so the reading carries a flag rather than silently missing plans.
-    case "sheet":
-      return capped(sheetToText(item.buffer));
+    case "sheet": {
+      const { text, sheets } = sheetToText(item.buffer);
+      return capped(text, { kind: "sheets", total_sheets: sheets.length, sheets });
+    }
     case "docx":
-      return capped(await docxToText(item.buffer));
-    case "text":
-      return capped(item.buffer.toString("utf8"));
+      return capped(await docxToText(item.buffer), { kind: "text", format: "docx" });
+    case "text": {
+      const text = item.buffer.toString("utf8");
+      return capped(text, { kind: "text", format: /\.csv$/i.test(item.filename || "") || /csv/i.test(item.mime || "") ? "csv" : "text", sections: textSections(text) });
+    }
     case "email":
     case "msg": {
       // The email body is the proposal (no attachments worth reading).
       const opened = await openEmail(item.buffer, c.type);
       const h = opened.context;
-      return {
-        kind: "text",
-        text: `From: ${h.from}\nTo: ${h.to}\nDate: ${h.date || ""}\nSubject: ${h.subject}\n\n${h.body}`,
-      };
+      return capped(`From: ${h.from}\nTo: ${h.to}\nDate: ${h.date || ""}\nSubject: ${h.subject}\n\n${h.body}`, { kind: "text", format: "email" });
     }
     default:
       throw new Error(`"${item.filename}" is not a type this reads yet.`);

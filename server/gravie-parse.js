@@ -116,6 +116,23 @@ function readPlans(rows, sheetName, network) {
 const RATE_SHEETS = /^(PPO|EPO)$/i;
 
 /**
+ * Every sheet in the workbook is enumerated and accounted for: a rate sheet
+ * is parsed; a sheet Kennion knowingly does not quote from is recorded with
+ * the reason; anything else is "unrecognized" - a sheet no rule covers, so
+ * the workbook cannot be Verified until a person looks (a new Gravie layout
+ * is never silently half-read).
+ */
+const KNOWN_SHEETS = [
+  { test: /narrow/i, reason: "Narrow Network (Cigna LocalPlus): offered only in a few areas; not quoted by Kennion" },
+  { test: /benefits?\s*grid/i, reason: "Static benefits grid, the same for every group: no rates" },
+];
+function sheetStatus(name) {
+  if (RATE_SHEETS.test(name.trim())) return { status: "parsed" };
+  const k = KNOWN_SHEETS.find((x) => x.test.test(name));
+  return k ? { status: "not a quote sheet", reason: k.reason } : { status: "unrecognized" };
+}
+
+/**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
  * tier, and every priced plan on the PPO and EPO sheets - the 67 designs on
  * each, in the carrier's order.
@@ -135,7 +152,8 @@ export function parseGravieWorkbook(buf) {
   }
   if (!header || !header.group) throw new Error("Not a Gravie rate workbook: no group name in a sheet header");
   if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on a PPO or EPO sheet");
-  return { ...header, plans };
+  const sheetList = wb.SheetNames.map((name) => ({ name, ...sheetStatus(name), plans: plans.filter((pl) => pl.sheet === name.trim().toUpperCase()).length }));
+  return { ...header, plans, sheets: sheetList };
 }
 
 /** The rows the carrier_quotes tables take: one per plan, monthly at the quoted tiers. */
@@ -200,6 +218,14 @@ export function gravieExtracted(p) {
     plans,
     reconciliation: canon.reconciliation,
     extraction: { method: "parser", model: null, parts: 1, at: new Date().toISOString() },
+    // Every sheet enumerated and accounted for (see KNOWN_SHEETS).
+    coverage: {
+      kind: "sheets",
+      parser: "gravie",
+      total_sheets: (p.sheets || []).length,
+      inspected_sheets: (p.sheets || []).filter((sh) => sh.status !== "unrecognized").length,
+      sheets: p.sheets || [],
+    },
     total_monthly: null,
     summary:
       `Gravie level-funded rate workbook, quote ${p.quoteNumber || "n/a"}: ${plans.length} plan prices, ` +
