@@ -718,7 +718,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   // Grid, the same for every group - supplemental and attributed, never the
   // plan's own record - so they are not compared against it.
   const gravieParsed = !!(extracted && ((extracted.coverage && extracted.coverage.parser === "gravie") || (extracted.extraction && extracted.extraction.method === "parser" && /gravie/i.test(String(extracted.carrier || "")))));
-  const compareOpts = gravieParsed ? { benefitFields: ["coinsurance"] } : {};
+  const compareOpts = gravieParsed ? { benefitFields: ["coinsurance"], networkFromSheet: true } : {};
   const saved = { ...(jobs || {}) };
   const save = async (id, value) => {
     saved[id] = value;
