@@ -316,7 +316,7 @@ export async function analyzeProposal(file, roster) {
     // canned plan with no pages of its own is placed on page 1.
     const r = fakeReading(file);
     r.plans = (r.plans || []).map((pl) => ({ ...pl, source_pages: pl.source_pages || { identity: [1], benefits: [1], rates: [1] }, source_sheet: pl.source_sheet || "(canned)", source_rows: pl.source_rows || "row 1" }));
-    return fold([r], { method: "fake", pages: 1 });
+    return { ...fold([r], { method: "fake", pages: 1 }), coverage: fullCoverage(file.prepared) };
   }
   if (!aiEnabled()) throw new Error("AI matching is off: no ANTHROPIC_API_KEY is set.");
   // A proposal read shares the org's tokens-per-minute budget with every
@@ -368,6 +368,10 @@ export async function analyzeProposal(file, roster) {
    * exact plan identity, so a plan whose benefits sit in one half and its
    * rates in the other is still one plan with both.
    */
+  // What was actually read, for the coverage record: every page a deep read
+  // came back from, every line of a text source a read came back from.
+  const deep = new Set();
+  const scanned = new Set();
   const readPages = async (pages, total, depth = 0) => {
     const whole = pages.length === total && pages.every((n, i) => n === i + 1);
     let content;
@@ -383,6 +387,7 @@ export async function analyzeProposal(file, roster) {
     try {
       const r = await readOnce(client, model, content);
       r._pageMap = pageMap;
+      for (const n of pages) deep.add(n);
       return [r];
     } catch (e) {
       if (!(e instanceof TooLongError)) throw e;
@@ -392,29 +397,35 @@ export async function analyzeProposal(file, roster) {
       return [...(await readPages(pages.slice(0, mid), total, depth + 1)), ...(await readPages(pages.slice(mid), total, depth + 1))];
     }
   };
-  /** The same for a text document (a flattened spreadsheet, say): halve it by lines. */
-  const readText = async (text, part = "", depth = 0) => {
+  /**
+   * The same for a text document (a flattened spreadsheet, a CSV, an email
+   * body): halve it by lines. `lines` are { n, text } - n the line's number
+   * in the source (null for a sheet heading repeated into a second half) - so
+   * every line a read came back from is recorded as scanned.
+   */
+  const readText = async (lines, part = "", depth = 0) => {
+    const text = lines.map((l) => l.text).join("\n");
     const content = [
       { type: "document", source: { type: "text", media_type: "text/plain", data: text || "(empty)" }, title: file.filename },
-      { type: "text", text: ask(part) },
+      { type: "text", text: ask(`${part}${SECTIONS_NOTE}`) },
     ];
     try {
-      return [await readOnce(client, model, content)];
+      const r = await readOnce(client, model, content);
+      for (const l of lines) if (l.n != null) scanned.add(l.n);
+      return [r];
     } catch (e) {
-      const lines = String(text || "").split("\n");
       if (!(e instanceof TooLongError)) throw e;
       if (lines.length < 2 || depth >= 6) throw new Error("Part of this document is longer than one reading can hold, even read in pieces.");
       const mid = Math.ceil(lines.length / 2);
+      const first = lines.slice(0, mid);
+      const second = lines.slice(mid);
       // Each half keeps the sheet heading it sits under, so a plan's sheet
       // is still named in the half that holds its rows.
-      const lastHeading = lines.slice(0, mid).reverse().find((l) => /^## Sheet:/.test(l));
-      const second = lines.slice(mid);
-      if (lastHeading && !/^## Sheet:/.test(second[0] || "")) second.unshift(lastHeading);
-      const note = (a, b) => `\n\nThis is lines ${a}-${b} of the document, read in parts. List only the plans in these lines; the other parts are read separately and merged with yours by exact plan name and code.`;
-      return [
-        ...(await readText(lines.slice(0, mid).join("\n"), note(1, mid), depth + 1)),
-        ...(await readText(second.join("\n"), note(mid + 1, lines.length), depth + 1)),
-      ];
+      const lastHeading = [...first].reverse().find((l) => /^## Sheet:/.test(l.text));
+      if (lastHeading && !/^## Sheet:/.test((second[0] || {}).text || "")) second.unshift({ n: null, text: lastHeading.text });
+      const num = (ls) => ls.filter((l) => l.n != null).map((l) => l.n);
+      const note = (ls) => `\n\nThis is lines ${Math.min(...num(ls))}-${Math.max(...num(ls))} of the document, read in parts. List only the plans in these lines; the other parts are read separately and merged with yours by exact plan name and code.`;
+      return [...(await readText(first, note(first), depth + 1)), ...(await readText(second, note(second), depth + 1))];
     }
   };
 
@@ -442,7 +453,7 @@ export async function analyzeProposal(file, roster) {
     if (!numpages) {
       // Nothing could count the pages: one reading of the whole document.
       console.warn(`${file.filename}: page count unknown; reading the whole document in one pass`);
-      return fold([await readOnce(client, model, pdfContent(p.buffer, ""))], { method: "full", pages: null });
+      return { ...fold([await readOnce(client, model, pdfContent(p.buffer, ""))], { method: "full", pages: null }), coverage: pdfCoverage(null, map, deep) };
     }
     const all = Array.from({ length: numpages }, (_, i) => i + 1);
     const relevant = map && numpages > MAP_MIN_PAGES ? relevantPages(map, numpages) : [];
@@ -451,7 +462,7 @@ export async function analyzeProposal(file, roster) {
       for (let i = 0; i < relevant.length; i += RELEVANT_BATCH) readings.push(...(await readPages(relevant.slice(i, i + RELEVANT_BATCH), numpages)));
       const out = fold(readings, { method: "mapped", pages: numpages, relevantPages: relevant, map: mapSummary(map) });
       const doubt = mappedDoubt(out, map);
-      if (!doubt) return out;
+      if (!doubt) return { ...out, coverage: pdfCoverage(numpages, map, deep) };
       console.log(`${file.filename}: relevant-page reading not confident (${doubt}); reading the whole document`);
     }
 
@@ -467,11 +478,11 @@ export async function analyzeProposal(file, roster) {
     if (numpages > RELEVANT_BATCH) {
       for (let i = 0; i < numpages; i += RELEVANT_BATCH) readings.push(...(await readPages(all.slice(i, i + RELEVANT_BATCH), numpages)));
     } else readings.push(...(await readPages(all, numpages)));
-    return fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages });
+    return { ...fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages }), coverage: pdfCoverage(numpages, map, deep) };
   }
   stage("EXTRACTING");
   if (p.kind === "image") {
-    return fold(
+    const out = fold(
       [
         await readOnce(client, model, [
           { type: "image", source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") } },
@@ -480,12 +491,68 @@ export async function analyzeProposal(file, roster) {
       ],
       { method: "full", pages: 1 },
     );
+    return { ...out, coverage: { kind: "image", total_pages: 1, mapped_pages: 0, deep_read_pages: 1, covered_pages: 1, uncovered: "" } };
   }
   // Text: a CSV, a spreadsheet or Word file already flattened, or an email body.
   const note = p.truncated ? [`The document was longer than ${p.text.length} characters and was cut off before it was read - plans past that point are missing.`] : [];
-  const out = fold(await readText(p.text), { method: "text", pages: null });
+  const out = fold(await readText(String(p.text || "").split("\n").map((text, i) => ({ n: i + 1, text }))), { method: "text", pages: null });
   if (note.length) out.audit_flags = [...note, ...(out.audit_flags || [])];
+  return { ...out, coverage: textCoverage(p.coverage, scanned) };
+}
+
+/** Told on every text read: a CSV or workbook can hold several tables. */
+const SECTIONS_NOTE = "\n\nThis document may hold several sheets, sections or tables (a heading or header row can repeat part-way down): read every one to the end - do not stop after the first plan table.";
+
+/**
+ * The coverage record of a PDF reading - what was inspected, from what was
+ * actually done: the pages the map listed, the pages a deep read came back
+ * from, and any page neither saw. A page is covered when the map inspected
+ * it or a deep read read it; the reading can only be Verified when every
+ * page is covered (server/plan-validate.js, "Source coverage").
+ */
+function pdfCoverage(numpages, map, deep) {
+  const total = Number.isInteger(numpages) && numpages > 0 ? numpages : null;
+  const mapped = new Set(map && Array.isArray(map.pages) ? map.pages.map((pg) => pg.page).filter((n) => Number.isInteger(n) && n >= 1 && (!total || n <= total)) : []);
+  const covered = new Set([...mapped, ...deep]);
+  const uncovered = total ? Array.from({ length: total }, (_, i) => i + 1).filter((n) => !covered.has(n)) : [];
+  return {
+    kind: "pdf",
+    total_pages: total,
+    mapped_pages: mapped.size,
+    deep_read_pages: deep.size,
+    deep_read: describePages([...deep].sort((a, b) => a - b)),
+    covered_pages: total ? total - uncovered.length : covered.size,
+    uncovered: describePages(uncovered),
+  };
+}
+
+/**
+ * The coverage record of a text reading (a workbook flattened by sheet, a
+ * CSV, an email body): the source's total lines, the lines a read came back
+ * from, each sheet inspected (every one of its lines read, or found empty
+ * when the workbook was opened) and each section read.
+ */
+function textCoverage(cov = {}, scanned) {
+  const total = Number.isInteger(cov.total_lines) ? cov.total_lines : scanned.size;
+  const allRead = (from, to) => {
+    for (let n = from; n <= to; n++) if (!scanned.has(n)) return false;
+    return true;
+  };
+  const out = { kind: cov.kind || "text", ...(cov.format ? { format: cov.format } : {}), total_lines: total, scanned_lines: scanned.size, total_chars: cov.total_chars ?? null };
+  if (Array.isArray(cov.sheets)) {
+    const sheets = cov.sheets.map((sh) => ({ name: sh.name, rows: sh.rows, status: sh.empty ? "empty" : allRead(sh.lineFrom, sh.lineTo) ? "read" : "not read" }));
+    Object.assign(out, { total_sheets: cov.total_sheets ?? sheets.length, inspected_sheets: sheets.filter((sh) => sh.status !== "not read").length, sheets });
+  }
+  if (Array.isArray(cov.sections)) Object.assign(out, { total_sections: cov.sections.length, sections_read: cov.sections.filter((sc) => allRead(sc.from, sc.to)).length });
   return out;
+}
+
+/** The canned reader's coverage (KENNION_FAKE_AI): the whole source, as a real read of it would record. */
+function fullCoverage(prepared) {
+  const p = prepared || {};
+  if (p.kind === "pdf" || p.kind === "image") return { kind: p.kind, total_pages: 1, mapped_pages: 0, deep_read_pages: 1, deep_read: "1", covered_pages: 1, uncovered: "" };
+  const lines = String(p.text || "").split("\n").length;
+  return textCoverage(p.coverage || { total_lines: lines }, new Set(Array.from({ length: (p.coverage && p.coverage.total_lines) || lines }, (_, i) => i + 1)));
 }
 
 /** Pages past which a PDF is mapped before it is read. */

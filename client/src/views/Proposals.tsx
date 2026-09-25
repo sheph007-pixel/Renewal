@@ -385,6 +385,8 @@ export interface VerifyCell {
   stageReason?: string | null;
   /** Appearances -> unique plans -> EPO excluded -> expected, as the canonical reading counts them. */
   reconciliation?: { plan_appearances: number; unique_plans: number; unique_ppo: number; unique_epo: number; expected: number } | null;
+  /** What of the source the reading covered: pages (PDF), sheets (workbook) or lines (CSV / text). */
+  coverage?: { kind: string; total_pages: number | null; mapped_pages: number | null; deep_read_pages: number | null; covered_pages: number | null; total_sheets: number | null; inspected_sheets: number | null; total_lines: number | null; scanned_lines: number | null } | null;
   /** Stored and audited, but not shown to the client - and why (server/plan-visibility.js). */
   hidden?: { id: string | null; name: string; plan_code: string | null; reason: string }[];
   /** review: a person decides (the carrier prints one plan name for several plan codes). */
@@ -428,8 +430,16 @@ function checkTitle(c: VerifyCell): string {
   const counts = rc
     ? [`Plans: ${rc.plan_appearances} appearances on the document → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO) → ${c.counts.stored ?? "-"} loaded in the database → ${c.counts.visible ?? "-"} shown to the client (grid ${c.counts.grid ?? "-"})`]
     : [];
+  const cv = c.coverage;
+  const coverage = !cv
+    ? ["Source coverage: not recorded"]
+    : cv.kind === "pdf" || cv.kind === "image"
+      ? [`Source coverage: ${cv.covered_pages ?? "?"} of ${cv.total_pages ?? "?"} pages inspected (${cv.mapped_pages ?? 0} mapped, ${cv.deep_read_pages ?? 0} deep-read)`]
+      : cv.kind === "sheets"
+        ? [`Source coverage: ${cv.inspected_sheets ?? "?"} of ${cv.total_sheets ?? "?"} sheets inspected`]
+        : [`Source coverage: ${cv.scanned_lines ?? "?"} of ${cv.total_lines ?? "?"} lines read`];
   const hidden = c.hidden && c.hidden.length ? [`Loaded but hidden from the client (${c.hidden.length}): ${[...new Set(c.hidden.map((h) => h.reason))].join("; ")}`] : [];
-  return [line, ...(c.stage ? [`State: ${c.stage}`] : []), ...counts, ...hidden, ...detail, ...(c.stuck ? [`Needs review: ${c.stuck}`] : [])].join("\n");
+  return [line, ...(c.stage ? [`State: ${c.stage}`] : []), ...coverage, ...counts, ...hidden, ...detail, ...(c.stuck ? [`Needs review: ${c.stuck}`] : [])].join("\n");
 }
 
 /** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
@@ -519,7 +529,7 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
         </strong>
         {fixing > 0 && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
         {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} review</span>}
-        <span style={{ color: C.faint }}>Verified: the source, the extraction, every deterministic check (no duplicates, four rates, plan/rate pairing, counts reconciled), a Claude audit and an independent OpenAI audit of this exact reading, and the group's Medical Plans grid all agree.</span>
+        <span style={{ color: C.faint }}>Verified: the source (every page, sheet or line inspected), the extraction, every deterministic check (no duplicates, four rates, plan/rate pairing, counts reconciled), a Claude audit and an independent OpenAI audit of this exact reading, and the group's Medical Plans grid all agree.</span>
       </div>
       {stuck.length > 0 && (
         <table style={{ marginTop: 8, borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>

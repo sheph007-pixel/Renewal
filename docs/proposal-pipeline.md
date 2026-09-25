@@ -58,6 +58,10 @@ same records: `currentProposals` → `clientProposals`.
      the disagreement is recorded as a `conflict`.
 4. **Validate** (`server/plan-validate.js`, pure code, before any AI audit):
    - the reading is of the current file version;
+   - **source coverage**: every PDF page was mapped or deep-read, every
+     workbook sheet inspected, every CSV/text line and section read
+     (`extracted.coverage`, recorded from what was actually read and tied
+     to the file's SHA-256; part of the reading's version hash);
    - no duplicate canonical identities, no plan code on two plans, no exact
      printed name on two plans, no BenSync ID on two plans;
    - required fields are present;
@@ -193,3 +197,4 @@ The main tests for this pipeline, in `scripts/`:
 - `test-field-audit.mjs` (field-by-field comparison, batching)
 - `test-shared-names.mjs` (one name on two codes: flag, review, confirm)
 - `test-option-ids-reread.mjs`
+- `test-source-coverage.mjs` (CSV sections, workbook sheets, truncation, Gravie sheets, the coverage check)

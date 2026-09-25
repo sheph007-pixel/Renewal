@@ -168,8 +168,20 @@ const findersFor = (stored, indices) => indices.map((index) => {
  * changes the hash, and the old audit no longer counts.
  */
 export function readingVersion(extracted) {
-  return crypto.createHash("sha256").update(JSON.stringify(valuesFor(extracted))).digest("hex").slice(0, 16);
+  return crypto.createHash("sha256").update(JSON.stringify({ plans: valuesFor(extracted), coverage: coverageSignature(extracted) })).digest("hex").slice(0, 16);
 }
+
+/**
+ * The part of the source-coverage record an audit stands on: which file
+ * version was covered and how completely. In the version hash, so an audit
+ * is only good for a reading of this exact coverage; a re-read that covers
+ * the source differently makes the old audit stale.
+ */
+const coverageSignature = (extracted) => {
+  const c = extracted && extracted.coverage;
+  if (!c) return null;
+  return { kind: c.kind, sourceSha: c.sourceSha || null, pages: [c.total_pages ?? null, c.covered_pages ?? null], sheets: [c.total_sheets ?? null, c.inspected_sheets ?? null], lines: [c.total_lines ?? null, c.scanned_lines ?? null] };
+};
 
 /**
  * One model's answer for one batch, checked in code: every plan in the batch

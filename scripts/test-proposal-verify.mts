@@ -49,6 +49,7 @@ const canon = (plans: object[]) => ({
   plans: [...plans, epoTwin],
   reconciliation: { plan_appearances: plans.length * 3 + 2, unique_plans: plans.length + 1, unique_ppo: plans.length, unique_epo: 1, expected: plans.length + 1, reader_unique_plans: plans.length + 1 },
   extraction: { sourceSha: "sha-acme" },
+  coverage: { kind: "pdf", total_pages: 12, mapped_pages: 12, deep_read_pages: 4, covered_pages: 12, uncovered: "", sourceSha: "sha-acme" },
 });
 const plan1 = (over = {}) => ({ name: "Copay 1500 PPO", option_id: "GR1", deductible: "$1,500", oop_max: "$5,000", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 }, source: src, ...over });
 const reading1 = canon([plan1()]);
@@ -72,6 +73,19 @@ assert.equal(cell.stage, "VERIFIED");
 assert.equal(cell.reconciliation.unique_epo, 1);
 assert.deepEqual(cell.hidden.map((h: { name: string }) => h.name), ["Copay 1500 EPO"], "loaded, audited, and hidden from the client - visibly");
 assert.match(cell.steps.grid.note, /1 hidden by rule: EPO/);
+
+// Source coverage: a reading that left pages uninspected is never Verified,
+// whatever both audits said - it is read again.
+const partial = { ...reading1, coverage: { ...reading1.coverage, covered_pages: 11, uncovered: "12" } };
+const uncovered = { ...good, extracted: partial, audit: { ...dualPass(partial), sourceSha: "sha-acme" } };
+cell = cellOf(run([uncovered], served([uncovered])));
+assert.equal(cell.failedAt, "validation");
+assert.equal(cell.fix, "read");
+assert.match(cell.steps.validation.note, /1 of 12 pages were never inspected \(pages 12\)/);
+assert.equal(cell.coverage.covered_pages, 11);
+assert.notEqual(readingVersion(partial), readingVersion(reading1), "coverage is part of the reading's version: an audit is only good for this exact coverage");
+cell = cellOf(run([{ ...good, extracted: { ...reading1, coverage: undefined }, audit: { ...dualPass({ ...reading1, coverage: undefined }), sourceSha: "sha-acme" } }], served([good])));
+assert.equal(cell.fix, "read", "a reading with no coverage record is read again");
 
 // An audit held to the older, rates-only standard is pending a field-by-field one.
 cell = cellOf(run([{ ...good, audit: { ...good.audit, standard: 1 } }], served([good])));

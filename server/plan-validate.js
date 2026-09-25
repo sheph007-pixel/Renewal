@@ -41,6 +41,13 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
     ...(sourceSha && ext.sourceSha && ext.sourceSha !== sourceSha ? ["The reading was extracted from a different version of the document."] : []),
   ], "read", "The reading is of the document on file now.");
 
+  // Source coverage: every page of a PDF, every sheet of a workbook, every
+  // line of a CSV or text file was inspected by the read this plan list came
+  // from - recorded by the reader (server/ai.js, server/gravie-parse.js) from
+  // what was actually read, and tied to the version of the document on file.
+  // A plan list is only as complete as the source it was read from.
+  check("coverage", "Source coverage", ...coverageCheck(x.coverage, sourceSha));
+
   check("plans", "Plans present", plans.length ? [] : ["No plans stored."], "read", plural(plans.length, "plan"));
 
   // No duplicates: identity, code, name, internal ID.
@@ -193,4 +200,45 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   const order = ["read", "correct", "review", "refresh"];
   const fix = order.find((f) => failed.some((c) => c.fix === f)) || null;
   return { ok: !failed.length, checks, fix, failures: failed.map((c) => `${c.label}: ${c.note}`) };
+}
+
+/**
+ * The source-coverage check's failures, repair and note. PDF: every page
+ * covered - inspected by the page map or deep-read (covered_pages ==
+ * total_pages, nothing uncovered). Workbook: every sheet inspected
+ * (inspected_sheets == total_sheets). CSV / text: every line of the file
+ * read (scanned_lines == total_lines - a file cut at the size limit never
+ * passes), every section read. An unrecognized sheet in a workbook read by
+ * a code parser goes to a person ("review"); anything else is read again.
+ */
+export function coverageCheck(cov, sourceSha) {
+  if (!cov) return [["The reading does not record that the whole source was inspected."], "read", ""];
+  const fail = [];
+  let fix = "read";
+  if (sourceSha && cov.sourceSha && cov.sourceSha !== sourceSha) fail.push("The coverage was recorded for a different version of the document.");
+  if (sourceSha && !cov.sourceSha) fail.push("The coverage record is not tied to the version of the document on file.");
+  let note = "";
+  if (cov.kind === "pdf" || cov.kind === "image") {
+    const total = cov.total_pages;
+    if (!Number.isInteger(total) || total < 1) fail.push("The document's page count is unknown, so its coverage cannot be proved.");
+    else if (cov.covered_pages !== total || cov.uncovered) fail.push(`${total - (cov.covered_pages || 0)} of ${total} pages were never inspected${cov.uncovered ? ` (pages ${cov.uncovered})` : ""}.`);
+    note = `All ${total} page${total === 1 ? "" : "s"} inspected: ${cov.mapped_pages || 0} mapped, ${cov.deep_read_pages || 0} deep-read.`;
+  } else if (cov.kind === "sheets") {
+    const sheets = Array.isArray(cov.sheets) ? cov.sheets : [];
+    if (!Number.isInteger(cov.total_sheets) || cov.total_sheets < 1) fail.push("The workbook's sheets were not enumerated.");
+    else if (cov.inspected_sheets !== cov.total_sheets || sheets.length !== cov.total_sheets) {
+      const missed = sheets.filter((sh) => sh.status === "not read" || sh.status === "unrecognized");
+      fail.push(`${cov.total_sheets - (cov.inspected_sheets || 0)} of ${cov.total_sheets} sheets not inspected${missed.length ? `: ${missed.map((sh) => `"${sh.name}"${sh.status === "unrecognized" ? " (a sheet the parser does not recognize)" : ""}`).join(", ")}` : ""}.`);
+      if (cov.parser && missed.some((sh) => sh.status === "unrecognized")) fix = "review";
+    }
+    if (!cov.parser && Number.isInteger(cov.total_lines) && cov.scanned_lines !== cov.total_lines) fail.push(`${cov.total_lines - (cov.scanned_lines || 0)} of ${cov.total_lines} lines of the workbook were never read (cut at the size limit).`);
+    const parsed = sheets.filter((sh) => sh.status === "parsed" || sh.status === "read").length;
+    note = `All ${cov.total_sheets} sheet${cov.total_sheets === 1 ? "" : "s"} inspected: ${parsed} ${cov.parser ? "parsed" : "read"}${sheets.length - parsed ? `, ${sheets.length - parsed} ${cov.parser ? "not quote sheets" : "empty"}` : ""}.`;
+  } else if (cov.kind === "text") {
+    if (!Number.isInteger(cov.total_lines)) fail.push("The file's length was not recorded.");
+    else if (cov.scanned_lines !== cov.total_lines) fail.push(`${cov.total_lines - (cov.scanned_lines || 0)} of ${cov.total_lines} lines were never read${cov.total_chars > 300000 ? " (the file is past the size limit)" : ""}.`);
+    if (Number.isInteger(cov.total_sections) && cov.sections_read !== cov.total_sections) fail.push(`${cov.total_sections - (cov.sections_read || 0)} of ${cov.total_sections} sections were never read.`);
+    note = `All ${cov.total_lines} lines read${Number.isInteger(cov.total_sections) ? ` (${cov.total_sections} section${cov.total_sections === 1 ? "" : "s"})` : ""}.`;
+  } else fail.push(`Unknown source kind "${cov.kind}".`);
+  return [fail, fix, note];
 }

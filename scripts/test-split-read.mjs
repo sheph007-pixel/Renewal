@@ -128,6 +128,11 @@ assert.equal(out.reconciliation.unique_plans, 5);
 assert.equal(out.reconciliation.appearances_read, 6);
 assert.equal(out.extraction.method, "split");
 assert.deepEqual(seen, ["1-5", "1-3", "1-2", "3", "4-5"], "halved until each part fits");
+// Coverage is recorded from what was actually read: every page came back from a deep read.
+assert.deepEqual(
+  [out.coverage.kind, out.coverage.total_pages, out.coverage.mapped_pages, out.coverage.deep_read_pages, out.coverage.covered_pages, out.coverage.uncovered],
+  ["pdf", 5, 0, 5, 5, ""],
+);
 
 // 2. A 25-page proposal: mapped, only the medical pages read, benefits and
 //    rates on distant pages paired by plan code.
@@ -157,6 +162,22 @@ assert.deepEqual(a.source.rates, [20]);
 const b = out.plans.find((p) => p.plan_code === "B1");
 assert.equal(b.rates.EE, 502);
 assert.deepEqual(b.source.rates, [21]);
+// Every page inspected by the map; only the 4 medical pages deep-read.
+assert.deepEqual(
+  [out.coverage.total_pages, out.coverage.mapped_pages, out.coverage.deep_read_pages, out.coverage.deep_read, out.coverage.covered_pages, out.coverage.uncovered],
+  [25, 25, 4, "3-4, 20-21", 25, ""],
+  "every page covered by the map; deep reads only where the medical data is",
+);
+
+// 2b. A map that skips pages: the pages it never inspected are deep-read,
+//     so every page is still covered.
+seen.length = 0;
+mapSays = { ...mapSays, pages: mapSays.pages.filter((pg) => pg.page <= 20) };
+out = await analyzeProposal({ filename: "long.pdf", prepared: { kind: "pdf", buffer: await pdfOf(25) }, context: null }, roster);
+assert.equal(out.extraction.method, "mapped");
+assert.deepEqual(out.extraction.relevantPages, [3, 4, 20, 21, 22, 23, 24, 25], "the unmapped pages 21-25 are read");
+assert.deepEqual([out.coverage.mapped_pages, out.coverage.covered_pages, out.coverage.uncovered], [20, 25, ""]);
+mapSays = { ...mapSays, pages: Array.from({ length: 25 }, (_, i) => ({ page: i + 1, kinds: [3, 4].includes(i + 1) ? ["plan_identity", "benefit_detail"] : [20, 21].includes(i + 1) ? ["rates"] : ["cover_or_boilerplate"] })) };
 
 // 3. The map saw more plans than the excerpt produced: read the whole document.
 seen.length = 0;
@@ -176,6 +197,7 @@ assert.deepEqual(seen, ["1-6", "window:1-3", "window:1-2", "window:3", "window:4
 assert.deepEqual(out.plans.map((p) => p.name), ["Plan p1", "Plan p2", "Plan p3", "Plan p4", "Plan p5", "Plan p6"]);
 assert.deepEqual(out.plans[0].source.identity, [1, 5], "page 5's repeat of plan p1 merged, pages as printed");
 assert.deepEqual(out.plans[5].source.rates, [6]);
+assert.deepEqual([out.coverage.total_pages, out.coverage.covered_pages, out.coverage.deep_read_pages], [6, 6, 6], "an encrypted PDF's page windows cover every page");
 
 // 5. A long quote with a plan grid on every page (Adobe HVAC's 300-page UHC
 //    quote): the map finds every page relevant, so the whole document is
@@ -189,6 +211,7 @@ assert.equal(seen[1], "1-40", "the first read is a 40-page window, not the whole
 assert.ok(!seen.includes("1-45"), "the whole document is never tried in one read");
 assert.ok(seen.includes("41-45"));
 assert.equal(out.plans.length, 45, "every page's plan, folded from the windows");
+assert.deepEqual([out.coverage.total_pages, out.coverage.mapped_pages, out.coverage.deep_read_pages, out.coverage.covered_pages], [45, 45, 45, 45]);
 
 server.close();
-console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document - ok");
+console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document; page coverage recorded from what was read - ok");

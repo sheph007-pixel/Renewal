@@ -40,6 +40,7 @@ writeFileSync(seed, JSON.stringify([{
     plans: [plan("P1000A", 600, 3), plan("P1000B", 600, 4)],
     reconciliation: { plan_appearances: 4, unique_plans: 2, unique_ppo: 2, unique_epo: 0, expected: 2, reader_unique_plans: 2 },
     extraction: { sourceSha: "sha-shared" },
+    coverage: { kind: "pdf", total_pages: 14, mapped_pages: 0, deep_read_pages: 14, covered_pages: 14, uncovered: "", sourceSha: "sha-shared" },
   },
 }]));
 
