@@ -2,7 +2,7 @@ import { useState } from "react";
 import { C, money0, panel } from "@/lib/importui";
 import { h3 } from "@/lib/ui";
 import Link from "@/lib/Link";
-import { PATHS, linkPath } from "@/lib/router";
+import { PATHS } from "@/lib/router";
 import { BROKER_LABEL, GROUP_STATUSES, GROUP_STATUS_LABEL, GROUP_STATUS_TONE, RENEWALS, RENEWAL_LABEL, RENEWAL_TONE, type AdminGroup } from "@/views/GroupsTable";
 import { GroupProposals } from "@/views/Proposals";
 import { GroupBilling } from "@/views/Funding";
@@ -63,11 +63,8 @@ function ClientLink({
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  // The readable address - company, plan-year code, then the token - so the
-  // link a client is sent says whose pages it opens.
-  const url = token
-    ? origin + linkPath(token, "home", { name, code })
-    : `${origin}/?code=${encodeURIComponent(code)}`;
+  // Short format: the evergreen code is the sign-in credential.
+  const url = `${origin}/${code}`;
   return (
     <div style={{ marginTop: 14 }}>
       <label style={{ display: "block", fontSize: 12.5, color: C.body, marginBottom: 5 }}>
