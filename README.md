@@ -435,7 +435,13 @@ are on page 18 and rates on page 37 is one plan with both. If that cannot
 account for every plan (a plan with benefits but no rates, fewer plans than
 the map saw), the whole document is read instead. Any reading too long for
 one answer is halved down to single pages and folded the same way, so no
-plan near either end is lost to an output limit. Spreadsheets and CSVs are
+plan near either end is lost to an output limit. Carriers often send
+owner-password-encrypted PDFs, which open without a password but which
+pdf-parse cannot read and pdf-lib will not cut: their pages are counted
+with pdf-lib (encryption ignored, or the map's count), and each half is
+read by sending the whole document with "read only pages X-Y" - the way
+Boss Logistics', Adobe HVAC's and Taz Panama City's UHC Level Funded quotes
+now read (`STEWARD_EPOCH` gave them a fresh round of repairs). Spreadsheets and CSVs are
 read as text by sheet, with sheet and row provenance; text cut at the
 300,000-character limit is flagged, never silently short. Gravie workbooks
 keep their code parser, which now records each plan's sheet and row.

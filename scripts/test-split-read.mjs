@@ -8,8 +8,13 @@
 //     provenance in original page numbers.
 //  3. When the relevant-page reading cannot account for the plans the map
 //     saw, the whole document is read instead.
+//  4. An owner-password-encrypted carrier PDF - which pdf-parse cannot open
+//     and pdf-lib will not cut - is still counted and read in halves, by
+//     sending the whole file with "read only pages X-Y" (the Boss Logistics
+//     UHC Level Funded quote failed exactly this way).
 import assert from "node:assert/strict";
 import http from "node:http";
+import { readFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 
 let doc = "short";
@@ -21,7 +26,7 @@ const plan = (o) => ({ name: "", plan_code: null, network: "Choice Plus", plan_t
 
 /** What each original page of the stand-in document shows. `pos` is its position in the file sent. */
 function onPage(page, pos) {
-  if (doc === "short") {
+  if (doc === "short" || doc === "encrypted") {
     const out = [plan({ name: `Plan p${page}`, plan_code: `P${page}`, deductible: "$1,000", oop_max: "$5,000", benefits: bens, rates: rates(page), source_pages: { identity: [pos], benefits: [pos], rates: [pos] } })];
     // The headline plan is printed again on the last page.
     if (page === 5) out.push(plan({ name: "Plan p1", plan_code: "P1", source_pages: { identity: [pos], benefits: [], rates: [] } }));
@@ -49,7 +54,7 @@ const server = http.createServer((req, res) => {
     const text = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
     const system = Array.isArray(j.system) ? j.system.map((b) => b.text).join("") : String(j.system || "");
     const pdfDoc = content.find((c) => c.type === "document");
-    const count = (await PDFDocument.load(Buffer.from(pdfDoc.source.data, "base64"))).getPageCount();
+    const count = (await PDFDocument.load(Buffer.from(pdfDoc.source.data, "base64"), { ignoreEncryption: true })).getPageCount();
     let out;
     let stop = "end_turn";
     if (/You map a carrier's medical proposal/.test(system)) {
@@ -57,10 +62,13 @@ const server = http.createServer((req, res) => {
       out = mapSays;
     } else {
       const m = /its pages are the original pages ([\d,\s-]+), in that order/.exec(text);
-      const pages = m ? expand(m[1]) : Array.from({ length: count }, (_, i) => i + 1);
-      assert.equal(pages.length, count, "the excerpt holds exactly the pages it says it does");
-      seen.push(m ? m[1].replace(/\s/g, "") : `1-${count}`);
-      const plans = pages.flatMap((pg, i) => onPage(pg, i + 1));
+      const w = /but read ONLY pages ([\d,\s-]+): list only/.exec(text);
+      const pages = m ? expand(m[1]) : w ? expand(w[1]) : Array.from({ length: count }, (_, i) => i + 1);
+      if (!w) assert.equal(pages.length, count, "the excerpt holds exactly the pages it says it does");
+      else assert.equal(count, 6, "a page window is sent the whole document");
+      seen.push(`${w ? "window:" : ""}${m ? m[1].replace(/\s/g, "") : w ? w[1].replace(/\s/g, "") : `1-${count}`}`);
+      // In a page window, page positions ARE the document's page numbers.
+      const plans = pages.flatMap((pg, i) => onPage(pg, w ? pg : i + 1));
       const appearances = plans.length;
       out = {
         carrier: "UnitedHealthcare",
@@ -81,7 +89,7 @@ const server = http.createServer((req, res) => {
         summary: `pages ${pages.join(",")}`,
         audit_flags: [],
       };
-      if (count > (doc === "short" ? 2 : 2)) stop = "max_tokens";
+      if (pages.length > 2) stop = "max_tokens";
     }
     const text2 = stop === "max_tokens" ? JSON.stringify(out).slice(0, 200) : JSON.stringify(out);
     res.writeHead(200, { "Content-Type": "text/event-stream" });
@@ -156,6 +164,17 @@ out = await analyzeProposal({ filename: "long.pdf", prepared: { kind: "pdf", buf
 assert.ok(seen.includes("1-25"), "fell back to the whole document");
 assert.equal(out.extraction.method, "split");
 assert.equal(out.plans.length, 2);
+
+// 4. An encrypted carrier PDF: counted, and read in page windows.
+doc = "encrypted";
+seen.length = 0;
+const encrypted = readFileSync(new URL("./fixtures/encrypted-6-pages.pdf", import.meta.url));
+await assert.rejects(PDFDocument.load(encrypted), /encrypted/, "the fixture is a PDF pdf-lib will not cut");
+out = await analyzeProposal({ filename: "BOSS LOGISTICS WC UHC LF GRX.pdf", prepared: { kind: "pdf", buffer: encrypted }, context: null }, roster);
+assert.deepEqual(seen, ["1-6", "window:1-3", "window:1-2", "window:3", "window:4-6", "window:4-5", "window:6"], "halved in page windows over the whole document");
+assert.deepEqual(out.plans.map((p) => p.name), ["Plan p1", "Plan p2", "Plan p3", "Plan p4", "Plan p5", "Plan p6"]);
+assert.deepEqual(out.plans[0].source.identity, [1, 5], "page 5's repeat of plan p1 merged, pages as printed");
+assert.deepEqual(out.plans[5].source.rates, [6]);
 
 server.close();
 console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document - ok");
