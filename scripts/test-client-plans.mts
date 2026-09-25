@@ -39,12 +39,12 @@ const staff = await (await fetch(`${base}/api/signin`, { method: "POST", headers
 const auth = { Authorization: `Bearer ${staff.token}` };
 const g = staff.groups.find((x: { archived?: boolean; eligible?: boolean }) => !x.archived && x.eligible !== false);
 const cookie = ((await fetch(`${base}/api/signin`, { method: "POST", headers: json, body: JSON.stringify({ code: g.code }) })).headers.get("set-cookie") || "").split(";")[0];
-const SLOT = "Nationwide";
+const SLOT = "Angle";
 
 // 100 quoted plans across every network and plan type.
 const NETS = ["Cigna Open Access Plus (PPO)", "Cigna Open Access Plus (EPO)", "Cigna LocalPlus (PPO)", "Cigna HMO", "Choice Plus"];
 const plans = Array.from({ length: 100 }, (_, i) => ({
-  name: `Nationwide ${NETS[i % 5].includes("EPO") ? "EPO" : NETS[i % 5].includes("HMO") ? "HMO" : "Plan"} ${1000 + i * 50}${i % 7 === 0 ? " HSA" : ""}`,
+  name: `Angle ${NETS[i % 5].includes("EPO") ? "EPO" : NETS[i % 5].includes("HMO") ? "HMO" : "Plan"} ${1000 + i * 50}${i % 7 === 0 ? " HSA" : ""}`,
   plan_code: `NWP${String(i + 1).padStart(3, "0")}`,
   network: NETS[i % 5],
   plan_type: NETS[i % 5].includes("EPO") ? "EPO" : NETS[i % 5].includes("HMO") ? "HMO" : "PPO",
@@ -54,7 +54,7 @@ const plans = Array.from({ length: 100 }, (_, i) => ({
   rates: { EE: 400 + i, ES: 900 + i, EC: 800 + i, FAM: 1300 + i },
   monthly_total: null,
 }));
-const reading = { carrier: "Nationwide", funding: "level funded", quotes_medical: true, matched_group: g.name, confidence: 0.95, effective_date: "2027-01-01", proposal_type: "renewal", enrolled_on_document: g.enrolled, plans, total_monthly: null, summary: "Canned 100-plan quote." };
+const reading = { carrier: "Angle Health", funding: "level funded", quotes_medical: true, matched_group: g.name, confidence: 0.95, effective_date: "2027-01-01", proposal_type: "renewal", enrolled_on_document: g.enrolled, plans, total_monthly: null, summary: "Canned 100-plan quote." };
 const up = await fetch(`${base}/api/admin/proposals?filename=nw100.json&group=${encodeURIComponent(g.name)}&slot=${SLOT}`, { method: "POST", headers: { ...auth, "Content-Type": "text/plain" }, body: JSON.stringify(reading) });
 assert.equal(up.status, 200, await up.text());
 
@@ -95,7 +95,7 @@ assert.equal(new Set(pr.plans.map((p: { identity: string }) => p.identity)).size
 const COMMON = ["optionId", "identity", "name", "planCode", "network", "planType", "deductible", "oopMax", "benefits", "rates", "source"];
 for (const pl of pr.plans) for (const k of COMMON) assert.ok(k in pl, `${pl.planCode} carries ${k}`);
 assert.ok(pr.plans.every((pl: { source: unknown }) => pl.source), "every plan says where on the proposal it was read");
-assert.deepEqual([pr.slot, pr.carrier, pr.funding, pr.verified], [SLOT, "Nationwide", "level funded", true]);
+assert.deepEqual([pr.slot, pr.carrier, pr.funding, pr.verified], [SLOT, "Angle Health", "level funded", true]);
 assert.deepEqual(pr.plans.slice(0, 2).map((pl: { benefits: { hsaEligible: boolean } }) => pl.benefits.hsaEligible), [true, false], "HSA as the proposal states it (yes, no), normalized to a boolean");
 const epo = pr.plans.filter((p: { network: string }) => /EPO/.test(p.network)).length;
 const localPlus = pr.plans.filter((p: { network: string }) => /LocalPlus/.test(p.network)).length;

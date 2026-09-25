@@ -332,7 +332,7 @@ export function planDocumentUrl(carrier: string, d: PlanDesign, kind: "sbc" | "s
   return `/api/carriers/${carrierDocSlug(carrier)}/plan-documents/${planCodeSlug(d.planCode)}/${kind}?year=${d.planYear}`;
 }
 
-/** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Nationwide, Angle, Cobalt). */
+/** A group's current proposal in one slot (UHC Fully Insured, UHC Level Funded, Gravie, Angle, Optimyl). */
 export interface GroupProposal {
   id: number;
   slot: string;
@@ -860,7 +860,7 @@ export interface MarketPlan {
 }
 
 /** The proposal slots a group's 2027 options are built from, in the order they are shown. */
-export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Optimyl"];
+export const PROPOSAL_SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Angle", "Optimyl"];
 
 /** "$1,500" / "1500.00" / "$1,500 individual" → 1500; anything unreadable → null. */
 export function moneyNum(v: string | number | null | undefined): number | null {

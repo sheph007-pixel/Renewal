@@ -215,14 +215,11 @@ function isChurch(g) {
 /**
  * The slots that apply to one group, in the "carrier this group is being
  * shopped at" sense the Welcome page and the Proposals admin grid use to
- * say a review is complete: Angle Scorecard is never a quote to wait on
- * (see SLOTS above), so it never counts toward what a group is still
- * missing - the underlying document, if one is on file, stays stored and
- * is simply not counted. A church never gets a UHC Level Funded slot at
+ * say a review is complete. A church never gets a UHC Level Funded slot at
  * all - UHC Fully Insured is its only UHC option.
  */
 function slotsForGroup(g) {
-  return SLOTS.filter((sl) => sl !== "Angle Scorecard" && !(sl === "UHC Level Funded" && isChurch(g)));
+  return SLOTS.filter((sl) => !(sl === "UHC Level Funded" && isChurch(g)));
 }
 
 /**
@@ -2749,8 +2746,8 @@ const clientVerifiedOnly = () => process.env.KENNION_CLIENT_VERIFIED_ONLY !== "0
  * THE client plan universe for a group - the one resolver the Medical Plans
  * grid, plan cards, comparison, pricing, documents, Sign Up and the AI
  * Assistant all read (every client payload carries `proposals` from here):
- *   1. the group's current proposals (Cobalt and the Angle Scorecard are
- *      admin-only), Verified ones only (see clientVerifiedOnly);
+ *   1. the group's current proposals (never one in a retired slot - Cobalt,
+ *      Nationwide, the Angle Scorecard), Verified ones only (see clientVerifiedOnly);
  *   2. less the proposal slots Kennion turned OFF for this group;
  *   3. every canonical plan of every remaining proposal - all of them, with
  *      their exact stored values. Nothing is hidden by network, plan type,
@@ -2760,7 +2757,7 @@ const clientVerifiedOnly = () => process.env.KENNION_CLIENT_VERIFIED_ONLY !== "0
  * plan `hidden`; there are none.)
  */
 function clientAvailablePlans(name) {
-  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard" && slotEnabled(name, p.slot));
+  const list = (currentProposals[name] || []).filter((p) => !retiredSlot(p.slot) && slotEnabled(name, p.slot));
   const withStatus = list
     .map((p) => {
       const v = verifiedProposals.get(p.id);
@@ -4631,16 +4628,18 @@ const proposalStore = db
  * newer one in a slot replaces the older, which is kept. Surest is a
  * UnitedHealthcare product, so a Surest quote is that group's UHC proposal;
  * an ancillary-only document (dental, vision, life) fills no slot at all.
- *
- * "Angle Scorecard" is not a rate quote - Angle Health sends a Health
- * Scorecard alongside its actual proposal for a group, a second document
- * that would otherwise collide with (and delete) the real proposal if both
- * landed in the "Angle" slot. It gets its own slot instead, with no rate
- * plans of its own, so it is excluded everywhere a slot means "a carrier
- * this group is shopped at" - slotsForGroup, clientProposals - rather than
- * "a document on file"; see the comments there.
  */
-const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", "Angle", "Angle Scorecard", "Optimyl"];
+const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Angle", "Optimyl"];
+
+/**
+ * Slots no longer offered: Cobalt, Nationwide and the Angle Health Scorecard
+ * (a companion document, not a rate quote). A proposal already filed under
+ * one keeps it - stored, never deleted - but it is not on the grid, not
+ * checked, not counted and never served to a client. A new Nationwide quote
+ * or Angle scorecard fills no slot.
+ */
+const RETIRED_SLOTS = ["Cobalt", "Nationwide", "Angle Scorecard"];
+const retiredSlot = (slot) => RETIRED_SLOTS.includes(slot);
 
 /**
  * Option IDs: every plan a client can be offered gets a short, stable handle
@@ -4911,10 +4910,10 @@ function slotFor(carrier, funding, quotesMedical, filename) {
   const c = String(carrier || "").toLowerCase();
   // Angle Health's Health Scorecard is not a rate quote and must never land
   // in the "Angle" slot, where a newer upload replaces (and deletes) the
-  // older one: a scorecard there would delete the group's real proposal, or
-  // vice versa. Its filename says what it is even when the reader does not
-  // mark it ancillary, so this is checked before quotesMedical can return null.
-  if (/scorecard/i.test(filename || "") && /angle/.test(c)) return "Angle Scorecard";
+  // older one: a scorecard there would delete the group's real proposal. Its
+  // filename says what it is even when the reader does not mark it
+  // ancillary, so this is checked first. It fills no slot.
+  if (/scorecard/i.test(filename || "") && /angle/.test(c)) return null;
   if (quotesMedical === false) return null;
   const f = String(funding || "").toLowerCase();
   if (/united|uhc|surest|optum/.test(c)) {
@@ -4923,7 +4922,6 @@ function slotFor(carrier, funding, quotesMedical, filename) {
     return null; // UnitedHealthcare, funding unclear - leave for staff to say
   }
   if (/gravie/.test(c)) return "Gravie";
-  if (/nationwide/.test(c)) return "Nationwide";
   if (/angle/.test(c)) return "Angle";
   if (/optimyl/.test(c)) return "Optimyl";
   return null; // not a tracked carrier: kept on file, but it fills no slot
@@ -4942,9 +4940,9 @@ function slotFor(carrier, funding, quotesMedical, filename) {
  */
 function guessSlotFromFilename(filename) {
   const f = String(filename || "");
-  if (/scorecard/i.test(f) && /angle/i.test(f)) return "Angle Scorecard";
+  if (/scorecard/i.test(f) && /angle/i.test(f)) return null; // a companion document, never the Angle quote's slot
   if (/gravie/i.test(f)) return "Gravie";
-  if (/nationwide/i.test(f)) return "Nationwide";
+  if (/nationwide/i.test(f)) return null; // Nationwide is no longer a slot
   if (/optimyl/i.test(f)) return "Optimyl";
   if (/\bangle\b/i.test(f)) return "Angle";
   // Of every carrier this app tracks, only UnitedHealthcare splits a slot by
@@ -4964,9 +4962,8 @@ function guessSlotFromFilename(filename) {
  * summary that calls itself ancillary, or one that names only ancillary
  * products and quoted no plan with a rate.
  */
-/** A proposal whose read finished with something to show: plans, or a scorecard's reading. */
-const hasReading = (r) =>
-  !!(r.extracted && Array.isArray(r.extracted.plans) && (r.extracted.plans.length || r.slot === "Angle Scorecard"));
+/** A proposal whose read finished with plans to show. */
+const hasReading = (r) => !!(r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
 
 /**
  * After any change: recount proposals per group for the Groups page, and
@@ -4990,25 +4987,15 @@ async function proposalsChanged() {
           remapped = true;
         }
       }
+      // A proposal filed under a retired slot keeps it, as it is (see
+      // RETIRED_SLOTS): stored for the record, off the grid.
+      if (retiredSlot(r.slot)) continue;
       // An ancillary proposal fills no slot, whichever slot an older reading
-      // gave it: the four are group health. Angle Scorecard is the one
-      // exception - it always reads ancillary (no rates), but it has its
-      // own slot on purpose (see SLOTS above) and must keep it.
-      if (r.slot && r.slot !== "Angle Scorecard" && isAncillaryRow(r)) {
+      // gave it: the slots are group health.
+      if (r.slot && isAncillaryRow(r)) {
         await proposalStore.updateProposal(r.id, { slot: null });
         remapped = true;
         continue;
-      }
-      // A scorecard read before that exception existed lost its slot to the
-      // rule above and never got it back on its own; put it back now.
-      if (!r.slot && r.status !== "container") {
-        const x = r.extracted || {};
-        const scorecardSlot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
-        if (scorecardSlot === "Angle Scorecard") {
-          await proposalStore.updateProposal(r.id, { slot: scorecardSlot });
-          remapped = true;
-          continue;
-        }
       }
       // Filed under a group but still slotless - most often a document too
       // long for one AI reading to finish (it will never get a slot from the
@@ -5047,9 +5034,7 @@ async function proposalsChanged() {
           remapped = true;
         }
       }
-      // Cobalt is no longer offered, but a proposal already filed under that
-      // slot keeps it rather than being re-derived into an unassigned one.
-      if (!r.slot || SLOTS.includes(r.slot) || r.slot === "Cobalt") continue;
+      if (!r.slot || SLOTS.includes(r.slot)) continue;
       const x = r.extracted || {};
       const slot = slotFor(r.carrier || x.carrier, x.funding, x.quotes_medical, r.filename);
       await proposalStore.updateProposal(r.id, { slot });
@@ -6140,11 +6125,11 @@ const correcting = new Set();
 function proposalVerification(rows) {
   const live = groups.filter((g) => !g.archived && g.eligible);
   const check = (rs) => verifyProposals({
-    groups: live.map((g) => ({ name: g.name, slots: [...slotsForGroup(g), "Angle Scorecard"], tiers: clientGroupView(g).tiers || {} })),
+    groups: live.map((g) => ({ name: g.name, slots: slotsForGroup(g), tiers: clientGroupView(g).tiers || {} })),
     rows: rs,
     // Everything stored for the group, each plan marked with whether the
     // client is shown it; the check compares the client's share to the rules.
-    served: (name) => (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt"),
+    served: (name) => (currentProposals[name] || []).filter((p) => !retiredSlot(p.slot)),
     isEpoPlan,
     isBlankPlan,
     slotEnabled,
