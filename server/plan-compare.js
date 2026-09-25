@@ -56,8 +56,14 @@ export const AUDIT_STANDARD = 2;
  *    the document prints ("EZ18 Open Access" for "Open Access", code EZ18) -
  *    matches that printed name. Used where one printed name sits on several
  *    plan codes (UnitedHealthcare fully insured).
+ * 8: imaging drops the parts labelled labs or X-ray when another part is
+ *    left ("D&C: DDP; X-ray $0, Lab $0: DDP" is "D&C: DDP"). A Gravie rate
+ *    workbook read by the parser takes each plan's network from its sheet;
+ *    the workbook's one header line names every network it prices ("Cigna
+ *    Healthcare LocalPlus Cigna Healthcare Open Access Plus"), so a plan's
+ *    network agrees when that line names it.
  */
-export const COMPARE_VERSION = 7;
+export const COMPARE_VERSION = 8;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -210,11 +216,15 @@ const onceEach = (v) => {
 
 const ADVANCED_IMAGING = /\b(?:mri|ct|pet|advanced|high[- ]?tech|maj(?:or)?\.?\s*diag\w*|md)\b/i;
 /** The advanced-imaging part of an imaging value that labels its parts ("MRI/CT $500; Lab/X-Ray $40" -> "MRI/CT $500"); the value as is otherwise. */
+const LAB_XRAY = /\b(?:x-?rays?|labs?|laborator\w*|blood\s*work)\b/i;
 export function advancedImagingPart(v) {
   const parts = String(v ?? "").split(/;|,(?!\d)|\s\/\s/).map((p) => p.trim()).filter(Boolean);
   if (parts.length < 2) return String(v ?? "");
   const adv = parts.filter((p) => ADVANCED_IMAGING.test(p));
-  return adv.length && adv.length < parts.length ? adv.join("; ") : String(v ?? "");
+  if (adv.length && adv.length < parts.length) return adv.join("; ");
+  // No part names MRI / CT: the parts that are not labs or X-ray are.
+  const rest = parts.filter((p) => !LAB_XRAY.test(p));
+  return rest.length && rest.length < parts.length ? rest.join("; ") : String(v ?? "");
 }
 
 export function sameBenefit(a, b, field = null) {
@@ -346,7 +356,14 @@ export const optimylNumber = (code) => {
 /** The fixed name an Optimyl plan is stored under: its proposal prints a plan number and no name. */
 export const optimylLabel = (n) => `Optimyl Plan ${n}`;
 
-export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS } = {}) {
+/** The stored network's words all appear in a document line that names several networks. */
+export function networkNamedIn(stored, line) {
+  const ws = networkWords(stored).filter((w) => !PLAN_TYPES.has(w));
+  const wl = new Set(networkWords(line));
+  return ws.length > 0 && ws.every((w) => wl.has(w));
+}
+
+export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS, networkFromSheet = false } = {}) {
   const out = [];
   const diff = (field, st, doc) => out.push({ field, stored: st == null ? "" : String(st), onDocument: doc == null || String(doc) === "" ? "not stated" : String(doc) });
   const optimylNo = optimylNumber(stored.plan_code);
@@ -358,7 +375,7 @@ export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS } = {
   const readNo = /^\s*(?:optimyl\s+)?(?:plan\s*)?#?\s*(\d+)\s*$/i.exec(String(read.plan_code ?? ""));
   const optimylCode = optimylNo != null && readNo && Number(readNo[1]) === optimylNo;
   if (!optimylCode && normCode(stored.plan_code) !== normCode(read.plan_code)) diff("plan_code", stored.plan_code, read.plan_code);
-  if (!blank(read.network) && !blank(stored.network) && !sameNetwork(stored.network, read.network)) diff("network", stored.network, read.network);
+  if (!blank(read.network) && !blank(stored.network) && !sameNetwork(stored.network, read.network) && !(networkFromSheet && networkNamedIn(stored.network, read.network))) diff("network", stored.network, read.network);
   for (const f of ["deductible", "oop_max"]) {
     const st = stored[f];
     const doc = read[f];

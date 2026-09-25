@@ -70,6 +70,18 @@ assert.ok(!sameName("EZ18 Open Access Direct", "Open Access", "EZ18"));
   ]);
   assert.deepEqual(shared.map((p) => p.name), ["EZ18 Open Access", "EZ2T Open Access", "EZ3D Open Access", "Choice Plus Gold", "Plan A", "Plan A"], "a shared name takes each plan's short code; a unique name and a long plan ID are left alone");
 }
+// v8: imaging drops labs / X-ray parts; a Gravie parser reading's network is named in the header line.
+assert.ok(sameBenefit("D&C: DDP; X-ray $0, Lab $0: DDP", "D&C: DDP", "imaging"));
+assert.ok(sameBenefit("Ded+100%: DDP; X-ray $0, Lab $0: DDP", "Ded+100%: DDP", "imaging"));
+assert.ok(!sameBenefit("$0", "D&C: DDP; X-ray $0, Lab $0: DDP", "imaging"), "the X-ray figure is not the imaging cost");
+{
+  const st = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna Open Access Plus (PPO)", deductible: "$1000", oop_max: "$6000", benefits: { coinsurance: "20%" }, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
+  const rd = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna Healthcare LocalPlus Cigna Healthcare Open Access Plus", deductible: "$1000", oop_max: "$6000", coinsurance: "20%", EE: 1, ES: 2, EC: 3, FAM: 4 };
+  assert.deepEqual(comparePlan(st, rd, { benefitFields: ["coinsurance"], networkFromSheet: true }), []);
+  assert.deepEqual(comparePlan({ ...st, network: "Cigna LocalPlus" }, rd, { benefitFields: ["coinsurance"], networkFromSheet: true }), []);
+  assert.deepEqual(comparePlan({ ...st, network: "UHC Choice Plus" }, rd, { benefitFields: ["coinsurance"], networkFromSheet: true }).map((d) => d.field), ["network"], "a network the line does not name is a finding");
+  assert.deepEqual(comparePlan(st, rd, { benefitFields: ["coinsurance"] }).map((d) => d.field), ["network"], "outside a parser-read workbook the network must be the plan's own");
+}
 // Optimyl: a plan number and no printed name.
 {
   const op = { name: "Optimyl Plan 1", plan_code: "OPTIMYL PLAN 1", network: "", deductible: "$1,000", oop_max: "$5,000", benefits: {}, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
