@@ -489,6 +489,19 @@ const DEFAULT_EFFECTIVE_DATE = "2027-01-01";
 /** "2027-01-01" -> "January 1, 2027", parsed as UTC so the server's own timezone never shifts the day. */
 const fmtEffectiveDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
+// The Welcome page's headline and paragraph when staff have not written one
+// for the group. Existing clients are told about the 2027 options; a New
+// group starts blank, and staff write its greeting as they bring it on.
+const DEFAULT_GREETING = {
+  existing: {
+    headline: "Options For 2027",
+    body:
+      "As you prepare for your upcoming renewal, you will notice our medical program has evolved. Kennion's recent growth has unlocked new partnerships with major national Carriers and TPAs. Rather than a standard renewal, we shopped the market to bring these upgraded options directly to your group. We have paired your trusted Kennion team with intelligent technology to simplify complexity, improve decision-making, and ensure you find the best fit for your employees.",
+  },
+  new: { headline: "", body: "" },
+};
+const defaultGreeting = (status) => DEFAULT_GREETING[status] || DEFAULT_GREETING.existing;
+
 function rebuild() {
   const base = data.groups.filter((g) => (g.plans || []).length > 0);
   const merged = new Map(base.map((g) => [g.name, g]));
@@ -535,6 +548,11 @@ function rebuild() {
     // Existing is the safe default; staff flip a group to New by hand.
     g.groupStatus = m.groupStatus || "existing";
     g.effectiveDate = m.effectiveDate || DEFAULT_EFFECTIVE_DATE;
+    // The Welcome greeting: staff's own wording when set (an empty string
+    // included - blank on purpose), else the default for the group status.
+    const greeting = defaultGreeting(g.groupStatus);
+    g.greetingHeadline = m.greetingHeadline != null ? m.greetingHeadline : greeting.headline;
+    g.greetingBody = m.greetingBody != null ? m.greetingBody : greeting.body;
     // Archived, or not on a program carrier: the row stays for staff, but the
     // code is refused at sign-in.
     if (!g.archived && g.eligible) {
@@ -568,6 +586,9 @@ function rebuild() {
     renewal: g.renewal,
     groupStatus: g.groupStatus,
     effectiveDate: g.effectiveDate,
+    greetingHeadline: g.greetingHeadline,
+    greetingBody: g.greetingBody,
+    greetingIsSet: (meta[g.name] || {}).greetingHeadline != null || (meta[g.name] || {}).greetingBody != null,
     proposals: proposalCounts[g.name] || 0,
     invoice: invoiceByGroup[g.name] || null,
     address1: g.address1 || null,
@@ -2475,6 +2496,10 @@ const CLIENT_GROUP_FIELDS = [
   // grid, dental/vision/supplemental) reads the same regardless.
   "groupStatus",
   "effectiveDate",
+  // The headline and paragraph at the top of the Welcome page, as staff set
+  // them on the company page (or the default for the group status).
+  "greetingHeadline",
+  "greetingBody",
   // Dental, vision, life, disability … - the same shape the Groups page
   // shows staff, with no member detail: benefit, carrier, plan, enrolled,
   // monthly. Present only once an Employee Navigator export has been read
@@ -3619,7 +3644,7 @@ const EDITABLE_FIELDS = new Set([
 app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }), async (req, res) => {
   const { group, field, value } = req.body || {};
   const isCompanyField = EDITABLE_FIELDS.has(field);
-  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager", "groupStatus", "effectiveDate"].includes(field) || isCompanyField)) {
+  if (!group || !(["companyId", "sizeCategory", "broker", "renewal", "archived", "manager", "groupStatus", "effectiveDate", "greetingHeadline", "greetingBody"].includes(field) || isCompanyField)) {
     return res.status(400).json({ error: "group and a valid field are required" });
   }
   if (!groups.some((g) => g.name === group)) {
@@ -3642,6 +3667,24 @@ app.post("/api/admin/group-meta", requireStaff, express.json({ limit: "16kb" }),
     meta[group] = { ...(meta[group] || {}), archived: !!value };
     try {
       if (db) await db.setMeta(group, "archived", !!value, req.staffEmail || null);
+    } catch (e) {
+      return res.status(500).json({ error: "Could not save: " + e.message });
+    }
+    rebuild();
+    return res.json({ ok: true, groups: adminGroups });
+  }
+
+  if (field === "greetingHeadline" || field === "greetingBody") {
+    // null goes back to the default for the group status; any string,
+    // empty included, is what the Welcome page shows.
+    const text = value == null ? null : String(value).replace(/\r\n?/g, "\n").trim();
+    const max = field === "greetingHeadline" ? 200 : 4000;
+    if (text && text.length > max) {
+      return res.status(400).json({ error: `Keep the ${field === "greetingHeadline" ? "headline" : "paragraph"} under ${max} characters.` });
+    }
+    meta[group] = { ...(meta[group] || {}), [field]: text };
+    try {
+      if (db) await db.setMeta(group, field, text, req.staffEmail || null);
     } catch (e) {
       return res.status(500).json({ error: "Could not save: " + e.message });
     }

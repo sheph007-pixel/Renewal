@@ -110,6 +110,9 @@ export interface Group {
   groupStatus?: "new" | "existing";
   /** The date this group's elections take effect, as "YYYY-MM-DD"; falls back to the system default when unset. */
   effectiveDate?: string;
+  /** The Welcome page's headline and paragraph, as staff set them (or the default for the group status). Blank shows nothing. */
+  greetingHeadline?: string;
+  greetingBody?: string;
   tpa: string;
   enrolled: number;
   /**

@@ -976,6 +976,8 @@ export default function App() {
                 lastSignup={data.signup || null}
                 effectiveDate={g.effectiveDate}
                 groupStatus={g.groupStatus}
+                greetingHeadline={g.greetingHeadline}
+                greetingBody={g.greetingBody}
               />
             ) : tab === "current" ? (
               <Current
