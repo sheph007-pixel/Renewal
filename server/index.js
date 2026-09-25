@@ -30,7 +30,7 @@ import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
 import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
 import { categorizeResource } from "./resources.js";
-import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
+import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
 import { validatePlans } from "./plan-validate.js";
@@ -1350,7 +1350,7 @@ app.post("/api/signin", async (req, res) => {
     overrides: overridesFor(g.name),
     // The carrier proposals on file for this group - plans and tier rates as
     // read off the documents - and this month's billing, counts and rates only.
-    proposals: clientProposals(g.name),
+    proposals: clientAvailablePlans(g.name),
     slots: slotsForGroup(g),
     funding: fundingSnapshot(g.name),
     // This month's invoice, if one is filed: enough to offer the link, not the file.
@@ -2059,7 +2059,7 @@ async function assistantData(g) {
   const signup = await latestSignup(g.name);
   return {
     group: clientGroupView(g),
-    proposals: clientProposals(g.name),
+    proposals: clientAvailablePlans(g.name),
     funding: fundingSnapshot(g.name),
     manager: managerContact(g.manager),
     splits: splitFor(g) ? { [g.name]: splitFor(g) } : {},
@@ -2222,7 +2222,7 @@ app.post("/api/group/export", async (req, res) => {
     }
   }
   const group = clientGroupView(g);
-  const proposals = clientProposals(g.name);
+  const proposals = clientAvailablePlans(g.name);
   let file;
   try {
     if (body.format === "changes") {
@@ -2711,21 +2711,60 @@ function clientUhc(g) {
   };
 }
 
-/** A group's current proposals as a client sees them: PPO plans only, and no Cobalt or Angle Scorecard - both stay admin-only. */
-function clientProposals(name) {
-  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard");
-  // Verified comes from the full check (source, extraction, validation, both
-  // audits of this exact reading, grid) and nothing else: a proposal still
-  // being read, validated, audited or corrected is "pending" to the client,
-  // its plan cards and the assistant alike.
-  const withStatus = list.map((p) => {
-    const v = verifiedProposals.get(p.id);
-    return { ...p, verified: !!v, audit: v ? { status: "pass", completedAt: v } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
-  });
-  // Every plan is stored; the visibility rules (server/plan-visibility.js)
-  // decide which the client, its grid and the assistant are shown.
+/**
+ * Which proposal slots each group's client is shown: "<group>||<slot>" ->
+ * { clientEnabled, updatedBy, updatedAt }, kept in
+ * kennion.proposal_slot_visibility - apart from the proposal rows, so a
+ * re-read or a newer upload in the slot never changes it. No entry = ON.
+ */
+const slotVisibility = new Map();
+async function loadSlotVisibility() {
+  if (!db) return;
+  try {
+    for (const r of await db.listSlotVisibility()) slotVisibility.set(`${r.groupName}||${r.slot}`, r);
+  } catch (e) {
+    console.error("could not read proposal-slot visibility:", e.message);
+  }
+}
+/** Is this proposal slot ON for the group's client? ON unless Kennion turned it OFF. */
+const slotEnabled = (groupName, slot) => {
+  const v = slotVisibility.get(`${groupName}||${slot}`);
+  return v ? v.clientEnabled !== false : true;
+};
+/**
+ * Whether a client is shown only Verified proposals. On by default: the
+ * client sees a proposal once the whole check has passed. Set
+ * KENNION_CLIENT_VERIFIED_ONLY=0 to show proposals still being verified
+ * (marked pending) - for a book still mid-way through its first pass.
+ */
+const clientVerifiedOnly = () => process.env.KENNION_CLIENT_VERIFIED_ONLY !== "0";
+
+/**
+ * THE client plan universe for a group - the one resolver the Medical Plans
+ * grid, plan cards, comparison, pricing, documents, Sign Up and the AI
+ * Assistant all read (every client payload carries `proposals` from here):
+ *   1. the group's current proposals (Cobalt and the Angle Scorecard are
+ *      admin-only), Verified ones only (see clientVerifiedOnly);
+ *   2. less the proposal slots Kennion turned OFF for this group;
+ *   3. every canonical plan of every remaining proposal - all of them, with
+ *      their exact stored values. Nothing is hidden by network, plan type,
+ *      deductible, rate or any other attribute, and nothing is
+ *      de-duplicated again: each canonical record is one carrier plan.
+ * (An advanced per-plan exception in server/plan-visibility.js would mark a
+ * plan `hidden`; there are none.)
+ */
+function clientAvailablePlans(name) {
+  const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard" && slotEnabled(name, p.slot));
+  const withStatus = list
+    .map((p) => {
+      const v = verifiedProposals.get(p.id);
+      return { ...p, verified: !!v, audit: v ? { status: "pass", completedAt: v } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
+    })
+    .filter((p) => p.verified || !clientVerifiedOnly());
   return withStatus.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !pl.hidden).map(({ hidden, ...pl }) => pl) }));
 }
+/** The same universe, flat: every plan a group's client can see, with its slot. */
+const clientPlanList = (name) => clientAvailablePlans(name).flatMap((p) => p.plans.map((pl) => ({ ...pl, slot: p.slot, proposalId: p.id })));
 /** Proposal id -> when its dual audit completed, for every proposal the check currently calls Verified. */
 const verifiedProposals = new Map();
 
@@ -2972,7 +3011,7 @@ function dataAuditBundles() {
     g,
     admin: byName.get(g.name) || {},
     split: splitFor(g),
-    proposals: clientProposals(g.name),
+    proposals: clientAvailablePlans(g.name),
     billing: (funding && funding.summary[g.name]) || null,
     fundingMonth: funding ? funding.month : null,
     // The assigned manager by name; none means the assistant gets the fallback contact.
@@ -3871,32 +3910,27 @@ async function loadRatesLock() {
 const ratesLocked = () => !!(ratesLock && ratesLock.locked);
 
 /**
- * What a client is shown of the market. One rule today: **PPO only** - an
- * EPO twin of a PPO plan (UnitedHealthcare's E-coded menu plans, Gravie's
- * "EPO" sheet) is priced a few dollars under it and adds a choice without
- * adding a decision, so it is kept out of every client page. The rule is a
- * portal-wide setting, kept in kennion.settings under marketRules, and the
- * stored quotes keep every plan; this only decides what is served.
+ * What a client is shown of the market. No network rule: every quoted plan
+ * is shown, EPO and narrow-network plans included - they are attributes the
+ * client filters on, not reasons to remove an option. (The old "PPO only"
+ * rule, which dropped EPO menu plans and mapped current plans to PPO twins,
+ * is gone; marketRules.networks is now "all".)
  */
-const DEFAULT_MARKET_RULES = { networks: "ppo-only" };
+const DEFAULT_MARKET_RULES = { networks: "all" };
 let marketRules = { ...DEFAULT_MARKET_RULES };
 async function loadMarketRules() {
   if (!db) return;
   try {
     const stored = await db.getSetting("marketRules");
-    if (stored && typeof stored === "object") marketRules = { ...DEFAULT_MARKET_RULES, ...stored };
-    else await db.setSetting("marketRules", marketRules, "system");
+    // The retired "ppo-only" value is not carried forward.
+    marketRules = { ...DEFAULT_MARKET_RULES, ...(stored && typeof stored === "object" ? stored : {}), networks: "all" };
+    if (!stored || stored.networks !== "all") await db.setSetting("marketRules", marketRules, "system");
   } catch (e) {
     console.error("could not read the market rules:", e.message);
   }
 }
-/**
- * Kennion offers PPO plans only. Every carrier's quote carries EPO twins
- * (UnitedHealthcare's E-coded plans, Gravie's EPO sheet on Cigna); they are
- * never shown to a client, whatever the stored setting says - the switch
- * that once turned this off is gone, so it cannot be flipped by accident.
- */
-const ppoOnly = () => true;
+/** Retired: nothing is filtered by network any more. */
+const ppoOnly = () => false;
 /** A proposal plan that is an EPO: says so in its network, its type, or its name. */
 const isEpoPlan = (pl) =>
   /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.planType || ""} ${pl.name || ""}`);
@@ -4310,7 +4344,7 @@ app.get("/api/admin/market-rules", requireStaff, (req, res) => {
 
 app.post("/api/admin/market-rules", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
   const networks = String((req.body || {}).networks || "");
-  if (networks !== "ppo-only") return res.status(400).json({ error: "Kennion offers PPO plans only; EPO plans are never shown and the rule cannot be turned off." });
+  if (networks !== "all") return res.status(400).json({ error: "Every quoted plan is shown; the only client control is a proposal slot ON or OFF per group." });
   const next = { ...marketRules, networks, by: req.staffEmail || null, at: new Date().toISOString() };
   try {
     if (db) await db.setSetting("marketRules", next, req.staffEmail || null);
@@ -5096,7 +5130,9 @@ async function proposalsChanged() {
               identity: identityKey(pl),
               name: pl.name,
               planCode: pl.plan_code || null,
-              network: networkLabel(pl.network),
+              // The exact network the proposal prices the plan on (the grid
+              // shortens it for display itself): served values = stored values.
+              network: pl.network || null,
               planType: pl.plan_type || null,
               deductible: pl.deductible || null,
               oopMax: pl.oop_max || null,
@@ -5769,7 +5805,7 @@ async function settleGravieQuotes() {
       // Also stale: a reading without per-plan provenance (sheet and row) or
       // not tied to the version of the workbook on file.
       const ext = (r.extracted && r.extracted.extraction) || null;
-      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || !plans.length || plans.some((pl) => !pl.source) || !ext || ext.parser !== GRAVIE_PARSER || (r.source_sha && ext.sourceSha !== r.source_sha);
+      const stale = !plans.length || plans.some((pl) => !pl.source) || !ext || ext.parser !== GRAVIE_PARSER || (r.source_sha && ext.sourceSha !== r.source_sha);
       const quote = have.get(r.group_name);
       const wanted = quote && String(quote.proposalId) === String(r.id) && quote.planCount === plans.length && !stale;
       if (!stale && wanted) continue;
@@ -5810,8 +5846,8 @@ async function settleGravieQuotes() {
  * row provenance), tied to the workbook version it was parsed from, and -
  * on a re-parse - the numbers its plans held, so every design keeps its ID.
  */
-/** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too; v3 records every sheet (source coverage). */
-const GRAVIE_PARSER = "gravie-v3";
+/** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too; v3 records every sheet (source coverage); v4 reads the Narrow Network (Cigna LocalPlus) sheet too. */
+const GRAVIE_PARSER = "gravie-v4";
 function gravieReading(parsed, groupName, sourceSha, priorPlans) {
   const x = gravieExtracted(parsed);
   return {
@@ -5993,22 +6029,31 @@ const correcting = new Set();
  */
 function proposalVerification(rows) {
   const live = groups.filter((g) => !g.archived && g.eligible);
-  const v = verifyProposals({
+  const check = (rs) => verifyProposals({
     groups: live.map((g) => ({ name: g.name, slots: [...slotsForGroup(g), "Angle Scorecard"], tiers: clientGroupView(g).tiers || {} })),
-    rows,
+    rows: rs,
     // Everything stored for the group, each plan marked with whether the
     // client is shown it; the check compares the client's share to the rules.
     served: (name) => (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt"),
     isEpoPlan,
     isBlankPlan,
+    slotEnabled,
     reading: rereading,
     auditing,
     correcting,
     readingVersion,
     gaveUp: (id) => (stewardState && stewardState[id] && stewardState[id].gaveUp) || null,
   });
+  const v = check(rows);
+  // Which proposals a client may see as Verified. A newer upload waiting
+  // beside the proposal in force (still reading, or failed to read) holds the
+  // box back on the admin grid until the steward sorts it out - but it does
+  // not un-verify the proposal in force, whose plans stay on the client's
+  // grid: the in-force proposals are checked again without the waiting ones.
+  const waiting = new Set(v.groups.flatMap((g) => g.cells).flatMap((c) => (c.waiting || []).map((w) => w.id)));
+  const inForce = waiting.size ? check(rows.filter((r) => !waiting.has(r.id))) : v;
   verifiedProposals.clear();
-  for (const g of v.groups) {
+  for (const g of inForce.groups) {
     for (const c of g.cells) {
       if (c.state !== "verified" || c.proposalId == null) continue;
       const r = rows.find((rr) => rr.id === c.proposalId);
@@ -6359,6 +6404,35 @@ app.post("/api/admin/proposals/fix", requireStaff, async (req, res) => {
 });
 
 /**
+ * Proposal slots ON / OFF for a group's client. GET lists every setting
+ * Kennion has made (a slot not listed is ON); POST sets one:
+ * { group, slot, clientEnabled }. OFF hides every plan of that slot from the
+ * client's grid, cards, documents and assistant, and changes nothing about
+ * how the proposal is stored, validated or audited.
+ */
+app.get("/api/admin/proposal-slots", requireStaff, (req, res) => {
+  res.json({ slots: [...slotVisibility.values()] });
+});
+app.post("/api/admin/proposal-slots", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const b = req.body || {};
+  const groupName = String(b.group || "");
+  const slot = String(b.slot || "");
+  if (!groups.some((g) => g.name === groupName)) return res.status(404).json({ error: "No such group." });
+  if (!SLOTS.includes(slot)) return res.status(400).json({ error: "No such proposal slot." });
+  if (typeof b.clientEnabled !== "boolean") return res.status(400).json({ error: "clientEnabled must be true or false." });
+  const row = { groupName, slot, clientEnabled: b.clientEnabled, updatedBy: req.staffEmail || null, updatedAt: new Date().toISOString() };
+  try {
+    if (db) await db.setSlotVisibility(groupName, slot, b.clientEnabled, req.staffEmail || null);
+  } catch (e) {
+    return res.status(500).json({ error: "Could not save: " + e.message });
+  }
+  slotVisibility.set(`${groupName}||${slot}`, row);
+  console.log(`proposal slot ${groupName} / ${slot}: client ${b.clientEnabled ? "ON" : "OFF"} (${req.staffEmail || "staff"})`);
+  await proposalsChanged();
+  res.json({ ok: true, slot: row });
+});
+
+/**
  * A person confirms that the carrier really does print one plan name for
  * several different plan codes (validation's "Plan names unique" check
  * flags it and the steward will not decide it alone). Recorded on the
@@ -6372,8 +6446,8 @@ app.post("/api/admin/proposals/:id/confirm-shared-names", requireStaff, async (r
   const plans = Array.isArray(row.extracted.plans) ? row.extracted.plans : [];
   const byName = new Map();
   for (const pl of plans) {
-    const k = exactName(pl.name).toLowerCase();
-    if (k && normCode(pl.plan_code)) byName.set(k, [...(byName.get(k) || []), pl]);
+    const k = `${exactName(pl.name).toLowerCase()}|${String(pl.network || "").replace(/\s+/g, " ").trim().toLowerCase()}`;
+    if (exactName(pl.name) && normCode(pl.plan_code)) byName.set(k, [...(byName.get(k) || []), pl]);
   }
   const shared = [...byName.values()].filter((g) => g.length > 1 && new Set(g.map((pl) => normCode(pl.plan_code))).size === g.length);
   if (!shared.length) return res.status(400).json({ error: "No plan name on this proposal is shared by different plan codes." });
@@ -6576,6 +6650,7 @@ async function boot() {
   markAdminCodeReady();
   await loadRatesLock();
   await loadMarketRules();
+  await loadSlotVisibility();
   await loadWelcomeCopy();
   await loadGroupCookieSecret();
   await loadPlaybook();

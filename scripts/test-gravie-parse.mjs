@@ -1,6 +1,6 @@
 // A Gravie rate workbook, built here the way Gravie lays one out, read back:
-// header facts, subscribers by tier, every plan on the PPO and EPO sheets -
-// all stored; the visibility rules keep EPO off a client's grid - and the
+// header facts, subscribers by tier, every plan on the PPO, EPO and Narrow
+// Network (LocalPlus) sheets - all stored, audited and shown - and the
 // proposal shape the Options page prices from.
 import assert from "node:assert/strict";
 import * as XLSX from "xlsx";
@@ -44,8 +44,9 @@ assert.equal(p.quoteNumber, "00099999");
 assert.equal(p.effectiveDate, "2027-01-01", "Excel serial 46388 is 1 Jan 2027");
 assert.equal(p.generated, "2026-09-08");
 assert.deepEqual(p.tiers, { EE: 10, ES: 2, EC: 1, FAM: 3, total: 16 });
-assert.equal(p.plans.length, 3, "the PPO and EPO sheets: nothing from Narrow Network or the benefits grid");
-assert.deepEqual(p.plans.map((x) => x.variant), ["PPO", "EPO", "EPO"], "PPO first, then EPO");
+assert.equal(p.plans.length, 5, "every priced plan: the PPO, EPO and Narrow Network sheets (nothing from the benefits grid, which has no rates)");
+assert.deepEqual(p.plans.map((x) => `${x.sheet}:${x.variant}`), ["PPO:PPO", "EPO:EPO", "EPO:EPO", "NARROW NETWORK:EPO", "NARROW NETWORK:PPO"], "PPO first, then EPO, then Narrow Network");
+assert.deepEqual(p.plans.slice(3).map((x) => x.network), ["Cigna LocalPlus (EPO)", "Cigna LocalPlus (PPO)"], "the Narrow Network sheet's plans are priced on Cigna LocalPlus");
 assert.equal(p.plans[0].network, "Cigna Open Access Plus (PPO)");
 assert.equal(p.plans[0].planType, "QHDHP");
 assert.deepEqual(p.plans[0].rates, { EE: 360, ES: 720, EC: 620, FAM: 1030 });
@@ -58,15 +59,18 @@ assert.equal(x.carrier, "Gravie");
 assert.equal(x.funding, "level funded");
 assert.equal(x.quote_id, "00099999");
 assert.equal(x.enrolled_on_document, 16);
-assert.equal(x.plans.length, 3, "every plan stored");
-assert.deepEqual([x.reconciliation.unique_plans, x.reconciliation.unique_ppo, x.reconciliation.unique_epo, x.reconciliation.expected], [3, 1, 2, 3]);
+assert.equal(x.plans.length, 5, "every quoted plan stored: 5 in the workbook, 5 in the database");
+assert.deepEqual([x.reconciliation.unique_plans, x.reconciliation.unique_ppo, x.reconciliation.unique_epo, x.reconciliation.expected], [5, 2, 3, 5]);
+assert.deepEqual(x.coverage.sheets.map((sh) => `${sh.name}:${sh.status}:${sh.plans}`), ["Narrow Network:parsed:2", "EPO:parsed:2", "PPO:parsed:1", "Benefits Grid (static):not a quote sheet:0"], "every sheet accounted for");
+// The same design name on Open Access Plus and on LocalPlus is two plans - the network tells them apart.
+assert.equal(new Set(x.plans.map((pl) => `${pl.name}|${pl.network}`)).size, 5);
 assert.deepEqual(x.plans[0].source, { identity: [], benefits: [], rates: [], sheet: "PPO", rows: "row 18", appearances: 1, codes: [] });
 assert.equal(x.plans[0].monthly_total, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3, "priced on the quoted tiers");
 assert.equal(x.plans[0].deductible, "$5000/$10000");
 
 const rows = gravieQuoteRows(p);
-assert.equal(rows.length, 3);
-assert.deepEqual(rows.map((r) => r.network), ["PPO", "EPO", "EPO"]);
+assert.equal(rows.length, 5);
+assert.deepEqual(rows.map((r) => r.network), ["PPO", "EPO", "EPO", "LocalPlus EPO", "LocalPlus PPO"]);
 assert.equal(rows[0].monthly, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3);
 assert.equal(rows[0].name, "Gravie QHDHP $5,000 Ded/$5,000 OOPM");
 assert.match(x.summary, /quote 00099999/);

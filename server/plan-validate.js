@@ -71,17 +71,21 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   }
   check("codes", "Plan codes unique", dupCodes, "correct", "No plan code is on two plans.");
 
-  // No exact printed name on two plans. Where one of them has no code,
+  // No exact printed name on two plans of one network. Where one of them has no code,
   // nothing printed tells them apart: the same plan read twice - settled
   // against the source. Where every one has its own code, the carrier prints
   // one name for two different plans: never merged, never shown twice
   // silently - flagged for a person to confirm (`review`), unless one has
   // already confirmed exactly these codes share the name
   // (extracted.shared_names_confirmed).
+  // Grouped by exact name AND printed network: the same design name on two
+  // networks (Gravie prices each design on Open Access Plus and on
+  // LocalPlus) is two plans the carrier itself tells apart by network.
   const byName = new Map();
   for (const pl of plans) {
-    const k = exactName(pl.name).toLowerCase();
-    if (!k) continue;
+    const n = exactName(pl.name).toLowerCase();
+    if (!n) continue;
+    const k = `${n}|${String(pl.network || "").replace(/\s+/g, " ").trim().toLowerCase()}`;
     byName.set(k, [...(byName.get(k) || []), pl]);
   }
   const confirmed = Array.isArray(x.shared_names_confirmed) ? x.shared_names_confirmed : [];

@@ -338,6 +338,19 @@ CREATE TABLE IF NOT EXISTS kennion.audits (
 -- group (a newer workbook replaces the older rows), and under it every plan
 -- the carrier priced, with its four tier rates. Gravie's rate workbooks fill
 -- these today; the proposal record keeps the file itself.
+-- Which of a group's proposal slots its client is shown: one row per group
+-- and slot, only where Kennion has set it (no row = ON). Kept apart from the
+-- proposal rows on purpose, so a re-read or a newer upload in the slot never
+-- touches it; turning a slot OFF hides its plans from the client and changes
+-- nothing about their storage, validation or audit.
+CREATE TABLE IF NOT EXISTS kennion.proposal_slot_visibility (
+  group_name     text NOT NULL,
+  slot           text NOT NULL,
+  client_enabled boolean NOT NULL,
+  updated_by     text,
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (group_name, slot)
+);
 CREATE TABLE IF NOT EXISTS kennion.carrier_quotes (
   id             bigserial PRIMARY KEY,
   carrier        text NOT NULL,
@@ -704,6 +717,23 @@ export function createDb(url) {
         [email],
       );
       return rows[0] || null;
+    },
+
+    /** Every proposal-slot visibility Kennion has set: [{ groupName, slot, clientEnabled, updatedBy, updatedAt }]. */
+    async listSlotVisibility() {
+      const { rows } = await pool.query("SELECT group_name, slot, client_enabled, updated_by, updated_at FROM kennion.proposal_slot_visibility");
+      return rows.map((r) => ({ groupName: r.group_name, slot: r.slot, clientEnabled: r.client_enabled, updatedBy: r.updated_by, updatedAt: r.updated_at }));
+    },
+
+    /** Turn a group's proposal slot ON or OFF for its client. */
+    async setSlotVisibility(groupName, slot, clientEnabled, by) {
+      await pool.query(
+        `INSERT INTO kennion.proposal_slot_visibility (group_name, slot, client_enabled, updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, now())
+         ON CONFLICT (group_name, slot) DO UPDATE SET
+           client_enabled = EXCLUDED.client_enabled, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [groupName, slot, !!clientEnabled, by || null],
+      );
     },
 
     /** One portal-wide setting, or null when it has never been set. */

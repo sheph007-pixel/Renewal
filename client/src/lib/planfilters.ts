@@ -11,6 +11,12 @@ export interface PlanFacets {
   carrier: string;
   network: string;
   funding: string;
+  /** The network by name (Choice Plus, Open Access Plus, LocalPlus), where the quote names one. */
+  netname: string;
+  /** "HSA eligible" / "Not HSA eligible" / "Not stated". */
+  hsa: string;
+  /** The proposal the plan is from (UHC Level Funded, Gravie, …). */
+  slot: string;
   ded: number | null;
   oop: number | null;
   /** Total Monthly Bill at the group's enrollment; null where a rate is missing. */
@@ -54,7 +60,10 @@ export interface BillRange {
 
 export interface PlanFilters {
   carriers: string[];
+  slots: string[];
   networks: string[];
+  netnames: string[];
+  hsas: string[];
   fundings: string[];
   /** Band ids from DED_BANDS / OOP_BANDS. */
   deds: string[];
@@ -62,21 +71,24 @@ export interface PlanFilters {
   bill: BillRange;
 }
 
-/** The five checkbox categories. */
-export type ListKey = "carriers" | "networks" | "fundings" | "deds" | "oops";
+/** The checkbox categories. */
+export type ListKey = "carriers" | "slots" | "networks" | "netnames" | "hsas" | "fundings" | "deds" | "oops";
 export type FilterKey = ListKey | "bill";
-export const LIST_KEYS: ListKey[] = ["carriers", "networks", "fundings", "deds", "oops"];
+export const LIST_KEYS: ListKey[] = ["carriers", "slots", "networks", "netnames", "hsas", "fundings", "deds", "oops"];
 
 export const CATEGORY_LABELS: Record<FilterKey, string> = {
   carriers: "Carrier/TPA",
+  slots: "Proposal",
   networks: "Network Type",
+  netnames: "Network",
+  hsas: "HSA",
   fundings: "Funding",
   deds: "Deductible",
   oops: "OOP Max",
   bill: "Total Monthly Bill",
 };
 
-export const EMPTY_FILTERS: PlanFilters = { carriers: [], networks: [], fundings: [], deds: [], oops: [], bill: { min: null, max: null } };
+export const EMPTY_FILTERS: PlanFilters = { carriers: [], slots: [], networks: [], netnames: [], hsas: [], fundings: [], deds: [], oops: [], bill: { min: null, max: null } };
 
 export const billSet = (b: BillRange) => b.min != null || b.max != null;
 
@@ -106,7 +118,10 @@ export const withBill = (f: PlanFilters, bill: BillRange): PlanFilters => ({ ...
 export function matches(x: PlanFacets, f: PlanFilters, except?: FilterKey): boolean {
   const on = (k: FilterKey) => k !== except;
   if (on("carriers") && f.carriers.length && !f.carriers.includes(x.carrier)) return false;
+  if (on("slots") && f.slots.length && !f.slots.includes(x.slot)) return false;
   if (on("networks") && f.networks.length && !f.networks.includes(x.network)) return false;
+  if (on("netnames") && f.netnames.length && !f.netnames.includes(x.netname)) return false;
+  if (on("hsas") && f.hsas.length && !f.hsas.includes(x.hsa)) return false;
   if (on("fundings") && f.fundings.length && !f.fundings.includes(x.funding)) return false;
   if (on("deds") && f.deds.length && (x.ded == null || !DED_BANDS.some((b) => f.deds.includes(b.id) && inBand(b, x.ded!)))) return false;
   if (on("oops") && f.oops.length && (x.oop == null || !OOP_BANDS.some((b) => f.oops.includes(b.id) && inBand(b, x.oop!)))) return false;
@@ -121,7 +136,10 @@ export function matches(x: PlanFacets, f: PlanFilters, except?: FilterKey): bool
 /** The facet value a plan contributes to one category: the band it falls in for the dollar categories. */
 export function facetValue(x: PlanFacets, key: ListKey): string | null {
   if (key === "carriers") return x.carrier;
+  if (key === "slots") return x.slot;
   if (key === "networks") return x.network;
+  if (key === "netnames") return x.netname;
+  if (key === "hsas") return x.hsa;
   if (key === "fundings") return x.funding;
   const bands = key === "deds" ? DED_BANDS : OOP_BANDS;
   const v = key === "deds" ? x.ded : x.oop;
@@ -195,7 +213,7 @@ export function filterChips(f: PlanFilters): FilterChip[] {
 
 // ------------------------------------------------------------------- sort
 
-export type SortKey = "option" | "carrier" | "plan" | "ded" | "oop" | "er" | "ee" | "total";
+export type SortKey = "option" | "carrier" | "plan" | "network" | "ded" | "oop" | "er" | "ee" | "es" | "ec" | "fam" | "total" | "recommended";
 export interface SortState {
   key: SortKey;
   dir: 1 | -1;
@@ -211,12 +229,18 @@ const SORT_NAMES: Record<SortKey, string> = {
   oop: "OOP max",
   er: "Your company pays",
   ee: "Employee only rate",
+  es: "Employee + spouse rate",
+  ec: "Employee + child(ren) rate",
+  fam: "Family rate",
+  network: "Network",
   total: "Monthly bill",
+  recommended: "Recommended first",
 };
-const TEXT_SORTS: SortKey[] = ["option", "carrier", "plan"];
+const TEXT_SORTS: SortKey[] = ["option", "carrier", "plan", "network"];
 
 /** "Monthly bill: Low to high", "Carrier/TPA: A to Z" - plain words, for the Sort by control and its options. */
 export function sortLabel(s: SortState): string {
+  if (s.key === "recommended") return SORT_NAMES.recommended;
   const text = TEXT_SORTS.includes(s.key);
   const dir = text ? (s.dir > 0 ? "A to Z" : "Z to A") : s.dir > 0 ? "Low to high" : "High to low";
   return `${SORT_NAMES[s.key]}: ${dir}`;
@@ -232,6 +256,14 @@ export const SORT_CHOICES: SortState[] = [
   { key: "ded", dir: -1 },
   { key: "oop", dir: 1 },
   { key: "oop", dir: -1 },
+  { key: "fam", dir: 1 },
+  { key: "fam", dir: -1 },
+  { key: "es", dir: 1 },
+  { key: "ec", dir: 1 },
+  { key: "carrier", dir: 1 },
+  { key: "network", dir: 1 },
+  { key: "plan", dir: 1 },
+  { key: "recommended", dir: 1 },
 ];
 
 export const sortValue = (s: SortState) => `${s.key}:${s.dir > 0 ? "asc" : "desc"}`;

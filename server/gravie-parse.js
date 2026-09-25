@@ -2,10 +2,10 @@
 // Excel file. The "EPO" and "PPO" sheets each price the same 67 plan designs
 // on Cigna Open Access Plus - the EPO version has no out-of-network cover,
 // the PPO does - under a header block (group, effective date, quote number,
-// subscribers quoted by tier). That is the quote Kennion works from: 134
-// plans for every group. Some workbooks also carry a "Narrow Network" sheet
-// (Cigna LocalPlus, offered only in a few areas) and a "Benefits Grid
-// (static)" sheet that is the same for every group; both are left out.
+// subscribers quoted by tier). Some workbooks also carry a "Narrow Network"
+// sheet: the designs priced on Cigna LocalPlus. Every priced plan on all
+// three is a quoted medical plan - read, stored, audited and shown. The
+// "Benefits Grid (static)" sheet, the same for every group, has no rates.
 import * as XLSX from "xlsx";
 import { canonicalizePlans } from "./plan-canonical.js";
 
@@ -107,13 +107,12 @@ function readPlans(rows, sheetName, network) {
 }
 
 /**
- * The sheets that make up the quote: Open Access Plus PPO, and EPO - the same
- * designs priced without out-of-network cover. Every plan on both is stored
- * and audited; the visibility rules (server/plan-visibility.js) keep the EPO
- * designs off a client's grid, since Kennion offers PPO plans only. The
- * Narrow Network sheet and the static benefits grid are not read.
+ * The sheets that make up the quote, each with the network its plans are
+ * priced on: Open Access Plus PPO and EPO (the same designs without
+ * out-of-network cover), and the Narrow Network sheet on Cigna LocalPlus.
  */
-const RATE_SHEETS = /^(PPO|EPO)$/i;
+const RATE_SHEETS = /^(PPO|EPO|Narrow Network)$/i;
+const sheetNetwork = (name) => (/narrow/i.test(name) ? "Cigna LocalPlus" : "Cigna Open Access Plus");
 
 /**
  * Every sheet in the workbook is enumerated and accounted for: a rate sheet
@@ -122,10 +121,7 @@ const RATE_SHEETS = /^(PPO|EPO)$/i;
  * the workbook cannot be Verified until a person looks (a new Gravie layout
  * is never silently half-read).
  */
-const KNOWN_SHEETS = [
-  { test: /narrow/i, reason: "Narrow Network (Cigna LocalPlus): offered only in a few areas; not quoted by Kennion" },
-  { test: /benefits?\s*grid/i, reason: "Static benefits grid, the same for every group: no rates" },
-];
+const KNOWN_SHEETS = [{ test: /benefits?\s*grid/i, reason: "Static benefits grid, the same for every group: no rates" }];
 function sheetStatus(name) {
   if (RATE_SHEETS.test(name.trim())) return { status: "parsed" };
   const k = KNOWN_SHEETS.find((x) => x.test.test(name));
@@ -134,8 +130,8 @@ function sheetStatus(name) {
 
 /**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
- * tier, and every priced plan on the PPO and EPO sheets - the 67 designs on
- * each, in the carrier's order.
+ * tier, and every priced plan on the PPO, EPO and Narrow Network sheets, in
+ * the carrier's order (PPO first, then EPO, then Narrow Network).
  */
 export function parseGravieWorkbook(buf) {
   const wb = XLSX.read(buf, { type: "buffer" });
@@ -143,12 +139,13 @@ export function parseGravieWorkbook(buf) {
   const plans = [];
   // The PPO sheet first, then EPO: the order the plans are listed (and the
   // client-facing designs numbered) in.
-  const sheets = wb.SheetNames.filter((n) => RATE_SHEETS.test(n.trim())).sort((a, b) => (/^PPO$/i.test(a.trim()) ? 0 : 1) - (/^PPO$/i.test(b.trim()) ? 0 : 1));
+  const rank = (n) => (/^PPO$/i.test(n.trim()) ? 0 : /^EPO$/i.test(n.trim()) ? 1 : 2);
+  const sheets = wb.SheetNames.filter((n) => RATE_SHEETS.test(n.trim())).sort((a, b) => rank(a) - rank(b));
   for (const sheetName of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: null });
     const h = readHeader(rows);
     if (!header && h.group) header = h;
-    plans.push(...readPlans(rows, sheetName.trim().toUpperCase(), "Cigna Open Access Plus"));
+    plans.push(...readPlans(rows, sheetName.trim().toUpperCase(), sheetNetwork(sheetName)));
   }
   if (!header || !header.group) throw new Error("Not a Gravie rate workbook: no group name in a sheet header");
   if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on a PPO or EPO sheet");
@@ -162,7 +159,8 @@ export function gravieQuoteRows(p) {
   return p.plans.map((pl) => ({
     name: pl.name,
     planType: pl.planType,
-    network: pl.variant,
+    // PPO / EPO, and LocalPlus for the Narrow Network sheet's plans.
+    network: /LocalPlus/i.test(pl.network) ? `LocalPlus ${pl.variant}` : pl.variant,
     deductible: pl.deductible || null,
     oopMax: pl.oopMax || null,
     coinsurance: pl.coinsurance,

@@ -123,23 +123,17 @@ assert.match(bo.detail, /EBPA Gold ES: billed at \$1,115\.00, the XML's rate is 
 assert.match(bo.detail, /EBPA Silver FAM: 3 billed, 1 in the XML/);
 assert.match(bo.detail, /Billed but not in this group's XML: EBPA Bronze \(2 billed\)/);
 
-// These are the plans a client is shown. Every plan is stored, but Kennion
-// offers PPO plans only and every group's Gravie quote shows the same 67
-// designs: an EPO plan reaching the client, or a Gravie quote of another
-// size, is flagged.
+// The plans a client is shown are every quoted plan: EPO plans and a Gravie
+// quote of any size are not problems.
 {
   const gravie = (n, epo = 0) => ({ slot: "Gravie", carrier: "Gravie", enrolledOnDocument: 4, plans: [
     ...Array.from({ length: n }, (_, i) => ({ name: `Gravie Copay ${i} PPO`, network: "Cigna Open Access Plus (PPO)", rates: { EE: 500, ES: 900, EC: 800, FAM: 1300 } })),
     ...Array.from({ length: epo }, (_, i) => ({ name: `Gravie Copay ${i} EPO`, network: "Cigna Open Access Plus (EPO)", planType: "EPO", rates: { EE: 480, ES: 880, EC: 780, FAM: 1280 } })),
   ] });
-  const okq = auditGroup({ g: clean(), admin, split, proposals: [gravie(67)] }).checks.find((c) => c.key === "quotes");
-  assert.equal(okq.level, "ok", okq.detail);
-  const short = auditGroup({ g: clean(), admin, split, proposals: [gravie(60)] }).checks.find((c) => c.key === "quotes");
-  assert.equal(short.level, "warn");
-  assert.match(short.detail, /Gravie: 60 PPO plans shown; every group's Gravie quote is the same 67 designs/);
-  const withEpo = auditGroup({ g: clean(), admin, split, proposals: [gravie(67, 67)] }).checks.find((c) => c.key === "quotes");
-  assert.equal(withEpo.level, "warn");
-  assert.match(withEpo.detail, /67 EPO plans shown to the client - Kennion offers PPO only/);
+  for (const q of [gravie(67), gravie(60), gravie(67, 67)]) {
+    const c = auditGroup({ g: clean(), admin, split, proposals: [q] }).checks.find((k) => k.key === "quotes");
+    assert.equal(c.level, "ok", c.detail);
+  }
 }
 
 // The stored export re-read against the portal: exact matches, drift named

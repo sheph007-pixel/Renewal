@@ -54,7 +54,7 @@ type GridView = "all" | "picks" | "favorites" | "compare";
 const TIER_LABEL: Record<RecommendedPick["tier"], string> = { lower_cost: "Lower Cost", best_fit: "Best Fit", richer_benefits: "Richer Benefits" };
 const RECOMMEND_ASK = "Please give me your plan recommendations for my group: a Lower Cost, a Best Fit and a Richer Benefits option, for each carrier that quoted us - and for UnitedHealthcare, for each funding it quoted, based on our employees' ages and our enrollment. Tell me which you'd start with and why.";
 /** PPO / EPO / RBP, from the proposal; "-" where the quote does not say. */
-const netType = (p: MarketPlan) => networkTypeOf(p) || "-";
+const netType = (p: MarketPlan) => networkTypeOf({ ...p, network: p.networkExact || p.network }) || "-";
 const dedOf = (p: MarketPlan): number | null => (p.ded == null || p.ded === "" ? null : Number.isFinite(+p.ded) ? +p.ded : null);
 /** Whole dollars in the fields: nobody sets a contribution to the cent. */
 const fmtDraft = (v: number) => String(Math.round(v));
@@ -329,12 +329,32 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
   // What each plan is filtered on, read once. The dropdowns' choices come
   // off every quoted plan and never change shape as filters are applied; the
   // count beside each is what choosing it would show given the rest.
-  const faceted = useMemo(() => plans.map((p) => ({ p, x: { carrier: carrierOf(p), network: netType(p), funding: fundingOf(p), ded: dedOf(p), oop: p.oop ?? null, bill: p.monthly ?? null } as PlanFacets })), [plans]);
+  const faceted = useMemo(
+    () =>
+      plans.map((p) => ({
+        p,
+        x: {
+          carrier: carrierOf(p),
+          network: netType(p),
+          netname: p.networkExact || p.network || "-",
+          hsa: p.hsa === true ? "HSA eligible" : p.hsa === false ? "Not HSA eligible" : "Not stated",
+          slot: p.quoted?.slot || "-",
+          funding: fundingOf(p),
+          ded: dedOf(p),
+          oop: p.oop ?? null,
+          bill: p.monthly ?? null,
+        } as PlanFacets,
+      })),
+    [plans],
+  );
   const choices = useMemo(() => {
     const xs = faceted.map((f) => f.x);
-    const distinct = (k: "carrier" | "funding") => Array.from(new Set(xs.map((x) => x[k]))).map((v) => ({ value: v, label: v }));
+    const distinct = (k: "carrier" | "funding" | "netname" | "hsa" | "slot") => Array.from(new Set(xs.map((x) => x[k]))).sort().map((v) => ({ value: v, label: v }));
     return {
       carriers: distinct("carrier"),
+      slots: distinct("slot"),
+      netnames: distinct("netname"),
+      hsas: distinct("hsa"),
       networks: NETWORK_TYPES.filter((t) => xs.some((x) => x.network === t)).map((v) => ({ value: v, label: v })),
       fundings: distinct("funding"),
       deds: bandsWithData(DED_BANDS, xs.map((x) => x.ded)).map((b) => ({ value: b.id, label: b.label })),
@@ -356,7 +376,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           (!picksOnly || picks.has(p.plan)) &&
           (!favoritesOnly || !!selected[p.plan]) &&
           (!compareOnly || proposal.includes(p.plan)) &&
-          (!q || `${p.optionId ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${x.network}`.toLowerCase().includes(q)),
+          (!q || `${p.optionId ?? ""} ${p.planCode ?? ""} ${p.plan} ${p.carrier} ${p.type} ${p.copays} ${p.network} ${x.network}`.toLowerCase().includes(q)),
       ),
     [faceted, q, picksOnly, picks, favoritesOnly, selected, compareOnly, proposal],
   );
@@ -387,6 +407,17 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
           }
           if (sort.key === "carrier") return carrierOf(p).toLowerCase();
           if (sort.key === "plan") return p.plan.toLowerCase();
+          if (sort.key === "network") return (p.network || "").toLowerCase();
+          if (sort.key === "es") return p.rates.ES ?? Infinity;
+          if (sort.key === "ec") return p.rates.EC ?? Infinity;
+          if (sort.key === "fam") return p.rates.FAM ?? Infinity;
+          // Recommended first: the assistant's "start here" pick, then its
+          // other picks, then every other plan by Employee Only rate - the
+          // picks lead, nothing is hidden.
+          if (sort.key === "recommended") {
+            const pk = picks.get(p.plan);
+            return (pk ? (pk.start ? 0 : 1) : 2) * 1e9 + (p.rates.EE ?? 1e8);
+          }
           if (sort.key === "ded") return dedOf(p) ?? Infinity;
           if (sort.key === "oop") return p.oop ?? Infinity;
           if (sort.key === "er") return split(p)?.er ?? Infinity;
@@ -399,7 +430,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
         return (va > vb ? 1 : -1) * sort.dir;
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base, filters, sort, applied, counts]);
+  }, [base, filters, sort, applied, counts, picks]);
 
   const favorites = plans.filter((p) => selected[p.plan]).length;
   const filtering = !filtersEmpty(filters) || !!q || picksOnly || favoritesOnly || compareOnly;

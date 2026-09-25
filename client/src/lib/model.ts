@@ -813,6 +813,12 @@ export interface MarketPlan {
   indicative: boolean;
   /** The plan's option ID (UH3, GR1); only a quoted plan has one. */
   optionId?: string | null;
+  /** The carrier's plan code, exactly as printed; null when the plan has none. */
+  planCode?: string | null;
+  /** The network exactly as the proposal prices the plan on ("Cigna LocalPlus (PPO)"); `network` is its display label. */
+  networkExact?: string | null;
+  /** HSA-eligible, as the proposal states it; null when it does not say. */
+  hsa?: boolean | null;
   /** The carrier's standard design, from the plan catalogue, where the quoted plan is one. */
   design?: PlanDesign | null;
   /** Read off a proposal the carrier sent for this group. */
@@ -1034,29 +1040,28 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
   const out: MarketPlan[] = [];
   const seen = new Set<string>();
   for (const pr of data.proposals || []) {
-    // Cobalt is not offered for 2027, and Kennion offers PPO plans only: the
-    // server already keeps both out of the payload; this holds the line if
-    // an older payload or a new source ever carries them.
+    // Cobalt is not offered for 2027: the server keeps it out of the
+    // payload; this holds the line if an older payload ever carries it.
     if (pr.slot === "Cobalt") continue;
+    // Every plan the server sends is shown: the server's one resolver
+    // (clientAvailablePlans) has already applied the only client control -
+    // a proposal slot ON or OFF. EPO, narrow-network, any plan type, any
+    // rate: attributes to filter and sort on, never reasons to drop a plan.
     for (const pl of pr.plans || []) {
-      if (networkTypeOf({ plan: pl.name, planType: pl.planType, network: pl.network }) === "EPO") continue;
       const rates = {} as Record<TierKey, number | null>;
       TIERS.forEach((t) => {
         const v = pl.rates?.[t.key];
         rates[t.key] = v == null ? null : v;
       });
-      if (!TIERS.some((t) => rates[t.key] != null)) continue;
-      let monthly: number | null = 0;
+      // A plan the carrier did not price for a tier this group has people
+      // in is still shown - with no monthly figure rather than a partial one.
+      let monthly: number | null = TIERS.some((t) => rates[t.key] != null) ? 0 : null;
       TIERS.forEach((t) => {
         if (!counts[t.key]) return;
         const v = rates[t.key];
         if (v == null) monthly = null;
         else if (monthly != null) monthly += v * counts[t.key];
       });
-      // A plan the carrier did not price for every tier this group has
-      // people in cannot be priced for the group: it is not shown, rather
-      // than shown with a partial figure beside a blank one.
-      if (monthly == null) continue;
       const show = slotPresentation(pr.slot, pr.carrier);
       // Gravie's benefits are by plan family and the same for every group.
       const fam = pr.slot === "Gravie" ? gravieFamily(pl.planType, pl.name) : null;
@@ -1078,6 +1083,10 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
       const underwritingNote = pr.slot === "Optimyl" && g.sizeCategory === "2-50" ? OPTIMYL_UNDERWRITING_NOTE : null;
       out.push({
         optionId: pl.optionId ?? null,
+        planCode: pl.planCode ?? null,
+        networkExact: pl.network ?? null,
+        // Only what the proposal states: never guessed from the plan's name.
+        hsa: pb?.hsaEligible ?? null,
         carrier: show.carrier,
         label: show.label,
         plan: planName,

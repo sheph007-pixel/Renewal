@@ -90,8 +90,8 @@ assert.deepEqual(
   { a: 7, u: 3, ppo: 2, epo: 1, exp: 3 },
 );
 const { clientPlans, hiddenReason } = await import("../server/plan-visibility.js");
-assert.deepEqual(clientPlans(c.plans).map((p) => p.plan_code), ["P1", "P2"], "the client is shown the PPO plans");
-assert.match(hiddenReason(c.plans[1]), /EPO/);
+assert.deepEqual(clientPlans(c.plans).map((p) => p.plan_code), ["P1", "E1", "P2"], "the client is shown every quoted plan, the EPO plan too - no plan-level hiding");
+assert.equal(hiddenReason(c.plans[1]), null, "network and plan type are attributes, never reasons to hide a plan");
 assert.notEqual(identityKey({ plan_code: "P1" }), identityKey({ name: "P1" }));
 
 // --- Deterministic validation ------------------------------------------------
@@ -177,10 +177,15 @@ assert.equal(offeredCount(reading([good(), { ...second, rates: good().rates }]))
 v = run(reading([good(), { ...second, plan_code: "A1", source: { ...second.source, codes: ["A1"] } }]));
 assert.ok(failing(v).includes("codes"));
 assert.equal(v.fix, "correct");
-// The same exact name with nothing printed to tell them apart: settled against the source.
-v = run(reading([good({ plan_code: null, source: { ...good().source, codes: [] } }), { ...second, name: "Plan A", plan_code: null, network: "Choice", source: { ...second.source, codes: [] } }]));
-assert.deepEqual(failing(v), ["names"]);
+// The same exact name with nothing printed to tell them apart (no code, same
+// network): the same plan read twice - settled against the source.
+v = run(reading([good({ plan_code: null, source: { ...good().source, codes: [] } }), { ...second, name: "Plan A", plan_code: null, source: { ...second.source, codes: [] } }]));
+assert.deepEqual(failing(v), ["unique", "names"]);
 assert.equal(v.fix, "correct");
+// The same design name on two printed networks (Gravie's Open Access Plus and
+// LocalPlus sheets) is two plans the carrier tells apart by network.
+v = run(reading([good({ plan_code: null, source: { ...good().source, codes: [] } }), { ...second, name: "Plan A", plan_code: null, network: "Cigna LocalPlus", source: { ...second.source, codes: [] } }]));
+assert.equal(v.ok, true, JSON.stringify(v.failures));
 // The same exact name on two DIFFERENT plan codes: never merged, never shown
 // twice silently - flagged for a person.
 const shared = reading([good(), { ...second, name: "plan  a" }]);

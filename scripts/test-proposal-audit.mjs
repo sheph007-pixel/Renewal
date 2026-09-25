@@ -78,7 +78,7 @@ assert.equal(row.audit.models.length, 2, "two models checked it");
 assert.ok(row.audit.models.every((m) => m.verdict === "pass"));
 
 // The client's page: the proposal carries the audit outcome, never the notes,
-// and the EPO twin is not offered.
+// and every quoted plan - the EPO version too - is offered.
 const page = await (await fetch(`${base}/api/signin`, { method: "POST", headers: { ...json, cookie }, body: "{}" })).json();
 const pr = (page.proposals || []).find((p) => p.slot === "Gravie");
 assert.ok(pr, "the client sees its Gravie proposal");
@@ -87,8 +87,8 @@ assert.deepEqual(Object.keys(pr.audit).sort(), ["completedAt", "status"], "the c
 assert.equal(pr.audit.status, "pass");
 assert.deepEqual(
   pr.plans.map((p) => p.name),
-  ["Gravie Copay 1500 PPO"],
-  "PPO only: the EPO version never reaches the client",
+  ["Gravie Copay 1500 PPO", "Gravie Copay 1500 EPO"],
+  "every quoted plan reaches the client: 2 stored, 2 shown",
 );
 
 // The carrier's document stays with staff: no client route serves it.
