@@ -40,6 +40,14 @@ assert.ok(!sameBenefit("D&C", "D&C (Maj Diag); 0%, 0% (X-ray & Lab)"), "a stated
 assert.ok(sameBenefit("$500 (MRI/CT); $40 (Lab/X-Ray)", "$40 (Lab/X-Ray) / $500 (MRI, CT Scan)"));
 assert.ok(!sameBenefit("$500 (MRI/CT); $40 (Lab/X-Ray)", "$500 (Lab/X-Ray) / $40 (MRI, CT Scan)"), "the MRI and lab figures swapped is a different value");
 assert.ok(!sameBenefit("$10 / $40 (Tier 2)", "$40 / $10 (Tier 1)", "rx"), "rx tiers stay in order");
+// v5: hospital is the inpatient stay; a part repeated word for word is one part.
+assert.ok(sameBenefit("Ded+$1500", "OP Ded+$750, IP Ded+$1500", "hospital"));
+assert.ok(sameBenefit("Ded+100%", "OP Ded+100%, IP Ded+100%", "hospital"));
+assert.ok(sameBenefit("Ded+100%", "Ded+100%, Ded+100%", "hospital"));
+assert.ok(!sameBenefit("Ded+$750", "OP Ded+$750, IP Ded+$1500", "hospital"), "the outpatient figure is not the inpatient stay");
+assert.ok(!sameBenefit("$250 copay", "IP $500 copay", "hospital"));
+assert.ok(sameBenefit("$1,500 copay", "OP $750 copay, IP $1,500 copay", "hospital"), "a comma inside a figure is not a separator");
+assert.ok(!sameBenefit("$750", "OP $750, IP $1500", "imaging"), "only hospital narrows to the inpatient part");
 // A Gravie rate workbook is compared on what its rate rows state: the static Benefits Grid is not the plan's record.
 {
   const st = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna OAP", deductible: "$1000", oop_max: "$6000", benefits: { coinsurance: "20%" }, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
