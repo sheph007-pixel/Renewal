@@ -10,6 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { PDFDocument } from "pdf-lib";
+import { canonicalizePlans } from "./plan-canonical.js";
 
 /**
  * The extraction agent: every proposal, short or long, PDF or workbook, is
@@ -51,21 +52,6 @@ async function splitPdf(buffer, size = MAX_PDF_PAGES) {
 /** Thrown by readOnce when the model's answer ran past max_tokens. */
 class TooLongError extends Error {}
 
-/**
- * The same plan printed twice - once in a summary table, again on its own
- * page - lands in two parts of a split reading. Identical name, code and
- * tier rates is one plan; anything that differs is kept.
- */
-function dedupePlans(plans) {
-  const seen = new Set();
-  return plans.filter((pl) => {
-    const r = pl.rates || {};
-    const k = [String(pl.name || "").toLowerCase().replace(/\s+/g, " ").trim(), pl.plan_code || "", pl.network || "", r.EE ?? "", r.ES ?? "", r.EC ?? "", r.FAM ?? ""].join("|");
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-}
 
 /**
  * Fold the readings of a split proposal into one. Every plan from every part
@@ -102,7 +88,9 @@ function mergeReadings(readings) {
     effective_date: firstSet("effective_date"),
     enrolled_on_document: firstSet("enrolled_on_document"),
     total_monthly: firstSet("total_monthly"),
-    plans: dedupePlans(readings.flatMap((r) => (Array.isArray(r.plans) ? r.plans : []))),
+    // Every appearance from every part, each still knowing which part (and so
+    // which pages) it came from; canonicalizePlans folds them by identity.
+    plans: readings.flatMap((r) => (Array.isArray(r.plans) ? r.plans.map((pl) => ({ ...pl, _pageMap: r._pageMap || null })) : [])),
     summary: readings.map((r) => r.summary).filter(Boolean).join(" "),
     audit_flags: [
       `Read in ${readings.length} parts: the document is longer than one reading holds.`,
@@ -173,6 +161,9 @@ const SCHEMA = {
     "proposal_type",
     "enrolled_on_document",
     "plans",
+    "plan_appearances",
+    "unique_plans_found",
+    "unique_epo_found",
     "total_monthly",
     "summary",
     "audit_flags",
@@ -227,11 +218,11 @@ const SCHEMA = {
     plans: {
       type: "array",
       description:
-        "Every plan option quoted, with monthly composite rates by tier where given. A carrier quote often runs to dozens of options over many pages - list them all, in the order they appear.",
+        "Every DISTINCT medical plan option quoted - each unique plan exactly once, however many pages it appears on - with monthly composite rates by tier where given. A carrier quote often runs to dozens of options over many pages - list them all, in the order they first appear. EPO plans included.",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "benefits", "rates", "monthly_total"],
+        required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "benefits", "rates", "monthly_total", "source_pages", "source_sheet", "source_rows"],
         properties: {
           name: {
             type: "string",
@@ -251,15 +242,32 @@ const SCHEMA = {
           plan_type: nullable("string"),
           deductible: nullable("string"),
           oop_max: nullable("string"),
+          source_pages: {
+            type: "object",
+            additionalProperties: false,
+            required: ["identity", "benefits", "rates"],
+            description:
+              "Where this plan is on the PDF you were given, as page positions within that file (1 = its first page): identity = every page that shows this plan's name or code; benefits = the pages its benefit values are read from; rates = the pages its four tier rates are read from. Empty arrays for a spreadsheet or text document.",
+            properties: {
+              identity: { type: "array", items: { type: "integer" } },
+              benefits: { type: "array", items: { type: "integer" } },
+              rates: { type: "array", items: { type: "integer" } },
+            },
+          },
+          source_sheet: { type: "string", description: "For a spreadsheet: the sheet this plan is read from (the '## Sheet:' heading). Empty for a PDF." },
+          source_rows: { type: "string", description: "For a spreadsheet or text document: the rows or section this plan is read from, e.g. 'rows 12-14'. Empty for a PDF." },
           benefits: {
             type: "object",
             additionalProperties: false,
-            required: ["doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"],
+            required: ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"],
             description:
               "The in-network member cost for each service as printed on the benefit summary for this plan, short and verbatim (\"$30 copay\", \"20% after deductible\", \"$10 / $40 / $80\"). An empty string where the document does not say.",
             // Plain strings, empty where unknown: the API caps a schema at 16 nullable fields.
             properties: {
               doctor_visit: { type: "string", description: "Primary care office visit." },
+              emergency_room: { type: "string", description: "Emergency room visit." },
+              coinsurance: { type: "string", description: "The plan's in-network coinsurance, e.g. \"20%\" or \"0%\"." },
+              hsa_eligible: { type: "string", description: "\"yes\" when the document says the plan is HSA-eligible / HSA-qualified (an HDHP), \"no\" when it says it is not, empty when it does not say." },
               specialist: { type: "string", description: "Specialist office visit." },
               imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
               urgent_care: { type: "string" },
@@ -286,6 +294,15 @@ const SCHEMA = {
       ...nullable("number"),
       description: "Total monthly premium for the proposal at the quoted enrollment, if stated.",
     },
+    plan_appearances: {
+      type: "integer",
+      description: "How many times medical plans appear in what you read, counting every appearance (overview, comparison table, benefit page, rate page, appendix) - the same plan shown on four pages is four appearances.",
+    },
+    unique_plans_found: {
+      type: "integer",
+      description: "How many DISTINCT medical plans those appearances are, EPO plans included. Equals the length of plans.",
+    },
+    unique_epo_found: { type: "integer", description: "How many of the distinct plans are EPO plans." },
     summary: {
       type: "string",
       description: "One or two sentences a benefits advisor would want: what was quoted and anything unusual.",
@@ -301,7 +318,9 @@ const SCHEMA = {
 
 const SYSTEM = `You read insurance carrier proposals for Kennion Benefit Advisors, a benefits brokerage in Alabama. Each proposal is a quote for one employer group's medical plan, sent by a carrier such as UnitedHealthcare (including Surest), Gravie, Nationwide, Angle Health, Cobalt, Optimyl Health, EBPA, HealthEZ or BCBS of Alabama.
 
-Your job: identify the carrier, read off the plans and tier rates, and decide which group on Kennion's roster the proposal is for. Match by the employer name on the document against the roster names. Treat legal-form words (LLC, Inc., Co., Corporation, Holdings) and punctuation loosely, but do not match on a shared common word alone - "Birmingham Steel" is not "Birmingham-Toledo". When two roster groups could both fit, pick neither and say so in the flags. Copy the matched roster name exactly as listed. Say whether the quote is fully insured or level funded. UnitedHealthcare sends one of each for a group, in separate documents, and Kennion tracks them as separate proposals, so decide from the document in front of you and say which - a UHC quote whose funding you cannot tell is worth an audit flag. A quote runs to many pages and often dozens of plan options: read every page and list every option, including the alternate, illustrative and benchmark grids that follow the headline plans - they are quotable options and Kennion prices from them. Give each one the name exactly as printed - the carrier's wording, nothing added, no placement labels of your own - and the plan or benefit code printed on it, the network it is priced on where the quote distinguishes them, and its own tier rates. Two plans that differ only by network or by deductible are two plans. Never summarise a grid as "and other options"; list them. Surest is a UnitedHealthcare product, not a separate carrier: report a Surest quote with carrier "UnitedHealthcare" and say which funding it is, so it files under the group's UnitedHealthcare proposal. Kennion tracks seven medical proposals per group - UnitedHealthcare fully insured, UnitedHealthcare level funded, Gravie, Nationwide, Angle Health, Cobalt (a self-funded quote) and Optimyl Health (a self-funded, reference-based-pricing quote) - so set quotes_medical false for an ancillary-only document (dental, vision, life, disability) even when it comes from one of those carriers. Rates are monthly composite amounts per tier: EE (employee only), ES (employee + spouse), EC (employee + children), FAM (family). Leave a value null rather than guessing. Optimyl Health always quotes the same 4 standard plans - its Proposal Summary table numbers them 1 through 4 in a "Plan Number" row and nothing else names or codes them - so for an Optimyl proposal set each plan's plan_code from that row exactly as the schema says ("OPTIMYL PLAN 1" .. "OPTIMYL PLAN 4"); every Optimyl proposal has exactly these 4 plans, never more or fewer.`;
+Your job: identify the carrier, read off the plans and tier rates, and decide which group on Kennion's roster the proposal is for. Match by the employer name on the document against the roster names. Treat legal-form words (LLC, Inc., Co., Corporation, Holdings) and punctuation loosely, but do not match on a shared common word alone - "Birmingham Steel" is not "Birmingham-Toledo". When two roster groups could both fit, pick neither and say so in the flags. Copy the matched roster name exactly as listed. Say whether the quote is fully insured or level funded. UnitedHealthcare sends one of each for a group, in separate documents, and Kennion tracks them as separate proposals, so decide from the document in front of you and say which - a UHC quote whose funding you cannot tell is worth an audit flag. A quote runs to many pages and often dozens of plan options: read every page and list every option, including the alternate, illustrative and benchmark grids that follow the headline plans - they are quotable options and Kennion prices from them. Give each one the name exactly as printed - the carrier's wording, nothing added, no placement labels of your own - and the plan or benefit code printed on it, the network it is priced on where the quote distinguishes them, and its own tier rates. Two plans that differ only by network or by deductible are two plans. Never summarise a grid as "and other options"; list them. Surest is a UnitedHealthcare product, not a separate carrier: report a Surest quote with carrier "UnitedHealthcare" and say which funding it is, so it files under the group's UnitedHealthcare proposal. Kennion tracks seven medical proposals per group - UnitedHealthcare fully insured, UnitedHealthcare level funded, Gravie, Nationwide, Angle Health, Cobalt (a self-funded quote) and Optimyl Health (a self-funded, reference-based-pricing quote) - so set quotes_medical false for an ancillary-only document (dental, vision, life, disability) even when it comes from one of those carriers. Rates are monthly composite amounts per tier: EE (employee only), ES (employee + spouse), EC (employee + children), FAM (family). Leave a value null rather than guessing. Optimyl Health always quotes the same 4 standard plans - its Proposal Summary table numbers them 1 through 4 in a "Plan Number" row and nothing else names or codes them - so for an Optimyl proposal set each plan's plan_code from that row exactly as the schema says ("OPTIMYL PLAN 1" .. "OPTIMYL PLAN 4"); every Optimyl proposal has exactly these 4 plans, never more or fewer.
+
+One plan, one entry. A proposal shows the same plan many times - an overview page, a comparison table, a detailed benefit page, a rate page, an appendix. Those are appearances of ONE plan: list it once, and record every page it appears on in source_pages (identity, benefits, rates), counting all of them in plan_appearances. Never list a plan twice because it is printed twice, and never merge two plans because they look alike: a different plan code, network or printed name is a different plan. Keep each plan's benefits and its four rates together: pair a rate row with a plan by the plan name and code printed with it, the section heading and the table it sits in - not by row order alone - and never give one plan the benefits or rates of another. Copy every name and code exactly as printed; never shorten, rename, normalise or invent one. If two appearances of the same plan show different values, report the one on the page that is the plan's own benefit or rate table and add an audit flag naming both pages. List EPO plans too, with EPO in the network or plan type as printed (Kennion leaves them out later, and counts them).`;
 
 /**
  * Read one proposal. `file` is { filename, prepared, context } where `prepared`
@@ -310,7 +329,13 @@ Your job: identify the carrier, read off the plans and tier rates, and decide wh
  * the extraction, or throws with a message the admin screen can show.
  */
 export async function analyzeProposal(file, roster) {
-  if (fakeAi()) return fakeReading(file);
+  if (fakeAi()) {
+    // Canned readings go through the same canonical fold as real ones; a
+    // canned plan with no pages of its own is placed on page 1.
+    const r = fakeReading(file);
+    r.plans = (r.plans || []).map((pl) => ({ ...pl, source_pages: pl.source_pages || { identity: [1], benefits: [1], rates: [1] }, source_sheet: pl.source_sheet || "(canned)", source_rows: pl.source_rows || "row 1" }));
+    return fold([r], { method: "fake", pages: 1 });
+  }
   if (!aiEnabled()) throw new Error("AI matching is off: no ANTHROPIC_API_KEY is set.");
   // A proposal read shares the org's tokens-per-minute budget with every
   // other caller. The server already caps how many run at once (see
@@ -335,12 +360,8 @@ export async function analyzeProposal(file, roster) {
     `The file is named "${file.filename}".${emailNote}${partNote}\n\nKennion's roster - the only groups a proposal can be matched to:\n${rosterText}\n\nRead the proposal and fill in the structured result.`;
 
   const p = file.prepared;
-
-  // How long the quote is decides which model reads it, and whether it can be
-  // read in one go at all.
+  const stage = typeof file.onStage === "function" ? file.onStage : () => undefined;
   const model = PROPOSAL_MODEL;
-  const partNote = (first, last, total) =>
-    `\n\nThis is pages ${first}-${last} of a ${total}-page proposal, read in parts. List only the plans printed on these pages; the other parts are read separately and their plans are added to yours.`;
   const pdfContent = (buf, note) => [
     {
       type: "document",
@@ -349,24 +370,30 @@ export async function analyzeProposal(file, roster) {
     },
     { type: "text", text: ask(note) },
   ];
+  const excerptNote = (pageMap, total) =>
+    `\n\nThis file is an excerpt of a ${total}-page proposal: its pages are the original pages ${describePages(pageMap)}, in that order. List only the plans printed in this excerpt; other excerpts are read separately and merged with yours by exact plan name and code. Report source_pages as positions within THIS file (1 = its first page).`;
   /**
-   * Read a run of pages; when the answer would not fit in one reading - a
-   * quote listing more plans than 64K tokens of output holds, which is what
-   * left Boss Logistics' UHC Level Funded quote unread on every retry - cut
-   * the run in half and read each half, down to a single page. Never gives
-   * up on a document merely for being long.
+   * Read a run of pages. `pageMap[i]` is the original page number of the
+   * file's page i+1, so every page a plan is read from is recorded as the
+   * page it is on in the carrier's document. When the answer would not fit
+   * in one reading, the run is cut in half and each half read - down to a
+   * single page - and the halves' appearances are folded back together by
+   * exact plan identity, so a plan whose benefits sit in one half and its
+   * rates in the other is still one plan with both.
    */
-  const readPages = async (buf, first, last, total, depth = 0) => {
-    const note = first === 1 && last === total ? "" : partNote(first, last, total);
+  const readPages = async (buf, pageMap, total, depth = 0) => {
+    const whole = pageMap.length === total && pageMap.every((n, i) => n === i + 1);
     try {
-      return [await readOnce(client, model, pdfContent(buf, note))];
+      const r = await readOnce(client, model, pdfContent(buf, whole ? "" : excerptNote(pageMap, total)));
+      r._pageMap = pageMap;
+      return [r];
     } catch (e) {
       if (!(e instanceof TooLongError)) throw e;
-      if (last <= first || depth >= 6) throw new Error(`Page ${first} alone is longer than one reading can hold.`);
-      const halves = await splitPdf(buf, Math.ceil((last - first + 1) / 2));
-      console.log(`${file.filename}: pages ${first}-${last} too long for one reading, reading in ${halves.length} parts`);
+      if (pageMap.length <= 1 || depth >= 6) throw new Error(`Page ${pageMap[0]} alone is longer than one reading can hold.`);
+      const halves = await splitPdf(buf, Math.ceil(pageMap.length / 2));
+      console.log(`${file.filename}: pages ${describePages(pageMap)} too long for one reading, reading in ${halves.length} parts`);
       const out = [];
-      for (const h of halves) out.push(...(await readPages(h.buffer, first + h.first - 1, first + h.last - 1, total, depth + 1)));
+      for (const h of halves) out.push(...(await readPages(h.buffer, pageMap.slice(h.first - 1, h.last), total, depth + 1)));
       return out;
     }
   };
@@ -383,38 +410,213 @@ export async function analyzeProposal(file, roster) {
       if (!(e instanceof TooLongError)) throw e;
       if (lines.length < 2 || depth >= 6) throw new Error("Part of this document is longer than one reading can hold, even read in pieces.");
       const mid = Math.ceil(lines.length / 2);
-      const note = (a, b) => `\n\nThis is lines ${a}-${b} of the document, read in parts. List only the plans in these lines; the other parts are read separately and their plans are added to yours.`;
+      // Each half keeps the sheet heading it sits under, so a plan's sheet
+      // is still named in the half that holds its rows.
+      const lastHeading = lines.slice(0, mid).reverse().find((l) => /^## Sheet:/.test(l));
+      const second = lines.slice(mid);
+      if (lastHeading && !/^## Sheet:/.test(second[0] || "")) second.unshift(lastHeading);
+      const note = (a, b) => `\n\nThis is lines ${a}-${b} of the document, read in parts. List only the plans in these lines; the other parts are read separately and merged with yours by exact plan name and code.`;
       return [
         ...(await readText(lines.slice(0, mid).join("\n"), note(1, mid), depth + 1)),
-        ...(await readText(lines.slice(mid).join("\n"), note(mid + 1, lines.length), depth + 1)),
+        ...(await readText(second.join("\n"), note(mid + 1, lines.length), depth + 1)),
       ];
     }
   };
-  const fold = (readings) => (readings.length === 1 ? readings[0] : mergeReadings(readings));
 
   if (p.kind === "pdf") {
     const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
+    const all = Array.from({ length: numpages }, (_, i) => i + 1);
 
-    // Past what one reading on the long model holds, the document is read in
-    // parts and folded back into one result rather than handed to staff to
-    // split by hand.
-    if (numpages > MAX_PDF_PAGES) {
-      const parts = await splitPdf(p.buffer);
+    // A long proposal is mapped first: which pages carry plan names, benefits
+    // and rates, and which are ancillary or boilerplate. The map only steers
+    // the reading; it is never taken as plan data. The relevant pages are read
+    // as excerpts and merged by exact plan identity; if that cannot
+    // reconstruct the proposal with confidence, the whole document is read.
+    if (numpages > MAP_MIN_PAGES && numpages <= MAX_PDF_PAGES) {
+      stage("MAPPING");
+      const map = await mapDocument(client, p.buffer, file.filename, numpages).catch((e) => {
+        console.warn(`${file.filename}: mapping failed (${e.message}); reading the whole document`);
+        return null;
+      });
+      stage("EXTRACTING");
+      const relevant = map ? relevantPages(map, numpages) : [];
+      if (map && relevant.length && relevant.length < numpages) {
+        const readings = [];
+        for (let i = 0; i < relevant.length; i += RELEVANT_BATCH) {
+          const pages = relevant.slice(i, i + RELEVANT_BATCH);
+          readings.push(...(await readPages(await excerptPdf(p.buffer, pages), pages, numpages)));
+        }
+        const out = fold(readings, { method: "mapped", pages: numpages, relevantPages: relevant, map: mapSummary(map) });
+        const doubt = mappedDoubt(out, map);
+        if (!doubt) return out;
+        console.log(`${file.filename}: relevant-page reading not confident (${doubt}); reading the whole document`);
+      }
+    } else stage("EXTRACTING");
+
+    // The whole document, halved as needed; past what one reading on the
+    // model holds at all, read in 300-page parts first.
+    if (numpages > 0) {
       const readings = [];
-      for (const part of parts) readings.push(...(await readPages(part.buffer, part.first, part.last, part.total)));
-      return fold(readings);
+      if (numpages > MAX_PDF_PAGES) {
+        for (const part of await splitPdf(p.buffer)) readings.push(...(await readPages(part.buffer, all.slice(part.first - 1, part.last), numpages)));
+      } else readings.push(...(await readPages(p.buffer, all, numpages)));
+      return fold(readings, { method: readings.length > 1 ? "split" : "full", pages: numpages });
     }
-    if (numpages > 0) return fold(await readPages(p.buffer, 1, numpages, numpages));
-    return readOnce(client, model, pdfContent(p.buffer, ""));
+    return fold([await readOnce(client, model, pdfContent(p.buffer, ""))], { method: "full", pages: null });
   }
+  stage("EXTRACTING");
   if (p.kind === "image") {
-    return readOnce(client, model, [
-      { type: "image", source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") } },
-      { type: "text", text: ask() },
-    ]);
+    return fold(
+      [
+        await readOnce(client, model, [
+          { type: "image", source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") } },
+          { type: "text", text: ask() },
+        ]),
+      ],
+      { method: "full", pages: 1 },
+    );
   }
   // Text: a CSV, a spreadsheet or Word file already flattened, or an email body.
-  return fold(await readText(p.text));
+  const note = p.truncated ? [`The document was longer than ${p.text.length} characters and was cut off before it was read - plans past that point are missing.`] : [];
+  const out = fold(await readText(p.text), { method: "text", pages: null });
+  if (note.length) out.audit_flags = [...note, ...(out.audit_flags || [])];
+  return out;
+}
+
+/** Pages past which a PDF is mapped before it is read. */
+const MAP_MIN_PAGES = 20;
+/** Most pages one excerpt carries when a mapped proposal is read in sections. */
+const RELEVANT_BATCH = 40;
+
+/** "3-5, 9, 12-14" for a list of page numbers. */
+function describePages(pages) {
+  const out = [];
+  for (let i = 0; i < pages.length; i++) {
+    let j = i;
+    while (j + 1 < pages.length && pages[j + 1] === pages[j] + 1) j++;
+    out.push(i === j ? `${pages[i]}` : `${pages[i]}-${pages[j]}`);
+    i = j;
+  }
+  return out.join(", ");
+}
+
+/** A PDF holding just these pages of `buffer`, in order. */
+async function excerptPdf(buffer, pages) {
+  const src = await PDFDocument.load(buffer);
+  const doc = await PDFDocument.create();
+  const copied = await doc.copyPages(src, pages.map((n) => n - 1));
+  for (const pg of copied) doc.addPage(pg);
+  return Buffer.from(await doc.save());
+}
+
+/**
+ * Fold one or more readings into one result whose plans are canonical: every
+ * appearance merged by exact identity, EPO plans moved to `excluded`, and the
+ * count reconciliation on the result. `extraction` records how it was read.
+ */
+function fold(readings, extraction) {
+  const base = readings.length === 1 ? { ...readings[0], plans: (readings[0].plans || []).map((pl) => ({ ...pl, _pageMap: readings[0]._pageMap || null })) } : mergeReadings(readings);
+  const one = readings.length === 1 ? readings[0] : null;
+  const appearancesReported = readings.every((r) => Number.isInteger(r.plan_appearances)) ? readings.reduce((n, r) => n + r.plan_appearances, 0) : null;
+  const canon = canonicalizePlans(base.plans || [], {
+    reportedAppearances: appearancesReported,
+    // A part's own unique count cannot be summed across parts (a plan can
+    // appear in two); only a single reading's count is compared.
+    reportedUnique: one && Number.isInteger(one.unique_plans_found) ? one.unique_plans_found : null,
+    reportedEpo: one && Number.isInteger(one.unique_epo_found) ? one.unique_epo_found : null,
+  });
+  const out = { ...base, plans: canon.plans, excluded: canon.excluded, reconciliation: canon.reconciliation, extraction: { ...extraction, model: PROPOSAL_MODEL, parts: readings.length, at: new Date().toISOString() } };
+  delete out._pageMap;
+  delete out.plan_appearances;
+  delete out.unique_plans_found;
+  delete out.unique_epo_found;
+  return out;
+}
+
+const MAP_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["carrier", "effective_date", "page_count", "document_type", "pages", "approx_unique_ppo", "approx_unique_epo", "notes"],
+  properties: {
+    carrier: { type: "string" },
+    effective_date: { type: "string", description: "As printed, or empty." },
+    page_count: { type: "integer" },
+    document_type: { type: "string", enum: ["digital", "scanned", "mixed"] },
+    pages: {
+      type: "array",
+      description: "Every page of the document, in order, with what it carries.",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["page", "kinds"],
+        properties: {
+          page: { type: "integer" },
+          kinds: {
+            type: "array",
+            items: { type: "string", enum: ["plan_identity", "benefit_summary", "benefit_detail", "rates", "ancillary", "cover_or_boilerplate", "other"] },
+          },
+        },
+      },
+    },
+    approx_unique_ppo: { type: "integer", description: "Roughly how many distinct non-EPO medical plans the document quotes." },
+    approx_unique_epo: { type: "integer", description: "Roughly how many distinct EPO medical plans it quotes." },
+    notes: { type: "string" },
+  },
+};
+
+const MAP_SYSTEM = `You map a carrier's medical proposal so it can be read in sections. For every page, say what it carries: plan_identity (plan names or codes are listed), benefit_summary or benefit_detail (medical benefit values - deductibles, copays, coinsurance, prescriptions), rates (medical tier rates), ancillary (dental, vision, life, disability), cover_or_boilerplate (cover, disclosures, instructions, census, underwriting terms), or other. A page can carry several. When in doubt whether a page has medical plan names, benefits or rates, include it - a page left out is never read. Estimate how many distinct PPO and EPO medical plans the document quotes. You are only navigating; you do not read out plan data.`;
+
+/** Map a long PDF: which pages carry medical plan identities, benefits and rates. */
+async function mapDocument(client, buffer, filename, numpages) {
+  const response = await client.messages
+    .stream({
+      model: PROPOSAL_MODEL,
+      max_tokens: 32000,
+      system: MAP_SYSTEM,
+      output_config: { effort: "medium", format: rawJsonSchemaFormat(MAP_SCHEMA) },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") }, title: filename },
+            { type: "text", text: `This proposal has ${numpages} pages. Map every page.` },
+          ],
+        },
+      ],
+    })
+    .finalMessage();
+  if (response.stop_reason !== "end_turn") throw new Error(`map ended ${response.stop_reason}`);
+  const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  const map = JSON.parse(text);
+  if (!Array.isArray(map.pages) || !map.pages.length) throw new Error("the map lists no pages");
+  return map;
+}
+
+const MEDICAL_KINDS = new Set(["plan_identity", "benefit_summary", "benefit_detail", "rates"]);
+/** The pages worth reading, in order - every page the map says carries medical plan data. */
+function relevantPages(map, numpages) {
+  const listed = new Set(map.pages.map((pg) => pg.page));
+  // A page the map skipped entirely is read, not dropped.
+  const unmapped = Array.from({ length: numpages }, (_, i) => i + 1).filter((n) => !listed.has(n));
+  const medical = map.pages.filter((pg) => Number.isInteger(pg.page) && pg.page >= 1 && pg.page <= numpages && (pg.kinds || []).some((k) => MEDICAL_KINDS.has(k))).map((pg) => pg.page);
+  return [...new Set([...medical, ...unmapped])].sort((a, b) => a - b);
+}
+const mapSummary = (map) => ({ documentType: map.document_type, approxPpo: map.approx_unique_ppo, approxEpo: map.approx_unique_epo, carrier: map.carrier });
+
+/**
+ * Why a relevant-page reading cannot be trusted to stand for the document -
+ * or null when it can. A plan with no rate or no benefit read (its other half
+ * sat in a section the merge could not pair), fewer plans than the map saw,
+ * or nothing at all sends the reading back to the whole document.
+ */
+function mappedDoubt(out, map) {
+  const plans = [...(out.plans || []), ...(out.excluded || [])];
+  if (!plans.length) return "no plans";
+  const unpaired = (out.plans || []).filter((pl) => !["EE", "ES", "EC", "FAM"].some((t) => pl.rates && pl.rates[t] != null) || !(pl.deductible || pl.oop_max));
+  if (unpaired.length) return `${unpaired.length} plan(s) without both benefits and rates`;
+  const seen = (Number(map.approx_unique_ppo) || 0) + (Number(map.approx_unique_epo) || 0);
+  if (seen && plans.length < seen) return `${plans.length} plans read, the map saw about ${seen}`;
+  return null;
 }
 
 /**

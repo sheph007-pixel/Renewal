@@ -7,6 +7,7 @@
 // (Cigna LocalPlus, offered only in a few areas) and a "Benefits Grid
 // (static)" sheet that is the same for every group; both are left out.
 import * as XLSX from "xlsx";
+import { canonicalizePlans } from "./plan-canonical.js";
 
 const TIER_KEYS = { "EE:": "EE", "ES:": "ES", "EC:": "EC", "F:": "FAM", "Total:": "total" };
 
@@ -81,7 +82,7 @@ function readPlans(rows, sheetName, network) {
     FAM: col("F Rate"),
   };
   const out = [];
-  for (const r of rows.slice(hi + 1)) {
+  for (const [k, r] of rows.slice(hi + 1).entries()) {
     if (!r || typeof r[0] !== "string" || !/^Gravie/.test(r[0])) continue;
     const name = r[0].trim();
     const rates = { EE: num(r[c.EE]), ES: num(r[c.ES]), EC: num(r[c.EC]), FAM: num(r[c.FAM]) };
@@ -90,6 +91,8 @@ function readPlans(rows, sheetName, network) {
     out.push({
       name,
       sheet: sheetName,
+      /** The row on the sheet this plan is read from, as Excel numbers it - its provenance. */
+      row: hi + 1 + k + 1,
       /** "EPO" or "PPO": the one thing that differs between the two sheets. */
       variant: epo ? "EPO" : "PPO",
       network: `${network} (${epo ? "EPO" : "PPO"})`,
@@ -155,7 +158,10 @@ export function gravieQuoteRows(p) {
 export function gravieExtracted(p) {
   const t = p.tiers || {};
   const enrolled = ["EE", "ES", "EC", "FAM"].reduce((n, k) => n + (t[k] || 0), 0) || null;
-  const plans = p.plans.map((pl) => {
+  // Each row is one plan appearance with its sheet and row as provenance;
+  // the same canonicalization every other proposal goes through folds them
+  // (a design listed twice is one plan) and sets out the reconciliation.
+  const appearances = p.plans.map((pl) => {
     const monthly =
       enrolled == null
         ? null
@@ -167,10 +173,15 @@ export function gravieExtracted(p) {
       plan_type: pl.planType,
       deductible: pl.deductible || null,
       oop_max: pl.oopMax || null,
+      ...(pl.coinsurance != null ? { benefits: { coinsurance: `${Math.round(pl.coinsurance * (pl.coinsurance <= 1 ? 100 : 1))}%` } } : {}),
       rates: pl.rates,
       monthly_total: monthly,
+      source_sheet: pl.sheet,
+      source_rows: pl.row ? `row ${pl.row}` : "",
     };
   });
+  const canon = canonicalizePlans(appearances);
+  const plans = canon.plans;
   const sheets = [...new Set(p.plans.map((pl) => pl.sheet))];
   return {
     carrier: "Gravie",
@@ -184,6 +195,9 @@ export function gravieExtracted(p) {
     proposal_type: "new business",
     enrolled_on_document: enrolled,
     plans,
+    excluded: canon.excluded,
+    reconciliation: canon.reconciliation,
+    extraction: { method: "parser", model: null, parts: 1, at: new Date().toISOString() },
     total_monthly: null,
     summary:
       `Gravie level-funded rate workbook, quote ${p.quoteNumber || "n/a"}: ${plans.length} plan prices, ` +

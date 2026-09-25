@@ -265,8 +265,12 @@ export interface PlanBenefits {
   urgentCare: string | null;
   hospital: string | null;
   rx: string | null;
-  /** Emergency room; only the plan catalogue gives it. */
+  /** Emergency room, as the carrier's proposal prints it. */
   er?: string | null;
+  /** In-network coinsurance, as printed ("20%"). */
+  coinsurance?: string | null;
+  /** Whether the proposal says the plan is HSA-eligible; null when it does not say. */
+  hsaEligible?: boolean | null;
 }
 
 /** In- and out-of-network figures for one design. */
@@ -322,12 +326,14 @@ export interface GroupProposal {
   uploadedAt: string;
   /** The two-model check of the stored reading against the document, or null before it has run. */
   audit?: ProposalAudit | null;
+  /** True only when the proposal passed the full check - source, extraction, validation, both audits of this exact reading, grid. */
+  verified?: boolean;
 }
 
 /** Whether the figures read off a proposal were checked against the document, and when. */
 export interface ProposalAudit {
-  status: "pass" | "issues" | "unreadable";
-  completedAt: string;
+  status: "pass" | "issues" | "pending" | "unreadable";
+  completedAt: string | null;
 }
 
 /** What Employee Navigator billed the group for the month - counts and rates only. */
@@ -1064,7 +1070,7 @@ export function proposalPlans(data: KennionData, g: Group): MarketPlan[] {
         oop: moneyNum(pl.oopMax),
         copays: gb ? `${gb.pcp} / ${gb.specialist}` : pb?.doctorVisit || pb?.specialist ? `${pb.doctorVisit ?? "-"} / ${pb.specialist ?? "-"}` : "On the proposal",
         rx: gb ? `${gb.rxGeneric} generic · ${gb.rxPreferredBrand} preferred brand · ${gb.rxNonPreferredBrand} non-preferred` : pb?.rx || "On the proposal",
-        coins: null,
+        coins: pb?.coinsurance ?? null,
         pcp: gb ? gb.pcp : pb?.doctorVisit ?? null,
         specialist: gb ? gb.specialist : pb?.specialist ?? null,
         uc: gb ? gb.uc : pb?.urgentCare ?? null,

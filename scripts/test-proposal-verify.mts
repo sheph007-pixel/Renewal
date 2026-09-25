@@ -29,10 +29,18 @@ assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).len
 // --- The check, pure: Verified needs both auditors on this exact reading --
 const isEpoPlan = (pl: { name?: string }) => /\bEPO\b/.test(pl.name || "");
 const isBlankPlan = (pl: { name?: string }) => !pl || !pl.name;
-const reading1 = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }] };
+const src = { identity: [2], benefits: [3], rates: [9], sheet: "", rows: "", appearances: 3, codes: [] };
+const canon = (plans: object[]) => ({
+  plans,
+  excluded: [{ name: "Copay 1500 EPO", plan_code: null, network: null, reason: "EPO - Kennion offers PPO plans only" }],
+  reconciliation: { plan_appearances: plans.length * 3 + 1, unique_plans: plans.length + 1, unique_ppo: plans.length, unique_epo: 1, excluded: 1, expected: plans.length, reader_unique_plans: plans.length + 1 },
+  extraction: { sourceSha: "sha-acme" },
+});
+const plan1 = (over = {}) => ({ name: "Copay 1500 PPO", option_id: "GR1", deductible: "$1,500", oop_max: "$5,000", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 }, source: src, ...over });
+const reading1 = canon([plan1()]);
 const passModel = (model: string, extra = {}) => ({ model, verdict: "pass", plansFoundTotal: 2, epoExcluded: 1, documentPlanCount: 1, confirmed: 1, of: 1, mismatches: [], notes: "", ...extra });
 const dualPass = (extracted = reading1) => ({ status: "pass", completedAt: "2026-09-25T00:00:00Z", version: readingVersion(extracted), mismatches: [], models: [passModel("Claude (claude-sonnet-5)"), passModel("ChatGPT (gpt-5)")] });
-const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", superseded_by: null, size: 1000, filename: "acme gravie.pdf", extracted: reading1, audit: dualPass() };
+const good = { id: 10, group_name: "Acme", slot: "Gravie", status: "assigned", superseded_by: null, size: 1000, mime: "application/pdf", source_sha: "sha-acme", filename: "acme gravie.pdf", extracted: reading1, audit: { ...dualPass(), sourceSha: "sha-acme" } };
 const served = (rows: { id: number; slot: string; extracted: { plans: { name: string; option_id?: string; rates: object; unpriced?: string[] }[] } }[]) => () =>
   rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.filter((p) => !isEpoPlan(p)).map((p) => ({ name: p.name, optionId: p.option_id, rates: p.rates, unpriced: p.unpriced })) }));
 const run = (rows: unknown[], srv: () => unknown[], gaveUp: (id: number) => string | null = () => null) =>
@@ -45,6 +53,31 @@ assert.equal(cell.state, "verified", JSON.stringify(cell.steps));
 assert.equal(cell.plans, 1);
 assert.deepEqual([cell.counts.document, cell.counts.stored, cell.counts.grid], [1, 1, 1], "document, database and grid: one number");
 assert.deepEqual(cell.counts.audit.claude, { found: 2, epoExcluded: 1, expected: 1 }, "the EPO plan left out is on the record");
+assert.equal(cell.stage, "VERIFIED");
+assert.equal(cell.reconciliation.unique_epo, 1);
+assert.equal(cell.excluded[0].name, "Copay 1500 EPO", "the EPO exclusion is visible, not silent");
+assert.ok(cell.steps.validation.checks.every((k: { ok: boolean }) => k.ok));
+
+// Validation runs before either audit: a duplicate, a conflict or a missing
+// source page stops the box there, whatever the audits said.
+const dupReading = canon([plan1(), plan1({ option_id: "GR2" })]);
+let dup = { ...good, extracted: dupReading, audit: { ...dualPass(dupReading), sourceSha: "sha-acme" } };
+cell = cellOf(run([dup], served([dup])));
+assert.equal(cell.failedAt, "validation");
+assert.equal(cell.fix, "correct");
+assert.equal(cell.stage, "VALIDATING");
+const conflictReading = canon([plan1({ conflicts: [{ field: "FAM", values: [{ value: 4, pages: [9] }, { value: 5, pages: [30] }] }] })]);
+dup = { ...good, extracted: conflictReading, audit: { ...dualPass(conflictReading), sourceSha: "sha-acme" } };
+assert.equal(cellOf(run([dup], served([dup]))).failedAt, "validation", "two appearances that disagree are never waved through");
+const noSource = canon([plan1({ source: undefined })]);
+dup = { ...good, extracted: noSource, audit: { ...dualPass(noSource), sourceSha: "sha-acme" } };
+cell = cellOf(run([dup], served([dup])));
+assert.equal(cell.fix, "read", "a reading without provenance is extracted again");
+
+// An audit of another version of the document is stale.
+cell = cellOf(run([{ ...good, audit: { ...good.audit, sourceSha: "sha-older" } }], served([good])));
+assert.equal(cell.failedAt, "claude");
+assert.equal(cell.fix, "audit");
 assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Nationwide").state, "missing", "an empty slot is just blank");
 
 // Never one-model green: ChatGPT did not complete -> pending, audit again.
@@ -62,7 +95,7 @@ assert.equal(cell.failedAt, "claude");
 assert.match(cell.steps.claude.note, /confirmed the rates of 0 of 1/);
 
 // An audit of an earlier reading does not count: stale -> audit again.
-const changed = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } }] };
+const changed = canon([plan1({ rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } })]);
 const stale = { ...good, extracted: changed, audit: dualPass(reading1) };
 cell = cellOf(run([stale], served([stale])));
 assert.equal(cell.state, "fail");
@@ -88,12 +121,12 @@ assert.equal(cell.failedAt, "grid", "the grid showing other rates than the datab
 
 // Grid: a plan missing a tier rate the group needs - correct it, unless the
 // document itself leaves that tier unpriced.
-const noEsReading = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 } }] };
+const noEsReading = canon([plan1({ rates: { EE: 1, ES: null, EC: 3, FAM: 4 } })]);
 const noEs = { ...good, extracted: noEsReading, audit: dualPass(noEsReading) };
 cell = cellOf(run([noEs], served([noEs])));
-assert.equal(cell.failedAt, "grid");
+assert.equal(cell.failedAt, "validation", "a missing tier rate fails validation before any audit");
 assert.equal(cell.fix, "correct");
-const confirmedReading = { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] };
+const confirmedReading = canon([plan1({ rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] })]);
 const confirmed = { ...good, extracted: confirmedReading, audit: dualPass(confirmedReading) };
 assert.equal(cellOf(run([confirmed], served([confirmed]))).state, "verified", "a tier the carrier does not price is not a failure once confirmed");
 
@@ -145,6 +178,17 @@ assert.deepEqual(fixed.extracted.plans[0].unpriced, ["FAM"]);
 assert.equal(fixed.extracted.plans[0].option_id, "UH1", "a plan keeps its number through a correction");
 assert.equal(fixed.log.length, 6, "every change logged: 3 values, 1 unpriced tier, 1 removed, 1 added");
 assert.equal(reading0.plans[0].rates.EE, 600, "the stored reading is not mutated");
+
+// A plan "removed and added" under the same carrier code is one plan renamed
+// in place - it keeps its BenSync ID and never leaves the grid.
+const labelled = { plans: [{ name: "Option 1 - EZ2I (Open Access HSA) Rx plan: E04X", plan_code: "EZ2I", option_id: "UH4", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }] };
+const renamed = applyCorrection(labelled, { fixes: [], unpriced: [], remove: [0], add: [{ name: "EZ2I Open Access HSA", plan_code: "EZ2I", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 }, source_pages: { identity: [4], benefits: [4], rates: [9] } }] }, { proposalId: 40, version: "v1", by: "test" });
+assert.equal(renamed.extracted.plans.length, 1);
+assert.equal(renamed.extracted.plans[0].option_id, "UH4", "the ID stays with the plan");
+assert.equal(renamed.extracted.plans[0].name, "EZ2I Open Access HSA");
+assert.deepEqual(renamed.log.map((l: { field: string }) => l.field), ["name"], "logged as a name correction, not a removal and an addition");
+assert.equal(renamed.log[0].proposalId, 40);
+assert.equal(renamed.log[0].optionId, "UH4");
 
 // --- An auditor's answer is checked in code, not taken on its word ---------
 const storedTwo = [

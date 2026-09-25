@@ -17,6 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import crypto from "node:crypto";
 import https from "node:https";
 import { prepareForModel } from "./intake.js";
+import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 /** The API's page ceiling for the 1M-context model this audits with. */
@@ -39,19 +40,31 @@ const nullableNumber = { anyOf: [{ type: "number" }, { type: "null" }] };
 const RESULT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "plans_found_total", "epo_excluded", "document_plan_count", "rate_confirmations", "mismatches", "notes"],
+  required: ["verdict", "plan_appearances", "plans_found_total", "epo_excluded", "document_plan_count", "duplicates_found", "rate_confirmations", "mismatches", "notes"],
   properties: {
-    plans_found_total: { type: "integer", description: "Every distinct plan option the document prices, EPO plans included, across every page and grid. A plan printed twice at the same rates counts once." },
+    plan_appearances: { type: "integer", description: "How many times medical plans appear on the document in total - one plan on four pages is four appearances." },
+    plans_found_total: { type: "integer", description: "Every DISTINCT plan option the document prices, EPO plans included, across every page and grid. A plan printed on several pages counts once." },
+    duplicates_found: { type: "boolean", description: "True if the stored list holds the same carrier plan more than once." },
     epo_excluded: { type: "integer", description: "How many of those are EPO plans (Kennion offers PPO only, so these are left out of the portal on purpose)." },
     document_plan_count: { type: "integer", description: "plans_found_total minus epo_excluded: the plans the portal should hold." },
     rate_confirmations: {
       type: "array",
-      description: "One entry for EVERY stored plan, by its index: whether it is on the document, and its four monthly tier rates read off the document yourself (not copied from the stored values). null for a tier the document does not price.",
+      description: "One entry for EVERY stored plan, by its index: whether it is on the document; whether the stored name and plan code are exactly as printed; whether the stored benefit values are this plan's own (not another plan's); and its four monthly tier rates read off the document yourself (not copied from the stored values) from this plan's own rate row. null for a tier the document does not price.",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["index", "on_document", "EE", "ES", "EC", "FAM"],
-        properties: { index: { type: "integer" }, on_document: { type: "boolean" }, EE: nullableNumber, ES: nullableNumber, EC: nullableNumber, FAM: nullableNumber },
+        required: ["index", "on_document", "name_exact", "code_exact", "benefits_belong", "EE", "ES", "EC", "FAM"],
+        properties: {
+          index: { type: "integer" },
+          on_document: { type: "boolean" },
+          name_exact: { type: "boolean" },
+          code_exact: { type: "boolean", description: "True also when neither the document nor the stored plan has a code." },
+          benefits_belong: { type: "boolean" },
+          EE: nullableNumber,
+          ES: nullableNumber,
+          EC: nullableNumber,
+          FAM: nullableNumber,
+        },
       },
     },
     verdict: { type: "string", enum: ["pass", "issues", "unreadable"], description: "pass when every stored value matches the document; issues when any does not; unreadable when the document cannot be checked." },
@@ -73,11 +86,11 @@ const RESULT_SCHEMA = {
   },
 };
 
-const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself. The stored plans are given as a numbered JSON list: for each, its index, the name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family) and the benefit figures the portal shows to the employer.
+const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself - the document is the source of truth. The stored plans are given as a numbered JSON list: for each, its index, the portal's own ID, the exact name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family), the benefit figures the portal shows to the employer, and the pages the portal says each came from. You also get the portal's plan-count reconciliation and the EPO plans it left out on purpose. You audit on your own: no other auditor's result is given to you.
 
-1. Count the plans on the document: every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the rest (document_plan_count). A plan printed twice at the same rates counts once.
+1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the rest (document_plan_count). A plan printed on several pages is one plan. The EPO plans listed as excluded are left out on purpose - they are not missing.
 
-2. For EVERY stored plan, by index, find it on the document and read its four tier rates off the page yourself (rate_confirmations). Do not copy the stored rates - read the document. If a stored plan is not on the document, set on_document false. Use null only for a tier the document does not price for that plan.
+2. For EVERY stored plan, by index, find it on the document and confirm it (rate_confirmations): is the stored name exactly as printed, is the plan code exactly as printed, are the stored benefit values this plan's own, and read its four tier rates off the page yourself from this plan's own rate row - do not copy the stored rates. If a stored plan is not on the document, set on_document false. Use null only for a tier the document does not price for that plan. Set duplicates_found if the stored list holds one carrier plan twice.
 
 3. Check every other stored value against the document. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value the document contradicts. Kennion offers PPO plans only, so an EPO plan printed on the document is left out of the portal on purpose: never report one as extra_plan, and never expect one to be stored. The portal is meant to store every non-EPO option the document prices: report each one it is missing (field extra_plan, the plan's printed name in on_document, "not stored" in stored).
 
@@ -86,6 +99,7 @@ Names: the stored name should be the plan's name exactly as printed. A stored na
 const storedFor = (extracted) => {
   const plans = Array.isArray(extracted && extracted.plans) ? extracted.plans : [];
   return plans.map((pl) => ({
+    id: pl.option_id || null,
     name: pl.name,
     plan_code: pl.plan_code || null,
     network: pl.network || null,
@@ -94,8 +108,11 @@ const storedFor = (extracted) => {
     oop_max: pl.oop_max || null,
     rates: pl.rates || null,
     benefits: pl.benefits || null,
+    source_pages: pl.source ? { identity: pl.source.identity || [], benefits: pl.source.benefits || [], rates: pl.source.rates || [], sheet: pl.source.sheet || "", rows: pl.source.rows || "" } : null,
   }));
 };
+/** The same, without what the portal adds of its own (IDs, provenance) - the values a reading is made of, for its version hash. */
+const valuesFor = (extracted) => storedFor(extracted).map(({ id, source_pages, ...v }) => v);
 
 /**
  * The exact reading an audit checked: a hash of every stored plan's values.
@@ -103,7 +120,7 @@ const storedFor = (extracted) => {
  * changes the hash, and the old audit no longer counts.
  */
 export function readingVersion(extracted) {
-  return crypto.createHash("sha256").update(JSON.stringify(storedFor(extracted))).digest("hex").slice(0, 16);
+  return crypto.createHash("sha256").update(JSON.stringify(valuesFor(extracted))).digest("hex").slice(0, 16);
 }
 
 const RATE_TIERS = ["EE", "ES", "EC", "FAM"];
@@ -130,6 +147,18 @@ export function shape(who, r, stored) {
       if (!seen.has(`${pl.name}|missing_plan`.toLowerCase())) mismatches.push({ plan: pl.name, field: "missing_plan", stored: "stored", onDocument: "not on document" });
       return;
     }
+    // Identity and pairing, confirmed plan by plan: a "no" is a finding
+    // whether or not the auditor also listed it.
+    const flag = (ok, field, stored, onDoc) => {
+      if (ok !== false) return;
+      const key = `${pl.name}|${field}`.toLowerCase();
+      if ([...seen].some((k) => k.startsWith(`${pl.name}|`.toLowerCase()) && k.includes(field.split(" ")[0]))) return;
+      seen.add(key);
+      mismatches.push({ plan: pl.name, field, stored, onDocument: onDoc });
+    };
+    flag(c.name_exact, "name", pl.name, "not exactly as printed");
+    flag(c.code_exact, "plan_code", pl.plan_code || "", "not exactly as printed");
+    flag(c.benefits_belong, "benefits", "stored benefits", "belong to another plan or differ from this plan's own");
     for (const t of RATE_TIERS) {
       const st = pl.rates ? pl.rates[t] : null;
       if (sameRate(c[t], st)) continue;
@@ -139,11 +168,13 @@ export function shape(who, r, stored) {
       mismatches.push({ plan: pl.name, field: `rate ${t}`, stored: st == null ? "" : String(st), onDocument: c[t] == null ? "not priced" : String(c[t]) });
     }
   });
+  if (r && r.duplicates_found === true) mismatches.push({ plan: "(stored list)", field: "duplicate_plan", stored: "a plan stored twice", onDocument: "one plan" });
   const int = (v) => (Number.isInteger(v) ? v : null);
   const verdict = modelVerdict === "unreadable" ? "unreadable" : confirmed < stored.length ? "incomplete" : mismatches.length || modelVerdict === "issues" ? "issues" : "pass";
   return {
     model: who,
     verdict,
+    planAppearances: int(r && r.plan_appearances),
     plansFoundTotal: int(r && r.plans_found_total),
     epoExcluded: int(r && r.epo_excluded),
     documentPlanCount: int(r && r.document_plan_count),
@@ -154,9 +185,18 @@ export function shape(who, r, stored) {
   };
 }
 
-const auditPayload = (stored) => `The stored plans:\n${JSON.stringify(stored.map((pl, index) => ({ index, ...pl })), null, 1)}\n\nAudit them against the document.`;
+const auditPayload = (stored, extracted, version, sourceSha) => {
+  const x = extracted || {};
+  return [
+    `Proposal version: document ${sourceSha || "?"}, reading ${version}.`,
+    `The portal's plan-count reconciliation: ${JSON.stringify(x.reconciliation || null)}`,
+    `EPO plans left out on purpose (Kennion offers PPO only; not missing): ${JSON.stringify((x.excluded || []).map((e) => ({ name: e.name, plan_code: e.plan_code, pages: e.source ? [...new Set([...(e.source.identity || []), ...(e.source.rates || [])])] : [] })))}`,
+    `The stored plans:\n${JSON.stringify(stored.map((pl, index) => ({ index, ...pl })), null, 1)}`,
+    "Audit every stored plan against the document.",
+  ].join("\n\n");
+};
 
-async function claudeCheck({ filename, prepared, stored }) {
+async function claudeCheck({ filename, prepared, stored, payload }) {
   // Audits run several at a time against the same org-wide tokens-per-minute
   // budget the proposal reader shares - stretch the SDK's built-in backoff so
   // a burst retries instead of failing the audit outright.
@@ -171,7 +211,7 @@ async function claudeCheck({ filename, prepared, stored }) {
   }
   else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
   else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
-  content.push({ type: "text", text: auditPayload(stored) });
+  content.push({ type: "text", text: payload });
   // Streamed with room to spare: every plan's four rates come back now, and a
   // 145-plan quote's findings ran past the old 8,000-token ceiling.
   const response = await client.messages
@@ -220,12 +260,12 @@ function postJson(url, headers, body, timeoutMs) {
   });
 }
 
-async function chatgptCheck({ filename, prepared, stored }) {
+async function chatgptCheck({ filename, prepared, stored, payload }) {
   const parts = [];
   if (prepared.kind === "pdf") parts.push({ type: "file", file: { filename, file_data: `data:application/pdf;base64,${prepared.buffer.toString("base64")}` } });
   else if (prepared.kind === "image") parts.push({ type: "image_url", image_url: { url: `data:${prepared.mime};base64,${prepared.buffer.toString("base64")}` } });
   else parts.push({ type: "text", text: `The document (${filename}):\n${prepared.text || "(empty)"}` });
-  parts.push({ type: "text", text: auditPayload(stored) });
+  parts.push({ type: "text", text: payload });
   const body = {
     model: CHATGPT_MODEL(),
     messages: [
@@ -266,24 +306,26 @@ async function chatgptCheck({ filename, prepared, stored }) {
  *             failed, or skipped a plan. Never counted as a pass.
  * `version` names the reading that was checked (see readingVersion).
  */
-export async function auditProposal({ filename, mime, buffer, extracted }) {
+export async function auditProposal({ filename, mime, buffer, extracted, sourceSha = null }) {
   const stored = storedFor(extracted);
   const completedAt = new Date().toISOString();
   const version = readingVersion(extracted);
+  const payload = auditPayload(stored, extracted, version, sourceSha);
   const storedCount = offeredCount(extracted);
   if (!stored.length) return { completedAt, status: "pending", models: [], mismatches: [], notes: "No plans stored to check.", version, counts: { stored: 0 } };
   let models;
   if (fakeAi()) {
-    const canned = (name) => shape(name, { verdict: "pass", plans_found_total: storedCount, epo_excluded: 0, document_plan_count: storedCount, rate_confirmations: stored.map((pl, index) => ({ index, on_document: true, ...(pl.rates || {}) })), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }, stored);
+    const epo = Array.isArray(extracted && extracted.excluded) ? extracted.excluded.length : 0;
+    const canned = (name) => shape(name, { verdict: "pass", plan_appearances: storedCount + epo, plans_found_total: storedCount + epo, epo_excluded: epo, document_plan_count: storedCount, duplicates_found: false, rate_confirmations: stored.map((pl, index) => ({ index, on_document: true, name_exact: true, code_exact: true, benefits_belong: true, ...(pl.rates || {}) })), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }, stored);
     models = [canned("Claude (canned)"), canned("ChatGPT (canned)")];
   } else {
     const prepared = await prepareForModel({ filename, mime, buffer });
     models = await Promise.all([
       apiKey() || process.env.ANTHROPIC_AUTH_TOKEN
-        ? claudeCheck({ filename, prepared, stored }).catch((e) => ({ model: `Claude (${CLAUDE_MODEL})`, verdict: "error", mismatches: [], notes: e.message }))
+        ? claudeCheck({ filename, prepared, stored, payload }).catch((e) => ({ model: `Claude (${CLAUDE_MODEL})`, verdict: "error", mismatches: [], notes: e.message }))
         : Promise.resolve({ model: "Claude", verdict: "off", mismatches: [], notes: "No Anthropic key." }),
       chatgptKey()
-        ? chatgptCheck({ filename, prepared, stored }).catch((e) => ({ model: `ChatGPT (${CHATGPT_MODEL()})`, verdict: "error", mismatches: [], notes: e.message }))
+        ? chatgptCheck({ filename, prepared, stored, payload }).catch((e) => ({ model: `ChatGPT (${CHATGPT_MODEL()})`, verdict: "error", mismatches: [], notes: e.message }))
         : Promise.resolve({ model: "ChatGPT", verdict: "off", mismatches: [], notes: "No ChatGPT key." }),
     ]);
   }
@@ -303,9 +345,9 @@ export async function auditProposal({ filename, mime, buffer, extracted }) {
   const counts = { stored: storedCount };
   for (const m of models) {
     const k = /^claude/i.test(m.model) ? "claude" : "chatgpt";
-    counts[k] = { found: m.plansFoundTotal ?? null, epoExcluded: m.epoExcluded ?? null, expected: m.documentPlanCount ?? null };
+    counts[k] = { appearances: m.planAppearances ?? null, found: m.plansFoundTotal ?? null, epoExcluded: m.epoExcluded ?? null, expected: m.documentPlanCount ?? null };
   }
-  return { completedAt, status, models, mismatches, notes, version, counts, documentPlanCount: both && !mismatches.length ? storedCount : null };
+  return { completedAt, status, models, mismatches, notes, version, sourceSha, counts, documentPlanCount: both && !mismatches.length ? storedCount : null };
 }
 
 const TIERS = ["EE", "ES", "EC", "FAM"];
@@ -332,56 +374,67 @@ export function offeredCount(extracted) {
 // two-model audit runs again - a correction is only ever trusted once both
 // models agree with it.
 
+const S = { type: "string" };
+const NS = { anyOf: [{ type: "string" }, { type: "null" }] };
+const NN = { anyOf: [{ type: "number" }, { type: "null" }] };
+const PAGES = {
+  type: "object",
+  additionalProperties: false,
+  required: ["identity", "benefits", "rates"],
+  description: "Page positions within the file you were given (1 = its first page).",
+  properties: { identity: { type: "array", items: { type: "integer" } }, benefits: { type: "array", items: { type: "integer" } }, rates: { type: "array", items: { type: "integer" } } },
+};
 const PLAN_ITEM = {
   type: "object",
   additionalProperties: false,
-  required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "benefits", "rates", "monthly_total"],
+  required: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "benefits", "rates", "monthly_total", "source_pages"],
   properties: {
-    name: { type: "string" },
-    plan_code: { anyOf: [{ type: "string" }, { type: "null" }] },
-    network: { anyOf: [{ type: "string" }, { type: "null" }] },
-    plan_type: { anyOf: [{ type: "string" }, { type: "null" }] },
-    deductible: { anyOf: [{ type: "string" }, { type: "null" }] },
-    oop_max: { anyOf: [{ type: "string" }, { type: "null" }] },
+    name: S,
+    plan_code: NS,
+    network: NS,
+    plan_type: NS,
+    deductible: NS,
+    oop_max: NS,
     benefits: {
       type: "object",
       additionalProperties: false,
-      required: ["doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"],
-      properties: { doctor_visit: { type: "string" }, specialist: { type: "string" }, imaging: { type: "string" }, urgent_care: { type: "string" }, hospital: { type: "string" }, rx: { type: "string" } },
+      required: BENEFIT_FIELDS_LIST(),
+      properties: Object.fromEntries(BENEFIT_FIELDS_LIST().map((k) => [k, S])),
     },
-    rates: {
-      type: "object",
-      additionalProperties: false,
-      required: ["EE", "ES", "EC", "FAM"],
-      properties: { EE: { anyOf: [{ type: "number" }, { type: "null" }] }, ES: { anyOf: [{ type: "number" }, { type: "null" }] }, EC: { anyOf: [{ type: "number" }, { type: "null" }] }, FAM: { anyOf: [{ type: "number" }, { type: "null" }] } },
-    },
-    monthly_total: { anyOf: [{ type: "number" }, { type: "null" }] },
+    rates: { type: "object", additionalProperties: false, required: ["EE", "ES", "EC", "FAM"], properties: { EE: NN, ES: NN, EC: NN, FAM: NN } },
+    monthly_total: NN,
+    source_pages: PAGES,
   },
 };
+function BENEFIT_FIELDS_LIST() {
+  return ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
+}
 
 const CORRECTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["document_plan_count", "fixes", "add", "remove", "unpriced", "notes"],
   properties: {
-    document_plan_count: { type: "integer", description: "Distinct non-EPO plan options the document prices, each printed-twice plan counted once." },
+    document_plan_count: { type: "integer", description: "Distinct non-EPO plan options the document prices, each plan counted once however many pages it is on." },
     fixes: {
       type: "array",
-      description: "One entry per finding you were given (and any other wrong value you notice), after checking it against the document.",
+      description: "One entry per finding and per conflict you were given (and any other wrong value you notice), after checking it against the document.",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["index", "field", "verdict", "value"],
+        required: ["index", "field", "verdict", "value", "source_page", "reason"],
         properties: {
           index: { type: "integer", description: "The stored plan's index in the list you were given." },
-          field: { type: "string", enum: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "EE", "ES", "EC", "FAM", "doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"] },
+          field: { type: "string", enum: ["name", "plan_code", "network", "plan_type", "deductible", "oop_max", "EE", "ES", "EC", "FAM", ...BENEFIT_FIELDS_LIST()] },
           verdict: { type: "string", enum: ["fix", "stored_is_correct"], description: "fix when the document prints something else; stored_is_correct when the finding was wrong." },
           value: { type: "string", description: "The value exactly as the document prints it (a rate as a plain number, e.g. 612.45). Empty for stored_is_correct." },
+          source_page: { type: "integer", description: "The page position (within the file you were given) you read the value from; 0 for a spreadsheet or text document." },
+          reason: { type: "string", description: "One short sentence: what the document shows and why this is the plan's own value." },
         },
       },
     },
     add: { type: "array", description: "Every non-EPO plan the document prices that the stored list is missing, in full.", items: PLAN_ITEM },
-    remove: { type: "array", description: "Indexes of stored plans that are not on the document at all, or are an exact repeat of another stored plan.", items: { type: "integer" } },
+    remove: { type: "array", description: "Indexes of stored plans that are not on the document at all, or are a repeat of another stored plan (the same carrier plan stored twice).", items: { type: "integer" } },
     unpriced: {
       type: "array",
       description: "Stored plans with an empty tier rate that the document genuinely does not price for that tier.",
@@ -391,26 +444,58 @@ const CORRECTION_SCHEMA = {
   },
 };
 
-const CORRECTION_INSTRUCTIONS = `You correct a benefits portal's stored reading of a carrier's proposal so that it matches the proposal document exactly. You are given the document, the stored plans as a numbered list, the findings two independent auditors reported, and the tier rates the portal is missing.
+const CORRECTION_INSTRUCTIONS = `You correct a benefits portal's stored reading of a carrier's proposal so that it matches the proposal document exactly - the document is the source of truth. You are given the document (or the pages of it that the findings concern), the stored plans as a numbered list with the pages each was read from, the findings two independent auditors reported, any conflicts between two appearances of the same plan, and the tier rates the portal is missing.
 
-Check every finding against the document yourself - the auditors can be wrong. For each, return a fix with the value exactly as printed, or stored_is_correct. Read each missing tier rate off the document: return it as a fix, or list it under unpriced when the document really does not price that tier for that plan. Add, in full, every non-EPO plan the document prices that the stored list lacks (Kennion offers PPO plans only: never add an EPO plan). Remove a stored plan only when it is not on the document at all or is an exact repeat of another stored plan. Count the distinct non-EPO plan options the document prices. Never guess: a value you cannot read on the page is left alone.`;
+Do not take a finding's proposed value on trust - the auditors can be wrong. For each finding and each conflict, find that exact plan on the document by its printed name and plan code, read the value from that plan's own benefit or rate table, and return a fix with the value exactly as printed (and the page you read it from), or stored_is_correct. Never take a value from a different plan, however similar it looks. Read each missing tier rate off the document: return it as a fix, or list it under unpriced when the document really does not price that tier for that plan. Add, in full, every non-EPO plan the document prices that the stored list lacks (Kennion offers PPO plans only: never add an EPO plan), with the pages it is on. Remove a stored plan only when it is not on the document at all or is the same carrier plan stored twice. A stored plan that IS on the document under a different printed name (a placement label added, a typo) is corrected with a fix on its name - never removed and added back. Count the distinct non-EPO plan options the document prices. Never guess: a value you cannot read on the page is left alone.`;
+
+/** A PDF holding just these pages of `buffer`, in order. */
+async function excerptPdf(buffer, pages) {
+  const src = await PDFDocument.load(buffer);
+  const doc = await PDFDocument.create();
+  const copied = await doc.copyPages(src, pages.map((n) => n - 1));
+  for (const pg of copied) doc.addPage(pg);
+  return Buffer.from(await doc.save());
+}
 
 /**
- * Ask Claude to settle an audit's findings against the document. Returns the
- * structured correction; `applyCorrection` turns it into a new reading.
+ * Ask Claude to settle findings against the document. `pages`, when given,
+ * are the original page numbers the findings concern (the affected plans'
+ * source pages): only those pages are sent - a targeted correction, not the
+ * whole 50-page PDF for one field. Without them (a missing plan, a count
+ * problem, a duplicate - anything structural) the whole document is sent.
+ * The answer's page positions are mapped back to original pages (`_pageMap`).
  */
-export async function correctProposal({ filename, mime, buffer, extracted, mismatches, missingRates }) {
-  if (fakeAi()) return { document_plan_count: offeredCount(extracted), fixes: [], add: [], remove: [], unpriced: [], notes: "Canned correction (KENNION_FAKE_AI)." };
+export async function correctProposal({ filename, mime, buffer, extracted, mismatches, missingRates, conflicts = [], pages = null }) {
+  if (fakeAi()) return { document_plan_count: offeredCount(extracted), fixes: [], add: [], remove: [], unpriced: [], notes: "Canned correction (KENNION_FAKE_AI).", _pageMap: null };
   const prepared = await prepareForModel({ filename, mime, buffer });
   const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 10 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 });
   const content = [];
-  if (prepared.kind === "pdf") content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: prepared.buffer.toString("base64") }, title: filename });
-  else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
+  let pageMap = null;
+  if (prepared.kind === "pdf") {
+    let buf = prepared.buffer;
+    if (Array.isArray(pages) && pages.length) {
+      try {
+        buf = await excerptPdf(prepared.buffer, pages);
+        pageMap = pages;
+      } catch {
+        buf = prepared.buffer;
+        pageMap = null;
+      }
+    }
+    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") }, title: filename });
+  } else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
   else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
   const numbered = storedFor(extracted).map((pl, index) => ({ index, ...pl }));
   content.push({
     type: "text",
-    text: `The stored plans:\n${JSON.stringify(numbered, null, 1)}\n\nThe auditors' findings:\n${JSON.stringify(mismatches || [], null, 1)}\n\nTier rates the portal is missing (index, tier):\n${JSON.stringify(missingRates || [])}\n\nCorrect the stored reading against the document.`,
+    text: [
+      pageMap ? `This file holds only pages ${pageMap.join(", ")} of the proposal - the pages the findings concern - in that order. Page positions in your answer are positions within this file.` : "This is the whole proposal.",
+      `The stored plans:\n${JSON.stringify(numbered, null, 1)}`,
+      `The auditors' findings:\n${JSON.stringify(mismatches || [], null, 1)}`,
+      `Conflicts between two appearances of the same plan (settle each from the plan's own table):\n${JSON.stringify(conflicts || [], null, 1)}`,
+      `Tier rates the portal is missing (index, tier):\n${JSON.stringify(missingRates || [])}`,
+      "Correct the stored reading against the document.",
+    ].join("\n\n"),
   });
   const response = await client.messages
     .stream({
@@ -429,28 +514,54 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
     .join("");
   const out = JSON.parse(text);
   if (!out || !Array.isArray(out.fixes)) throw new Error("Could not read the correction.");
-  return out;
+  return { ...out, _pageMap: pageMap };
 }
 
-const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "hospital", "rx"];
+const BENEFIT_FIELDS = BENEFIT_FIELDS_LIST();
 const moneyNumber = (v) => {
   const n = Number(String(v).replace(/[$,\s]/g, ""));
   return Number.isFinite(n) ? n : null;
 };
+const mapPage = (p, pageMap) => (pageMap && Number.isInteger(p) && p >= 1 && p <= pageMap.length ? pageMap[p - 1] : Number.isInteger(p) && p > 0 ? p : null);
 
 /**
  * Apply a correction to a reading. Pure: returns the new extracted and a log
- * of every change (plan, field, from, to), so what the AI changed is always
- * on the row. Option IDs ride with the plans they belong to; a removed plan's
- * number is retired by the numbering step as usual.
+ * of every change, each entry naming the proposal, the reading version it
+ * was made against, the plan (BenSync ID, exact name, code), the field, the
+ * previous and corrected values, the source page, the reason and the model.
+ * A conflict between two appearances is cleared once the corrector has read
+ * the value off the plan's own table (fixed or confirmed). Option IDs ride
+ * with the plans they belong to; a removed plan's number is retired by the
+ * numbering step as usual.
  */
-export function applyCorrection(extracted, c) {
-  const plans = (Array.isArray(extracted && extracted.plans) ? extracted.plans : []).map((pl) => ({ ...pl, rates: { ...(pl.rates || {}) }, benefits: pl.benefits ? { ...pl.benefits } : pl.benefits }));
+export function applyCorrection(extracted, c, meta = {}) {
+  const pageMap = c._pageMap || null;
+  const plans = (Array.isArray(extracted && extracted.plans) ? extracted.plans : []).map((pl) => ({
+    ...pl,
+    rates: { ...(pl.rates || {}) },
+    benefits: pl.benefits ? { ...pl.benefits } : pl.benefits,
+    ...(Array.isArray(pl.conflicts) ? { conflicts: pl.conflicts.map((k) => ({ ...k })) } : {}),
+  }));
+  const at = new Date().toISOString();
   const log = [];
+  const entry = (pl, field, from, to, page, reason) =>
+    log.push({ at, proposalId: meta.proposalId ?? null, version: meta.version ?? null, optionId: pl.option_id || null, plan: pl.name, planCode: pl.plan_code || null, field, from: from ?? null, to, source: page ? `page ${page}` : pl.source && pl.source.sheet ? `${pl.source.sheet}${pl.source.rows ? ` ${pl.source.rows}` : ""}` : null, reason: reason || null, by: meta.by || null });
+  const settle = (pl, field) => {
+    if (!Array.isArray(pl.conflicts)) return;
+    pl.conflicts = pl.conflicts.filter((k) => k.field !== field);
+    if (!pl.conflicts.length) delete pl.conflicts;
+  };
   for (const f of c.fixes || []) {
-    if (f.verdict !== "fix") continue;
     const pl = plans[f.index];
     if (!pl) continue;
+    const page = mapPage(f.source_page, pageMap);
+    if (f.verdict !== "fix") {
+      if (Array.isArray(pl.conflicts) && pl.conflicts.some((k) => k.field === f.field)) {
+        settle(pl, f.field);
+        entry(pl, f.field, "conflicting appearances", "stored value confirmed against the document", page, f.reason);
+      }
+      continue;
+    }
     let from;
     let to;
     if (TIERS.includes(f.field)) {
@@ -468,25 +579,72 @@ export function applyCorrection(extracted, c) {
       to = String(f.value);
       pl[f.field] = to;
     }
-    if (String(from ?? "") !== String(to ?? "")) log.push({ plan: pl.name, field: f.field, from: from ?? null, to });
+    settle(pl, f.field);
+    if (String(from ?? "") !== String(to ?? "")) entry(pl, f.field, from, to, page, f.reason);
   }
   for (const u of c.unpriced || []) {
     const pl = plans[u.index];
     if (!pl || !TIERS.includes(u.tier) || pl.rates[u.tier] != null) continue;
     pl.unpriced = [...new Set([...(pl.unpriced || []), u.tier])];
-    log.push({ plan: pl.name, field: u.tier, from: null, to: "not priced on the document" });
+    entry(pl, u.tier, null, "not priced on the document", null, "The document prints no rate for this tier.");
   }
   const drop = new Set((c.remove || []).filter((i) => Number.isInteger(i) && plans[i]));
-  for (const i of drop) log.push({ plan: plans[i].name, field: "plan", from: "stored", to: "removed - not on the document" });
-  const kept = plans.filter((_, i) => !drop.has(i));
-  const have = new Set(kept.map(planKey));
+  // A plan "removed" and "added" under the same carrier code is one plan
+  // whose printed name was wrong: it is renamed in place and keeps its
+  // BenSync ID - never taken off the grid and put back as a new plan.
+  const codeOf = (pl) => String(pl.plan_code || "").trim().toUpperCase();
+  const renamed = new Set();
   for (const a of c.add || []) {
-    if (!a || !String(a.name || "").trim() || isEpo(a) || have.has(planKey(a))) continue;
-    kept.push({ ...a });
-    have.add(planKey(a));
-    log.push({ plan: a.name, field: "plan", from: "missing", to: "added from the document" });
+    const code = a && codeOf(a);
+    if (!code) continue;
+    const i = [...drop].find((k) => codeOf(plans[k]) === code && !renamed.has(k));
+    if (i == null) continue;
+    const pl = plans[i];
+    renamed.add(i);
+    drop.delete(i);
+    const sp = a.source_pages || {};
+    const m = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map((p) => mapPage(p, pageMap)).filter(Boolean))].sort((x, y) => x - y);
+    for (const f of ["name", "network", "plan_type", "deductible", "oop_max"]) {
+      if (a[f] != null && String(a[f]) !== String(pl[f] ?? "")) {
+        entry(pl, f, pl[f] ?? null, a[f], null, "The plan is on the document under this value; corrected in place, not removed.");
+        pl[f] = a[f];
+      }
+    }
+    for (const t of TIERS) {
+      if (a.rates && a.rates[t] != null && a.rates[t] !== pl.rates[t]) {
+        entry(pl, t, pl.rates[t] ?? null, a.rates[t], null, "Read off the plan's own rate row.");
+        pl.rates[t] = a.rates[t];
+      }
+    }
+    if (a.benefits) pl.benefits = { ...(pl.benefits || {}), ...Object.fromEntries(Object.entries(a.benefits).filter(([, v]) => v !== "")) };
+    if (sp.identity || sp.rates) pl.source = { ...(pl.source || {}), identity: m(sp.identity), benefits: m(sp.benefits), rates: m(sp.rates) };
   }
-  return { extracted: { ...(extracted || {}), plans: kept }, log };
+  for (const i of drop) entry(plans[i], "plan", "stored", "removed", null, "Not on the document, or the same carrier plan stored twice.");
+  const kept = plans.filter((_, i) => !drop.has(i));
+  const have = new Set(kept.map((pl) => `${String(pl.plan_code || "").trim().toUpperCase()}|${normName(pl.name)}`));
+  for (const a of c.add || []) {
+    if (!a || !String(a.name || "").trim() || isEpo(a)) continue;
+    if (codeOf(a) && kept.some((pl) => codeOf(pl) === codeOf(a))) continue;
+    const key = `${String(a.plan_code || "").trim().toUpperCase()}|${normName(a.name)}`;
+    if (have.has(key)) continue;
+    const sp = a.source_pages || {};
+    const m = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map((p) => mapPage(p, pageMap)).filter(Boolean))].sort((x, y) => x - y);
+    const { source_pages, ...plan } = a;
+    const added = { ...plan, source: { identity: m(sp.identity), benefits: m(sp.benefits), rates: m(sp.rates), sheet: "", rows: "", appearances: 1, codes: a.plan_code ? [String(a.plan_code).trim().toUpperCase()] : [] } };
+    kept.push(added);
+    have.add(key);
+    entry(added, "plan", "missing", "added from the document", added.source.rates[0] || added.source.identity[0] || null, "On the document but not stored.");
+  }
+  // Keep the reconciliation in step: the plans stored now are the plans expected.
+  let reconciliation = extracted && extracted.reconciliation ? { ...extracted.reconciliation } : null;
+  if (reconciliation) {
+    if (drop.size || kept.length !== plans.length) reconciliation = { ...reconciliation, unique_ppo: kept.length, expected: kept.length, unique_plans: kept.length + (reconciliation.unique_epo || 0) };
+    // The corrector's own count of the document replaces the reader's: a
+    // reader that listed one plan twice (merged, correctly, into one) no
+    // longer holds the count out of step once the source has been re-counted.
+    if (Number.isInteger(c.document_plan_count)) reconciliation.reader_unique_plans = c.document_plan_count + (reconciliation.unique_epo || 0);
+  }
+  return { extracted: { ...(extracted || {}), plans: kept, ...(reconciliation ? { reconciliation } : {}) }, log };
 }
 
 /**

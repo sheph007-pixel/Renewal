@@ -33,7 +33,7 @@ export interface CardModel {
   /** Everyone enrolled, across the tiers - what the employee share is averaged over. */
   enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
-  source?: { proposalId: number; audit: { status: "pass" | "issues" | "unreadable"; completedAt: string } | null } | null;
+  source?: { proposalId: number; audit: { status: "pass" | "issues" | "pending" | "unreadable"; completedAt: string | null } | null } | null;
   /** Set only for an Optimyl plan on a 2-50 enrolled group: this rate is preliminary until Optimyl underwrites it. */
   underwritingNote?: string | null;
   /** Where to open the carrier's actual SBC and SOB for this design; null where it is not a catalogue design or the document is not on file. */
@@ -117,9 +117,9 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
   const foot = { display: "flex", flexWrap: "wrap" as const, alignItems: "center", gap: "2px 8px", fontSize: 11.5, color: C.muted, borderTop: `1px solid ${C.hairline}`, paddingTop: 8 };
   if (a && a.status === "pass") {
     return (
-      <div className="noprint" style={foot} title="The plan name, benefits and rates shown here were checked against the carrier's own quote">
-        <span style={{ color: C.green, fontWeight: 600 }}>✓ Proposal Audit Completed</span>
-        <span>{when(a.completedAt)}</span>
+      <div className="noprint" style={foot} title="The plan name, benefits and rates shown here passed two independent audits against the carrier's own quote">
+        <span style={{ color: C.green, fontWeight: 600 }}>✓ Verified · Dual Audit Passed</span>
+        {a.completedAt && <span>{when(a.completedAt)}</span>}
       </div>
     );
   }

@@ -383,18 +383,105 @@ else reads "under review by Kennion". ChatGPT is called with a 20-minute
 timeout and one retry, since a large PDF can take longer than Node's fetch
 waits.
 
+### One carrier plan, one canonical record
+
+The carrier's proposal is the source of truth, and every plan on it becomes
+exactly one canonical record: one BenSync ID (UH3, GR12 - stable, never
+reused), the exact printed plan name and plan code, one set of benefits and
+one four-tier rate set, all belonging to that plan. The record lives in
+Postgres on the proposal's row (`kennion.proposals.extracted.plans`), and
+everything reads it: the admin grid, the client's Medical Plans grid and
+plan cards, comparisons, the shortlist, contribution and cost figures, the
+generated documents and the AI Assistant (`currentProposals` →
+`clientProposals`). There is no second copy of a plan anywhere the client or
+the assistant sees. (`kennion.carrier_quote_plans` is an admin-only export of
+the Gravie rows, for the quotes endpoint.)
+
+**Identity and deduplication** (`server/plan-canonical.js`). A proposal
+shows one plan many times - overview, comparison table, benefit page, rate
+page, appendix. Each is an *appearance*; the reader returns them with the
+pages each came from, and they are folded by exact identity: the carrier's
+plan code (case and spacing aside), or - only when no code is printed - the
+exact printed name on the same network. An appearance with no code joins a
+coded plan only when exactly one coded plan carries that exact name. Two
+different codes are never one plan; similar names are never merged; names
+and codes are stored exactly as printed (whitespace aside), never shortened
+or normalised. Repeated appearances add their pages to the plan's
+provenance, never another plan. When two appearances of one plan disagree on
+a material value (a rate, the deductible, a copay, the network), nothing is
+chosen silently: the first value is kept, the disagreement is recorded on
+the plan (`conflicts`, with each value's pages), and validation fails until
+the correction step has read the plan's own table and settled it.
+
+**EPO exclusion** stays - Kennion offers PPO plans only - but EPO plans are
+listed, not dropped: `extracted.excluded` names each with its code, pages
+and reason, and `extracted.reconciliation` counts it all:
+`plan_appearances → unique_plans (unique_ppo + unique_epo) → excluded →
+expected`, alongside the reader's own unique count. Both auditors are given
+the exclusions, so an EPO plan is never taken for a missing one.
+
+**Provenance.** Every canonical plan carries `source`: the pages its
+identity, benefits and rates were read from (original page numbers, even when
+it was read from an excerpt), or for a workbook the sheet and rows; the number
+of appearances; and every plan code seen on them.
+
+**Reading long PDFs** (`server/ai.js`). A PDF over 20 pages is first
+*mapped*: Claude marks every page as plan identities, benefit summary or
+detail, rates, ancillary or boilerplate, and estimates the PPO and EPO plan
+counts. The map only steers; it is never plan data. The medical pages (and
+any page the map skipped) are read as excerpts of at most 40 pages, and the
+excerpts' appearances are merged by exact identity - a plan whose benefits
+are on page 18 and rates on page 37 is one plan with both. If that cannot
+account for every plan (a plan with benefits but no rates, fewer plans than
+the map saw), the whole document is read instead. Any reading too long for
+one answer is halved down to single pages and folded the same way, so no
+plan near either end is lost to an output limit. Spreadsheets and CSVs are
+read as text by sheet, with sheet and row provenance; text cut at the
+300,000-character limit is flagged, never silently short. Gravie workbooks
+keep their code parser, which now records each plan's sheet and row.
+
+**Deterministic validation** (`server/plan-validate.js`) runs before either
+AI audit: the reading is of the document version on file; no duplicate
+plans, plan codes, names or BenSync IDs (within the group too); name,
+deductible and out-of-pocket max present; four numeric tier rates (or a tier
+the document is confirmed not to price); source references for identity,
+benefits and rates; no plan holding data from another plan code; no
+unresolved conflicting appearances; and the counts reconcile - expected
+equals stored, PPO plus EPO equals unique, the reader's unique count equals
+what was stored. No count, uniqueness or version check is left to a model.
+
+**Versions and stale results.** Each proposal row keeps `source_sha`, the
+SHA-256 of the document as uploaded. Each reading records the hash it was
+extracted from; each audit records both that hash and a hash of the exact
+stored values (`version`). An extraction, audit or correction that finishes
+after the document or the reading has changed is discarded, never written,
+and an audit of an earlier version never counts. A newer upload replaces the
+proposal in force only once it has read successfully.
+
+**Processing states.** `kennion.proposals.stage` is one of UPLOADED,
+MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED
+or NEEDS_REVIEW (`stage_reason` says why). Only a proposal the whole check
+calls Verified is shown to the client, its plan cards and the assistant as
+checked ("✓ Verified · Dual Audit Passed"); anything else reads as being
+reviewed by Kennion.
+
 ### Verified: the check, and the AI that works it
 
 Every slot with a proposal in it is held to one standard
 (`server/proposal-verify.js`); an empty slot is just blank. A box is
 **Verified** - green, "✓ Verified · 14 plans" - only when all of these hold:
-**Source** (the original document is on file), **Extraction** (the read
-finished: plans, each named and rated), **Claude Audit** and **ChatGPT
-Audit** (each passed, of this exact reading, with its plan count equal to
-the database's), and **Grid** (the group's Medical Plans grid shows exactly
-the stored plans - document, database and grid, one number). Hovering the
-box shows "Source ✓ · Extraction ✓ · Claude Audit ✓ · ChatGPT Audit ✓ ·
-Grid ✓" and each step's detail. The one plan the grid may leave out is one
+**Source** (the original document is on file and its version hash recorded),
+**Extraction** (the read finished: plans, each named and rated),
+**Validation** (every deterministic check above passes), **Claude Audit**
+and **OpenAI Audit** (each passed, independently, of this exact reading of
+this exact document, confirming every plan's name, code, benefits and four
+rates, with its plan count equal to the database's), and **Grid** (the
+group's Medical Plans grid shows exactly the stored plans - document,
+database and grid, one number). Hovering the box shows "Source ✓ ·
+Extraction ✓ · Validation ✓ · Claude Audit ✓ · OpenAI Audit ✓ · Grid ✓",
+the reconciliation ("31 appearances → 19 unique (16 PPO, 3 EPO excluded) →
+16 expected · database 16 · grid 16"), the excluded plans, each validation
+check and each step's detail. The one plan the grid may leave out is one
 the carrier's document does not price for a tier the group has people in,
 confirmed against the page. Two independent AI audits sharply cut the risk
 of an error; they are not a mathematical guarantee, and the page says
@@ -404,12 +491,20 @@ Nobody fixes a box by hand. A server-side **steward** works the check on
 its own - at boot, after every change to the proposals, and every ten
 minutes, group by group - and carries out the repair each failing box
 names: read the document again (in parts when long), run the dual audit,
-or **correct** it: Claude is given the document, the stored plans and both
-auditors' findings, checks each finding against the page, and returns the
-fixed values, the plans the database is missing (added in full), the tier
-rates it lacks, and anything not on the document (removed); the server
-applies them (`applyCorrection`, every change logged on the row as
-`extracted.corrections`). A correction is always followed by a fresh audit
+or **correct** it: Claude is given the stored plans with their pages, both
+auditors' findings, the validation failures, any conflicting appearances and
+the missing tier rates - and, when every finding is about a value on a plan
+whose pages are known, only those pages of the document (a missing,
+duplicated or extra plan, or a count problem, gets the whole document). It
+reads each value off the plan's own table rather than taking an auditor's
+proposed value, and returns the fixed values (with the page it read each
+from and why), the plans the database is missing (added in full, with their
+pages), the tier rates it lacks, and anything not on the document (removed);
+the server applies them (`applyCorrection`) and logs every change on the row
+(`extracted.corrections`: proposal, reading version, BenSync ID, exact plan
+name, plan code, field, previous and corrected value, source page, reason,
+model, time). Deterministic validation then runs again, and only a reading
+that passes it goes back to both auditors. A correction is always followed by a fresh audit
 by both models - the corrector never settles a finding on its own word.
 Limits per proposal: two reads, three audits that could not complete, three
 corrections per reading and then one fresh read and three more. Only a box
@@ -1170,7 +1265,7 @@ human enters:
 | `kennion.group_meta` | staff-assigned access code and ALE bucket per group |
 | `kennion.rate_overrides` | hand-keyed rates by group + plan + tier, with `updated_at` / `updated_by` |
 | `kennion.imports` | one row per upload — filename, when, by whom, companies found and applied |
-| `kennion.proposals` | one row per carrier proposal — the file itself, what Claude read off it, the group it is assigned to and by whom |
+| `kennion.proposals` | one row per carrier proposal - the file itself (`source_sha` its SHA-256), the canonical plans read off it (`extracted`: plans with provenance, excluded EPO plans, the count reconciliation, the correction log), the dual audit (`audit`), its processing `stage` and `stage_reason`, the group it is assigned to and by whom |
 | `kennion.carrier_quotes` | one row per carrier and group: quote number, effective date, subscribers quoted by tier, plan count — replaced when a newer workbook comes in |
 | `kennion.carrier_quote_plans` | every plan on that quote as a row: name, family, EPO or PPO, deductible, out-of-pocket max, coinsurance, the four tier rates and the monthly at the quoted tiers |
 

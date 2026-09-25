@@ -9,6 +9,7 @@
 // overrides - so it survives redeploys and is shared across the team rather
 // than living in one browser.
 import pg from "pg";
+import crypto from "node:crypto";
 
 // Everything lives in its own `kennion` schema. The database may already carry
 // tables from a previous application - the first import failed because a
@@ -279,6 +280,15 @@ ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS superseded_by bigint;
 -- The two-model check of the stored reading against the document itself:
 -- {completedAt, status pass|issues|unreadable, models[], mismatches[], notes}.
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS audit jsonb;
+-- The version of the carrier's document itself: a SHA-256 of the file as
+-- uploaded. Every extraction and audit records the hash it worked from, so a
+-- result computed from another version is recognised and discarded.
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS source_sha text;
+-- Where the proposal is in processing - UPLOADED, MAPPING, EXTRACTING,
+-- EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED, NEEDS_REVIEW - and,
+-- for NEEDS_REVIEW, exactly why.
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage text;
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage_reason text;
 
 -- Employee Navigator's Carrier Stats report, one row per upload. The latest
 -- one is the independent check the XML import is reconciled against.
@@ -913,16 +923,17 @@ export function createDb(url) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.proposals
            (group_name, carrier, filename, mime, size, data, status, assigned_by, uploaded_by,
-            kind, parent_id, context, slot)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            kind, parent_id, context, slot, source_sha, stage)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'UPLOADED')
          RETURNING id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                    status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                   kind, parent_id, context, slot, superseded_by`,
+                   kind, parent_id, context, slot, superseded_by, source_sha, stage, stage_reason`,
         [
           p.group_name || null, p.carrier || null, p.filename, p.mime, p.size, p.data,
           p.status || "analyzing", p.assigned_by || null, p.uploaded_by || null,
           p.kind || "file", p.parent_id || null, p.context ? JSON.stringify(p.context) : null,
           p.slot || null,
+          p.data ? crypto.createHash("sha256").update(p.data).digest("hex") : null,
         ],
       );
       return rows[0];
@@ -933,7 +944,7 @@ export function createDb(url) {
       const { rows } = await pool.query(
         `SELECT id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                 status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                kind, parent_id, context, slot, superseded_by, audit
+                kind, parent_id, context, slot, superseded_by, audit, source_sha, stage, stage_reason
            FROM kennion.proposals ORDER BY uploaded_at DESC, id DESC`,
       );
       return rows;
@@ -941,7 +952,7 @@ export function createDb(url) {
 
     /** Change any of the reviewable fields on a proposal. */
     async updateProposal(id, fields) {
-      const allowed = ["group_name", "carrier", "extracted", "summary", "confidence", "status", "assigned_by", "error", "slot", "superseded_by", "audit"];
+      const allowed = ["group_name", "carrier", "extracted", "summary", "confidence", "status", "assigned_by", "error", "slot", "superseded_by", "audit", "source_sha", "stage", "stage_reason"];
       const sets = [];
       const vals = [];
       for (const k of allowed) {
@@ -957,7 +968,7 @@ export function createDb(url) {
           WHERE id = $${vals.length}
           RETURNING id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                     status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                    kind, parent_id, context, slot, superseded_by, audit`,
+                    kind, parent_id, context, slot, superseded_by, audit, source_sha, stage, stage_reason`,
         vals,
       );
       return rows[0] || null;
