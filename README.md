@@ -372,22 +372,42 @@ does not offer). A plan whose audit found something reads "under review by
 Kennion" instead.
 The audit runs once per reading; a re-read runs it again.
 
-### The four-step check
+### The four-step check, and the AI that works it
 
-Every filled box on the Proposals grid is taken through four steps
-(`server/proposal-verify.js`): **1 Filed** (a proposal is on file for the
-group in that slot), **2 Read** (the read finished, every plan named, rated
-and numbered, and no newer upload stuck beside it), **3 Audited** (both
-models found nothing), **4 Loaded** (the plans stored are the plans the
-group's Medical Plans grid shows, counted the way `proposalPlans` counts
-them: a plan missing a rate for a tier the group has people in fails it).
-The box is green with a ✓ and the plan count only when all four pass;
-otherwise four numbered squares show which step failed, and the box offers
-the fix: audit it, or read it again. A panel above the grid gives the
-totals, lists every box that is not verified with the reason, and has
-**Fix all**. It is arithmetic over what is stored, so it runs instantly:
-`GET /api/admin/proposals/verify`; `POST /api/admin/proposals/fix` (one box,
-or every failing one); the totals and each failing box are logged at boot.
+Every slot with a proposal in it is held to four steps
+(`server/proposal-verify.js`); an empty slot is just blank:
+**1 On file** (a proposal is filed for the group in that slot), **2
+Scanned** (the document was read for its plans, and the audit counted every
+plan option it prices, EPO twins aside), **3 Database** (the database holds
+exactly that many plans, and both audit models agree every stored value
+matches the page), **4 Grid** (every one of those plans is in the group's
+Medical Plans grid, counted the way `proposalPlans` counts them). The box
+is green with a ✓ and the plan count only when all four pass - the same
+number at every step: 67 on the document, 67 in the database, 67 in the
+grid. The one plan the grid may leave out is one the carrier's document
+does not price for a tier the group has people in, confirmed against the
+page.
+
+Nobody fixes a box by hand. A server-side **steward** works the check on
+its own - at boot, after every change to the proposals, and every ten
+minutes - and carries out the repair each failing box names: read the
+document again (in parts when long), audit it (count and check), or
+**correct** it: Claude is given the document, the stored plans and the
+auditors' findings, checks each finding against the page, and returns the
+fixed values, the plans the database is missing (added in full), the tier
+rates it lacks, and anything not on the document (removed); the server
+applies them (`applyCorrection`, every change logged on the row as
+`extracted.corrections`) and both models audit again. A finding the
+corrector shows to be the auditor's own misread, with the counts agreeing,
+is settled by that third reading. Limits per proposal: two reads, two audits
+that could not run, three corrections per reading and then one fresh read
+and three more. Only a box still failing after all of that - a slot holding
+a case summary instead of a quote, say - is shown as needing a person, with
+the reason; "let the AI try these again" gives those another round. The
+grid's panel reads "N of M proposals verified · AI fixing K now".
+`GET /api/admin/proposals/verify` returns the check; `POST
+/api/admin/proposals/fix` wakes the steward. The totals and every box not
+yet green are logged after each pass.
 
 A newer upload never replaces a proposal that was read until it has plans of
 its own: while it is being read, or if its read fails, the older one stays in

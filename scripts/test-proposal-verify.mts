@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { gridCounts, verifyProposals } from "../server/proposal-verify.js";
+import { applyCorrection, offeredCount } from "../server/proposal-audit.js";
 import { proposalPlans, type KennionData, type Group, type GroupProposal } from "../client/src/lib/model.ts";
 
 // --- The check's count is the client's count --------------------------------
@@ -20,7 +21,7 @@ const plans = [
 const counts = gridCounts(plans, "UHC Level Funded", tiers);
 assert.equal(counts.shown, 2);
 assert.equal(counts.repeats, 1);
-assert.deepEqual(counts.unpriced, ["Choice Plus 2000", "Unpriced"]);
+assert.deepEqual(counts.unpriced.map((p) => p.name), ["Choice Plus 2000", "Unpriced"]);
 const pr = { id: 1, slot: "UHC Level Funded", carrier: "UnitedHealthcare", plans: plans.map((p) => ({ ...p, planType: "PPO" })), uploadedAt: "2026-09-01" } as unknown as GroupProposal;
 const g = { name: "X", tiers } as unknown as Group;
 assert.equal(proposalPlans({ proposals: [pr] } as unknown as KennionData, g).length, counts.shown, "the check counts exactly the plans the client's grid shows");
@@ -36,7 +37,7 @@ const good = {
   superseded_by: null,
   filename: "acme gravie.pdf",
   extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }, { name: "Copay 1500 EPO", rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } }] },
-  audit: { status: "pass", completedAt: "2026-09-25T00:00:00Z", mismatches: [] },
+  audit: { status: "pass", completedAt: "2026-09-25T00:00:00Z", mismatches: [], documentPlanCount: 1 },
 };
 const served = (rows: typeof good[]) => () => rows.map((r) => ({ id: r.id, slot: r.slot, plans: r.extracted.plans.filter((p) => !isEpoPlan(p)).map((p) => ({ name: p.name, optionId: p.option_id, rates: p.rates })) }));
 const run = (rows: unknown[], srv: () => unknown[]) =>
@@ -47,20 +48,46 @@ let cell = v.groups[0].cells.find((c: { slot: string }) => c.slot === "Gravie");
 assert.equal(cell.state, "verified", JSON.stringify(cell.steps));
 assert.equal(cell.plans, 1, "the EPO twin is never counted");
 assert.equal(v.groups[0].cells.find((c: { slot: string }) => c.slot === "Nationwide").state, "missing");
-assert.deepEqual(v.totals, { filed: 1, verified: 1, working: 0, failing: 0, byStep: { read: 0, audited: 0, loaded: 0 } });
+assert.deepEqual(cell.counts, { document: 1, stored: 1, grid: 1 }, "one number at every step");
+assert.deepEqual(v.totals, { filed: 1, verified: 1, working: 0, failing: 0, stuck: 0, byStep: { read: 0, audited: 0, loaded: 0 } });
 
+// Step 2: nobody has counted the plans on the document yet - audit it.
 v = run([{ ...good, audit: null }], served([good]));
 cell = v.groups[0].cells[0];
 assert.equal(cell.state, "fail");
-assert.equal(cell.failedAt, "audited");
+assert.equal(cell.failedAt, "read");
 assert.equal(cell.fix, "audit");
 
-v = run([{ ...good, audit: { status: "issues", completedAt: "x", mismatches: [{ plan: "Copay 1500 PPO", field: "EE", stored: "1", onDocument: "2", by: "Claude" }] } }], served([good]));
-assert.equal(v.groups[0].cells[0].fix, "read", "an audit that found something is fixed by reading again");
+// Step 3: a value the document contradicts - correct it against the page.
+v = run([{ ...good, audit: { status: "issues", completedAt: "x", documentPlanCount: 1, mismatches: [{ plan: "Copay 1500 PPO", field: "EE", stored: "1", onDocument: "2", by: "Claude" }] } }], served([good]));
+assert.equal(v.groups[0].cells[0].failedAt, "audited");
+assert.equal(v.groups[0].cells[0].fix, "correct");
 
-// Served to the group short of what is stored: loaded fails.
+// Step 3: the document has more plans than the database - correct (add them).
+v = run([{ ...good, audit: { ...good.audit, documentPlanCount: 3 } }], served([good]));
+assert.equal(v.groups[0].cells[0].failedAt, "audited");
+assert.equal(v.groups[0].cells[0].fix, "correct");
+assert.match(v.groups[0].cells[0].steps.audited.note, /document has 3 plans; the database has 1/);
+
+// Step 4: served to the group short of what is stored - rebuild.
 v = run([good], () => [{ id: 10, slot: "Gravie", plans: [] }]);
 assert.equal(v.groups[0].cells[0].failedAt, "loaded");
+assert.equal(v.groups[0].cells[0].fix, "refresh");
+
+// Step 4: a plan missing a tier rate the group needs - correct (read the rate),
+// unless the document itself leaves that tier unpriced.
+const noEs = { ...good, extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 } }] } };
+v = run([noEs], served([noEs]));
+assert.equal(v.groups[0].cells[0].failedAt, "loaded");
+assert.equal(v.groups[0].cells[0].fix, "correct");
+const confirmed = { ...good, extracted: { plans: [{ name: "Copay 1500 PPO", option_id: "GR1", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] } };
+v = run([confirmed], () => [{ id: 10, slot: "Gravie", plans: [{ name: "Copay 1500 PPO", rates: { EE: 1, ES: null, EC: 3, FAM: 4 }, unpriced: ["ES"] }] }]);
+assert.equal(v.groups[0].cells[0].state, "verified", "a tier the carrier does not price is not a failure once confirmed");
+
+// The steward has run out of repairs: the box needs a person, and says why.
+v = verifyProposals({ groups: [{ name: "Acme", slots: ["Gravie"], tiers: {} }], rows: [{ ...good, audit: null }], served: served([good]), isEpoPlan, isBlankPlan, gaveUp: () => "tried twice" });
+assert.equal(v.groups[0].cells[0].state, "stuck");
+assert.equal(v.groups[0].cells[0].stuck, "tried twice");
 
 // A newer upload that failed to read, waiting beside the good one.
 const failed = { ...good, id: 11, extracted: null, audit: null, error: "This proposal is longer than one reading can hold", filename: "acme gravie v2.pdf" };
@@ -69,7 +96,7 @@ cell = v.groups[0].cells[0];
 assert.equal(cell.proposalId, 10, "the good reading stays in force");
 assert.equal(cell.state, "fail");
 assert.equal(cell.failedAt, "read");
-assert.equal(cell.fix, "read-waiting");
+assert.equal(cell.fix, "read");
 assert.equal(cell.fixId, 11);
 assert.equal(cell.waiting.length, 1);
 
@@ -79,6 +106,39 @@ cell = v.groups[0].cells[0];
 assert.equal(cell.proposalId, null);
 assert.equal(cell.fix, "read");
 assert.equal(cell.fixId, 11);
+
+// --- Corrections: applied exactly, logged, repeats and EPO kept out ---------
+const reading0 = {
+  plans: [
+    { name: "Choice Plus 1000", option_id: "UH1", rates: { EE: 600, ES: 1200, EC: 1100, FAM: null }, deductible: "$1,000", benefits: { rx: "$10" } },
+    { name: "Choice Plus 2000", option_id: "UH2", rates: { EE: 500, ES: 1000, EC: 900, FAM: 1500 } },
+    { name: "Not On Paper", option_id: "UH3", rates: { EE: 1, ES: 1, EC: 1, FAM: 1 } },
+  ],
+};
+assert.equal(offeredCount(reading0), 3);
+const fixed = applyCorrection(reading0, {
+  fixes: [
+    { index: 0, field: "EE", verdict: "fix", value: "$612.45" },
+    { index: 0, field: "deductible", verdict: "fix", value: "$1,500" },
+    { index: 0, field: "rx", verdict: "fix", value: "$15" },
+    { index: 1, field: "ES", verdict: "stored_is_correct", value: "" },
+  ],
+  add: [
+    { name: "Choice Plus 3000", rates: { EE: 450, ES: 900, EC: 800, FAM: 1300 } },
+    { name: "Choice Plus 3000 EPO", rates: { EE: 400, ES: 800, EC: 700, FAM: 1200 } },
+    { name: "Choice Plus 2000", rates: { EE: 500, ES: 1000, EC: 900, FAM: 1500 } },
+  ],
+  remove: [2],
+  unpriced: [{ index: 0, tier: "FAM" }],
+});
+assert.deepEqual(fixed.extracted.plans.map((p) => p.name), ["Choice Plus 1000", "Choice Plus 2000", "Choice Plus 3000"], "wrong plan out, missing plan in, EPO and repeats never added");
+assert.equal(fixed.extracted.plans[0].rates.EE, 612.45);
+assert.equal(fixed.extracted.plans[0].deductible, "$1,500");
+assert.equal(fixed.extracted.plans[0].benefits.rx, "$15");
+assert.deepEqual(fixed.extracted.plans[0].unpriced, ["FAM"]);
+assert.equal(fixed.extracted.plans[0].option_id, "UH1", "a plan keeps its number through a correction");
+assert.equal(fixed.log.length, 6, "every change logged: 3 values, 1 unpriced tier, 1 removed, 1 added");
+assert.equal(reading0.plans[0].rates.EE, 600, "the stored reading is not mutated");
 
 // --- End to end: the server keeps the good reading --------------------------
 const PORT = 5091;
@@ -155,8 +215,15 @@ assert.ok(rows.some((r) => r.id === first.id), "the good reading is not deleted 
 c = await check();
 assert.equal(c.proposalId, first.id, "and it stays the one in force");
 assert.equal(c.failedAt, "read");
-assert.equal(c.fix, "read-waiting");
 assert.equal(c.waiting.length, 1);
+// The steward reads the unread upload again, twice, then hands it to a person.
+for (let i = 0; i < 80 && c.state !== "stuck"; i++) {
+  await wait(250);
+  c = await check();
+}
+assert.equal(c.state, "stuck", JSON.stringify(c));
+assert.match(c.stuck, /would not read into plans in 2 tries/);
+assert.equal(c.proposalId, first.id, "the good reading is still in force");
 
 // The group's own page still carries the good plans.
 const cookie = ((await fetch(`${base}/api/signin`, { method: "POST", headers: json, body: JSON.stringify({ code: mine.code }) })).headers.get("set-cookie") || "").split(";")[0];
@@ -177,11 +244,9 @@ assert.equal(c.proposalId, third.id);
 assert.equal(c.state, "verified");
 assert.equal(c.plans, 2);
 
-// Fix-all answers even with nothing to fix.
-const fix = await (await fetch(`${base}/api/admin/proposals/fix`, { method: "POST", headers: { ...auth, ...json }, body: "{}" })).json();
-assert.equal(typeof fix.reading, "number");
-assert.equal((await fetch(`${base}/api/admin/proposals/fix`, { method: "POST", headers: { ...auth, ...json }, body: JSON.stringify({ id: third.id, fix: "nope" }) })).status, 400);
+assert.deepEqual(c.counts, { document: 2, stored: 2, grid: 2 });
+assert.ok((await fetch(`${base}/api/admin/proposals/fix`, { method: "POST", headers: auth })).ok, "staff can ask the steward to try again");
 assert.equal((await fetch(`${base}/api/admin/proposals/verify`)).status, 401, "staff only");
 
-console.log("proposal verify: four steps per box, counts match the client's grid, an unread upload never replaces a read one - ok");
+console.log("proposal verify: four steps per box, one plan count at every step, corrections applied and logged, the steward repairs or hands over, an unread upload never replaces a read one - ok");
 stop();
