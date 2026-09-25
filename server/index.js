@@ -19,7 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
-import { withUsage, setUsageSink, memoryUsage, summarize } from "./ai-usage.js";
+import { withUsage, setUsageSink, memoryUsage, summarize, aiQuotaBlock, lastQuotaBlock, quotaErrorCount } from "./ai-usage.js";
 import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION, optimylNumber, optimylLabel, labelSharedNames } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
@@ -27,6 +27,8 @@ import { comparisonTable, renderChangesReport, renderComparison, renderPicksRepo
 import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify, SUPPORTED } from "./intake.js";
 import JSZip from "jszip";
+import pg from "pg";
+import { s3Store, runBackup, pruneBackups, listBackups } from "./backup.js";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows, gravieDrift } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
@@ -6262,7 +6264,7 @@ let stewardState = null;
  * 2026-09-25e: every Claude audit had failed on a schema the API refused
  * (18 nullable fields, limit 16); attempts spent on that are given back.)
  */
-const STEWARD_EPOCH = "2026-09-25e";
+const STEWARD_EPOCH = "2026-09-26a"; // f: attempts spent on the Anthropic monthly-limit errors are given back
 async function loadSteward() {
   if (stewardState) return stewardState;
   stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};
@@ -6371,8 +6373,29 @@ async function runProposalCorrection(id) {
 }
 
 /** Carry out one box's repair, within the limits. */
+/**
+ * Carry out one box's repair. A step that ran into a provider's spending
+ * limit (server/ai-usage.js) proved nothing about the proposal: the attempt
+ * it used is given back, so a box is never marked unreadable or given up on
+ * because the account was out of credit.
+ */
 async function stewardRepair(cell, tiers) {
   const st = stewardEntry(cell.fixId);
+  const before = { ...st };
+  const quotaBefore = quotaErrorCount();
+  try {
+    await stewardRepairStep(cell, tiers, st);
+  } finally {
+    if (quotaErrorCount() > quotaBefore) {
+      for (const k of Object.keys(st)) delete st[k];
+      Object.assign(st, before);
+      await saveSteward();
+      console.log(`steward: #${cell.fixId}: stopped by the AI spending limit - attempt not counted`);
+    }
+  }
+}
+
+async function stewardRepairStep(cell, tiers, st) {
   const row = (await proposalStore.listProposals()).find((r) => r.id === cell.fixId);
   if (!row) return;
   const workbook = !!(row.context && row.context.source === "gravie-workbook");
@@ -6520,13 +6543,28 @@ async function stewardPass() {
         .filter((x) => x.jobs.length)
         .sort((a, b) => order(a.jobs[0], b.jobs[0]));
       if (!byGroup.length) break;
+      // A provider's spending limit is in force: every repair would fail
+      // and prove nothing. Wait; a probe every half hour tries again.
+      const block = aiQuotaBlock();
+      if (block) {
+        console.log(`steward: paused - ${block.provider} spending limit reached${block.until ? ` (the provider says until ${block.until})` : ""}; ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) wait`);
+        setTimeout(() => scheduleSteward(0), 31 * 60 * 1000);
+        break;
+      }
       console.log(`steward: ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) to fix across ${byGroup.length} group(s)`);
       const queue = [...byGroup];
       await Promise.all(
         Array.from({ length: Math.min(STEWARD_PARALLEL, queue.length) }, async () => {
           while (queue.length) {
             const { g, jobs } = queue.shift();
-            for (const c of jobs) await stewardRepair(c, tiersOf.get(g.group)).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+            for (const c of jobs) {
+              if (aiQuotaBlock()) break;
+              await stewardRepair(c, tiersOf.get(g.group)).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+            }
+            if (aiQuotaBlock()) {
+              queue.length = 0;
+              break;
+            }
             const now = proposalVerification(await proposalStore.listProposals()).groups.find((x) => x.group === g.group);
             if (now) console.log(`steward: ${g.group}: ${now.verified} of ${now.filed} verified${now.cells.filter((c) => c.state === "verified").length ? ` (${now.cells.filter((c) => c.state === "verified").map((c) => `${c.slot} ${c.plans}`).join(", ")})` : ""}`);
           }
@@ -6543,7 +6581,8 @@ async function stewardPass() {
 app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
   try {
     await loadSteward();
-    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0" } });
+    const block = aiQuotaBlock() || lastQuotaBlock();
+    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: block.provider, until: block.until, since: block.at } : null } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6785,6 +6824,22 @@ app.use(
   }),
 );
 
+// The nightly database backups (see backupIfDue below): list them, or run one now.
+app.get("/api/admin/backups", requireStaff, async (req, res) => {
+  try {
+    res.json({ enabled: !!backupStore, running: backupRunning, last: db ? await db.getSetting("backup.last") : null, lastError: db ? await db.getSetting("backup.error") : null, backups: backupStore ? await listBackups(backupStore) : [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post("/api/admin/backups", requireStaff, async (req, res) => {
+  if (!backupStore) return res.status(400).json({ error: "Backups are off: no storage bucket is configured." });
+  if (backupRunning) return res.status(409).json({ error: "A backup is already running." });
+  const m = await backupIfDue(true);
+  if (!m) return res.status(500).json({ error: "The backup failed - see the server log." });
+  res.json({ stamp: m.stamp, tables: m.tables.length, rows: m.rows, bytes: m.bytes });
+});
+
 // An API path no route claimed is a mistake, not a page. Falling through to
 // the app answered a mistyped endpoint with 200 and a lump of HTML, so the
 // caller got a JSON parse error instead of being told what was wrong.
@@ -6962,6 +7017,42 @@ async function boot() {
 
 await boot();
 
+// Nightly backup of the whole database to the storage bucket (server/backup.js):
+// the Railway plan keeps no volume backups. At boot when the newest backup is
+// more than a day old, then once a night after BACKUP_HOUR_UTC; the newest
+// BACKUP_KEEP_DAYS are kept. KENNION_BACKUP=0 turns it off.
+const BACKUP_HOUR_UTC = Number(process.env.KENNION_BACKUP_HOUR_UTC || 8); // 3am Central
+const backupStore = db && process.env.KENNION_BACKUP !== "0" ? s3Store() : null;
+let backupRunning = false;
+async function backupIfDue(force = false) {
+  if (!backupStore || backupRunning) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const last = await db.getSetting("backup.last").catch(() => null);
+  const ageHours = last && last.at ? (Date.now() - new Date(last.at).getTime()) / 36e5 : Infinity;
+  const due = force || ageHours > 30 || (last && last.stamp !== today && new Date().getUTCHours() >= BACKUP_HOUR_UTC);
+  if (!due) return null;
+  backupRunning = true;
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: /localhost|127\.0\.0\.1|sslmode=disable/.test(process.env.DATABASE_URL || "") ? false : { rejectUnauthorized: false } });
+  try {
+    const m = await runBackup({ pool, store: backupStore, stamp: today });
+    await db.setSetting("backup.last", { at: m.at, stamp: m.stamp, tables: m.tables.length, rows: m.rows, bytes: m.bytes, seconds: m.seconds }, "backup");
+    await pruneBackups(backupStore);
+    return m;
+  } catch (e) {
+    console.error("backup: failed:", e.message);
+    await db.setSetting("backup.error", { at: new Date().toISOString(), error: e.message }, "backup").catch(() => undefined);
+    return null;
+  } finally {
+    backupRunning = false;
+    await pool.end().catch(() => undefined);
+  }
+}
+if (backupStore) {
+  setTimeout(() => void backupIfDue(), 60_000);
+  setInterval(() => void backupIfDue(), 60 * 60 * 1000);
+} else if (db) {
+  console.log("backup: off - no storage bucket configured (S3_BUCKET) or KENNION_BACKUP=0");
+}
 app.listen(port, "0.0.0.0", () => {
   const n = Object.keys(imported.groups || {}).length;
   const store = db ? "postgres" : DURABLE ? "volume" : "ephemeral disk";

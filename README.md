@@ -1433,6 +1433,30 @@ those to survive. The admin screen states which of the three modes is in effect.
 A database that is configured but unreachable is logged and the site serves the
 shipped census rather than failing to boot.
 
+### Backups
+
+The Railway plan keeps no volume backups, so the app keeps its own
+(`server/backup.js`). Every night after 08:00 UTC (3am Central), and at boot
+when the newest backup is more than 30 hours old, every table in the
+`kennion` schema - proposals with their original files, readings, audits,
+rates, settings, everything - is exported with Postgres's own `COPY` format
+from one consistent snapshot, gzipped, and put in the storage bucket
+(`S3_BUCKET`) under `backups/<yyyy-mm-dd>/`, with a `manifest.json` naming each
+table, its columns and its row count. The newest 14 are kept
+(`KENNION_BACKUP_KEEP_DAYS`); `KENNION_BACKUP=0` turns backups off.
+`GET /api/admin/backups` lists them with the last run and any error;
+`POST /api/admin/backups` runs one now.
+
+To restore, point `DATABASE_URL` at the database to fill - safest a new,
+empty Postgres, checked before the app is pointed at it - and run
+`node scripts/restore-backup.mjs --list`, then
+`node scripts/restore-backup.mjs --date <yyyy-mm-dd> --yes` (with the `S3_*`
+variables set, or `--dir` for a downloaded copy of the `backups/` folder). It
+creates the app's tables, empties each table in the backup and loads it back
+by its named columns, parents before the tables that reference them, in one
+transaction, and moves each id sequence past the highest id restored.
+`scripts/test-backup.mjs` checks the round trip against a real Postgres.
+
 ### The inbox
 
 Files too large or too binary to travel through a chat or an env var — a zip
