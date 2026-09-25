@@ -36,6 +36,10 @@ assert.ok(!sameBenefit("Not covered", "D&C"));
 assert.ok(sameBenefit("Lab/X-Ray Ded+Coins; MRI/CT Ded+Coins", "Ded+Coins"));
 assert.ok(sameBenefit("D&C", "D&C (Maj Diag); D&C, D&C (X-ray & Lab)"));
 assert.ok(!sameBenefit("D&C", "D&C (Maj Diag); 0%, 0% (X-ray & Lab)"), "a stated figure is never dropped");
+// v4: labelled parts in either order, matched by service; a swap is still a finding.
+assert.ok(sameBenefit("$500 (MRI/CT); $40 (Lab/X-Ray)", "$40 (Lab/X-Ray) / $500 (MRI, CT Scan)"));
+assert.ok(!sameBenefit("$500 (MRI/CT); $40 (Lab/X-Ray)", "$500 (Lab/X-Ray) / $40 (MRI, CT Scan)"), "the MRI and lab figures swapped is a different value");
+assert.ok(!sameBenefit("$10 / $40 (Tier 2)", "$40 / $10 (Tier 1)", "rx"), "rx tiers stay in order");
 // A Gravie rate workbook is compared on what its rate rows state: the static Benefits Grid is not the plan's record.
 {
   const st = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna OAP", deductible: "$1000", oop_max: "$6000", benefits: { coinsurance: "20%" }, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };

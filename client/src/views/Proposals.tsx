@@ -1647,7 +1647,6 @@ export default function Proposals({ token, groups }: Props) {
               </section>
             )}
           </div>
-        )}
       </div>
     </>
   );
