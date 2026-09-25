@@ -11,14 +11,15 @@
 //                  sheet rows for identity, benefits and rates, no data mixed
 //                  in from another plan code, no unresolved conflicting
 //                  appearances, and the plan count reconciled (appearances ->
-//                  unique -> EPO excluded -> expected = stored).
+//                  unique -> PPO + EPO -> every unique plan stored).
 //   Claude Audit   Claude counted the plans on the document (found, EPO
-//                  excluded, expected), read every stored plan's four rates
+//                  and expected), read every stored plan's four rates
 //                  off the page, and found nothing - and its count is the
 //                  database's.
 //   ChatGPT Audit  the same, independently, by a different model family.
 //   Grid           the group's Medical Plans grid shows exactly the stored
-//                  plans, the same count.
+//                  plans the visibility rules let the client see
+//                  (server/plan-visibility.js - EPO hidden), no more, no fewer.
 //
 // Both audits must be of the exact reading on the grid now (`version`): a
 // correction, a re-read or a newer upload makes an older audit stale, and
@@ -30,6 +31,7 @@
 // server's steward carries out on its own.
 
 import { validatePlans } from "./plan-validate.js";
+import { hiddenReason } from "./plan-visibility.js";
 
 const TIERS = ["EE", "ES", "EC", "FAM"];
 
@@ -91,7 +93,7 @@ function stageOf(c, row, correcting) {
  * `correcting`: ids with that step in flight. `gaveUp(id)`: the steward's
  * note when it has run out of repairs to try on a proposal.
  */
-export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null }) {
+export function verifyProposals({ groups, rows, served, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), readingVersion = null, gaveUp = () => null }) {
   const out = [];
   for (const g of groups) {
     const mine = rows.filter((r) => r.group_name === g.name && r.status !== "container" && r.kind !== "invoice" && r.kind !== "email");
@@ -110,7 +112,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         proposalId: row ? row.id : null,
         filename: row ? row.filename : null,
         plans: 0,
-        counts: { document: null, stored: null, grid: null, audit: null },
+        counts: { document: null, stored: null, visible: null, hidden: null, grid: null, audit: null },
         steps,
         waiting: waiting.map((r) => ({ id: r.id, filename: r.filename, reading: busyRow(r, reading), error: r.error || null })),
       };
@@ -150,9 +152,14 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       steps.source = { ok: true, note: row.filename };
       const scorecard = slot === "Angle Scorecard";
       const x = row.extracted || {};
-      const stored = (Array.isArray(x.plans) ? x.plans : []).filter((pl) => !isBlankPlan(pl) && !isEpoPlan(pl));
+      // Every unique plan is stored, EPO included; the client is shown the
+      // ones the visibility rules allow.
+      const stored = (Array.isArray(x.plans) ? x.plans : []).filter((pl) => !isBlankPlan(pl));
       const storedDistinct = new Set(stored.map(planKey)).size;
+      const hiddenPlans = stored.filter((pl) => hiddenReason(pl));
       cell.counts.stored = storedDistinct;
+      cell.counts.hidden = hiddenPlans.length;
+      cell.hidden = hiddenPlans.map((pl) => ({ id: pl.option_id || null, name: pl.name, plan_code: pl.plan_code || null, reason: hiddenReason(pl) }));
       cell.plans = storedDistinct;
       const a = row.audit;
 
@@ -198,12 +205,12 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
 
       // Validation: everything code can check, before either model is asked.
       const groupIds = list.filter((pp) => pp.slot !== slot).flatMap((pp) => (pp.plans || []).map((pl) => pl.optionId).filter(Boolean));
+      // (served() carries every stored plan, hidden ones too, so no ID can hide from this check.)
       const val = validatePlans({ extracted: x, sourceSha: row.source_sha, groupOptionIds: groupIds, textSource: !/pdf|image/i.test(String(row.mime || "")) });
       steps.validation = val.ok
         ? { ok: true, note: (val.checks.find((c) => c.key === "reconciliation") || {}).note || "Every check passed.", checks: val.checks }
         : { ok: false, busy: correcting.has(row.id), note: val.failures.join(" "), checks: val.checks };
       cell.reconciliation = x.reconciliation || null;
-      cell.excluded = Array.isArray(x.excluded) ? x.excluded.map((e) => ({ name: e.name, plan_code: e.plan_code, reason: e.reason })) : [];
       if (!val.ok) {
         settle("validation", val.fix, row.id, correcting.has(row.id));
         continue;
@@ -223,7 +230,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         if (!current) return { ok: false, note: "Audited an earlier reading - pending a fresh audit of this one." };
         const m = (a.models || []).find((mm) => re.test(mm.model));
         if (!m) return { ok: false, note: "Did not run." };
-        const c = m.plansFoundTotal != null ? `${m.plansFoundTotal} found, ${m.epoExcluded ?? 0} EPO excluded, ${m.documentPlanCount} expected; database ${storedDistinct}` : null;
+        const c = m.plansFoundTotal != null ? `${m.planAppearances != null ? `${m.planAppearances} appearances, ` : ""}${m.plansFoundTotal} unique plans on the document (${m.epoExcluded ?? 0} EPO); database ${storedDistinct}` : null;
         if (m.verdict === "pass" && m.documentPlanCount === storedDistinct) return { ok: true, note: `Pass. ${c}; all ${m.of} plans' rates confirmed against the document.` };
         if (m.verdict === "off" || m.verdict === "error") return { ok: false, note: `Pending - ${m.verdict === "off" ? "not configured" : "did not complete"}: ${m.notes || ""}` };
         if (m.verdict === "incomplete") return { ok: false, note: `Pending - confirmed the rates of ${m.confirmed} of ${m.of} plans.` };
@@ -245,17 +252,23 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         continue;
       }
 
-      // Grid: exactly the stored plans, in the group's Medical Plans grid.
-      const sentPlans = sv ? sv.plans || [] : [];
-      const sentKeys = new Set(sentPlans.map(planKey));
-      const storedKeys = new Set(stored.map(planKey));
-      const sameSet = sentKeys.size === storedKeys.size && [...storedKeys].every((k) => sentKeys.has(k));
+      // Grid: the served proposal is this exact reading (every stored plan),
+      // and the client is shown exactly the ones the visibility rules allow.
+      const servedAll = sv ? sv.plans || [] : [];
+      const sameSetOf = (a, b) => {
+        const ka = new Set(a.map(planKey));
+        const kb = new Set(b.map(planKey));
+        return ka.size === kb.size && [...ka].every((k) => kb.has(k));
+      };
+      const sentPlans = servedAll.filter((pl) => !pl.hidden);
+      const sameSet = sameSetOf(servedAll, stored) && sameSetOf(sentPlans, stored.filter((pl) => !hiddenReason(pl)));
       const g4 = gridCounts(sentPlans, slot, g.tiers);
       const confirmedUnpriced = g4.unpriced.filter((pl) => Array.isArray(pl.unpriced) && TIERS.some((t) => g.tiers && g.tiers[t] && pl.rates && pl.rates[t] == null && pl.unpriced.includes(t)));
       const unexplained = g4.unpriced.length - confirmedUnpriced.length;
-      const expected = storedDistinct - confirmedUnpriced.length;
+      const visibleDistinct = new Set(stored.filter((pl) => !hiddenReason(pl)).map(planKey)).size;
+      const expected = visibleDistinct - confirmedUnpriced.length;
+      cell.counts.visible = visibleDistinct;
       cell.counts.grid = g4.shown;
-      cell.plans = g4.shown;
       if (!sv || sv.id !== row.id || !sameSet) {
         steps.grid = { ok: false, note: "The group's page is not showing this exact reading yet." };
         settle("grid", "refresh", row.id, false);
@@ -273,7 +286,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       }
       steps.grid = {
         ok: true,
-        note: `Document ${cell.counts.document}, database ${storedDistinct}, grid ${g4.shown}${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in)` : ""}.`,
+        note: `Document ${cell.counts.document}, database ${storedDistinct}; client grid ${g4.shown}${hiddenPlans.length ? ` (${hiddenPlans.length} hidden by rule: ${[...new Set(hiddenPlans.map((pl) => hiddenReason(pl)))].join("; ")})` : ""}${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in)` : ""}.`,
       };
       cell.state = "verified";
     }

@@ -107,31 +107,34 @@ function readPlans(rows, sheetName, network) {
 }
 
 /**
- * The sheet that makes up the quote: Open Access Plus PPO. Kennion offers PPO
- * plans only, so the EPO sheet - the same designs priced without
- * out-of-network cover - is never read: nothing from it is stored, numbered
- * or shown, for any group.
+ * The sheets that make up the quote: Open Access Plus PPO, and EPO - the same
+ * designs priced without out-of-network cover. Every plan on both is stored
+ * and audited; the visibility rules (server/plan-visibility.js) keep the EPO
+ * designs off a client's grid, since Kennion offers PPO plans only. The
+ * Narrow Network sheet and the static benefits grid are not read.
  */
-const RATE_SHEETS = /^PPO$/i;
+const RATE_SHEETS = /^(PPO|EPO)$/i;
 
 /**
  * Parse one workbook. Returns the header facts, the subscribers quoted by
- * tier, and every priced plan on the PPO sheet - the 67 designs Kennion
- * offers, in the carrier's order.
+ * tier, and every priced plan on the PPO and EPO sheets - the 67 designs on
+ * each, in the carrier's order.
  */
 export function parseGravieWorkbook(buf) {
   const wb = XLSX.read(buf, { type: "buffer" });
   let header = null;
   const plans = [];
-  for (const sheetName of wb.SheetNames) {
-    if (!RATE_SHEETS.test(sheetName.trim())) continue;
+  // The PPO sheet first, then EPO: the order the plans are listed (and the
+  // client-facing designs numbered) in.
+  const sheets = wb.SheetNames.filter((n) => RATE_SHEETS.test(n.trim())).sort((a, b) => (/^PPO$/i.test(a.trim()) ? 0 : 1) - (/^PPO$/i.test(b.trim()) ? 0 : 1));
+  for (const sheetName of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: null });
     const h = readHeader(rows);
     if (!header && h.group) header = h;
     plans.push(...readPlans(rows, sheetName.trim().toUpperCase(), "Cigna Open Access Plus"));
   }
   if (!header || !header.group) throw new Error("Not a Gravie rate workbook: no group name in a sheet header");
-  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on a PPO sheet");
+  if (!plans.length) throw new Error("Not a Gravie rate workbook: no priced plans on a PPO or EPO sheet");
   return { ...header, plans };
 }
 
@@ -195,7 +198,6 @@ export function gravieExtracted(p) {
     proposal_type: "new business",
     enrolled_on_document: enrolled,
     plans,
-    excluded: canon.excluded,
     reconciliation: canon.reconciliation,
     extraction: { method: "parser", model: null, parts: 1, at: new Date().toISOString() },
     total_monthly: null,

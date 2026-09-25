@@ -45,8 +45,8 @@ const RESULT_SCHEMA = {
     plan_appearances: { type: "integer", description: "How many times medical plans appear on the document in total - one plan on four pages is four appearances." },
     plans_found_total: { type: "integer", description: "Every DISTINCT plan option the document prices, EPO plans included, across every page and grid. A plan printed on several pages counts once." },
     duplicates_found: { type: "boolean", description: "True if the stored list holds the same carrier plan more than once." },
-    epo_excluded: { type: "integer", description: "How many of those are EPO plans (Kennion offers PPO only, so these are left out of the portal on purpose)." },
-    document_plan_count: { type: "integer", description: "plans_found_total minus epo_excluded: the plans the portal should hold." },
+    epo_excluded: { type: "integer", description: "How many of those distinct plans are EPO plans. (The portal stores them like every other plan; it only hides them from clients.)" },
+    document_plan_count: { type: "integer", description: "The plans the portal should hold: every distinct plan on the document, EPO included - equal to plans_found_total." },
     rate_confirmations: {
       type: "array",
       description: "One entry for EVERY stored plan, by its index: whether it is on the document; whether the stored name and plan code are exactly as printed; whether the stored benefit values are this plan's own (not another plan's); and its four monthly tier rates read off the document yourself (not copied from the stored values) from this plan's own rate row. null for a tier the document does not price.",
@@ -88,11 +88,11 @@ const RESULT_SCHEMA = {
 
 const INSTRUCTIONS = `You are auditing a benefits portal's stored reading of a carrier's proposal against the proposal document itself - the document is the source of truth. The stored plans are given as a numbered JSON list: for each, its index, the portal's own ID, the exact name, plan code, network, plan type, deductible, out-of-pocket maximum, the monthly composite rates by tier (EE employee only, ES employee + spouse, EC employee + children, FAM family), the benefit figures the portal shows to the employer, and the pages the portal says each came from. You also get the portal's plan-count reconciliation and the EPO plans it left out on purpose. You audit on your own: no other auditor's result is given to you.
 
-1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the rest (document_plan_count). A plan printed on several pages is one plan. The EPO plans listed as excluded are left out on purpose - they are not missing.
+1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the plans the portal should hold (document_plan_count - every distinct plan, EPO included: the portal stores them all and decides separately which a client sees). A plan printed on several pages is one plan.
 
 2. For EVERY stored plan, by index, find it on the document and confirm it (rate_confirmations): is the stored name exactly as printed, is the plan code exactly as printed, are the stored benefit values this plan's own, and read its four tier rates off the page yourself from this plan's own rate row - do not copy the stored rates. If a stored plan is not on the document, set on_document false. Use null only for a tier the document does not price for that plan. Set duplicates_found if the stored list holds one carrier plan twice.
 
-3. Check every other stored value against the document. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value the document contradicts. Kennion offers PPO plans only, so an EPO plan printed on the document is left out of the portal on purpose: never report one as extra_plan, and never expect one to be stored. The portal is meant to store every non-EPO option the document prices: report each one it is missing (field extra_plan, the plan's printed name in on_document, "not stored" in stored).
+3. Check every other stored value against the document. A value matches when it is the same figure or the same wording allowing for formatting ($1,500 vs 1500; "Choice Plus" vs "UHC Choice Plus"). Report a mismatch for each stored value the document contradicts. The portal is meant to store every distinct plan the document prices, EPO plans included: report each one it is missing (field extra_plan, the plan's printed name in on_document, "not stored" in stored).
 
 Names: the stored name should be the plan's name exactly as printed. A stored name that is the printed name with a placement label appended by the portal - "(headline option 2)", "(PPO alternate 32)" - is not a mismatch; mention it in the notes. Any other difference in the name is a mismatch. Ignore values the portal stores as null or empty, apart from rates. Never guess: if a page is unreadable say so in the notes and use verdict unreadable only when nothing can be checked.`;
 
@@ -190,7 +190,7 @@ const auditPayload = (stored, extracted, version, sourceSha) => {
   return [
     `Proposal version: document ${sourceSha || "?"}, reading ${version}.`,
     `The portal's plan-count reconciliation: ${JSON.stringify(x.reconciliation || null)}`,
-    `EPO plans left out on purpose (Kennion offers PPO only; not missing): ${JSON.stringify((x.excluded || []).map((e) => ({ name: e.name, plan_code: e.plan_code, pages: e.source ? [...new Set([...(e.source.identity || []), ...(e.source.rates || [])])] : [] })))}`,
+    "Every distinct plan on the document should be stored below, EPO plans included (the portal decides separately which plans a client sees).",
     `The stored plans:\n${JSON.stringify(stored.map((pl, index) => ({ index, ...pl })), null, 1)}`,
     "Audit every stored plan against the document.",
   ].join("\n\n");
@@ -315,8 +315,8 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   if (!stored.length) return { completedAt, status: "pending", models: [], mismatches: [], notes: "No plans stored to check.", version, counts: { stored: 0 } };
   let models;
   if (fakeAi()) {
-    const epo = Array.isArray(extracted && extracted.excluded) ? extracted.excluded.length : 0;
-    const canned = (name) => shape(name, { verdict: "pass", plan_appearances: storedCount + epo, plans_found_total: storedCount + epo, epo_excluded: epo, document_plan_count: storedCount, duplicates_found: false, rate_confirmations: stored.map((pl, index) => ({ index, on_document: true, name_exact: true, code_exact: true, benefits_belong: true, ...(pl.rates || {}) })), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }, stored);
+    const epo = (Array.isArray(extracted && extracted.plans) ? extracted.plans : []).filter((pl) => isEpo(pl)).length;
+    const canned = (name) => shape(name, { verdict: "pass", plan_appearances: storedCount, plans_found_total: storedCount, epo_excluded: epo, document_plan_count: storedCount, duplicates_found: false, rate_confirmations: stored.map((pl, index) => ({ index, on_document: true, name_exact: true, code_exact: true, benefits_belong: true, ...(pl.rates || {}) })), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }, stored);
     models = [canned("Claude (canned)"), canned("ChatGPT (canned)")];
   } else {
     const prepared = await prepareForModel({ filename, mime, buffer });
@@ -333,7 +333,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   // The plan count, held to the database by each model that gave one.
   for (const m of models) {
     if (m.documentPlanCount != null && m.documentPlanCount !== storedCount) {
-      mismatches.push({ plan: "(whole document)", field: "plan_count", stored: String(storedCount), onDocument: `${m.documentPlanCount} (${m.plansFoundTotal ?? "?"} found, ${m.epoExcluded ?? "?"} EPO excluded)`, by: m.model });
+      mismatches.push({ plan: "(whole document)", field: "plan_count", stored: String(storedCount), onDocument: `${m.documentPlanCount} (${m.plansFoundTotal ?? "?"} found, ${m.epoExcluded ?? "?"} of them EPO)`, by: m.model });
     }
   }
   const both = models.length === 2 && models.every((m) => m.verdict === "pass");
@@ -355,12 +355,12 @@ const isEpo = (pl) => /\bEPO\b/i.test(`${pl.network || ""} ${pl.plan_type || pl.
 const normName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
 /** The key two stored plans share when they are the same plan printed twice: name and the four rates. */
 export const planKey = (pl) => `${normName(pl.name)}|${TIERS.map((t) => (pl.rates && pl.rates[t] != null ? pl.rates[t] : "")).join(",")}`;
-/** How many distinct offered (non-EPO) plans a reading stores - the figure the document's count is held to. */
+/** How many distinct plans a reading stores - every one, EPO included - the figure the document's count is held to. */
 export function offeredCount(extracted) {
   const plans = Array.isArray(extracted && extracted.plans) ? extracted.plans : [];
   const keys = new Set();
   for (const pl of plans) {
-    if (!pl || isEpo(pl) || !String(pl.name || "").trim()) continue;
+    if (!pl || !String(pl.name || "").trim()) continue;
     keys.add(planKey(pl));
   }
   return keys.size;
@@ -415,7 +415,7 @@ const CORRECTION_SCHEMA = {
   additionalProperties: false,
   required: ["document_plan_count", "fixes", "add", "remove", "unpriced", "notes"],
   properties: {
-    document_plan_count: { type: "integer", description: "Distinct non-EPO plan options the document prices, each plan counted once however many pages it is on." },
+    document_plan_count: { type: "integer", description: "Distinct plan options the document prices, EPO included, each plan counted once however many pages it is on." },
     fixes: {
       type: "array",
       description: "One entry per finding and per conflict you were given (and any other wrong value you notice), after checking it against the document.",
@@ -433,7 +433,7 @@ const CORRECTION_SCHEMA = {
         },
       },
     },
-    add: { type: "array", description: "Every non-EPO plan the document prices that the stored list is missing, in full.", items: PLAN_ITEM },
+    add: { type: "array", description: "Every plan the document prices that the stored list is missing (EPO plans included), in full.", items: PLAN_ITEM },
     remove: { type: "array", description: "Indexes of stored plans that are not on the document at all, or are a repeat of another stored plan (the same carrier plan stored twice).", items: { type: "integer" } },
     unpriced: {
       type: "array",
@@ -446,7 +446,7 @@ const CORRECTION_SCHEMA = {
 
 const CORRECTION_INSTRUCTIONS = `You correct a benefits portal's stored reading of a carrier's proposal so that it matches the proposal document exactly - the document is the source of truth. You are given the document (or the pages of it that the findings concern), the stored plans as a numbered list with the pages each was read from, the findings two independent auditors reported, any conflicts between two appearances of the same plan, and the tier rates the portal is missing.
 
-Do not take a finding's proposed value on trust - the auditors can be wrong. For each finding and each conflict, find that exact plan on the document by its printed name and plan code, read the value from that plan's own benefit or rate table, and return a fix with the value exactly as printed (and the page you read it from), or stored_is_correct. Never take a value from a different plan, however similar it looks. Read each missing tier rate off the document: return it as a fix, or list it under unpriced when the document really does not price that tier for that plan. Add, in full, every non-EPO plan the document prices that the stored list lacks (Kennion offers PPO plans only: never add an EPO plan), with the pages it is on. Remove a stored plan only when it is not on the document at all or is the same carrier plan stored twice. A stored plan that IS on the document under a different printed name (a placement label added, a typo) is corrected with a fix on its name - never removed and added back. Count the distinct non-EPO plan options the document prices. Never guess: a value you cannot read on the page is left alone.`;
+Do not take a finding's proposed value on trust - the auditors can be wrong. For each finding and each conflict, find that exact plan on the document by its printed name and plan code, read the value from that plan's own benefit or rate table, and return a fix with the value exactly as printed (and the page you read it from), or stored_is_correct. Never take a value from a different plan, however similar it looks. Read each missing tier rate off the document: return it as a fix, or list it under unpriced when the document really does not price that tier for that plan. Add, in full, every plan the document prices that the stored list lacks - EPO plans included (the portal stores every plan and decides separately what a client sees) - with the pages it is on. Remove a stored plan only when it is not on the document at all or is the same carrier plan stored twice. A stored plan that IS on the document under a different printed name (a placement label added, a typo) is corrected with a fix on its name - never removed and added back. Count the distinct plan options the document prices, EPO included. Never guess: a value you cannot read on the page is left alone.`;
 
 /** A PDF holding just these pages of `buffer`, in order. */
 async function excerptPdf(buffer, pages) {
@@ -623,7 +623,7 @@ export function applyCorrection(extracted, c, meta = {}) {
   const kept = plans.filter((_, i) => !drop.has(i));
   const have = new Set(kept.map((pl) => `${String(pl.plan_code || "").trim().toUpperCase()}|${normName(pl.name)}`));
   for (const a of c.add || []) {
-    if (!a || !String(a.name || "").trim() || isEpo(a)) continue;
+    if (!a || !String(a.name || "").trim()) continue;
     if (codeOf(a) && kept.some((pl) => codeOf(pl) === codeOf(a))) continue;
     const key = `${String(a.plan_code || "").trim().toUpperCase()}|${normName(a.name)}`;
     if (have.has(key)) continue;

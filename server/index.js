@@ -34,6 +34,7 @@ import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-ki
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
 import { validatePlans } from "./plan-validate.js";
+import { hiddenReason } from "./plan-visibility.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -2713,8 +2714,9 @@ function clientProposals(name) {
     const v = verifiedProposals.get(p.id);
     return { ...p, verified: !!v, audit: v ? { status: "pass", completedAt: v } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
   });
-  if (!ppoOnly()) return withStatus;
-  return withStatus.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
+  // Every plan is stored; the visibility rules (server/plan-visibility.js)
+  // decide which the client, its grid and the assistant are shown.
+  return withStatus.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !pl.hidden).map(({ hidden, ...pl }) => pl) }));
 }
 /** Proposal id -> when its dual audit completed, for every proposal the check currently calls Verified. */
 const verifiedProposals = new Map();
@@ -4572,9 +4574,12 @@ const proposalStore = db
       async deleteProposal(id) {
         const i = memProposals.findIndex((r) => r.id === id);
         if (i < 0) return false;
+        const gone = new Set();
         for (let j = memProposals.length - 1; j >= 0; j--) {
-          if (memProposals[j].id === id || memProposals[j].parent_id === id) memProposals.splice(j, 1);
+          if (memProposals[j].id === id || memProposals[j].parent_id === id) gone.add(memProposals.splice(j, 1)[0].id);
         }
+        // Every row read from the proposal goes with it.
+        for (const [k, q] of memQuotes) if (gone.has(q.proposalId)) memQuotes.delete(k);
         return true;
       },
     };
@@ -4603,13 +4608,12 @@ const SLOTS = ["UHC Fully Insured", "UHC Level Funded", "Gravie", "Nationwide", 
  * the same slot hands each surviving plan its old number (matched by plan
  * code, else by exact name) and gives new plans the next free ones.
  *
- * Only offered plans are numbered. Kennion offers PPO plans only, so an EPO
- * twin carries no number at all: Gravie's 67 designs read GR1-GR67, not
- * GR1-GR134 with every other number missing. A slot numbered before this
- * rule (an EPO twin holding a number) is renumbered once, compactly, and
- * the numbers its older readings held are released with it. A number held
- * twice in a group (the two UnitedHealthcare slots once restarted at UH1
- * separately) is repaired the same way: the whole prefix, renumbered once.
+ * Every stored plan is numbered, EPO included. The plans a client is shown
+ * (server/plan-visibility.js) are numbered first, then the hidden ones, so
+ * Gravie's 67 PPO designs read GR1-GR67 and its 67 EPO twins GR68-GR134. A
+ * number once given is kept. A number held twice in a group (the two
+ * UnitedHealthcare slots once restarted at UH1 separately) is repaired by
+ * renumbering the whole prefix once.
  */
 const OPTION_PREFIX = { "UHC Fully Insured": "UH", "UHC Level Funded": "UH", Gravie: "GR", Nationwide: "NW", Angle: "AN", Optimyl: "OP" };
 
@@ -4690,7 +4694,6 @@ async function assignOptionIds(rows, bySlot) {
     if (!r.group_name || !r.extracted || !Array.isArray(r.extracted.plans)) continue;
     const taken = takenByGroup.get(r.group_name) || new Map();
     for (const pl of r.extracted.plans) {
-      if (isEpoPlan(pl)) continue;
       const m = OPTION_ID.exec(String(pl.option_id || ""));
       if (!m) continue;
       const set = taken.get(m[1]) || new Set();
@@ -4715,9 +4718,8 @@ async function assignOptionIds(rows, bySlot) {
   const groups = new Set([...bySlot.keys()].map((k) => k.split("||")[0]));
   for (const group of groups) {
     const taken = takenByGroup.get(group) || new Map();
-    // Which slots are renumbered from scratch: one numbered under the old
-    // rule (an EPO twin holding a number, or flagged by a re-read), and
-    // every slot of a prefix that holds a number twice - the sequence was
+    // Which slots are renumbered from scratch: one flagged for it
+    // (x.renumber), and every slot of a prefix that holds a number twice - the sequence was
     // once reset per slot, so UnitedHealthcare's two proposals could both
     // start at UH1. Their numbers are released together, before any slot
     // is numbered, while the numbers of the prefix's untouched slots stay
@@ -4730,10 +4732,12 @@ async function assignOptionIds(rows, bySlot) {
       if (!prefix || !list) continue;
       const x = list[0].extracted || {};
       const plans = Array.isArray(x.plans) ? x.plans : [];
-      if (x.renumber === true || plans.some((pl) => isEpoPlan(pl) && pl.option_id)) legacySlots.add(slot);
+      // Every stored plan - EPO included - holds a number now, so only an
+      // explicit request (x.renumber) marks a slot for renumbering.
+      if (x.renumber === true) legacySlots.add(slot);
       if (menu[group] && prefix === "UH") legacySlots.add(slot);
       for (const pl of plans) {
-        if (isEpoPlan(pl) || !OPTION_ID.test(String(pl.option_id || ""))) continue;
+        if (!OPTION_ID.test(String(pl.option_id || ""))) continue;
         const held = heldBy.get(pl.option_id) || [];
         held.push(slot);
         heldBy.set(pl.option_id, held);
@@ -4752,7 +4756,7 @@ async function assignOptionIds(rows, bySlot) {
         const plans = list && list[0].extracted && Array.isArray(list[0].extracted.plans) ? list[0].extracted.plans : [];
         for (const pl of plans) {
           const m = OPTION_ID.exec(String(pl.option_id || ""));
-          if (m && m[1] === prefix && !isEpoPlan(pl)) keep.add(Number(m[2]));
+          if (m && m[1] === prefix) keep.add(Number(m[2]));
         }
       }
       taken.set(prefix, keep);
@@ -4783,25 +4787,17 @@ async function assignOptionIds(rows, bySlot) {
       let plans = Array.isArray(x.plans) ? x.plans : [];
       if (!plans.length) continue;
       const before = JSON.stringify(plans.map((pl) => pl.option_id || null));
-      // Kennion offers PPO plans only, so nothing but offered plans is kept:
-      // an EPO twin still on a stored reading (read before this rule) goes,
-      // here and on the readings this one replaced. A slot whose EPO twins
-      // held numbers was numbered under the old rule: it is renumbered once
-      // from 1, and the numbers its older readings held are released, so the
-      // sequence is the offered plans and nothing else.
+      // Every stored plan is numbered - the ones a client is shown and the
+      // ones the visibility rules hide (EPO) alike. A slot marked for
+      // renumbering starts again from 1, and the numbers its older readings
+      // held are released.
       const legacy = legacySlots.has(slot);
-      let stripped = false;
-      if (plans.some((pl) => isEpoPlan(pl))) {
-        plans = plans.filter((pl) => !isEpoPlan(pl));
-        x.plans = plans;
-        stripped = true;
-      }
+      const stripped = false;
       for (const old of list.slice(1)) {
         const op = old.extracted && Array.isArray(old.extracted.plans) ? old.extracted.plans : [];
-        const hasEpo = op.some((pl) => isEpoPlan(pl));
         const numbered = legacy && op.some((pl) => String(pl.option_id || "").startsWith(prefix));
-        if (!hasEpo && !numbered) continue;
-        const kept = op.filter((pl) => !isEpoPlan(pl)).map((pl) => (numbered ? { ...pl, option_id: null } : pl));
+        if (!numbered) continue;
+        const kept = op.map((pl) => ({ ...pl, option_id: null }));
         const cleared = { ...old.extracted, plans: kept };
         old.extracted = cleared;
         await proposalStore.updateProposal(old.id, { extracted: cleared });
@@ -4818,7 +4814,9 @@ async function assignOptionIds(rows, bySlot) {
       // then the proposals this one replaced, newest first.
       const donors = (legacy ? [] : [...(Array.isArray(x.previous_plan_ids) ? x.previous_plan_ids : []), ...list.slice(1).flatMap((r) => (r.extracted && Array.isArray(r.extracted.plans) ? r.extracted.plans : []))]).filter((d) => OPTION_ID.test(String(d.option_id || "")) && String(d.option_id).startsWith(prefix));
       const used = new Set();
-      const offered = plans;
+      // Plans the client is shown are numbered first, so their IDs run
+      // compactly (GR1-GR67); hidden plans take the numbers after them.
+      const offered = [...plans.filter((pl) => !hiddenReason(pl)), ...plans.filter((pl) => hiddenReason(pl))];
       // An id under another carrier's prefix (the proposal was moved to a
       // different slot by staff) is renumbered.
       for (const pl of offered) if (pl.option_id && !String(pl.option_id).startsWith(prefix)) pl.option_id = null;
@@ -4833,7 +4831,7 @@ async function assignOptionIds(rows, bySlot) {
         held.add(pl.option_id);
       }
       const claim = (pl, match) => {
-        const d = donors.find((c) => !used.has(c.option_id) && !held.has(c.option_id) && !isEpoPlan(c) && match(c));
+        const d = donors.find((c) => !used.has(c.option_id) && !held.has(c.option_id) && match(c));
         if (!d) return;
         pl.option_id = d.option_id;
         used.add(d.option_id);
@@ -5094,6 +5092,8 @@ async function proposalsChanged() {
               oopMax: pl.oop_max || null,
               benefits: planBenefits(pl.benefits),
               rates: pl.rates || { EE: null, ES: null, EC: null, FAM: null },
+              // Stored, audited, but not shown to the client - and why (plan-visibility.js).
+              hidden: hiddenReason(pl),
               // Tiers the document itself does not price, confirmed by the steward.
               unpriced: Array.isArray(pl.unpriced) && pl.unpriced.length ? pl.unpriced : null,
               monthlyTotal: pl.monthly_total ?? null,
@@ -5360,22 +5360,13 @@ async function runAnalysis(id, file, keepAssignment) {
       }
     }
 
-    // Kennion offers PPO plans only: an EPO twin the carrier lists is read
-    // (the reading matches the document) and then left out, so nothing but
-    // offered plans is ever stored, numbered or shown.
     const priorPlans = (current && current.extracted && current.extracted.plans) || [];
     // A reading occasionally trails a blank entry - no name, no plan code,
     // no rate, nothing - an artifact of the model, never a real plan. Never
     // stored, whatever the carrier.
     if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isBlankPlan(pl));
-    // Numbers handed out while EPO twins were still stored (an EPO plan
-    // holding one, before or in this reading) belong to the old sequence:
-    // none is carried over, and the numbering step starts this slot again.
-    const oldRule =
-      priorPlans.some((pl) => isEpoPlan(pl) && pl.option_id) ||
-      (Array.isArray(out.plans) && out.plans.some((pl) => isEpoPlan(pl) && pl.option_id)) ||
-      (Array.isArray(out.excluded) && out.excluded.some((e) => e.option_id));
-    if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isEpoPlan(pl)).map((pl) => (oldRule ? { ...pl, option_id: null } : pl));
+    // Every unique plan is stored, EPO included (the visibility rules decide
+    // what a client sees); each keeps the BenSync number it held before.
     // Optimyl always quotes the same 4 standard plans, numbered by plan_code
     // ("OPTIMYL PLAN 1".."OPTIMYL PLAN 4"). A misread sometimes doubles one
     // of them onto two rows - collapse an exact repeat of that plan_code
@@ -5401,8 +5392,7 @@ async function runAnalysis(id, file, keepAssignment) {
       extracted: {
         ...out,
         audit_flags: flags,
-        previous_plan_ids: oldRule ? [] : priorPlans.filter((p) => p.option_id && !isEpoPlan(p)).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })),
-        ...(oldRule ? { renumber: true } : {}),
+        previous_plan_ids: priorPlans.filter((p) => p.option_id).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })),
       },
       summary: out.summary || null,
       confidence: conf,
@@ -5724,6 +5714,9 @@ const quoteStore = db
       async carrierQuote(carrier, groupName) {
         return memQuotes.get(`${carrier}||${groupName}`) || null;
       },
+      async deleteCarrierQuote(carrier, groupName) {
+        memQuotes.delete(`${carrier}||${groupName}`);
+      },
     };
 
 /** File one parsed Gravie workbook as rows for its group. */
@@ -5764,9 +5757,9 @@ async function settleGravieQuotes() {
       // Also stale: a reading without per-plan provenance (sheet and row) or
       // not tied to the version of the workbook on file.
       const ext = (r.extracted && r.extracted.extraction) || null;
-      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || plans.some((pl) => isEpoPlan(pl)) || !plans.length || plans.some((pl) => !pl.source) || !ext || (r.source_sha && ext.sourceSha !== r.source_sha);
+      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || !plans.length || plans.some((pl) => !pl.source) || !ext || ext.parser !== GRAVIE_PARSER || (r.source_sha && ext.sourceSha !== r.source_sha);
       const quote = have.get(r.group_name);
-      const wanted = quote && quote.proposalId === r.id && quote.planCount === plans.length && !stale;
+      const wanted = quote && String(quote.proposalId) === String(r.id) && quote.planCount === plans.length && !stale;
       if (!stale && wanted) continue;
       const f = await proposalStore.getProposalFile(r.id);
       if (!f) continue;
@@ -5782,7 +5775,19 @@ async function settleGravieQuotes() {
       console.error(`gravie: could not settle ${r.filename}:`, e.message);
     }
   }
+  // A quote whose workbook is no longer the group's current Gravie proposal
+  // (deleted, or replaced by a file that is not a workbook) goes: the rows
+  // match the proposals on file, nothing else.
+  // (Postgres hands a bigint back as text, so ids are compared as text.)
+  const live = new Set(rows.map((r) => String(r.id)));
+  let dropped = 0;
+  for (const q of have.values()) {
+    if (live.has(String(q.proposalId))) continue;
+    await quoteStore.deleteCarrierQuote("Gravie", q.groupName);
+    dropped++;
+  }
   const total = (await quoteStore.listCarrierQuotes("Gravie")).length;
+  if (dropped) console.log(`gravie: dropped ${dropped} quote(s) whose workbook is no longer on file`);
   if (reread || written) console.log(`gravie: re-read ${reread} workbook(s), wrote ${written} quote(s); ${total} Gravie quote(s) stored as rows`);
   if (reread) await proposalsChanged();
   return { reread, written, total };
@@ -5793,13 +5798,15 @@ async function settleGravieQuotes() {
  * row provenance), tied to the workbook version it was parsed from, and -
  * on a re-parse - the numbers its plans held, so every design keeps its ID.
  */
+/** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too. */
+const GRAVIE_PARSER = "gravie-v2";
 function gravieReading(parsed, groupName, sourceSha, priorPlans) {
   const x = gravieExtracted(parsed);
   return {
     ...x,
     matched_group: groupName,
-    extraction: { ...(x.extraction || {}), sourceSha: sourceSha || null },
-    ...(priorPlans && priorPlans.length ? { previous_plan_ids: priorPlans.filter((p) => p.option_id && !isEpoPlan(p)).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })) } : {}),
+    extraction: { ...(x.extraction || {}), sourceSha: sourceSha || null, parser: GRAVIE_PARSER },
+    ...(priorPlans && priorPlans.length ? { previous_plan_ids: priorPlans.filter((p) => p.option_id).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })) } : {}),
   };
 }
 
@@ -5976,8 +5983,9 @@ function proposalVerification(rows) {
   const v = verifyProposals({
     groups: live.map((g) => ({ name: g.name, slots: [...slotsForGroup(g), "Angle Scorecard"], tiers: clientGroupView(g).tiers || {} })),
     rows,
-    // What the group's own page is given, plus the scorecard (admin only).
-    served: (name) => [...clientProposals(name), ...(currentProposals[name] || []).filter((p) => p.slot === "Angle Scorecard")],
+    // Everything stored for the group, each plan marked with whether the
+    // client is shown it; the check compares the client's share to the rules.
+    served: (name) => (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt"),
     isEpoPlan,
     isBlankPlan,
     reading: rereading,
@@ -6054,9 +6062,10 @@ let stewardState = null;
  * worth another try: on the first load after a deploy that carries a new
  * epoch, every box the steward gave up on is tried again from scratch.
  * (2026-09-25b: encrypted carrier PDFs - Boss Logistics, Adobe HVAC, Taz
- * Panama City - can now be counted and read in page windows.)
+ * Panama City - can now be counted and read in page windows. 2026-09-25c:
+ * every plan is stored, EPO included; attempts count when they finish.)
  */
-const STEWARD_EPOCH = "2026-09-25b";
+const STEWARD_EPOCH = "2026-09-25c";
 async function loadSteward() {
   if (stewardState) return stewardState;
   stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};
@@ -6196,30 +6205,32 @@ async function stewardRepair(cell, tiers) {
           : `Read ${st.reads} times and still: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : "not verified"}`;
       return giveUp(why);
     }
+    // An attempt is counted when it finishes, not when it starts: a read cut
+    // off by a restart (a deploy) is not a try, and is simply run again.
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: reading again (${st.reads + 1}/2)`);
+    await stewardRead(row);
     st.reads++;
     st.audits = 0;
     st.corrections = 0;
     await saveSteward();
-    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: reading again (${st.reads}/2)`);
-    await stewardRead(row);
   };
   if (cell.fix === "read") return read();
   if (cell.fix === "audit") {
     if (st.audits >= 3) return giveUp(`Both auditors could not complete in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: dual audit against the document (${st.audits + 1}/3)`);
+    await runProposalAudit(row.id);
     st.audits++;
-    await saveSteward();
-    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: dual audit against the document (${st.audits}/3)`);
-    return runProposalAudit(row.id);
+    return saveSteward();
   }
   if (cell.fix === "correct") {
     if (st.corrections >= 3) {
       if (!workbook && st.reads < 2) return read();
       return giveUp(`Still differs from the document after ${st.corrections} corrections and a fresh read: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);
     }
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: correcting against the document (${st.corrections + 1}/3)`);
+    await runProposalCorrection(row.id);
     st.corrections++;
-    await saveSteward();
-    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: correcting against the document (${st.corrections}/3)`);
-    return runProposalCorrection(row.id);
+    return saveSteward();
   }
   if (cell.fix === "refresh") {
     if (st.refresh >= 2) return giveUp(`The group's grid does not match the database after a rebuild: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);

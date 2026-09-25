@@ -298,23 +298,58 @@ want the whole book rather than the block the portal serves.
 
 ## Proposals
 
-### PPO only
+### Stored vs shown: every plan in the database, PPO only on the page
 
-A fixed rule: **an EPO plan is never stored, numbered or shown.** Kennion
-offers PPO plans only. UnitedHealthcare's menu carries an
-E-coded EPO twin of most P-coded PPO plans, and Gravie prices every design
-twice, EPO and PPO; the EPO sits a few dollars under the PPO and adds a choice
-without adding a decision. So an EPO plan never makes it into the portal:
-the Gravie parser reads the PPO sheet only, a Claude reading of a carrier
-PDF is stripped of its EPO plans before it is stored, a stored reading from
-before this rule is cleaned at boot (and its Gravie workbook re-read), the
-UHC menu drops its E-coded plans, and a current plan the UHC mapping had
-pointed at an EPO is mapped to its PPO twin (same deductible, out-of-pocket
-max and coinsurance) so the like-for-like comparison still holds. The same
-for every group; what is stored is what the carrier quoted for the plans
-Kennion offers, name and rates as printed. The switch that once turned the
-rule off is gone (`POST /api/admin/market-rules` accepts `ppo-only` and
-nothing else), and the client itself drops any EPO row that reaches it.
+Two separate layers.
+
+**Stored: every plan on every proposal.** A proposal's unique plans - PPO
+and EPO alike, each with its exact name, plan code and four tier rates - are
+all loaded into `kennion.proposals.extracted.plans`, counted, validated and
+dual-audited. If a proposal shows 100 unique plans, the database holds 100
+and the check says 100. Gravie's workbook is read on both its PPO and EPO
+sheets (134 plans).
+
+**Shown: decided by rules, in one place** (`server/plan-visibility.js`).
+`VISIBILITY_RULES` is a list of `{ key, reason, hides(plan, group) }`; a
+plan any rule hides stays in the database but is marked `hidden` when the
+group's proposals are built (`currentProposals`), and `clientProposals`
+leaves it out of the client's grid, plan cards, documents and the AI
+Assistant. There is one rule today: **EPO - Kennion offers PPO plans
+only.** UnitedHealthcare's menu carries an E-coded EPO twin of most P-coded
+PPO plans, and Gravie prices every design twice; the EPO sits a few dollars
+under the PPO and adds a choice without adding a decision. Per-group or
+per-carrier show/exclude choices go in the same list later without touching
+extraction, storage or the audit. The admin grid shows both numbers ("134
+loaded · 67 shown to client · 67 hidden") and the hover names each hidden
+plan with its reason. The UHC menu still drops its E-coded plans, and a
+current plan the UHC mapping had pointed at an EPO is mapped to its PPO twin
+(same deductible, out-of-pocket max and coinsurance). The switch that once
+turned the rule off is gone (`POST /api/admin/market-rules` accepts
+`ppo-only` and nothing else), and the client itself drops any EPO row that
+reaches it.
+
+### When the pipeline runs, and what replace and delete do
+
+The work runs once per proposal version, not on a timer. The steward's
+pass is cheap (code only) and a proposal that is Verified stays Verified:
+nothing is re-read or re-audited unless its document or its stored values
+change. The model calls run only when:
+
+- **a proposal is added** - it is read, validated and dual-audited;
+- **a proposal is replaced** (a newer file in the same carrier slot) - the
+  newer one is read; once it has plans, the older row is deleted with
+  everything read from it (its plans, its audit, its correction log, and for
+  a Gravie workbook its `carrier_quotes` rows), its BenSync numbers are
+  retired, and the newer one is validated and audited;
+- **a proposal is deleted** (`DELETE /api/admin/proposals/:id`) - the row and
+  everything read from it goes in one step, including a Gravie workbook's
+  `carrier_quotes` rows; a boot-time sweep drops any quote rows left over from
+  a proposal no longer on file;
+- the pipeline itself changes in a way that needs it (a parser version or
+  `STEWARD_EPOCH` bump), which is how a fix reaches readings already stored.
+
+So the group's database always holds exactly the plans of the proposals
+currently on file, and nothing else.
 
 Cobalt is not offered as a 2027 option: its slot is not shown on any group,
 its proposals are not served to clients, and the assistant does not name it.
@@ -345,12 +380,10 @@ carrier lists its plans. `assignOptionIds` in `server/index.js`, run from
 `proposalsChanged`, writes `option_id` into each stored plan; a number is
 never reused. A re-read of a proposal, or a newer proposal in the same
 slot, hands each surviving plan its old number (matched by plan code, then
-by exact name) and gives new plans the next free ones. Only offered plans
-are numbered: Kennion offers PPO plans only, and an EPO twin is never
-stored, so Gravie's 67 designs read GR1–GR67 for every group, not GR1–GR134
-with every other number missing. A reading stored before that rule is
-cleaned of its EPO twins and renumbered once, compactly, at boot; a group
-holding a number twice (the two UnitedHealthcare slots once restarted at
+by exact name) and gives new plans the next free ones. Every stored plan
+is numbered, the plans a client is shown first and the hidden ones after,
+so Gravie's 67 PPO designs read GR1–GR67 and its EPO twins GR68–GR134; a
+number once given is kept. A group holding a number twice (the two UnitedHealthcare slots once restarted at
 UH1 separately) is repaired the same way. Only proposals are numbered:
 for one day the seed's UHC menu was numbered too and a proposal plan that
 was a menu plan took the menu's number, so a group listed in the leftover
@@ -366,9 +399,9 @@ accepts. Test: `node scripts/test-option-ids.mjs`.
 Every proposal's stored reading is checked against the document itself by
 two models from two different companies before a client is shown it
 (`server/proposal-audit.js`): Claude Sonnet 5 and ChatGPT, independently.
-Each auditor must count the plans on the document - every option found, the
-EPO plans left out on purpose (Kennion offers PPO only), and the plans that
-remain ("16 found, 2 EPO excluded, 14 expected") - read all four tier rates
+Each auditor must count the plans on the document - every unique plan
+found, PPO and EPO, every one of which is stored ("19 found, 16 PPO, 3 EPO,
+19 expected") - read all four tier rates
 off the page for **every** stored plan (the server compares them to the
 database in code, so a rate an auditor did not happen to notice is still
 checked), and report every other value the document contradicts. The audit
@@ -413,12 +446,11 @@ chosen silently: the first value is kept, the disagreement is recorded on
 the plan (`conflicts`, with each value's pages), and validation fails until
 the correction step has read the plan's own table and settled it.
 
-**EPO exclusion** stays - Kennion offers PPO plans only - but EPO plans are
-listed, not dropped: `extracted.excluded` names each with its code, pages
-and reason, and `extracted.reconciliation` counts it all:
-`plan_appearances → unique_plans (unique_ppo + unique_epo) → excluded →
-expected`, alongside the reader's own unique count. Both auditors are given
-the exclusions, so an EPO plan is never taken for a missing one.
+**Every plan is stored**, EPO included, and `extracted.reconciliation`
+counts it all: `plan_appearances → unique_plans (unique_ppo + unique_epo)
+→ expected` (expected = every unique plan), alongside the reader's own
+unique and EPO counts. What a client is shown is decided afterwards, by the
+visibility rules above.
 
 **Provenance.** Every canonical plan carries `source`: the pages its
 identity, benefits and rates were read from (original page numbers, even when
@@ -485,9 +517,11 @@ rates, with its plan count equal to the database's), and **Grid** (the
 group's Medical Plans grid shows exactly the stored plans - document,
 database and grid, one number). Hovering the box shows "Source ✓ ·
 Extraction ✓ · Validation ✓ · Claude Audit ✓ · OpenAI Audit ✓ · Grid ✓",
-the reconciliation ("31 appearances → 19 unique (16 PPO, 3 EPO excluded) →
-16 expected · database 16 · grid 16"), the excluded plans, each validation
-check and each step's detail. The one plan the grid may leave out is one
+the reconciliation ("31 appearances → 19 unique (16 PPO, 3 EPO) → 19
+loaded → 16 shown to client"), the hidden plans with their reason, each
+validation check and each step's detail. The Grid step checks both: every
+stored plan is in what the server builds for the group, and the client is
+shown exactly the stored plans the visibility rules leave in. The one plan the grid may leave out is one
 the carrier's document does not price for a tier the group has people in,
 confirmed against the page. Two independent AI audits sharply cut the risk
 of an error; they are not a mathematical guarantee, and the page says
@@ -533,7 +567,8 @@ scripts/test-proposal-verify.mts`, `node scripts/test-split-read.mjs`.
 Gravie returns its quote as an Excel workbook per group. Its **EPO** and
 **PPO** sheets each price the same 67 plan designs on Cigna Open Access Plus
 (the EPO version has no out-of-network cover, the PPO does), so every group's
-Gravie quote is the same 134 plans at that group's own rates. Every plan
+Gravie quote is the same 134 plans at that group's own rates. All 134 are
+stored and audited; the 67 PPO designs are shown to the client. Every plan
 card (the popup, the printed proposal, the Excel) carries the same rows for
 looking things up — **Network** with a *Find a doctor* link to the provider
 directory, and **Pharmacy (PBM)** with a *Formulary* link — filled in where
@@ -1271,7 +1306,7 @@ human enters:
 | `kennion.group_meta` | staff-assigned access code and ALE bucket per group |
 | `kennion.rate_overrides` | hand-keyed rates by group + plan + tier, with `updated_at` / `updated_by` |
 | `kennion.imports` | one row per upload — filename, when, by whom, companies found and applied |
-| `kennion.proposals` | one row per carrier proposal - the file itself (`source_sha` its SHA-256), the canonical plans read off it (`extracted`: plans with provenance, excluded EPO plans, the count reconciliation, the correction log), the dual audit (`audit`), its processing `stage` and `stage_reason`, the group it is assigned to and by whom |
+| `kennion.proposals` | one row per carrier proposal - the file itself (`source_sha` its SHA-256), the canonical plans read off it (`extracted`: every unique plan on it, EPO included, with provenance; the count reconciliation; the correction log), the dual audit (`audit`), its processing `stage` and `stage_reason`, the group it is assigned to and by whom |
 | `kennion.carrier_quotes` | one row per carrier and group: quote number, effective date, subscribers quoted by tier, plan count — replaced when a newer workbook comes in |
 | `kennion.carrier_quote_plans` | every plan on that quote as a row: name, family, EPO or PPO, deductible, out-of-pocket max, coinsurance, the four tier rates and the monthly at the quoted tiers |
 
@@ -1338,7 +1373,7 @@ is always about the data as it stands. The checks, in the order shown:
 | Program carrier | On EBPA, HealthEZ or BCBS of Alabama, with every plan's carrier read rather than assumed. |
 | This month's billing | The funding workbook against the XML for the group's captive plans: the month's participants and premium, then every billed plan and tier against the census's heads and the XML's billed rate for that tier — a rate that differs by a cent, a tier two people out, or a plan billed that the group's XML does not carry is flagged. |
 | Supplemental lines | Whether dental, vision, life and the rest were captured for the group. |
-| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount; no EPO plan is stored on any of them, and a Gravie quote is the same 67 PPO designs every group gets. |
+| 2027 quotes | Every proposal on file has plans with rates and is priced on this group's headcount; no EPO plan is shown to the client (every plan is stored), and a Gravie quote shows the same 67 PPO designs every group gets. |
 | Account manager | One is assigned, so the assistant names a person rather than the fallback contact. |
 | Client access | The code and a permanent link. |
 | Import | When the group was last imported, and whether the newest export still carried it. |
