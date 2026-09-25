@@ -18,7 +18,9 @@ import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion } from "./proposal-audit.js";
+import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
+import { withUsage, setUsageSink, memoryUsage, summarize } from "./ai-usage.js";
+import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -80,6 +82,9 @@ let imported = loadImports();
  * file remains as the fallback for a deployment without a database.
  */
 const db = createDb(process.env.DATABASE_URL);
+// Every model call's usage record goes to Postgres (kennion.ai_usage) as well
+// as the in-memory list (server/ai-usage.js).
+if (db) setUsageSink((r) => db.recordAiUsage(r));
 let overrides = {};
 /** Staff-set company IDs and ALE buckets, keyed by group name. */
 let meta = {};
@@ -4616,6 +4621,7 @@ const proposalStore = db
         }
         // Every row read from the proposal goes with it.
         for (const [k, q] of memQuotes) if (gone.has(q.proposalId)) memQuotes.delete(k);
+        for (const g of gone) memAuditJobs.delete(g);
         return true;
       },
     };
@@ -5280,30 +5286,82 @@ async function backfillPlanBenefits() {
 const auditing = new Set();
 
 /**
+ * Completed audit jobs, per proposal (kennion.proposal_audit_jobs; in memory
+ * without a database): each model's document reconciliation and each field
+ * batch, keyed to the exact source, standard and stored data it covers. An
+ * audit resumes at the first job missing - after a 429, a restart or a
+ * deploy - and a correction re-runs only the jobs its change touches.
+ */
+const memAuditJobs = new Map();
+const auditJobs = {
+  async list(id) {
+    if (db) return db.listAuditJobs(id);
+    return { ...(memAuditJobs.get(id) || {}) };
+  },
+  async save(id, job, data) {
+    if (db) return db.saveAuditJob(id, job, data);
+    memAuditJobs.set(id, { ...(memAuditJobs.get(id) || {}), [job]: data });
+  },
+};
+
+/** The proposal context every usage record made for this row carries. */
+const usageScope = (row) => ({
+  proposalId: row.id,
+  groupName: row.group_name || null,
+  slot: row.slot || null,
+  sourceSha: row.source_sha || null,
+  readingVersion: row.extracted ? readingVersion(row.extracted) : null,
+  auditStandard: PLAN_AUDIT_STANDARD,
+});
+
+/**
  * Check a proposal's stored reading against its document with both models
- * and keep the result on the row. Never throws: a failure is recorded on the
- * row so the admin can see it and run it again.
+ * and keep the result on the row. Resumes from the jobs already done (see
+ * auditJobs): only missing or stale jobs call a model. Never throws: a
+ * failure is recorded on the row so the admin can see it and run it again.
+ * Returns { progressed } - whether any new job completed this time.
  */
 async function runProposalAudit(id) {
-  if (auditing.has(id)) return;
+  if (auditing.has(id)) return { progressed: false };
   auditing.add(id);
+  let progressed = false;
   try {
     const row = (await proposalStore.listProposals()).find((r) => r.id === id);
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
-    if (!row || !f) return;
+    if (!row || !f) return { progressed };
     // Both audits are of one exact reading of one exact document; a result
     // that comes back after either has changed is discarded, never written.
     const startVersion = readingVersion(row.extracted || {});
     const startSha = row.source_sha || null;
     await setStage(id, "AUDITING");
-    const audit = await auditProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted || {}, sourceSha: startSha });
+    const jobs = await auditJobs.list(id).catch(() => ({}));
+    const before = auditProgress(row.extracted || {}, startSha, jobs);
+    console.log(`proposal ${id} audit: resuming - Claude ${before.claude.next || "complete"}, OpenAI ${before.openai.next || "complete"}`);
+    const audit = await withUsage(usageScope(row), () =>
+      auditProposal({
+        filename: f.filename,
+        mime: f.mime,
+        buffer: f.data,
+        extracted: row.extracted || {},
+        sourceSha: startSha,
+        jobs,
+        // Each job is kept the moment it completes - before the next one runs.
+        saveJob: async (job, data) => {
+          progressed = true;
+          await auditJobs.save(id, job, data);
+        },
+      }),
+    );
     const now = (await proposalStore.listProposals()).find((r) => r.id === id);
     if (!now || (now.source_sha || null) !== startSha || readingVersion(now.extracted || {}) !== startVersion) {
       console.log(`proposal ${id} audit of an earlier version discarded`);
-      return;
+      return { progressed };
     }
-    await proposalStore.updateProposal(id, { audit });
-    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings)` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}`);
+    const { jobs: _jobs, ...kept } = audit;
+    await proposalStore.updateProposal(id, { audit: kept });
+    const reused = audit.models.reduce((n, m) => n + (m.document && m.document.reused ? 1 : 0) + (m.batches || []).filter((b) => b.reused).length, 0);
+    const targeted = audit.models.reduce((n, m) => n + (m.batches || []).filter((b) => b.source && !b.source.full).length, 0);
+    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings)` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}; ${reused} job(s) reused, ${targeted} batch(es) from targeted packets`);
   } catch (e) {
     console.error(`proposal ${id} audit failed:`, e.message);
     await proposalStore.updateProposal(id, { audit: { completedAt: new Date().toISOString(), status: "unreadable", models: [], mismatches: [], notes: `The audit failed: ${e.message}` } }).catch(() => undefined);
@@ -5311,6 +5369,7 @@ async function runProposalAudit(id) {
     auditing.delete(id);
     await proposalsChanged().catch(() => undefined);
   }
+  return { progressed };
 }
 
 /** Audit a batch a few at a time: both APIs take parallel calls, and one at a time made 70 proposals an afternoon's work. */
@@ -5375,7 +5434,9 @@ async function runAnalysis(id, file, keepAssignment) {
     const before = (await proposalStore.listProposals()).find((r) => r.id === id);
     const startSha = (before && before.source_sha) || (file.buffer ? crypto.createHash("sha256").update(file.buffer).digest("hex") : null);
     const out = await withReadSlot(() =>
-      analyzeProposal({ filename: file.filename, prepared, context: file.context || null, onStage: (st) => void setStage(id, st) }, roster),
+      withUsage({ proposalId: id, groupName: (before && before.group_name) || null, slot: (before && before.slot) || null, sourceSha: startSha, readingVersion: null, auditStandard: null }, () =>
+        analyzeProposal({ filename: file.filename, prepared, context: file.context || null, onStage: (st) => void setStage(id, st) }, roster),
+      ),
     );
     out.extraction = { ...(out.extraction || {}), sourceSha: startSha };
     // The coverage record is of this version of the document, and no other.
@@ -6241,13 +6302,18 @@ async function runProposalCorrection(id) {
     const structural =
       findings.some((m) => /missing_plan|extra_plan|plan_count|duplicate/.test(m.field) || (m.plan && !m.plan.startsWith("(") && !plans.some((pl) => pl.name === m.plan))) ||
       val.checks.some((c) => !c.ok && ["unique", "codes", "names", "reconciliation", "plans"].includes(c.key));
-    let pages = null;
-    if (!structural && !textSource) {
-      const affected = plans.filter((pl, index) => findings.some((m) => (Number.isInteger(m.index) ? m.index === index : m.plan === pl.name)) || conflicts.some((k) => k.index === index) || missingRates.some((mr) => mr.index === index));
-      const pgs = [...new Set(affected.flatMap((pl) => (pl.source ? [...(pl.source.identity || []), ...(pl.source.benefits || []), ...(pl.source.rates || [])] : [])))].sort((a, b) => a - b);
-      if (affected.length && pgs.length && affected.every((pl) => pl.source && (pl.source.rates || []).length)) pages = pgs;
+    // The plans the findings concern: their cited source (PDF pages with
+    // header context, a parser-read workbook's rows) is the packet the
+    // corrector reads; server/audit-packets.js falls back to the whole
+    // document whenever that packet cannot be shown to be complete.
+    let targetIndices = null;
+    if (!structural) {
+      const affected = plans.map((pl, index) => index).filter((index) => findings.some((m) => (Number.isInteger(m.index) ? m.index === index : m.plan === plans[index].name)) || conflicts.some((k) => k.index === index) || missingRates.some((mr) => mr.index === index));
+      if (affected.length) targetIndices = affected;
     }
-    const c = await withReadSlot(() => correctProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: x, mismatches: findings, missingRates, conflicts, pages }));
+    const c = await withReadSlot(() => withUsage(usageScope(row), () => correctProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: x, mismatches: findings, missingRates, conflicts, targetIndices })));
+    const pages = c._pageMap || null;
+    const sent = c._source && !c._source.full ? (pages ? `pages ${pages.join(",")}` : "a targeted packet") : "whole document";
     // Stale guard: the reading or the document changed while the corrector
     // worked - its answer is about a version that is gone.
     const now = (await proposalStore.listProposals()).find((r) => r.id === id);
@@ -6255,13 +6321,13 @@ async function runProposalCorrection(id) {
       console.log(`proposal ${id} correction of an earlier version discarded`);
       return;
     }
-    const { extracted, log } = applyCorrection(x, c, { proposalId: id, version: startVersion, by: `Claude (claude-sonnet-5) correction${pages ? `, pages ${pages.join(",")}` : ", whole document"}` });
+    const { extracted, log } = applyCorrection(x, c, { proposalId: id, version: startVersion, by: `Claude (claude-sonnet-5) correction, ${sent}` });
     extracted.corrections = [...(x.corrections || []), ...log].slice(-300);
     // Whatever the corrector concluded - even "the auditors were wrong,
     // nothing to change" - only a fresh audit by both models can turn the
     // box green. The corrector never settles a finding on its own word.
     await proposalStore.updateProposal(id, { extracted, audit: null });
-    console.log(`proposal ${id} corrected against the document${pages ? ` (pages ${pages.join(",")})` : " (whole document)"}: ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.optionId || l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
+    console.log(`proposal ${id} corrected against the document (${sent}): ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.optionId || l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
     // Re-audit only a reading that now passes the deterministic checks
     // (IDs aside - they are handed out on the next settle).
     const recheck = validatePlans({ extracted, sourceSha: row.source_sha, textSource });
@@ -6325,8 +6391,10 @@ async function stewardRepair(cell, tiers) {
   if (cell.fix === "audit") {
     if (st.audits >= 3) return giveUp(`Both auditors could not complete in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
     console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: dual audit against the document (${st.audits + 1}/3)`);
-    await runProposalAudit(row.id);
-    st.audits++;
+    const res = await runProposalAudit(row.id);
+    // A run that completed at least one job made progress (the next run
+    // resumes after it): only a run that completed nothing uses an attempt.
+    if (!(res && res.progressed)) st.audits++;
     return saveSteward();
   }
   if (cell.fix === "correct") {
@@ -6460,6 +6528,30 @@ app.post("/api/admin/proposals/fix", requireStaff, async (req, res) => {
  * client's grid, cards, documents and assistant, and changes nothing about
  * how the proposal is stored, validated or audited.
  */
+/**
+ * API usage: every model call recorded (server/ai-usage.js), for one proposal
+ * (?proposal=ID) or since a time (?since=ISO), with totals by purpose and by
+ * the model that actually served each call - why one proposal cost more than
+ * another is in the rows.
+ */
+app.get("/api/admin/ai-usage", requireStaff, async (req, res) => {
+  const proposalId = req.query.proposal != null ? Number(req.query.proposal) : null;
+  const since = req.query.since ? String(req.query.since) : null;
+  let records;
+  if (db) records = await db.listAiUsage({ proposalId, since, limit: req.query.limit });
+  else records = memoryUsage().filter((r) => (proposalId == null || r.proposalId === proposalId) && (!since || r.at >= since)).reverse();
+  res.json({ records, ...summarize(records) });
+});
+
+/** Where a proposal's dual audit stands, job by job: which saved jobs still count and what runs next. */
+app.get("/api/admin/proposals/:id/audit-progress", requireStaff, async (req, res) => {
+  const id = Number(req.params.id);
+  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  if (!row) return res.status(404).json({ error: "No such proposal." });
+  const jobs = await auditJobs.list(id).catch(() => ({}));
+  res.json({ proposalId: id, progress: auditProgress(row.extracted || {}, row.source_sha || null, jobs), jobs: Object.fromEntries(Object.entries(jobs).map(([k, v]) => [k, { key: v.key, at: v.at, source: v.source || null, readingVersion: v.readingVersion || null }])) });
+});
+
 app.get("/api/admin/proposal-slots", requireStaff, (req, res) => {
   res.json({ slots: [...slotVisibility.values()] });
 });

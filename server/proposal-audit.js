@@ -7,8 +7,19 @@
 // but never the stored values, so they cannot copy them: SERVER CODE then
 // compares each value read against the database (server/plan-compare.js) -
 // a wrong copay is a finding whether or not the auditor thought to mention
-// it. Each auditor also counts the plans on the document and lists any it
-// prices that the portal lacks.
+// it.
+//
+// Each model's audit is two kinds of job. The DOCUMENT-LEVEL RECONCILIATION
+// reads the complete source once per model per version: it counts the
+// plans, lists stored plans not on the document and plans on the document
+// not stored, a plan stored twice, a plan printed twice with different
+// values, and unreadable pages. The PLAN FIELD AUDITS - one per batch of
+// AUDIT_BATCH plans - read each plan's values from a targeted packet of the
+// source (only the pages / sheet rows those plans are cited on, with header
+// context), falling back to the full source whenever a packet cannot be
+// shown to be complete. Every job is saved as it finishes, keyed to the
+// exact source, audit standard and stored data it covers, so a retry, a
+// restart or a correction re-runs only the jobs whose inputs changed.
 //
 // The audit passes only when BOTH models ran, both returned every plan
 // (every batch - see AUDIT_BATCH), every compared field agrees, both counts
@@ -25,15 +36,18 @@ import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
 import { AUDIT_STANDARD, BENEFIT_FIELDS, comparePlan } from "./plan-compare.js";
+import { buildPacket, describe as describePages } from "./audit-packets.js";
+import { recordUsage, anthropicUsage, openaiUsage } from "./ai-usage.js";
 
 /** The API's page ceiling for the 1M-context model this audits with. */
 const MAX_PDF_PAGES = 600;
 
 /**
- * Plans per audit request. A proposal with more stored plans is audited in
- * deterministic batches - plans 0-24, 25-49, ... by stored index - each
- * against the whole document, so no answer has to hold 17 fields for 145
- * plans at once. Every plan is in exactly one batch for each model; a
+ * Plans per field-audit request. A proposal with more stored plans is
+ * audited in deterministic batches - plans 0-24, 25-49, ... by stored index
+ * - each against a targeted packet of the source (or the full source when a
+ * packet cannot be shown complete), so no answer has to hold 17 fields for
+ * 145 plans at once. Every plan is in exactly one batch for each model; a
  * missing or failed batch leaves that model incomplete (pending).
  */
 export const AUDIT_BATCH = 25;
@@ -93,53 +107,6 @@ const CONFIRMATION = {
   },
 };
 
-const RESULT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["verdict", "plan_appearances", "plans_found_total", "epo_excluded", "document_plan_count", "duplicates_found", "plan_confirmations", "mismatches", "notes"],
-  properties: {
-    plan_appearances: { type: "integer", description: "How many times medical plans appear on the document in total - one plan on four pages is four appearances." },
-    plans_found_total: { type: "integer", description: "Every DISTINCT plan option the document prices, EPO plans included, across every page and grid. A plan printed on several pages counts once." },
-    duplicates_found: { type: "boolean", description: "True if the list you were given holds the same carrier plan more than once." },
-    epo_excluded: { type: "integer", description: "How many of those distinct plans are EPO plans. (The portal stores them like every other plan; it only hides them from clients.)" },
-    document_plan_count: { type: "integer", description: "The plans the portal should hold: every distinct plan on the document, EPO included - equal to plans_found_total." },
-    plan_confirmations: {
-      type: "array",
-      description: "One entry for EVERY plan in the list you were given, by its index: each value read off the document yourself, per the field guide.",
-      items: CONFIRMATION,
-    },
-    verdict: { type: "string", enum: ["pass", "issues", "unreadable"], description: "pass when every listed plan was found and read; issues when a plan is missing from the document, a plan on the document is missing from the list, or the list holds a plan twice; unreadable when the document cannot be read." },
-    mismatches: {
-      type: "array",
-      description: "Problems with the list itself: a plan the document prices that the list lacks (field extra_plan, its printed name in on_document), a plan listed twice (field duplicate_plan), or anything else worth a finding.",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["plan", "field", "stored", "on_document"],
-        properties: {
-          plan: { type: "string", description: "The plan's name." },
-          field: { type: "string" },
-          stored: { type: "string" },
-          on_document: { type: "string" },
-        },
-      },
-    },
-    notes: { type: "string", description: "One or two sentences: what was checked and anything worth a human look. Empty when clean." },
-  },
-};
-
-const INSTRUCTIONS = `You are auditing a benefits portal's reading of a carrier's proposal against the proposal document itself - the document is the source of truth. You are given a numbered list of the plans the portal stored (each with its index, the portal's ID, the name and plan code it stored, its network, and the pages the portal says it is on) - but NOT the values the portal stored for them. Your job is to read those values off the document yourself. You audit on your own: no other auditor's result is given to you.
-
-1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the plans the portal should hold (document_plan_count - every distinct plan, EPO included). A plan printed on several pages (a summary, a benefit page, a rate page) is ONE plan.
-
-2. For EVERY plan in the list, by index, find it on the document by its plan code (or, where it has none, its printed name) and return what the document prints for it (plan_confirmations), following the field guide below. Read every value from that plan's own table - never copy the name you were given if the document prints it differently, and never take a value from a neighbouring plan. If a listed plan is not on the document, set on_document false.
-
-3. In mismatches, list every plan the document prices that the list lacks (field extra_plan), and set duplicates_found (and list it, field duplicate_plan) if the list holds one carrier plan twice.
-
-${FIELD_GUIDE}
-
-Never guess: a value you cannot read is null. If pages are unreadable, say so in the notes; use verdict unreadable only when nothing can be checked.`;
-
 const storedFor = (extracted) => {
   const plans = Array.isArray(extracted && extracted.plans) ? extracted.plans : [];
   return plans.map((pl) => ({
@@ -185,7 +152,7 @@ export function unionParams(schema) {
   walk(schema);
   return n;
 }
-export const AUDIT_SCHEMAS = () => ({ audit: RESULT_SCHEMA, correction: CORRECTION_SCHEMA });
+export const AUDIT_SCHEMAS = () => ({ document: DOC_SCHEMA, field: FIELD_SCHEMA, combined: COMBINED_SCHEMA, correction: CORRECTION_SCHEMA });
 
 export function readingVersion(extracted) {
   return crypto.createHash("sha256").update(JSON.stringify({ plans: valuesFor(extracted), coverage: coverageSignature(extracted) })).digest("hex").slice(0, 16);
@@ -302,56 +269,6 @@ export function mergeBatches(who, parts, total) {
 /** The stored plans' indices in audit batches: [0..24], [25..49], ... */
 export const auditBatches = (n, size = AUDIT_BATCH) => Array.from({ length: Math.ceil(n / size) }, (_, b) => Array.from({ length: Math.min(size, n - b * size) }, (_, k) => b * size + k));
 
-const auditPayload = (stored, indices, extracted, version, sourceSha, batch, batchCount) => {
-  const x = extracted || {};
-  return [
-    `Proposal version: document ${sourceSha || "?"}, reading ${version}.`,
-    `The portal's plan-count reconciliation: ${JSON.stringify(x.reconciliation || null)}`,
-    "Every distinct plan on the document should be stored, EPO plans included (the portal decides separately which plans a client sees).",
-    batchCount > 1
-      ? `The portal stores ${stored.length} plans; they are audited in ${batchCount} batches. This is batch ${batch + 1} of ${batchCount}: plans ${indices[0]}-${indices[indices.length - 1]}. Return a plan_confirmation for every plan listed below (the others are audited separately), and still count the plans on the whole document.`
-      : `The portal stores ${stored.length} plans.`,
-    `The plans to find and read:\n${JSON.stringify(findersFor(stored, indices), null, 1)}`,
-    "Read every listed plan's values off the document.",
-  ].join("\n\n");
-};
-
-async function claudeCheck({ filename, prepared, stored, indices, payload }) {
-  // Audits run several at a time against the same org-wide tokens-per-minute
-  // budget the proposal reader shares - stretch the SDK's built-in backoff so
-  // a burst retries instead of failing the audit outright.
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 10 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 });
-  const content = [];
-  // The document is the same for every batch: cached, so batches 2..n read
-  // it from the prompt cache instead of paying for it again.
-  if (prepared.kind === "pdf") {
-    const { numpages } = await pdfParse(prepared.buffer).catch(() => ({ numpages: 0 }));
-    if (numpages > MAX_PDF_PAGES) {
-      throw new Error(`This proposal is ${numpages} pages - too long for the model to audit (limit ${MAX_PDF_PAGES}).`);
-    }
-    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: prepared.buffer.toString("base64") }, title: filename, cache_control: { type: "ephemeral" } });
-  }
-  else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") }, cache_control: { type: "ephemeral" } });
-  else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename, cache_control: { type: "ephemeral" } });
-  content.push({ type: "text", text: payload });
-  const response = await client.messages
-    .stream({
-      model: CLAUDE_MODEL,
-      max_tokens: 64000,
-      output_config: { effort: "high", format: { type: "json_schema", schema: RESULT_SCHEMA } },
-      system: INSTRUCTIONS,
-      messages: [{ role: "user", content }],
-    })
-    .finalMessage();
-  if (response.stop_reason === "refusal") throw new Error("Claude declined the check.");
-  if (response.stop_reason === "max_tokens") throw new Error("Claude's audit ran past one answer.");
-  const text = response.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  return shape(`Claude (${CLAUDE_MODEL})`, JSON.parse(text), stored, indices);
-}
-
 /**
  * POST JSON with a long timeout. Node's fetch gives up on a response that
  * takes more than five minutes to start - which a large PDF audit on
@@ -380,42 +297,6 @@ function postJson(url, headers, body, timeoutMs) {
   });
 }
 
-async function chatgptCheck({ filename, prepared, stored, indices, payload }) {
-  const parts = [];
-  if (prepared.kind === "pdf") parts.push({ type: "file", file: { filename, file_data: `data:application/pdf;base64,${prepared.buffer.toString("base64")}` } });
-  else if (prepared.kind === "image") parts.push({ type: "image_url", image_url: { url: `data:${prepared.mime};base64,${prepared.buffer.toString("base64")}` } });
-  else parts.push({ type: "text", text: `The document (${filename}):\n${prepared.text || "(empty)"}` });
-  parts.push({ type: "text", text: payload });
-  const body = {
-    model: CHATGPT_MODEL(),
-    messages: [
-      { role: "system", content: INSTRUCTIONS },
-      { role: "user", content: parts },
-    ],
-    response_format: { type: "json_schema", json_schema: { name: "proposal_audit", strict: true, schema: RESULT_SCHEMA } },
-  };
-  let last;
-  // One more try on a network failure or a 429/5xx: a missing ChatGPT audit
-  // holds the proposal back from green, so it is worth the second attempt.
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000);
-      if (!r.ok) {
-        last = new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(r.json.error && r.json.error.message) || `HTTP ${r.status}`}`);
-        if (r.status === 429 || r.status >= 500) continue;
-        throw last;
-      }
-      const text = r.json.choices && r.json.choices[0] && r.json.choices[0].message ? String(r.json.choices[0].message.content || "") : "";
-      if (!text) throw new Error("ChatGPT returned no text.");
-      return shape(`ChatGPT (${CHATGPT_MODEL()})`, JSON.parse(text), stored, indices);
-    } catch (e) {
-      last = e;
-      if (attempt === 2 || /HTTP 4\d\d|returned no text/.test(e.message)) break;
-    }
-  }
-  throw last;
-}
-
 /** What the document would say if it said exactly what is stored: the canned auditor's answer (KENNION_FAKE_AI). */
 const cannedRead = (pl, index) => ({
   index,
@@ -431,58 +312,534 @@ const cannedRead = (pl, index) => ({
 });
 
 /**
- * Run both audits and combine them. `status`:
- *   pass    - both models ran, both returned every plan in every batch,
- *             every compared field agrees with the database, both counts
- *             equal the database, and neither reported a problem;
- *   issues  - a finding (a value the document contradicts, a plan missing
- *             or extra, or a count that does not match the database);
- *   pending - no finding, but not both models' full word: one is off,
- *             failed, or left a plan or a batch out. Never counted as a pass.
- * `version` names the reading that was checked (see readingVersion);
- * `standard` the audit standard it was held to (plan-compare.js).
- * `read` (tests): a stand-in auditor, (who, payload, indices) => answer.
+ * The document-level reconciliation audit's answer: the complete source,
+ * read once per model per version. Counts, the stored plans it cannot find,
+ * the plans it finds that are not stored, a plan stored twice, a plan the
+ * document prints twice with different values, and whether every page could
+ * be read. No plan's field values: those are the field batches' job.
  */
-export async function auditProposal({ filename, mime, buffer, extracted, sourceSha = null, read = null }) {
+const DOC_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "plan_appearances", "plans_found_total", "epo_excluded", "document_plan_count", "duplicates_found", "missing_indices", "extra_plans", "inconsistent_plans", "all_pages_readable", "unreadable_pages", "notes"],
+  properties: {
+    verdict: { type: "string", enum: ["pass", "issues", "unreadable"], description: "pass when every listed plan is on the document, the document prices no plan the list lacks, and the list holds no plan twice; issues otherwise; unreadable when the document cannot be read." },
+    plan_appearances: { type: "integer", description: "How many times medical plans appear on the document in total - one plan on four pages is four appearances." },
+    plans_found_total: { type: "integer", description: "Every DISTINCT plan option the document prices, EPO plans included, across every page, sheet and grid. A plan printed on several pages counts once." },
+    epo_excluded: { type: "integer", description: "How many of those distinct plans are EPO plans (stored like every other plan)." },
+    document_plan_count: { type: "integer", description: "The plans the portal should hold: every distinct plan on the document, EPO included - equal to plans_found_total." },
+    duplicates_found: { type: "boolean", description: "True if the list you were given holds the same carrier plan more than once." },
+    missing_indices: { type: "array", items: { type: "integer" }, description: "The index of every listed plan that is NOT on the document at all." },
+    extra_plans: {
+      type: "array",
+      description: "Every plan the document prices that the list lacks.",
+      items: { type: "object", additionalProperties: false, required: ["name", "plan_code", "page"], properties: { name: { type: "string" }, plan_code: { type: "string", description: "Empty when none is printed." }, page: { type: "string", description: "Where it is printed (page, sheet/row or line)." } } },
+    },
+    inconsistent_plans: {
+      type: "array",
+      description: "A listed plan the document prints more than once with DIFFERENT values for the same field (e.g. two rates for EE).",
+      items: { type: "object", additionalProperties: false, required: ["index", "field", "values"], properties: { index: { type: "integer" }, field: { type: "string" }, values: { type: "string", description: "The differing values and where each is printed." } } },
+    },
+    all_pages_readable: { type: "boolean", description: "True when every page / sheet / section of the document could be read." },
+    unreadable_pages: { type: "string", description: "Which pages or sections could not be read; empty when all could." },
+    notes: { type: "string", description: "One or two sentences: what was checked and anything worth a human look. Empty when clean." },
+  },
+};
+
+/** A plan field batch's answer: only these plans' values, as the cited source shows them. */
+const FIELD_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "plan_confirmations", "insufficient_context", "notes"],
+  properties: {
+    verdict: { type: "string", enum: ["pass", "issues", "unreadable"], description: "pass when every listed plan was found and read; issues when a listed plan could not be found; unreadable when the source cannot be read." },
+    plan_confirmations: { type: "array", description: "One entry for EVERY plan in the list you were given, by its index: each value read off the source yourself, per the field guide.", items: CONFIRMATION },
+    insufficient_context: { type: "boolean", description: "True when the source you were given does not hold everything needed to read every listed plan's values with certainty (a plan, its rate row, its benefit column, or a table header is missing). Never guess instead." },
+    notes: { type: "string", description: "One sentence on anything worth a human look. Empty when clean." },
+  },
+};
+
+/**
+ * A proposal that fits in one batch: the document reconciliation and the
+ * field audit in ONE call against the full source - the full source is read
+ * exactly once either way, and a separate packet would only add pages.
+ */
+const COMBINED_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [...DOC_SCHEMA.required, "plan_confirmations"],
+  properties: { ...DOC_SCHEMA.properties, plan_confirmations: FIELD_SCHEMA.properties.plan_confirmations },
+};
+
+/**
+ * One system prompt for every auditor call (document reconciliation and field
+ * batches alike): kept byte-identical and cached, and it says nothing about
+ * any one proposal. What to do in this call is in the user turn.
+ */
+const AUDITOR_SYSTEM = `You audit a benefits portal's reading of a carrier's proposal against the proposal document itself - the document is the source of truth. You are given the plans the portal stored as a numbered list (each with its index, the portal's ID, the name and plan code it stored, its network, and where the portal says it is printed) - but NOT the values the portal stored for them: you read values off the document yourself. You audit on your own: no other auditor's result is given to you. Every distinct plan on the document should be stored, EPO plans included (the portal decides separately which plans a client sees).
+
+${FIELD_GUIDE}
+
+Never guess: a value you cannot read is left empty (a rate: null). If pages are unreadable, say so.`;
+
+const DOC_TASK = `This call is the DOCUMENT-LEVEL RECONCILIATION. You have the complete proposal. Do not read field values. Instead:
+1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page, sheet and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the plans the portal should hold (document_plan_count - every distinct plan, EPO included). A plan printed on several pages is ONE plan.
+2. For each listed plan, find it by its plan code (or, where it has none, its printed name); list the index of every listed plan the document does not price at all (missing_indices).
+3. List every plan the document prices that the list lacks (extra_plans), and set duplicates_found if the list holds one carrier plan twice.
+4. List any listed plan the document prints more than once with different values for the same field (inconsistent_plans).
+5. Say whether every page / sheet / section could be read.`;
+
+const COMBINED_TASK = () => `This call is BOTH the document-level reconciliation and the plan field audit (every stored plan fits in one batch). You have the complete proposal.
+
+${DOC_TASK}
+
+Then: ${FIELD_TASK}`;
+
+const FIELD_TASK = `This call is a PLAN FIELD AUDIT. For EVERY plan in the list, by index, find it by its plan code (or, where it has none, its printed name) and return what the source prints for it (plan_confirmations), following the field guide. Read every value from that plan's own table - never copy the name you were given if the source prints it differently, and never take a value from a neighbouring plan. Do not count or reconcile the whole document: that is done separately. If a listed plan is not in the source you were given, set on_document false.`;
+
+const PACKET_TASK = (note) => `The source you were given is a PACKET of the proposal: ${note} It holds the places the portal says these plans are printed, plus the headers around them. If anything needed to read a listed plan's values with certainty is not in this packet - the plan itself, its rate row, its benefit column, or a table header - set insufficient_context true instead of guessing; the plans will then be read against the whole proposal.`;
+
+/** Bumped when the document job's question changes: an older answer no longer counts. */
+export const DOC_JOB_VERSION = 1;
+/** Bumped when field packets are built differently: every batch is read again. */
+export const PACKET_VERSION = 1;
+
+const hash = (v) => crypto.createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16);
+
+/**
+ * What the document-level reconciliation depends on: the exact source
+ * document, the audit standard, which plans are stored (their identity -
+ * name, code, network - and count, not their values), and the reading's
+ * source-coverage record. A correction to one benefit or rate leaves this
+ * key - and the answer - valid; a plan added, removed or renamed, a re-read
+ * or a new file does not.
+ */
+export function docJobKey(extracted, sourceSha) {
   const stored = storedFor(extracted);
+  return hash({ s: sourceSha || null, std: AUDIT_STANDARD, v: DOC_JOB_VERSION, plans: stored.map((p) => [p.name, p.plan_code, p.network]), cov: coverageSignature(extracted) });
+}
+
+/**
+ * What one field batch depends on: the exact source document, the audit
+ * standard, how packets are built, and - for each plan in it, by index -
+ * every stored value and its provenance (the BenSync ID aside, which is
+ * only a label). A correction to one plan changes only its batch's key.
+ */
+export function batchJobKey(stored, indices, sourceSha) {
+  return hash({ s: sourceSha || null, std: AUDIT_STANDARD, v: PACKET_VERSION, plans: indices.map((i) => { const { id, ...rest } = stored[i] || {}; return [i, rest]; }) });
+}
+
+/** Which jobs a model's audit consists of, and the key each must match to count. */
+/** A one-batch proposal's single combined job depends on both. */
+export const combinedKey = (docKey, batchKey) => hash({ combined: [docKey, batchKey] });
+
+export function auditPlan(extracted, sourceSha) {
+  const stored = storedFor(extracted);
+  const batches = auditBatches(stored.length);
+  return { stored, batches, docKey: docJobKey(extracted, sourceSha), batchKeys: batches.map((b) => batchJobKey(stored, b, sourceSha)) };
+}
+
+/**
+ * Where a proposal's audit stands, job by job, for each model: which saved
+ * jobs still count (their key matches the reading now) and the next one
+ * missing - "Claude document reconciliation", "OpenAI batch 5 of 7" - so the
+ * steward resumes exactly there after a failure or a restart.
+ */
+export function auditProgress(extracted, sourceSha, jobs = {}) {
+  const { batches, docKey, batchKeys } = auditPlan(extracted, sourceSha);
+  const single = batches.length === 1;
+  const out = {};
+  for (const [p, label] of [["claude", "Claude"], ["openai", "OpenAI"]]) {
+    const doc = jobs[`${p}:doc`];
+    const docOk = !!(doc && doc.key === (single ? combinedKey(docKey, batchKeys[0]) : docKey));
+    const done = batchKeys.map((k, b) => (single ? docOk : !!(jobs[`${p}:batch:${b}`] && jobs[`${p}:batch:${b}`].key === k)));
+    const nextBatch = done.indexOf(false);
+    out[p] = {
+      document: docOk,
+      batchesDone: done.filter(Boolean).length,
+      batches: batches.length,
+      next: !docOk ? `${label} document reconciliation` : nextBatch >= 0 ? `${label} batch ${nextBatch + 1} of ${batches.length}` : null,
+    };
+  }
+  return out;
+}
+
+const docPayload = (stored, version, sourceSha, x, combined = false) =>
+  [
+    combined ? COMBINED_TASK() : DOC_TASK,
+    `Proposal version: document ${sourceSha || "?"}, reading ${version}.`,
+    `The portal's plan-count reconciliation: ${JSON.stringify((x && x.reconciliation) || null)}`,
+    `The portal stores ${stored.length} plans. The list (locators only):\n${JSON.stringify(findersFor(stored, stored.map((_, i) => i)), null, 1)}`,
+    ...(combined ? ["Return a plan_confirmation for every plan in the list, read off the document."] : []),
+  ].join("\n\n");
+
+const fieldPayload = (stored, indices, version, sourceSha, b, n, packetNote) =>
+  [
+    FIELD_TASK,
+    packetNote ? PACKET_TASK(packetNote) : "You have the complete proposal.",
+    `Proposal version: document ${sourceSha || "?"}, reading ${version}.`,
+    n > 1 ? `Batch ${b + 1} of ${n}: plans ${indices[0]}-${indices[indices.length - 1]} of the ${stored.length} stored. Return a plan_confirmation for every plan listed below.` : `The portal stores ${stored.length} plans.`,
+    `The plans to find and read:\n${JSON.stringify(findersFor(stored, indices), null, 1)}`,
+    "Read every listed plan's values off the source.",
+  ].join("\n\n");
+
+/** The document-level answer, checked in code into a model part: counts and document-level findings. */
+export function shapeDoc(who, r, stored) {
+  const verdict = ["pass", "issues", "unreadable"].includes(r && r.verdict) ? r.verdict : "unreadable";
+  const int = (v) => (Number.isInteger(v) ? v : null);
+  const mismatches = [];
+  for (const i of Array.isArray(r && r.missing_indices) ? r.missing_indices : []) {
+    const pl = stored[i];
+    if (pl) mismatches.push({ plan: pl.name, index: i, optionId: pl.id || null, planCode: pl.plan_code || null, field: "missing_plan", stored: "stored", onDocument: "not on document" });
+  }
+  for (const e of Array.isArray(r && r.extra_plans) ? r.extra_plans.slice(0, 80) : []) mismatches.push({ plan: String(e.name || ""), field: "extra_plan", stored: "not stored", onDocument: `${e.name}${e.plan_code ? ` [${e.plan_code}]` : ""}${e.page ? ` (${e.page})` : ""}` });
+  if (r && r.duplicates_found === true) mismatches.push({ plan: "(stored list)", field: "duplicate_plan", stored: "a plan stored twice", onDocument: "one plan" });
+  for (const k of Array.isArray(r && r.inconsistent_plans) ? r.inconsistent_plans.slice(0, 40) : []) {
+    const pl = stored[k.index];
+    mismatches.push({ plan: pl ? pl.name : `(index ${k.index})`, ...(pl ? { index: k.index, optionId: pl.id || null, planCode: pl.plan_code || null } : {}), field: "inconsistent_on_document", stored: String(k.field || ""), onDocument: String(k.values || "") });
+  }
+  if (r && r.all_pages_readable === false) mismatches.push({ plan: "(whole document)", field: "unreadable_pages", stored: "", onDocument: String(r.unreadable_pages || "some pages could not be read") });
+  return {
+    model: who,
+    verdict: verdict === "unreadable" ? "unreadable" : mismatches.length || verdict === "issues" ? "issues" : "pass",
+    planAppearances: int(r && r.plan_appearances),
+    plansFoundTotal: int(r && r.plans_found_total),
+    epoExcluded: int(r && r.epo_excluded),
+    documentPlanCount: int(r && r.document_plan_count),
+    mismatches,
+    notes: String((r && r.notes) || "").slice(0, 1500),
+  };
+}
+
+/**
+ * One model's audit: its document reconciliation and every field batch,
+ * combined. Passes only when the document job passed, every batch came back
+ * and passed, and every plan was confirmed. The document counts are the
+ * document job's own - the only call that read the whole source to count.
+ */
+export function composeModel(who, doc, parts, total) {
+  const confirmed = parts.reduce((n, p) => n + (p.confirmed || 0), 0);
+  const seen = new Set();
+  const mismatches = [...((doc && doc.mismatches) || []), ...parts.flatMap((p) => p.mismatches || [])].filter((m) => {
+    const k = `${Number.isInteger(m.index) ? m.index : m.plan}|${m.field}|${m.onDocument}`.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const failed = [doc, ...parts].find((p) => !p || p.verdict === "error" || p.verdict === "off");
+  const verdict = failed
+    ? (failed && failed.verdict) || "error"
+    : [doc, ...parts].some((p) => p.verdict === "unreadable")
+      ? "unreadable"
+      : confirmed < total || parts.some((p) => p.verdict === "incomplete")
+        ? "incomplete"
+        : mismatches.length || [doc, ...parts].some((p) => p.verdict === "issues")
+          ? "issues"
+          : "pass";
+  return {
+    model: who,
+    verdict,
+    planAppearances: doc ? doc.planAppearances ?? null : null,
+    plansFoundTotal: doc ? doc.plansFoundTotal ?? null : null,
+    epoExcluded: doc ? doc.epoExcluded ?? null : null,
+    documentPlanCount: doc ? doc.documentPlanCount ?? null : null,
+    confirmed,
+    of: total,
+    document: doc ? { verdict: doc.verdict, reused: !!doc.reused } : null,
+    batches: parts.map((p) => ({ from: p.from, to: p.to, verdict: p.verdict, confirmed: p.confirmed ?? 0, source: p.source || null, reused: !!p.reused })),
+    mismatches,
+    notes: [doc && doc.notes, ...parts.map((p) => p.notes)].filter(Boolean).join(" ").slice(0, 3000),
+  };
+}
+
+const anthropicClient = () => (apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 10 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 }));
+
+/**
+ * The cache marker on a full-source block and the shared system prompt: the
+ * 1-hour TTL (Anthropic prompt caching, `{ type: "ephemeral", ttl: "1h" }`),
+ * so a full source re-read within the hour - a full-source fallback batch, a
+ * retry, a correction, the other half of a resumed audit - is a cache read.
+ * A 1-hour write bills at 2x input (5-minute: 1.25x) and a read at 0.1x, so
+ * it pays off once the same source is read three or more times in the hour;
+ * KENNION_SOURCE_CACHE_TTL=5m or =off changes it if usage telemetry shows
+ * full sources are mostly read once.
+ */
+const cacheTtl = String(process.env.KENNION_SOURCE_CACHE_TTL || "1h").toLowerCase();
+export const SOURCE_CACHE = cacheTtl === "off" ? undefined : cacheTtl === "5m" ? { type: "ephemeral" } : { type: "ephemeral", ttl: "1h" };
+const withCache = (block) => (SOURCE_CACHE ? { ...block, cache_control: SOURCE_CACHE } : block);
+
+/**
+ * The source block(s) for one call. Full: the whole document, cached for an
+ * hour - the same bytes are read by the document job, any full-source
+ * fallback batch, a retry and a correction within the hour. A packet is not
+ * cached: each packet is read once, and a cache write would only add cost.
+ */
+function claudeSource(filename, prepared, packet) {
+  if (packet && !packet.full) {
+    if (packet.kind === "pdf") return { type: "document", source: { type: "base64", media_type: "application/pdf", data: packet.buffer.toString("base64") }, title: `${filename} (pages ${packetDescribe(packet)})` };
+    return { type: "document", source: { type: "text", media_type: "text/plain", data: packet.text || "(empty)" }, title: `${filename} (packet)` };
+  }
+  if (prepared.kind === "pdf") return withCache({ type: "document", source: { type: "base64", media_type: "application/pdf", data: prepared.buffer.toString("base64") }, title: filename });
+  if (prepared.kind === "image") return withCache({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
+  return withCache({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
+}
+/** For tests: the Anthropic source block a call would send. */
+export const _claudeSource = (...args) => claudeSource(...args);
+const packetDescribe = (packet) => (packet.pages ? describePages(packet.pages) : "");
+
+/** What a call sent, for telemetry: full (and why) or which pages / sheets / lines. */
+const sourceSent = (prepared, packet, numpages) => {
+  if (!packet || packet.full) return { full: true, of: prepared.kind === "pdf" ? numpages || null : null, unit: prepared.kind === "pdf" ? "pages" : prepared.kind, reason: packet && packet.reason ? packet.reason : null };
+  if (packet.kind === "pdf") return { full: false, pages: packet.pages, of: packet.of, cited: packet.cited, context: packet.context };
+  if (packet.sheets) return { full: false, sheets: packet.sheets };
+  return { full: false, lines: packet.lines, of: packet.of };
+};
+
+/** A connection or service failure (not the request's fault): worth the same call again. */
+const transient = (e) => !!e && (e.status === 429 || e.status >= 500 || /terminated|ECONNRESET|ETIMEDOUT|socket hang up|other side closed|overloaded|fetch failed/i.test(`${e.message || ""} ${(e.cause && (e.cause.code || e.cause.message)) || ""}`));
+
+async function callClaude({ purpose, schema, block, text, meta }) {
+  const client = anthropicClient();
+  const started = Date.now();
+  let retries = 0;
+  for (;;) {
+    try {
+      const response = await client.messages
+        .stream({
+          model: CLAUDE_MODEL,
+          max_tokens: 64000,
+          output_config: { effort: "high", format: { type: "json_schema", schema } },
+          system: [withCache({ type: "text", text: AUDITOR_SYSTEM })],
+          messages: [{ role: "user", content: [block, { type: "text", text }] }],
+        })
+        .finalMessage();
+      recordUsage({ purpose, provider: "anthropic", model: CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries, ok: response.stop_reason !== "refusal" && response.stop_reason !== "max_tokens", error: response.stop_reason === "refusal" || response.stop_reason === "max_tokens" ? response.stop_reason : null, ...meta });
+      if (response.stop_reason === "refusal") throw new Error("Claude declined the check.");
+      if (response.stop_reason === "max_tokens") throw new Error("Claude's audit ran past one answer.");
+      return JSON.parse(response.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+    } catch (e) {
+      if (transient(e) && retries < 2) {
+        retries++;
+        await new Promise((r) => setTimeout(r, RETRY_PAUSE_MS * retries));
+        continue;
+      }
+      if (!/declined|ran past/.test(e.message)) recordUsage({ purpose, provider: "anthropic", model: CLAUDE_MODEL, durationMs: Date.now() - started, retries, ok: false, error: e.message, ...meta });
+      throw e;
+    }
+  }
+}
+const RETRY_PAUSE_MS = Number(process.env.KENNION_AUDIT_RETRY_PAUSE_MS || 15000);
+
+async function callOpenAI({ purpose, schema, name, filename, prepared, packet, text, meta }) {
+  const parts = [];
+  if (packet && !packet.full) {
+    if (packet.kind === "pdf") parts.push({ type: "file", file: { filename: `${filename} (pages ${packetDescribe(packet)}).pdf`, file_data: `data:application/pdf;base64,${packet.buffer.toString("base64")}` } });
+    else parts.push({ type: "text", text: `The source packet (${filename}):\n${packet.text || "(empty)"}` });
+  } else if (prepared.kind === "pdf") parts.push({ type: "file", file: { filename, file_data: `data:application/pdf;base64,${prepared.buffer.toString("base64")}` } });
+  else if (prepared.kind === "image") parts.push({ type: "image_url", image_url: { url: `data:${prepared.mime};base64,${prepared.buffer.toString("base64")}` } });
+  else parts.push({ type: "text", text: `The document (${filename}):\n${prepared.text || "(empty)"}` });
+  parts.push({ type: "text", text });
+  const body = {
+    model: CHATGPT_MODEL(),
+    messages: [
+      { role: "system", content: AUDITOR_SYSTEM },
+      { role: "user", content: parts },
+    ],
+    response_format: { type: "json_schema", json_schema: { name, strict: true, schema } },
+  };
+  const started = Date.now();
+  let last;
+  let retries = 0;
+  // Up to three tries on a network failure or a 429/5xx: a missing OpenAI
+  // audit holds the proposal back from Verified, so it is worth retrying -
+  // this one call only; every job already done stays done.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000);
+      if (!r.ok) {
+        last = new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(r.json.error && r.json.error.message) || `HTTP ${r.status}`}`);
+        last.status = r.status;
+        if (r.status === 429 || r.status >= 500) {
+          retries++;
+          await new Promise((res) => setTimeout(res, RETRY_PAUSE_MS * attempt));
+          continue;
+        }
+        throw last;
+      }
+      recordUsage({ purpose, provider: "openai", model: CHATGPT_MODEL(), servedModel: r.json.model || CHATGPT_MODEL(), usage: openaiUsage(r.json), durationMs: Date.now() - started, retries, ok: true, ...meta });
+      const out = r.json.choices && r.json.choices[0] && r.json.choices[0].message ? String(r.json.choices[0].message.content || "") : "";
+      if (!out) throw new Error("ChatGPT returned no text.");
+      return JSON.parse(out);
+    } catch (e) {
+      last = e;
+      if (attempt === 3 || /HTTP 4\d\d|returned no text/.test(e.message) || (e.status && e.status < 500 && e.status !== 429)) break;
+      retries++;
+    }
+  }
+  recordUsage({ purpose, provider: "openai", model: CHATGPT_MODEL(), durationMs: Date.now() - started, retries, ok: false, error: last && last.message, ...meta });
+  throw last;
+}
+
+/**
+ * Run both models' audits, job by job, and combine them. Per model:
+ *   1. the DOCUMENT-LEVEL RECONCILIATION - the complete source, once: the
+ *      plan count, stored plans not on the document, plans on the document
+ *      not stored, a plan stored twice, a plan printed twice with different
+ *      values, unreadable pages;
+ *   2. one PLAN FIELD AUDIT per batch of AUDIT_BATCH plans - every stored
+ *      plan in exactly one batch - read against a TARGETED PACKET of the
+ *      source (the pages / sheet rows its plans are cited on, plus header
+ *      context; server/audit-packets.js), or the full source when a packet
+ *      cannot be shown to be complete or the auditor says it lacked context.
+ * Every job's answer is saved as it completes (`saveJob`) under a key tied
+ * to the exact source SHA, audit standard and the stored data it covers;
+ * `jobs` (saved earlier) whose key still matches are reused, never re-run.
+ * A job that fails stops that model; the next run resumes at that job.
+ *
+ * `status`: pass - both models' document jobs and every batch passed, every
+ * plan was confirmed by both, every compared field agrees, both counts equal
+ * the database; issues - a finding; pending - anything less. Never a pass on
+ * one model's word.
+ *
+ * Test hooks: `transport({ who, provider, kind: "doc"|"batch", indices,
+ * packet, payload })` answers a job; `read(who, payload, indices)` is the
+ * older combined-answer hook (counts + confirmations in one answer).
+ */
+export async function auditProposal({ filename, mime, buffer, extracted, sourceSha = null, read = null, transport = null, jobs = {}, saveJob = null }) {
   const completedAt = new Date().toISOString();
   const version = readingVersion(extracted);
   const storedCount = offeredCount(extracted);
+  const { stored, batches, docKey, batchKeys } = auditPlan(extracted, sourceSha);
   if (!stored.length) return { completedAt, status: "pending", models: [], mismatches: [], notes: "No plans stored to check.", version, standard: AUDIT_STANDARD, counts: { stored: 0 } };
-  const batches = auditBatches(stored.length);
   const epo = canonicalPlans(extracted).filter(isEpoPlan).length;
-  // One model, every batch in order (the cached document is reused batch to batch).
-  const runModel = async (who, check) => {
-    const parts = [];
-    for (const [b, indices] of batches.entries()) {
-      const payload = auditPayload(stored, indices, extracted, version, sourceSha, b, batches.length);
-      const part = await check({ payload, indices }).catch((e) => ({ model: who, verdict: "error", confirmed: 0, mismatches: [], notes: `Batch ${b + 1} of ${batches.length}: ${e.message}` }));
-      parts.push({ ...part, from: indices[0], to: indices[indices.length - 1] });
-      // A failed batch fails the model: stop rather than spend the rest.
-      if (part.verdict === "error") break;
-    }
-    return mergeBatches(who, parts, stored.length);
+  const exactRows = !!(extracted && extracted.extraction && extracted.extraction.method === "parser");
+  const saved = { ...(jobs || {}) };
+  const save = async (id, value) => {
+    saved[id] = value;
+    if (saveJob) await saveJob(id, value);
   };
-  let models;
-  if (read || fakeAi()) {
-    const answer =
+
+  // What answers a job: a test hook, the canned auditor, or the two APIs.
+  let answer;
+  let prepared = null;
+  let numpages = null;
+  const canned = !transport && !read && fakeAi();
+  // Packets are built from the real file whenever there is one - under a
+  // test transport too, so tests exercise exactly the pages that would be sent.
+  const prepareSource = async () => {
+    prepared = await prepareForModel({ filename, mime, buffer });
+    if (prepared.kind === "pdf") {
+      numpages = await countPages(prepared.buffer);
+      if (numpages > MAX_PDF_PAGES) throw new Error(`This proposal is ${numpages} pages - too long for the model to audit (limit ${MAX_PDF_PAGES}).`);
+    }
+  };
+  if (transport) {
+    if (buffer && buffer.length) await prepareSource();
+    answer = transport;
+  }
+  else if (read || canned) {
+    const combined =
       read ||
       ((who, payload, indices) => ({ verdict: "pass", plan_appearances: storedCount, plans_found_total: storedCount, epo_excluded: epo, document_plan_count: storedCount, duplicates_found: false, plan_confirmations: indices.map((i) => cannedRead(stored[i], i)), mismatches: [], notes: "Canned audit (KENNION_FAKE_AI)." }));
-    const canned = (who) => runModel(who, async ({ payload, indices }) => shape(who, await answer(who, payload, indices), stored, indices));
-    models = await Promise.all([canned(read ? "Claude (test)" : "Claude (canned)"), canned(read ? "ChatGPT (test)" : "ChatGPT (canned)")]);
+    answer = async ({ who, kind, indices, payload }) => {
+      const r = await combined(who, payload, kind === "doc" ? [] : indices);
+      if (kind === "combined") return { ...r, missing_indices: [], extra_plans: (r.mismatches || []).filter((m) => m.field === "extra_plan").map((m) => ({ name: m.on_document || m.plan, plan_code: "", page: "" })), inconsistent_plans: [], all_pages_readable: r.verdict !== "unreadable", unreadable_pages: "" };
+      if (kind === "batch") return { verdict: r.verdict === "unreadable" ? "unreadable" : "pass", plan_confirmations: r.plan_confirmations || [], insufficient_context: false, notes: r.notes || "" };
+      // The older hook answers counts and document-level findings in one reply.
+      const extra = (r.mismatches || []).filter((m) => m.field === "extra_plan").map((m) => ({ name: m.on_document || m.plan, plan_code: "", page: "" }));
+      return { verdict: r.verdict, plan_appearances: r.plan_appearances, plans_found_total: r.plans_found_total, epo_excluded: r.epo_excluded, document_plan_count: r.document_plan_count, duplicates_found: !!r.duplicates_found, missing_indices: [], extra_plans: extra, inconsistent_plans: [], all_pages_readable: r.verdict !== "unreadable", unreadable_pages: "", notes: r.notes || "" };
+    };
   } else {
-    const prepared = await prepareForModel({ filename, mime, buffer });
-    models = await Promise.all([
-      apiKey() || process.env.ANTHROPIC_AUTH_TOKEN
-        ? runModel(`Claude (${CLAUDE_MODEL})`, ({ payload, indices }) => claudeCheck({ filename, prepared, stored, indices, payload }))
-        : Promise.resolve({ model: "Claude", verdict: "off", mismatches: [], notes: "No Anthropic key." }),
-      chatgptKey()
-        ? runModel(`ChatGPT (${CHATGPT_MODEL()})`, ({ payload, indices }) => chatgptCheck({ filename, prepared, stored, indices, payload }))
-        : Promise.resolve({ model: "ChatGPT", verdict: "off", mismatches: [], notes: "No ChatGPT key." }),
-    ]);
+    await prepareSource();
+    answer = async ({ provider, kind, indices, packet, payload, batch }) => {
+      const meta = { batch: kind === "batch" ? batch : null, plansInBatch: kind === "batch" ? indices.length : stored.length, source: sourceSent(prepared, packet, numpages), readingVersion: version, auditStandard: AUDIT_STANDARD };
+      const purpose = kind === "doc" ? `document-reconciliation-${provider}` : kind === "combined" ? `document-and-field-audit-${provider}` : packet && packet.full ? `fallback-full-read-${provider}` : `plan-audit-${provider}`;
+      const schema = kind === "doc" ? DOC_SCHEMA : kind === "combined" ? COMBINED_SCHEMA : FIELD_SCHEMA;
+      if (provider === "claude") return callClaude({ purpose, schema, block: claudeSource(filename, prepared, packet), text: payload, meta });
+      return callOpenAI({ purpose, schema, name: kind === "doc" ? "document_reconciliation" : kind === "combined" ? "proposal_audit" : "plan_field_audit", filename, prepared, packet, text: payload, meta });
+    };
   }
+
+  const packetFor = async (indices) => {
+    if (!prepared) return { full: true, reason: "no source file to cut" };
+    return buildPacket({ prepared, source: { buffer, mime, filename }, plans: indices.map((i) => stored[i]), numpages, exactRows });
+  };
+
+  const runModel = async (provider, who) => {
+    // A proposal that fits in one batch: one call does both jobs.
+    if (batches.length === 1) {
+      const indices = batches[0];
+      const key = combinedKey(docKey, batchKeys[0]);
+      const prev = saved[`${provider}:doc`];
+      const range = { from: indices[0], to: indices[indices.length - 1] };
+      if (prev && prev.key === key) return composeModel(who, { ...shapeDoc(who, prev.answer, stored), reused: true }, [{ ...shape(who, prev.answer, stored, indices), ...range, source: { full: true }, reused: true }], stored.length);
+      try {
+        const r = await answer({ who, provider, kind: "combined", batch: 0, indices, packet: { full: true }, payload: docPayload(stored, version, sourceSha, extracted, true) });
+        await save(`${provider}:doc`, { key, combined: true, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r, source: { full: true } });
+        return composeModel(who, shapeDoc(who, r, stored), [{ ...shape(who, r, stored, indices), ...range, source: { full: true } }], stored.length);
+      } catch (e) {
+        return composeModel(who, { model: who, verdict: "error", mismatches: [], notes: `Audit: ${e.message}` }, [], stored.length);
+      }
+    }
+    // 1. The document-level reconciliation.
+    let docPart;
+    const prevDoc = saved[`${provider}:doc`];
+    if (prevDoc && prevDoc.key === docKey) docPart = { ...shapeDoc(who, prevDoc.answer, stored), reused: true };
+    else {
+      try {
+        const r = await answer({ who, provider, kind: "doc", indices: stored.map((_, i) => i), packet: { full: true }, payload: docPayload(stored, version, sourceSha, extracted) });
+        await save(`${provider}:doc`, { key: docKey, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r });
+        docPart = shapeDoc(who, r, stored);
+      } catch (e) {
+        return composeModel(who, { model: who, verdict: "error", mismatches: [], notes: `Document reconciliation: ${e.message}` }, [], stored.length);
+      }
+    }
+    // 2. Every field batch, each from its targeted packet.
+    const parts = [];
+    for (const [b, indices] of batches.entries()) {
+      const id = `${provider}:batch:${b}`;
+      const prev = saved[id];
+      const range = { from: indices[0], to: indices[indices.length - 1] };
+      if (prev && prev.key === batchKeys[b]) {
+        parts.push({ ...shape(who, prev.answer, stored, indices), ...range, source: prev.source || null, reused: true });
+        continue;
+      }
+      try {
+        let packet = await packetFor(indices);
+        let r = await answer({ who, provider, kind: "batch", batch: b, indices, packet, payload: fieldPayload(stored, indices, version, sourceSha, b, batches.length, packet.full ? null : packet.note || `pages ${packetDescribe(packet)} of the ${packet.of}-page proposal, in that order (original page numbers).`) });
+        let part = shape(who, r, stored, indices);
+        // A packet that did not hold everything - the auditor says so, or a
+        // listed plan was not found in it, or a plan came back unconfirmed -
+        // is never taken as a finding: the batch is read against the whole
+        // source instead. Accuracy first.
+        const short = !packet.full && (r.insufficient_context === true || part.confirmed < indices.length || (r.plan_confirmations || []).some((c) => c && (c.on_document === false || c.benefits_belong === false)));
+        if (short) {
+          packet = { full: true, reason: r.insufficient_context ? "the auditor said the packet lacked context" : "a plan was not found in the packet" };
+          r = await answer({ who, provider, kind: "batch", batch: b, indices, packet, payload: fieldPayload(stored, indices, version, sourceSha, b, batches.length, null) });
+          part = shape(who, r, stored, indices);
+        }
+        const source = packet.full ? { full: true, reason: packet.reason || null } : { full: false, pages: packet.pages || null, sheets: packet.sheets || null, lines: packet.lines || null };
+        await save(id, { key: batchKeys[b], indices, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r, source });
+        parts.push({ ...part, ...range, source });
+      } catch (e) {
+        parts.push({ model: who, verdict: "error", confirmed: 0, mismatches: [], notes: `Batch ${b + 1} of ${batches.length}: ${e.message}`, ...range });
+        // A failed job stops this model; every job done so far is saved and
+        // the next run starts at this one.
+        break;
+      }
+    }
+    return composeModel(who, docPart, parts, stored.length);
+  };
+
+  const claudeOn = transport || read || canned || apiKey() || process.env.ANTHROPIC_AUTH_TOKEN;
+  const openaiOn = transport || read || canned || chatgptKey();
+  const label = (p) => (transport || read ? `${p === "claude" ? "Claude" : "ChatGPT"} (test)` : canned ? `${p === "claude" ? "Claude" : "ChatGPT"} (canned)` : p === "claude" ? `Claude (${CLAUDE_MODEL})` : `ChatGPT (${CHATGPT_MODEL()})`);
+  const models = await Promise.all([
+    claudeOn ? runModel("claude", label("claude")) : Promise.resolve({ model: "Claude", verdict: "off", mismatches: [], notes: "No Anthropic key." }),
+    openaiOn ? runModel("openai", label("openai")) : Promise.resolve({ model: "ChatGPT", verdict: "off", mismatches: [], notes: "No ChatGPT key." }),
+  ]);
   const mismatches = models.flatMap((m) => (m.mismatches || []).map((x) => ({ ...x, by: m.model })));
-  // The plan count, held to the database by each model that gave one.
+  // The plan count, held to the database by each model's document job.
   for (const m of models) {
     if (m.documentPlanCount != null && m.documentPlanCount !== storedCount) {
       mismatches.push({ plan: "(whole document)", field: "plan_count", stored: String(storedCount), onDocument: `${m.documentPlanCount} (${m.plansFoundTotal ?? "?"} found, ${m.epoExcluded ?? "?"} of them EPO)`, by: m.model });
@@ -490,16 +847,20 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   }
   const both = models.length === 2 && models.every((m) => m.verdict === "pass");
   const status = mismatches.length ? "issues" : both ? "pass" : "pending";
-  const notes = models
-    .filter((m) => m.notes)
-    .map((m) => `${m.model}: ${m.notes}`)
-    .join(" ");
+  const notes = models.filter((m) => m.notes).map((m) => `${m.model}: ${m.notes}`).join(" ");
   const counts = { stored: storedCount };
   for (const m of models) {
     const k = /^claude/i.test(m.model) ? "claude" : "chatgpt";
     counts[k] = { appearances: m.planAppearances ?? null, found: m.plansFoundTotal ?? null, epoExcluded: m.epoExcluded ?? null, expected: m.documentPlanCount ?? null };
   }
-  return { completedAt, status, models, mismatches, notes, version, sourceSha, standard: AUDIT_STANDARD, batches: batches.length, counts, documentPlanCount: both && !mismatches.length ? storedCount : null };
+  return { completedAt, status, models, mismatches, notes, version, sourceSha, standard: AUDIT_STANDARD, batches: batches.length, counts, documentPlanCount: both && !mismatches.length ? storedCount : null, jobs: saved };
+}
+
+/** Pages in a PDF: pdf-parse, else pdf-lib (an encrypted carrier quote pdf-parse cannot open). */
+async function countPages(buf) {
+  const viaParse = await pdfParse(buf).then((r) => r.numpages || 0).catch(() => 0);
+  if (viaParse) return viaParse;
+  return PDFDocument.load(buf, { ignoreEncryption: true, updateMetadata: false }).then((d) => d.getPageCount()).catch(() => 0);
 }
 
 /**
@@ -596,64 +957,68 @@ Each finding names the stored plan by its index (where it concerns one plan), th
 
 ${FIELD_GUIDE}`;
 
-/** A PDF holding just these pages of `buffer`, in order. */
-async function excerptPdf(buffer, pages) {
-  const src = await PDFDocument.load(buffer);
-  const doc = await PDFDocument.create();
-  const copied = await doc.copyPages(src, pages.map((n) => n - 1));
-  for (const pg of copied) doc.addPage(pg);
-  return Buffer.from(await doc.save());
-}
-
 /**
- * Ask Claude to settle findings against the document. `pages`, when given,
- * are the original page numbers the findings concern (the affected plans'
- * source pages): only those pages are sent - a targeted correction, not the
- * whole 50-page PDF for one field. Without them (a missing plan, a count
- * problem, a duplicate - anything structural) the whole document is sent.
- * The answer's page positions are mapped back to original pages (`_pageMap`).
+ * Ask Claude to settle findings against the document. `targetIndices`, when
+ * given, are the stored plans the findings concern: only the source those
+ * plans are cited on is sent (a targeted packet - PDF pages with header
+ * context, or a parser-read workbook's sheet rows; server/audit-packets.js),
+ * not the whole proposal for one field. `pages` (older callers) names PDF
+ * pages directly. Without either - a missing plan, a count problem, a
+ * duplicate, anything structural - or when a packet cannot be shown to be
+ * complete, the whole document is sent. The answer's page positions are
+ * mapped back to original pages (`_pageMap`).
  */
-export async function correctProposal({ filename, mime, buffer, extracted, mismatches, missingRates, conflicts = [], pages = null }) {
-  if (fakeAi()) return { document_plan_count: offeredCount(extracted), fixes: [], add: [], remove: [], unpriced: [], notes: "Canned correction (KENNION_FAKE_AI).", _pageMap: null };
+export async function correctProposal({ filename, mime, buffer, extracted, mismatches, missingRates, conflicts = [], pages = null, targetIndices = null }) {
+  if (fakeAi()) return { document_plan_count: offeredCount(extracted), fixes: [], add: [], remove: [], unpriced: [], notes: "Canned correction (KENNION_FAKE_AI).", _pageMap: null, _source: { full: true, reason: "canned" } };
   const prepared = await prepareForModel({ filename, mime, buffer });
-  const client = apiKey() ? new Anthropic({ apiKey: apiKey(), maxRetries: 3, timeout: 10 * 60 * 1000 }) : new Anthropic({ maxRetries: 3, timeout: 10 * 60 * 1000 });
-  const content = [];
-  let pageMap = null;
-  if (prepared.kind === "pdf") {
-    let buf = prepared.buffer;
-    if (Array.isArray(pages) && pages.length) {
-      try {
-        buf = await excerptPdf(prepared.buffer, pages);
-        pageMap = pages;
-      } catch {
-        buf = prepared.buffer;
-        pageMap = null;
-      }
+  const client = anthropicClient();
+  const stored = storedFor(extracted);
+  const numbered = stored.map((pl, index) => ({ index, ...pl }));
+  let packet = { full: true, reason: "structural findings need the whole document" };
+  const numpages = prepared.kind === "pdf" ? await countPages(prepared.buffer) : null;
+  if (Array.isArray(targetIndices) && targetIndices.length) {
+    packet = await buildPacket({ prepared, source: { buffer, mime, filename }, plans: targetIndices.map((i) => stored[i]).filter(Boolean), numpages, exactRows: !!(extracted && extracted.extraction && extracted.extraction.method === "parser") });
+  } else if (prepared.kind === "pdf" && Array.isArray(pages) && pages.length) {
+    try {
+      const { excerptPdf } = await import("./audit-packets.js");
+      packet = { full: false, kind: "pdf", buffer: await excerptPdf(prepared.buffer, pages), pages, of: numpages };
+    } catch (e) {
+      packet = { full: true, reason: `the PDF cannot be cut into pages (${e.message.slice(0, 60)})` };
     }
-    content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") }, title: filename });
-  } else if (prepared.kind === "image") content.push({ type: "image", source: { type: "base64", media_type: prepared.mime, data: prepared.buffer.toString("base64") } });
-  else content.push({ type: "document", source: { type: "text", media_type: "text/plain", data: prepared.text || "(empty)" }, title: filename });
-  const numbered = storedFor(extracted).map((pl, index) => ({ index, ...pl }));
-  content.push({
-    type: "text",
-    text: [
-      pageMap ? `This file holds only pages ${pageMap.join(", ")} of the proposal - the pages the findings concern - in that order. Page positions in your answer are positions within this file.` : "This is the whole proposal.",
-      `The stored plans:\n${JSON.stringify(numbered, null, 1)}`,
-      `The auditors' findings:\n${JSON.stringify(mismatches || [], null, 1)}`,
-      `Conflicts between two appearances of the same plan (settle each from the plan's own table):\n${JSON.stringify(conflicts || [], null, 1)}`,
-      `Tier rates the portal is missing (index, tier):\n${JSON.stringify(missingRates || [])}`,
-      "Correct the stored reading against the document.",
-    ].join("\n\n"),
-  });
-  const response = await client.messages
-    .stream({
-      model: CLAUDE_MODEL,
-      max_tokens: 128000,
-      output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
-      system: CORRECTION_INSTRUCTIONS,
-      messages: [{ role: "user", content }],
-    })
-    .finalMessage();
+  }
+  const pageMap = !packet.full && packet.kind === "pdf" ? packet.pages : null;
+  const content = [
+    claudeSource(filename, prepared, packet),
+    {
+      type: "text",
+      text: [
+        pageMap ? `This file holds only pages ${pageMap.join(", ")} of the proposal - the pages the findings concern, with their headers - in that order. Page positions in your answer are positions within this file.` : !packet.full ? `This is a packet of the proposal: ${packet.note}` : "This is the whole proposal.",
+        `The stored plans:\n${JSON.stringify(numbered, null, 1)}`,
+        `The auditors' findings:\n${JSON.stringify(mismatches || [], null, 1)}`,
+        `Conflicts between two appearances of the same plan (settle each from the plan's own table):\n${JSON.stringify(conflicts || [], null, 1)}`,
+        `Tier rates the portal is missing (index, tier):\n${JSON.stringify(missingRates || [])}`,
+        "Correct the stored reading against the document.",
+      ].join("\n\n"),
+    },
+  ];
+  const started = Date.now();
+  const meta = { plansInBatch: Array.isArray(targetIndices) ? targetIndices.length : stored.length, source: sourceSent(prepared, packet, numpages) };
+  let response;
+  try {
+    response = await client.messages
+      .stream({
+        model: CLAUDE_MODEL,
+        max_tokens: 128000,
+        output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
+        system: [withCache({ type: "text", text: CORRECTION_INSTRUCTIONS })],
+        messages: [{ role: "user", content }],
+      })
+      .finalMessage();
+  } catch (e) {
+    recordUsage({ purpose: "correction", provider: "anthropic", model: CLAUDE_MODEL, durationMs: Date.now() - started, ok: false, error: e.message, ...meta });
+    throw e;
+  }
+  recordUsage({ purpose: "correction", provider: "anthropic", model: CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
   if (response.stop_reason === "refusal") throw new Error("Claude declined the correction.");
   if (response.stop_reason === "max_tokens") throw new Error("The correction was too long for one answer.");
   const text = response.content
@@ -662,7 +1027,7 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
     .join("");
   const out = JSON.parse(text);
   if (!out || !Array.isArray(out.fixes)) throw new Error("Could not read the correction.");
-  return { ...out, _pageMap: pageMap };
+  return { ...out, _pageMap: pageMap, _source: meta.source };
 }
 
 const moneyNumber = (v) => {

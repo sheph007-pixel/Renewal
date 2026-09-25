@@ -429,15 +429,33 @@ both auditors and the corrector how to read each field (in-network;
 deductible individual then family; Rx retail tiers in order), so they
 compare like with like.
 
-A proposal with more than 25 stored plans is audited in **deterministic
-batches** (`AUDIT_BATCH`: plans 0-24, 25-49, … by stored index), each batch
-against the whole document, run in order per model with the document
-prompt-cached. Every plan is in exactly one batch for each model; every
-batch names the same reading version and document hash; the audit passes
-only when every batch from both models came back complete and clean. A
-missing plan or a failed batch leaves the model incomplete, so the audit is
-**pending**, never a pass. Document-level findings (a plan the list lacks)
-are counted once per auditor, not once per batch.
+Each model's audit is two kinds of job:
+- **One document-level reconciliation**, the only call that reads the
+  complete source. It counts the plans and lists:
+  - stored plans that aren't on the document;
+  - plans on the document that aren't stored;
+  - a plan stored twice;
+  - a plan printed twice with different values;
+  - unreadable pages.
+- **Plan field audits**, in deterministic 25-plan batches (`AUDIT_BATCH`;
+  every plan in exactly one batch per model). Each batch reads a
+  **targeted packet** (`server/audit-packets.js`), not the whole document:
+  - for a PDF, the pages its plans are cited on plus header context;
+  - for a Gravie workbook, its sheet rows;
+  - otherwise, the full source whenever a packet can't be shown to be
+    complete.
+
+A proposal that fits in one batch runs both jobs as one full-source call.
+
+Every job is saved as it finishes (`kennion.proposal_audit_jobs`), keyed to
+the exact source SHA, audit standard and the stored data it covers. So a
+retry, restart or correction re-runs only the jobs whose inputs changed.
+
+The audit passes only when both models' reconciliation and every batch came
+back complete and clean. A missing plan or a failed job leaves the audit
+**pending**, never a pass. Full design: `docs/proposal-pipeline.md` (step 5).
+
+Every model call is recorded in `kennion.ai_usage` (`GET /api/admin/ai-usage`).
 
 The audit **passes** only when both models ran, both returned every plan in
 every batch, every compared field agrees, both counts equal the database,

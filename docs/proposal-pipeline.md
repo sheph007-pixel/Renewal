@@ -141,13 +141,46 @@ Each proposal also carries its `slot`, `carrier`, `funding` and `verified`.
    database. Formatting is normalized for the comparison only ($1,500 = 1500);
    stored values are never rewritten.
 
-   Proposals with more than 25 plans are audited in deterministic batches of
-   25 (every plan exactly once per model, all tied to the same reading and
-   file hash). A missing or failed batch means Pending, never Verified. Each
-   audit records `standard: 2`; an older rates-only audit is re-audited.
-6. **Correct** (only when something fails). Claude re-reads just the pages
-   involved (findings name the plan's index) and returns fixes with page
-   references.
+   Each model's audit is two kinds of job:
+   - **Document-level reconciliation** (once per model per version, the
+     complete source): the plan count, stored plans not on the document,
+     plans on the document not stored, a plan stored twice, a plan printed
+     twice with different values, unreadable pages. This is the only job that
+     reads the whole document.
+   - **Plan field audits**, one per deterministic batch of 25 stored plans
+     (every plan exactly once per model). Each reads a **targeted packet**
+     (`server/audit-packets.js`), never the whole document again:
+     - a PDF: only the pages the batch's plans are cited on (identity,
+       benefit and rate pages, each once), plus page 1 and the page before
+       each run of cited pages (continued table headers), original page
+       numbers named in the instructions;
+     - a Gravie (parser-read) workbook: only the batch's sheet(s), their
+       header rows and the plans' own rows, each labelled with its Excel row
+       number, cells as the workbook holds them (never the Benefits Grid);
+     - an AI-read workbook: only the cited sheets, whole;
+     - an AI-read CSV / text file, an image, an encrypted PDF, a plan with
+       no provenance, or a packet that would be 80%+ of the document: the
+       **full source**.
+     If an auditor says a packet lacked context, or a plan in it cannot be
+     found or confirmed, that batch is read again against the full source -
+     never taken as a finding.
+   - A proposal that fits in one batch runs both jobs as **one combined
+     full-source call** per model.
+
+   Every job is saved as it completes (`kennion.proposal_audit_jobs`), keyed
+   to the exact source SHA, audit standard and the stored data it covers
+   (the document job: the plans' identities and the coverage record; a
+   batch: its plans' values and provenance). A retry, a restart, a deploy or
+   a correction re-runs only jobs whose key no longer matches: a failed
+   batch 4 re-runs batch 4; an OpenAI failure never re-runs Claude; a
+   corrected rate re-runs that plan's batch (both models) and nothing else; a
+   renamed, added or removed plan re-runs the document reconciliation too.
+   A missing or failed job means Pending, never Verified. Each audit records
+   `standard: 2`.
+6. **Correct** (only when something fails). Claude reads a targeted packet
+   of the plans the findings name (the same packet rules as the field
+   audits; the whole document for anything structural - a missing, extra or
+   duplicated plan, a count problem) and returns fixes with page references.
    - The fixes are applied and logged in `corrections[]`.
    - An "added" plan already stored under the same identity is not added
      twice.
@@ -225,11 +258,48 @@ plan selection.
   that the carrier prints one plan name for several plan codes.
 - `DELETE /api/admin/proposals/:id`: removes a proposal and everything read
   from it.
+- `GET /api/admin/proposals/:id/audit-progress`: which audit jobs are done
+  and still valid, and the next one ("Claude batch 3 of 7").
+- `GET /api/admin/ai-usage?proposal=ID` (or `?since=ISO`): every model call
+  with its purpose, requested and served model, source sent, tokens (input,
+  cache writes, cache reads, output), duration, retries and outcome, with
+  totals by purpose and by model.
+
+### API usage telemetry
+
+Every model call is recorded in `kennion.ai_usage` (`server/ai-usage.js`):
+proposal ID, group, slot, source SHA, reading version, audit standard,
+purpose, provider, requested and served model, batch, plans in the batch,
+the pages / sheets / rows / lines sent, input tokens, cache-write and
+cache-read tokens, output tokens, an estimated cost where the model's price
+is known, duration, retries, and success. Purposes:
+- `extraction`, `source-map`
+- `document-reconciliation-claude|openai`
+- `document-and-field-audit-claude|openai` (a one-batch proposal)
+- `plan-audit-claude|openai`, `fallback-full-read-claude|openai`
+- `correction`
+- `admin-explain-*` (the Opus write-ups on the Data Check pages)
+
+Costs are left null for models with no built-in price; set
+`KENNION_MODEL_PRICES` (JSON, per million tokens) to price them.
+
+### Prompt caching
+
+The auditor and correction system prompts, and every full-source block, are
+cached with the 1-hour TTL (`cache_control: { type: "ephemeral", ttl: "1h" }`).
+Packets are never cached, because each is read once. Cache entries are keyed
+by the exact bytes, so a new file (a new source SHA) can never read an old
+entry. `KENNION_SOURCE_CACHE_TTL=5m|off` changes the TTL if telemetry shows
+full sources are mostly read once. A 1-hour write costs 2x input, so it
+pays off only at three or more reads within the hour.
 
 ## 7. Models
 
 - **Extraction, Claude audit and correction:** `claude-sonnet-5` (Anthropic
-  SDK, streaming, structured JSON output).
+  SDK, streaming, structured JSON output). Extraction sends
+  `fallbacks: "default"`: a read Sonnet's safety classifier declines is
+  re-run server-side on Anthropic's fallback model (Claude Opus). The usage
+  record and a log line name the model that actually served each read.
 - **Second auditor:** OpenAI `gpt-5`.
 - The UI says "Verified" / "Dual Audit Passed", never "100% accurate". Two
   independent audits sharply reduce the risk of an error; they are not a
@@ -247,6 +317,9 @@ The main tests for this pipeline, in `scripts/`:
 - `test-proposal-delete.mjs`
 - `test-proposal-audit.mjs`
 - `test-field-audit.mjs` (field-by-field comparison, batching)
+- `test-audit-cost.mjs` (one document reconciliation per model, targeted packets, every plan once per model, resumable and versioned jobs, full-source fallback, 1h cache, telemetry)
+- `test-schema-limits.mjs` (every schema sent to Anthropic within 16 union-typed parameters)
+- `node scripts/audit-cost-estimate.mjs [--db]`: source pages sent before and after, for representative or real proposals
 - `test-shared-names.mjs` (one name on two codes: flag, review, confirm)
 - `test-option-ids-reread.mjs`
 - `test-source-coverage.mjs` (CSV sections, workbook sheets, truncation, Gravie sheets, the coverage check)

@@ -351,6 +351,49 @@ CREATE TABLE IF NOT EXISTS kennion.proposal_slot_visibility (
   updated_at     timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (group_name, slot)
 );
+-- Every completed proposal-audit job (a model's document reconciliation or
+-- one field batch), keyed to the exact source, standard and stored data it
+-- covers: an audit resumes at the first job missing, and never pays twice
+-- for work whose inputs have not changed.
+CREATE TABLE IF NOT EXISTS kennion.proposal_audit_jobs (
+  proposal_id  bigint NOT NULL REFERENCES kennion.proposals(id) ON DELETE CASCADE,
+  job          text NOT NULL,
+  job_key      text NOT NULL,
+  data         jsonb NOT NULL,
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (proposal_id, job)
+);
+-- One row per model call: what it was for, which model served it, how much
+-- source was sent, and its tokens (input, cache writes, cache reads, output).
+CREATE TABLE IF NOT EXISTS kennion.ai_usage (
+  id               bigserial PRIMARY KEY,
+  at               timestamptz NOT NULL DEFAULT now(),
+  proposal_id      bigint,
+  group_name       text,
+  slot             text,
+  source_sha       text,
+  reading_version  text,
+  audit_standard   integer,
+  purpose          text NOT NULL,
+  provider         text,
+  model            text,
+  served_model     text,
+  batch            integer,
+  plans_in_batch   integer,
+  source           jsonb,
+  input_tokens     integer NOT NULL DEFAULT 0,
+  cache_write_tokens integer NOT NULL DEFAULT 0,
+  cache_write_1h_tokens integer NOT NULL DEFAULT 0,
+  cache_read_tokens integer NOT NULL DEFAULT 0,
+  output_tokens    integer NOT NULL DEFAULT 0,
+  cost_usd         numeric,
+  duration_ms      integer,
+  retries          integer NOT NULL DEFAULT 0,
+  ok               boolean NOT NULL DEFAULT true,
+  error            text
+);
+CREATE INDEX IF NOT EXISTS ai_usage_proposal_idx ON kennion.ai_usage (proposal_id, at);
+CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON kennion.ai_usage (at);
 CREATE TABLE IF NOT EXISTS kennion.carrier_quotes (
   id             bigserial PRIMARY KEY,
   carrier        text NOT NULL,
@@ -717,6 +760,54 @@ export function createDb(url) {
         [email],
       );
       return rows[0] || null;
+    },
+
+    /** A proposal's saved audit jobs: { "<model>:doc" | "<model>:batch:<n>": { key, ...data } }. */
+    async listAuditJobs(proposalId) {
+      const { rows } = await pool.query("SELECT job, job_key, data FROM kennion.proposal_audit_jobs WHERE proposal_id = $1", [proposalId]);
+      return Object.fromEntries(rows.map((r) => [r.job, { ...r.data, key: r.job_key }]));
+    },
+
+    /** Save (or replace) one completed audit job. */
+    async saveAuditJob(proposalId, job, data) {
+      await pool.query(
+        `INSERT INTO kennion.proposal_audit_jobs (proposal_id, job, job_key, data, updated_at) VALUES ($1, $2, $3, $4, now())
+         ON CONFLICT (proposal_id, job) DO UPDATE SET job_key = EXCLUDED.job_key, data = EXCLUDED.data, updated_at = now()`,
+        [proposalId, job, data.key, JSON.stringify(data)],
+      );
+    },
+
+    /** One model call's usage record. */
+    async recordAiUsage(r) {
+      await pool.query(
+        `INSERT INTO kennion.ai_usage (at, proposal_id, group_name, slot, source_sha, reading_version, audit_standard, purpose, provider, model, served_model, batch, plans_in_batch, source,
+           input_tokens, cache_write_tokens, cache_write_1h_tokens, cache_read_tokens, output_tokens, cost_usd, duration_ms, retries, ok, error)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+        [r.at, r.proposalId, r.groupName, r.slot, r.sourceSha, r.readingVersion, r.auditStandard, r.purpose, r.provider, r.model, r.servedModel, r.batch, r.plansInBatch, r.source ? JSON.stringify(r.source) : null,
+          r.inputTokens, r.cacheWriteTokens, r.cacheWrite1hTokens, r.cacheReadTokens, r.outputTokens, r.costUsd, r.durationMs, r.retries, r.ok, r.error],
+      );
+    },
+
+    /** Usage records, newest first: for one proposal, or since a time. */
+    async listAiUsage({ proposalId = null, since = null, limit = 2000 } = {}) {
+      const where = [];
+      const args = [];
+      if (proposalId != null) {
+        args.push(proposalId);
+        where.push(`proposal_id = $${args.length}`);
+      }
+      if (since) {
+        args.push(since);
+        where.push(`at >= $${args.length}`);
+      }
+      args.push(Math.min(Number(limit) || 2000, 10000));
+      const { rows } = await pool.query(`SELECT * FROM kennion.ai_usage ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY at DESC LIMIT $${args.length}`, args);
+      return rows.map((r) => ({
+        at: r.at, proposalId: r.proposal_id == null ? null : Number(r.proposal_id), groupName: r.group_name, slot: r.slot, sourceSha: r.source_sha, readingVersion: r.reading_version, auditStandard: r.audit_standard,
+        purpose: r.purpose, provider: r.provider, model: r.model, servedModel: r.served_model, batch: r.batch, plansInBatch: r.plans_in_batch, source: r.source,
+        inputTokens: r.input_tokens, cacheWriteTokens: r.cache_write_tokens, cacheWrite1hTokens: r.cache_write_1h_tokens, cacheReadTokens: r.cache_read_tokens, outputTokens: r.output_tokens,
+        costUsd: r.cost_usd == null ? null : Number(r.cost_usd), durationMs: r.duration_ms, retries: r.retries, ok: r.ok, error: r.error,
+      }));
     },
 
     /** Every proposal-slot visibility Kennion has set: [{ groupName, slot, clientEnabled, updatedBy, updatedAt }]. */

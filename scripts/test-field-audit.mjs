@@ -78,7 +78,18 @@ const docRead = (i) => {
 };
 const answer = ({ skip = null, fail = null, reading = extracted } = {}) => async (who, payload, indices) => {
   const key = /^claude/i.test(who) ? "Claude" : "ChatGPT";
+  // The document-level reconciliation (the whole list, no field values) is
+  // one call per model; the field batches read values.
+  if (!indices.length) {
+    asked[key].push("doc");
+    assert.match(payload, /DOCUMENT-LEVEL RECONCILIATION/);
+    const told = JSON.parse(payload.split("The list (locators only):\n")[1]);
+    assert.equal(told.length, N, "the document job is given every stored plan to find");
+    assert.deepEqual(Object.keys(told[0]).sort(), ["id", "index", "name", "network", "plan_code", "plan_type", "source_pages"], "locators only - never a stored value");
+    return { verdict: "pass", plan_appearances: N * 2, plans_found_total: N, epo_excluded: 0, document_plan_count: N, duplicates_found: false, plan_confirmations: [], mismatches: [], notes: "" };
+  }
   asked[key].push(indices);
+  assert.doesNotMatch(payload, /Count the plans on the document/, "a field batch never recounts the whole document");
   const told = JSON.parse(payload.split("The plans to find and read:\n")[1].split("\n\nRead every")[0]);
   assert.deepEqual(Object.keys(told[0]).sort(), ["id", "index", "name", "network", "plan_code", "plan_type", "source_pages"], "the auditor is told where to find each plan, never its stored values");
   assert.match(payload, new RegExp(`reading ${readingVersion(reading)}`), "every batch names the same reading");
@@ -86,8 +97,8 @@ const answer = ({ skip = null, fail = null, reading = extracted } = {}) => async
   return { verdict: "pass", plan_appearances: N * 2, plans_found_total: N, epo_excluded: 0, document_plan_count: N, duplicates_found: false, plan_confirmations: indices.filter((i) => i !== skip).map(docRead), mismatches: [], notes: "" };
 };
 let a = await auditProposal({ filename: "big.pdf", mime: "application/pdf", buffer: Buffer.from(""), extracted, sourceSha: "sha-big", read: answer() });
-assert.deepEqual(asked.Claude, auditBatches(N), "Claude saw every plan exactly once, in order");
-assert.deepEqual(asked.ChatGPT, auditBatches(N), "ChatGPT too");
+assert.deepEqual(asked.Claude, ["doc", ...auditBatches(N)], "Claude: one document reconciliation, then every plan exactly once, in order");
+assert.deepEqual(asked.ChatGPT, ["doc", ...auditBatches(N)], "ChatGPT too");
 assert.equal(a.standard, AUDIT_STANDARD);
 assert.equal(a.batches, 3);
 assert.equal(a.sourceSha, "sha-big");
@@ -113,11 +124,11 @@ a = await auditProposal({ filename: "big.pdf", mime: "application/pdf", buffer: 
 assert.equal(a.status, "pending", "a failed batch is never a pass");
 assert.ok(a.models.every((m) => m.verdict === "error" && /Batch 2 of 3: rate limited/.test(m.notes)));
 
-// A plan the list lacks, reported by every batch (each reads the whole document), is one finding per auditor.
+// A plan the list lacks - reported by the document reconciliation - is one finding per auditor.
 const extra = (who, payload, indices) => ({ verdict: "issues", plan_appearances: N * 2, plans_found_total: N + 1, epo_excluded: 0, document_plan_count: N + 1, duplicates_found: false, plan_confirmations: indices.map(docRead).map((r) => (r.index === 52 ? { ...r, specialist: "$65" } : r)), mismatches: [{ plan: "Plan X", field: "extra_plan", stored: "not stored", on_document: "Plan X" }], notes: "" });
 a = await auditProposal({ filename: "big.pdf", mime: "application/pdf", buffer: Buffer.from(""), extracted: good, sourceSha: "sha-big", read: extra });
 assert.equal(a.status, "issues");
-assert.equal(a.mismatches.filter((m) => m.field === "extra_plan").length, 2, "one per auditor, not one per batch");
+assert.equal(a.mismatches.filter((m) => m.field === "extra_plan").length, 2, "one per auditor");
 assert.equal(a.mismatches.filter((m) => m.field === "plan_count").length, 2, "and the count held to the database once per auditor");
 
 console.log("field audit: every client-facing field read by each auditor and compared in code, formatting normalized for comparison only, large proposals audited in batches - every plan once per model, pending unless every batch passes - ok");
