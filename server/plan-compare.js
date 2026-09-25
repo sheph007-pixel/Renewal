@@ -46,8 +46,14 @@ export const AUDIT_STANDARD = 2;
  *    its inpatient and outpatient parts ("OP Ded+$750, IP Ded+$1500"), the
  *    inpatient part is what is compared; a part repeated word for word
  *    ("Ded+100%, Ded+100%") is one part.
+ * 6: imaging is advanced imaging (MRI, CT, PET), as a Summary of Benefits
+ *    prints it: where a value labels its parts, the advanced-imaging part
+ *    ("Maj Diag", "MRI/CT") is compared, not labs or X-ray. Optimyl's plan
+ *    numbers: the fixed code "OPTIMYL PLAN 1" is the printed "1", and a plan
+ *    the document names nothing is stored under the fixed label "Optimyl
+ *    Plan 1".
  */
-export const COMPARE_VERSION = 5;
+export const COMPARE_VERSION = 6;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -198,8 +204,17 @@ const onceEach = (v) => {
   return repeated ? out.join(", ") : String(v ?? "");
 };
 
+const ADVANCED_IMAGING = /\b(?:mri|ct|pet|advanced|high[- ]?tech|maj(?:or)?\.?\s*diag\w*|md)\b/i;
+/** The advanced-imaging part of an imaging value that labels its parts ("MRI/CT $500; Lab/X-Ray $40" -> "MRI/CT $500"); the value as is otherwise. */
+export function advancedImagingPart(v) {
+  const parts = String(v ?? "").split(/;|,(?!\d)|\s\/\s/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return String(v ?? "");
+  const adv = parts.filter((p) => ADVANCED_IMAGING.test(p));
+  return adv.length && adv.length < parts.length ? adv.join("; ") : String(v ?? "");
+}
+
 export function sameBenefit(a, b, field = null) {
-  const prep = (v) => (field === "rx" ? retailRx(v) : onceEach(field === "hospital" ? inpatientPart(v) : v));
+  const prep = (v) => (field === "rx" ? retailRx(v) : onceEach(field === "hospital" ? inpatientPart(v) : field === "imaging" ? advancedImagingPart(v) : v));
   const pa = prep(a);
   const pb = prep(b);
   const fa = figures(pa);
@@ -276,11 +291,26 @@ const sameRate = (a, b) => (a == null && b == null) || (a != null && b != null &
  *    document states them for the plan; a value the document states that the
  *    database lacks is a disagreement (the client would see a blank).
  */
+/** Optimyl's fixed plan code "OPTIMYL PLAN <n>" -> n; null for any other code. */
+export const optimylNumber = (code) => {
+  const m = /^OPTIMYL PLAN (\d+)$/i.exec(String(code || "").trim());
+  return m ? Number(m[1]) : null;
+};
+/** The fixed name an Optimyl plan is stored under: its proposal prints a plan number and no name. */
+export const optimylLabel = (n) => `Optimyl Plan ${n}`;
+
 export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS } = {}) {
   const out = [];
   const diff = (field, st, doc) => out.push({ field, stored: st == null ? "" : String(st), onDocument: doc == null || String(doc) === "" ? "not stated" : String(doc) });
-  if (nameForCompare(stored.name) !== nameForCompare(read.name)) diff("name", stored.name, read.name);
-  if (normCode(stored.plan_code) !== normCode(read.plan_code)) diff("plan_code", stored.plan_code, read.plan_code);
+  const optimylNo = optimylNumber(stored.plan_code);
+  // Optimyl prints only a plan number: the fixed label "Optimyl Plan <n>" is
+  // the name when the document names nothing, and "OPTIMYL PLAN <n>" is the
+  // printed "<n>".
+  const optimylUnnamed = optimylNo != null && blank(read.name) && nameForCompare(stored.name) === nameForCompare(optimylLabel(optimylNo));
+  if (!optimylUnnamed && nameForCompare(stored.name) !== nameForCompare(read.name)) diff("name", stored.name, read.name);
+  const readNo = /^\s*(?:optimyl\s+)?(?:plan\s*)?#?\s*(\d+)\s*$/i.exec(String(read.plan_code ?? ""));
+  const optimylCode = optimylNo != null && readNo && Number(readNo[1]) === optimylNo;
+  if (!optimylCode && normCode(stored.plan_code) !== normCode(read.plan_code)) diff("plan_code", stored.plan_code, read.plan_code);
   if (!blank(read.network) && !blank(stored.network) && !sameNetwork(stored.network, read.network)) diff("network", stored.network, read.network);
   for (const f of ["deductible", "oop_max"]) {
     const st = stored[f];

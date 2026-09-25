@@ -252,7 +252,7 @@ const SCHEMA = {
               coinsurance: { type: "string", description: "The plan's in-network coinsurance, e.g. \"20%\" or \"0%\"." },
               hsa_eligible: { type: "string", description: "\"yes\" only when the document itself states the plan is HSA-eligible or HSA-qualified, \"no\" only when it states it is not, empty when it does not say. Never infer it from the plan's name, type, deductible or an \"HDHP\" label." },
               specialist: { type: "string", description: "Specialist office visit." },
-              imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
+              imaging: { type: "string", description: "Advanced imaging - MRI, CT, PET - the member's in-network cost as printed (a Summary of Benefits' \"Imaging\" row). Labs and X-ray are not imaging: leave them out." },
               urgent_care: { type: "string" },
               hospital: { type: "string", description: "Inpatient hospital stay." },
               rx: { type: "string", description: "Retail prescription drug copays or coinsurance by tier, in tier order - every tier printed, a specialty tier included (\"$10 / $40 / $80 / 20% after deductible\"); mail order left out." },

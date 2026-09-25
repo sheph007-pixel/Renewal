@@ -76,7 +76,7 @@ export const FIELD_GUIDE = `How to read each value (in-network, for this plan on
 - network: the network the plan is priced on, as printed; null when the document names none for this plan.
 - deductible, oop_max: the in-network amounts as printed, individual first and then family where both are printed (e.g. "$3,000 / $6,000").
 - coinsurance: the member's in-network coinsurance as printed (e.g. "20%", "0%").
-- doctor_visit (primary care office visit), specialist, imaging (labs, X-ray, MRI/CT), urgent_care, emergency_room, hospital (inpatient stay): the member's in-network cost as printed, short and verbatim (e.g. "$30 copay", "20% after deductible", "No charge").
+- doctor_visit (primary care office visit), specialist, imaging (advanced imaging - MRI, CT, PET - as a Summary of Benefits prints it; labs and X-ray are not imaging), urgent_care, emergency_room, hospital (inpatient stay): the member's in-network cost as printed, short and verbatim (e.g. "$30 copay", "20% after deductible", "No charge").
 - rx: the retail prescription cost by tier, in tier order, as printed - every tier the document prints, a specialty tier included (e.g. "$10 / $40 / $80 / 20% after deductible"); leave mail order out.
 - hsa_eligible: "yes" when the document says the plan is HSA-eligible / HSA-qualified, "no" when it says it is not.
 - EE, ES, EC, FAM: the monthly rate per tier (employee only, employee + spouse, employee + children, family) as a plain number, e.g. 612.45.
@@ -400,9 +400,9 @@ const FIELD_TASK = `This call is a PLAN FIELD AUDIT. For EVERY plan in the list,
 const PACKET_TASK = (note) => `The source you were given is a PACKET of the proposal: ${note} It holds the places the portal says these plans are printed, plus the headers around them. If anything needed to read a listed plan's values with certainty is not in this packet - the plan itself, its rate row, its benefit column, or a table header - set insufficient_context true instead of guessing; the plans will then be read against the whole proposal.`;
 
 /** Bumped when the document job's question changes: an older answer no longer counts. */
-export const DOC_JOB_VERSION = 2; // 2: plan IDs are plan codes; a design on two networks is two plans
+export const DOC_JOB_VERSION = 3; // 2: plan IDs are plan codes; a design on two networks is two plans. 3: imaging is MRI/CT/PET
 /** Bumped when field packets are built differently: every batch is read again. */
-export const PACKET_VERSION = 2; // 2: rx reads every tier (specialty included); plan IDs are plan codes
+export const PACKET_VERSION = 3; // 2: rx reads every tier (specialty included); plan IDs are plan codes. 3: imaging is MRI/CT/PET
 
 const hash = (v) => crypto.createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16);
 
