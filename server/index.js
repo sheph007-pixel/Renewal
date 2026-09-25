@@ -5911,15 +5911,21 @@ async function stewardPass() {
       }
       if (cleaned) await saveSteward();
       const tiersOf = new Map(groups.map((g) => [g.name, clientGroupView(g).tiers || {}]));
-      const jobs = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).map((c) => ({ c, tiers: tiersOf.get(g.group) })));
-      if (!jobs.length) break;
-      console.log(`steward: ${jobs.length} box(es) to fix`);
-      const queue = [...jobs];
+      // Group by group: each group's boxes are worked together, two groups
+      // at a time, and each group reports where it stands when it is done.
+      const byGroup = v.groups
+        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null) }))
+        .filter((x) => x.jobs.length);
+      if (!byGroup.length) break;
+      console.log(`steward: ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) to fix across ${byGroup.length} group(s)`);
+      const queue = [...byGroup];
       await Promise.all(
         Array.from({ length: Math.min(2, queue.length) }, async () => {
           while (queue.length) {
-            const j = queue.shift();
-            await stewardRepair(j.c, j.tiers).catch((e) => console.error(`steward: #${j.c.fixId}:`, e.message));
+            const { g, jobs } = queue.shift();
+            for (const c of jobs) await stewardRepair(c, tiersOf.get(g.group)).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+            const now = proposalVerification(await proposalStore.listProposals()).groups.find((x) => x.group === g.group);
+            if (now) console.log(`steward: ${g.group}: ${now.verified} of ${now.filed} verified${now.cells.filter((c) => c.state === "verified").length ? ` (${now.cells.filter((c) => c.state === "verified").map((c) => `${c.slot} ${c.plans}`).join(", ")})` : ""}`);
           }
         }),
       );

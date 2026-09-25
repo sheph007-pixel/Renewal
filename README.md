@@ -355,7 +355,8 @@ accepts. Test: `node scripts/test-option-ids.mjs`.
 
 Every proposal's stored reading is checked against the document itself by
 two models before a client is shown it (`server/proposal-audit.js`). After
-the read, Claude and ChatGPT each get the carrier's document and the stored
+the read, the audit agent's two halves - Claude Sonnet 5 and ChatGPT, two
+model families on purpose - each get the carrier's document and the stored
 plans — name, code, network, deductible, out-of-pocket max, the four tier
 rates, the benefit figures — and report every value the document
 contradicts, structured. Both must find nothing for the audit to **pass**;
@@ -460,15 +461,15 @@ a proposal of its own, and the email's subject, sender and body go along as
 context for the match; logos and signature images are skipped, and an email
 with nothing attached is read as the proposal itself. The email is kept too, so
 the original can always be opened. Each file is stored whole in Postgres
-(`kennion.proposals`) and then read by Claude (`claude-opus-5`, via the
-Anthropic SDK) in the background: the carrier, the employer named on the
+(`kennion.proposals`) and then read by the extraction agent, Claude Sonnet 5
+(`claude-sonnet-5` at high effort, via the Anthropic SDK), in the background: the carrier, the employer named on the
 document, the effective date, the carrier's own quote number, every plan with its code,
 network and tier rates, and which roster group it belongs to, with a
 confidence. A carrier quote runs to many pages and often dozens of options —
 the benchmark plans and the alternate and illustrative grids behind them are
 all read and stored, since Kennion prices from them; two plans that differ
 only by network or deductible are two plans. The reading is streamed with room
-for 64,000 tokens of output, because a long quote would otherwise be cut off
+for 128,000 tokens of output, because a long quote would otherwise be cut off
 mid-plan, and it runs at high effort. A match at 85% or better is **assigned**
 to the group; between 50% and 85% it is **suggested** and waits for a click to
 confirm; below that the proposal sits in the **to assign** queue with a group

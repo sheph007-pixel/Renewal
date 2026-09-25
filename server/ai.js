@@ -12,20 +12,15 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { PDFDocument } from "pdf-lib";
 
 /**
- * Which model reads a proposal depends on how long it is.
- *
- * Haiku is the cheapest and reads a normal quote perfectly well, but its
- * context holds 200K tokens and the API will not take a PDF over 100 pages
- * from a model that size. A carrier's full book runs past both: 100 pages of
- * rate grids weighed 255K tokens in practice. Those go to Sonnet, whose 1M
- * context swallows the whole document in one reading - still a fraction of
- * Opus, and no splitting to get the plans back in order.
+ * The extraction agent: every proposal, short or long, PDF or workbook, is
+ * read by Claude Sonnet 5 at high effort - the model for reading dense rate
+ * grids off a document into exact structured data. Its 1M context takes a
+ * carrier's whole book in one reading (100 pages of rate grids weighed 255K
+ * tokens in practice), and its 128K output holds a quote with well over a
+ * hundred plans. Haiku used to take the short ones; accuracy is the point
+ * here, not the cheapest read.
  */
-const PROPOSAL_MODEL = "claude-haiku-4-5";
-const LONG_PROPOSAL_MODEL = "claude-sonnet-5";
-
-/** Pages past which a quote is too dense for Haiku's context, measured above. */
-const HAIKU_MAX_PAGES = 30;
+const PROPOSAL_MODEL = "claude-sonnet-5";
 
 /**
  * Pages per reading on the long model. The API would take 600, but context
@@ -343,7 +338,7 @@ export async function analyzeProposal(file, roster) {
 
   // How long the quote is decides which model reads it, and whether it can be
   // read in one go at all.
-  let model = PROPOSAL_MODEL;
+  const model = PROPOSAL_MODEL;
   const partNote = (first, last, total) =>
     `\n\nThis is pages ${first}-${last} of a ${total}-page proposal, read in parts. List only the plans printed on these pages; the other parts are read separately and their plans are added to yours.`;
   const pdfContent = (buf, note) => [
@@ -399,7 +394,6 @@ export async function analyzeProposal(file, roster) {
 
   if (p.kind === "pdf") {
     const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
-    if (numpages > HAIKU_MAX_PAGES) model = LONG_PROPOSAL_MODEL;
 
     // Past what one reading on the long model holds, the document is read in
     // parts and folded back into one result rather than handed to staff to
@@ -448,15 +442,12 @@ async function readOnce(client, model, content) {
   const params = {
     model,
     // A carrier quote can list dozens of plans over many pages, and every one
-    // of them is written out here: 16k of output truncated the long ones.
-    max_tokens: 64000,
+    // of them is written out here: Sonnet 5's full 128K of output (streamed),
+    // so only a truly enormous book has to be read in parts.
+    max_tokens: 128000,
     system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    // Haiku takes no effort setting; reading rate grids off scanned pages is
-    // the intelligence-sensitive part everywhere it is accepted.
-    output_config:
-      model === PROPOSAL_MODEL
-        ? { format: rawJsonSchemaFormat(SCHEMA) }
-        : { effort: "high", format: rawJsonSchemaFormat(SCHEMA) },
+    // Reading rate grids off scanned pages is the intelligence-sensitive part.
+    output_config: { effort: "high", format: rawJsonSchemaFormat(SCHEMA) },
     messages: [{ role: "user", content }],
   };
 
