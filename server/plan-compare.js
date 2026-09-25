@@ -37,8 +37,13 @@ export const AUDIT_STANDARD = 2;
  *    "D&C (X-ray & Lab)" are "D&C"; "Ded+Coins" is "D&C"); a Gravie rate
  *    workbook read by the parser is compared on what its rate rows state -
  *    the static Benefits Grid is supplemental, never the plan's own record.
+ * 4: parts each labelled with their service may be listed in either order
+ *    ("$500 (MRI/CT); $40 (Lab/X-Ray)" = "$40 (Lab/X-Ray) / $500 (MRI, CT
+ *    Scan)"): each part is matched to one with the same figures and a
+ *    service word in common, so a figure moved to another service is caught.
+ *    Prescription tiers stay in tier order.
  */
-export const COMPARE_VERSION = 3;
+export const COMPARE_VERSION = 4;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -124,6 +129,37 @@ const wordTerms = (v) => {
   return [...new Set(s.split(/[,;]/).map((part) => term(part.trim())).filter(Boolean))].sort();
 };
 
+const LABEL_FILLER = new Set(["scan", "scans", "and", "the", "services", "service", "per", "visit"]);
+/** "$500 (MRI/CT); $40 (Lab/X-Ray)" -> [{ figs: ["500"], words: ["mri","ct"] }, ...]; null unless every part carries a label and a figure. */
+function labelledParts(v) {
+  const parts = fold(v)
+    .split(/;|\s\/\s/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  const out = [];
+  for (const p of parts) {
+    const labels = [...p.matchAll(/\(([^)]*)\)/g)].map((m) => m[1]).join(" ");
+    const figs = figures(p.replace(/\([^)]*\)/g, " "));
+    const words = labels.split(/[^a-z0-9]+/).filter((w) => w && !LABEL_FILLER.has(w));
+    if (!words.length || !figs.length) return null;
+    out.push({ figs, words });
+  }
+  return out;
+}
+function sameLabelledParts(a, b) {
+  const pa = labelledParts(a);
+  const pb = labelledParts(b);
+  if (!pa || !pb || pa.length !== pb.length) return false;
+  const used = new Set();
+  return pa.every((x) => {
+    const j = pb.findIndex((y, k) => !used.has(k) && sameList(x.figs, y.figs) && x.words.some((w) => y.words.includes(w)));
+    if (j < 0) return false;
+    used.add(j);
+    return true;
+  });
+}
+
 /**
  * Two benefit wordings agree when they state the same figures in the same
  * order, or - with no figures on either side - the same cost-sharing terms
@@ -135,6 +171,9 @@ export function sameBenefit(a, b, field = null) {
   const pb = field === "rx" ? retailRx(b) : b;
   const fa = figures(pa);
   const fb = figures(pb);
+  // Parts each labelled with their service on both sides: matched by service,
+  // in any order (and a swapped figure is caught). Otherwise figures in order.
+  if (field !== "rx" && labelledParts(pa) && labelledParts(pb)) return sameLabelledParts(pa, pb);
   if (fa.length || fb.length) return sameList(fa, fb);
   return sameList(wordTerms(pa), wordTerms(pb));
 }

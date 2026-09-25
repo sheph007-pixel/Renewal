@@ -215,7 +215,7 @@ const SCHEMA = {
           plan_code: {
             ...nullable("string"),
             description:
-              "The carrier's code for this plan where one is printed - a benefit or plan code such as \"P1000B22\" or \"MP34/MP92\". Null when the plan is named but not coded. Optimyl Health's proposal names no such code - it prints only a \"Plan Number\" row (1, 2, 3, 4) across its Proposal Summary table: for an Optimyl plan, set plan_code to \"OPTIMYL PLAN \" followed by that plan's own number, e.g. \"OPTIMYL PLAN 1\", \"OPTIMYL PLAN 4\" - this must read from the Plan Number row exactly, never invented or reordered. (The \"OPTIMYL PLAN \" prefix is Kennion's fixed form of that printed number, the one code rule of its kind.)",
+              "The carrier's code for this plan where one is printed - a benefit or plan code such as \"P1000B22\" or \"MP34/MP92\", or a plan ID the document prints for the plan however long (Angle Health prints one like \"aaa67100-1b51-5545-8956-affca4dbc6ae\"), exactly as printed. Null when the plan is named but not coded. Optimyl Health's proposal names no such code - it prints only a \"Plan Number\" row (1, 2, 3, 4) across its Proposal Summary table: for an Optimyl plan, set plan_code to \"OPTIMYL PLAN \" followed by that plan's own number, e.g. \"OPTIMYL PLAN 1\", \"OPTIMYL PLAN 4\" - this must read from the Plan Number row exactly, never invented or reordered. (The \"OPTIMYL PLAN \" prefix is Kennion's fixed form of that printed number, the one code rule of its kind.)",
           },
           network: {
             ...nullable("string"),

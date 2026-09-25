@@ -32,6 +32,8 @@ export interface Proposal {
   context?: { subject?: string; from?: string; date?: string | null; body?: string; emailFilename?: string } | null;
   /** The two-model check of the stored reading against the document. */
   audit?: ProposalAudit | null;
+  /** Set when the group has declined to quote for this slot. */
+  dtq?: boolean;
 }
 
 export interface ProposalAudit {
@@ -375,7 +377,7 @@ export interface VerifyCell {
     client?: number | null;
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
-  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`) · dtq: declined to quote. */
+  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
   state: "verified" | "fail" | "working" | "stuck" | "missing" | "dtq";
   stuck?: string;
   failedAt?: "source" | "extraction" | "validation" | "claude" | "chatgpt" | "grid";
@@ -395,6 +397,8 @@ export interface VerifyCell {
   fixId?: number;
   steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
+  /** Whether this slot has been marked as Decline to Quote. */
+  dtq?: boolean;
 }
 /** One auditor's plan count: every option found on the document, the EPO plans left out on purpose, and the rest. */
 export interface AuditCount {
@@ -1043,17 +1047,18 @@ function SlotCell({
   const when = current?.extracted?.effective_date || current?.uploaded_at?.slice(0, 10) || "";
   const quote = current?.extracted?.quote_id;
   const state = check ? check.state : current ? "verified" : "missing";
-  const verified = state === "verified";
   const isDtq = state === "dtq";
+  const verified = state === "verified";
   // Queued or in hand: either way the AI is on it.
   const working = state === "working" || state === "fail";
-  const filled = !!current || state !== "missing";
+  const filled = !!current || state !== "missing" || isDtq;
   // An empty slot - no proposal from that carrier - is blank. It still takes
   // a file: hovering or dragging one over it shows where it will land.
   const [hover, setHover] = useState(false);
+  const [pendingDTQ, setPendingDTQ] = useState(false);
   const reveal = hover || busy;
-  const edge = !filled ? (reveal ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? (reveal ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const edge = !filled ? (reveal || pendingDTQ ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal || pendingDTQ ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
   const tone = isDtq ? C.blue : verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
@@ -1171,31 +1176,39 @@ function SlotCell({
             </div>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", visibility: reveal ? "visible" : "hidden" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={() => ref.current?.click()}
-              disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              disabled={busy || pendingDTQ}
+              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.ghost : C.faint, opacity: pendingDTQ ? 0.5 : 1 }}
               title={`Upload the ${slot} proposal for ${group}`}
             >
               {busy ? "uploading…" : "+ add"}
             </button>
             <button
-              onClick={() => void setDTQ()}
+              onClick={() => {
+                setPendingDTQ(true);
+                void setDTQ();
+              }}
               disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.blue : C.faint, fontWeight: pendingDTQ ? 600 : 400 }}
               title={`Mark as Decline to Quote for ${group}`}
             >
-              DTQ
+              {pendingDTQ ? "DTQ (selected)" : "DTQ"}
             </button>
-            <button
-              onClick={() => void removeDTQ()}
-              disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
-              title={`Clear DTQ for ${group}`}
-            >
-              delete
-            </button>
+            {pendingDTQ && (
+              <button
+                onClick={() => {
+                  setPendingDTQ(false);
+                  void removeDTQ();
+                }}
+                disabled={busy}
+                style={{ ...linkBtn, fontSize: 12, color: C.ghost }}
+                title={`Clear DTQ for ${group}`}
+              >
+                delete
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1458,30 +1471,34 @@ export default function Proposals({ token, groups }: Props) {
             aria-label="Search proposals"
             style={{ flex: "1 1 240px", minWidth: 200, padding: "8px 11px", fontSize: 13.5, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 4, outline: "none" }}
           />
-          <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
-            <option value="All">All managers</option>
-            <option value="debbie">Debbie</option>
-            <option value="tracy">Tracy</option>
-          </select>
-          <select aria-label="Which groups" value={need} onChange={(e) => setNeed(e.target.value)} style={gridFilter}>
-            <option value="All">All groups</option>
-            <option value="missing">Missing a proposal</option>
-            <option value="complete">Every quote in</option>
-            <option value="attention">Needs attention (not verified)</option>
-            <option value="verified">Every proposal verified</option>
-            {SLOTS.map((sl) => (
-              <option key={sl} value={sl}>
-                Missing {sl}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => download(`kennion-proposals-${new Date().toISOString().slice(0, 10)}.csv`, gridCsv(gridRows))}
-            title="Download the rows shown, with the current search, filters and sort, as a CSV for Excel"
-            style={{ padding: "7px 13px", fontSize: 13, borderRadius: 4, cursor: "pointer", color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }}
-          >
-            Export CSV
-          </button>
+          {(
+            <>
+              <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
+                <option value="All">All managers</option>
+                <option value="debbie">Debbie</option>
+                <option value="tracy">Tracy</option>
+              </select>
+              <select aria-label="Which groups" value={need} onChange={(e) => setNeed(e.target.value)} style={gridFilter}>
+                <option value="All">All groups</option>
+                <option value="missing">Missing a proposal</option>
+                <option value="complete">Every quote in</option>
+                <option value="attention">Needs attention (not verified)</option>
+                <option value="verified">Every proposal verified</option>
+                {SLOTS.map((sl) => (
+                  <option key={sl} value={sl}>
+                    Missing {sl}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => download(`kennion-proposals-${new Date().toISOString().slice(0, 10)}.csv`, gridCsv(gridRows))}
+                title="Download the rows shown, with the current search, filters and sort, as a CSV for Excel"
+                style={{ padding: "7px 13px", fontSize: 13, borderRadius: 4, cursor: "pointer", color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }}
+              >
+                Export CSV
+              </button>
+            </>
+          )}
         </div>
         {error && (
           <div role="alert" style={{ margin: "12px 0", fontSize: 13, color: C.red }}>
@@ -1489,68 +1506,68 @@ export default function Proposals({ token, groups }: Props) {
           </div>
         )}
         <div>
-          <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
-          <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
-            {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
-            Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
-              <thead>
-                <tr>
-                  <GridTh k="name" label="Group" align="left" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                  <GridTh k="enrolled" label="Enrolled" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                  {SLOTS.map((sl) => (
-                    <GridTh key={sl} k={sl} label={sl} sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {gridRows.map(({ g, slots, applies, have, of }) => (
-                  <tr key={g.name}>
-                    <td style={{ padding: "5px 8px 5px 0", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
-                      <Link href={groupPath(g.name)} style={{ fontWeight: 500 }}>
-                        {g.name}
-                      </Link>
-                      <div style={{ fontSize: 11.5, color: C.ghost }}>
-                        {g.manager ? `${g.manager === "debbie" ? "Debbie" : "Tracy"} · ` : ""}
-                        {have} of {of}
-                      </div>
-                    </td>
-                    <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ink, fontVariantNumeric: "tabular-nums" }}>
-                      {g.enrolled}
-                    </td>
-                    {SLOTS.map((sl, i) =>
-                      applies.has(sl) ? (
-                        <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} check={checkOf.get(`${g.name}||${sl}`)} token={token} onChanged={() => void load()} />
-                      ) : (
-                        <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
-                          -
-                        </td>
-                      ),
-                    )}
+            <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
+            <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
+              {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
+              Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
+                <thead>
+                  <tr>
+                    <GridTh k="name" label="Group" align="left" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                    <GridTh k="enrolled" label="Enrolled" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                    {SLOTS.map((sl) => (
+                      <GridTh key={sl} k={sl} label={sl} sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {gridRows.map(({ g, slots, applies, have, of }) => (
+                    <tr key={g.name}>
+                      <td style={{ padding: "5px 8px 5px 0", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
+                        <Link href={groupPath(g.name)} style={{ fontWeight: 500 }}>
+                          {g.name}
+                        </Link>
+                        <div style={{ fontSize: 11.5, color: C.ghost }}>
+                          {g.manager ? `${g.manager === "debbie" ? "Debbie" : "Tracy"} · ` : ""}
+                          {have} of {of}
+                        </div>
+                      </td>
+                      <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ink, fontVariantNumeric: "tabular-nums" }}>
+                        {g.enrolled}
+                      </td>
+                      {SLOTS.map((sl, i) =>
+                        applies.has(sl) ? (
+                          <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} check={checkOf.get(`${g.name}||${sl}`)} token={token} onChanged={() => void load()} />
+                        ) : (
+                          <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
+                            - 
+                          </td>
+                        ),
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {!gridRows.length && (
+              <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>Nothing matches.</div>
+            )}
+            <Bucket title="To Assign" rows={unassignedRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
+            <Bucket title="Group Health, Waiting For A Slot" rows={slotlessRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
+            <Bucket
+              title="Ancillary Proposals"
+              note="Dental, vision, life and disability. No medical rates, so they fill no slot and stay out of the 2027 options."
+              rows={ancillaryRows}
+              tone={C.faint}
+              collapsed
+              token={token}
+              groups={sortedGroups}
+              onChanged={() => void load()}
+            />
+            <Bucket title="Other Carriers" rows={otherRows} tone={C.faint} collapsed token={token} groups={sortedGroups} onChanged={() => void load()} />
           </div>
-          {!gridRows.length && (
-            <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>Nothing matches.</div>
-          )}
-          <Bucket title="To Assign" rows={unassignedRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
-          <Bucket title="Group Health, Waiting For A Slot" rows={slotlessRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
-          <Bucket
-            title="Ancillary Proposals"
-            note="Dental, vision, life and disability. No medical rates, so they fill no slot and stay out of the 2027 options."
-            rows={ancillaryRows}
-            tone={C.faint}
-            collapsed
-            token={token}
-            groups={sortedGroups}
-            onChanged={() => void load()}
-          />
-          <Bucket title="Other Carriers" rows={otherRows} tone={C.faint} collapsed token={token} groups={sortedGroups} onChanged={() => void load()} />
-        </div>
       </div>
     </>
   );

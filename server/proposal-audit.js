@@ -72,7 +72,7 @@ const nullableNumber = { anyOf: [{ type: "number" }, { type: "null" }] };
  */
 export const FIELD_GUIDE = `How to read each value (in-network, for this plan only, from this plan's own benefit or rate table - never from a neighbouring plan):
 - name: the plan's name exactly as printed - nothing added, nothing dropped.
-- plan_code: the carrier's plan or benefit code exactly as printed; null when the plan has none.
+- plan_code: the carrier's plan or benefit code, or the plan ID the document prints for the plan however long, exactly as printed; empty when the plan has none.
 - network: the network the plan is priced on, as printed; null when the document names none for this plan.
 - deductible, oop_max: the in-network amounts as printed, individual first and then family where both are printed (e.g. "$3,000 / $6,000").
 - coinsurance: the member's in-network coinsurance as printed (e.g. "20%", "0%").
@@ -386,7 +386,7 @@ const DOC_TASK = `This call is the DOCUMENT-LEVEL RECONCILIATION. You have the c
 1. Count the plans on the document: every appearance (plan_appearances), every distinct plan option it prices across every page, sheet and grid (plans_found_total), how many of those are EPO plans (epo_excluded), and the plans the portal should hold (document_plan_count - every distinct plan, EPO included). A plan printed on several pages is ONE plan.
 2. For each listed plan, find it by its plan code (or, where it has none, its printed name); list the index of every listed plan the document does not price at all (missing_indices).
 3. List every plan the document prices that the list lacks (extra_plans), and set duplicates_found if the list holds one carrier plan twice.
-4. List any listed plan the document prints more than once with different values for the same field (inconsistent_plans).
+4. List any listed plan the document prints more than once with different values for the same field (inconsistent_plans). The same design priced on two networks (a narrow-network sheet beside a PPO sheet, say) is two plans, not an inconsistency.
 5. Say whether every page / sheet / section could be read.`;
 
 const COMBINED_TASK = () => `This call is BOTH the document-level reconciliation and the plan field audit (every stored plan fits in one batch). You have the complete proposal.
@@ -400,9 +400,9 @@ const FIELD_TASK = `This call is a PLAN FIELD AUDIT. For EVERY plan in the list,
 const PACKET_TASK = (note) => `The source you were given is a PACKET of the proposal: ${note} It holds the places the portal says these plans are printed, plus the headers around them. If anything needed to read a listed plan's values with certainty is not in this packet - the plan itself, its rate row, its benefit column, or a table header - set insufficient_context true instead of guessing; the plans will then be read against the whole proposal.`;
 
 /** Bumped when the document job's question changes: an older answer no longer counts. */
-export const DOC_JOB_VERSION = 1;
+export const DOC_JOB_VERSION = 2; // 2: plan IDs are plan codes; a design on two networks is two plans
 /** Bumped when field packets are built differently: every batch is read again. */
-export const PACKET_VERSION = 1;
+export const PACKET_VERSION = 2; // 2: rx reads every tier (specialty included); plan IDs are plan codes
 
 const hash = (v) => crypto.createHash("sha256").update(JSON.stringify(v)).digest("hex").slice(0, 16);
 
@@ -717,7 +717,8 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   // max and coinsurance; its other benefits are Gravie's static Benefits
   // Grid, the same for every group - supplemental and attributed, never the
   // plan's own record - so they are not compared against it.
-  const compareOpts = extracted && extracted.coverage && extracted.coverage.parser === "gravie" ? { benefitFields: ["coinsurance"] } : {};
+  const gravieParsed = !!(extracted && ((extracted.coverage && extracted.coverage.parser === "gravie") || (extracted.extraction && extracted.extraction.method === "parser" && /gravie/i.test(String(extracted.carrier || "")))));
+  const compareOpts = gravieParsed ? { benefitFields: ["coinsurance"] } : {};
   const saved = { ...(jobs || {}) };
   const save = async (id, value) => {
     saved[id] = value;
