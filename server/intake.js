@@ -230,6 +230,7 @@ async function docxToText(buffer) {
 }
 
 const MAX_TEXT = 300_000;
+const capped = (text) => ({ kind: "text", text: text.slice(0, MAX_TEXT), ...(text.length > MAX_TEXT ? { truncated: true } : {}) });
 
 /**
  * What the model gets for one item:
@@ -242,12 +243,14 @@ export async function prepareForModel(item) {
       return { kind: "pdf", buffer: item.buffer };
     case "image":
       return { kind: "image", mime: c.mime, buffer: item.buffer };
+    // Text past MAX_TEXT is cut - and the cut is said out loud (`truncated`),
+    // so the reading carries a flag rather than silently missing plans.
     case "sheet":
-      return { kind: "text", text: sheetToText(item.buffer).slice(0, MAX_TEXT) };
+      return capped(sheetToText(item.buffer));
     case "docx":
-      return { kind: "text", text: (await docxToText(item.buffer)).slice(0, MAX_TEXT) };
+      return capped(await docxToText(item.buffer));
     case "text":
-      return { kind: "text", text: item.buffer.toString("utf8").slice(0, MAX_TEXT) };
+      return capped(item.buffer.toString("utf8"));
     case "email":
     case "msg": {
       // The email body is the proposal (no attachments worth reading).

@@ -355,6 +355,8 @@ export interface VerifyStep {
   ok: boolean;
   busy?: boolean;
   note: string;
+  /** The Validation step's individual deterministic checks. */
+  checks?: { key: string; label: string; ok: boolean; note: string }[];
   mismatches?: { plan: string; field: string; stored: string; onDocument: string; by: string }[];
 }
 export interface VerifyCell {
@@ -373,14 +375,21 @@ export interface VerifyCell {
   /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
   state: "verified" | "fail" | "working" | "stuck" | "missing";
   stuck?: string;
-  failedAt?: "source" | "extraction" | "claude" | "chatgpt" | "grid";
+  failedAt?: "source" | "extraction" | "validation" | "claude" | "chatgpt" | "grid";
+  /** Processing state: UPLOADED, MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED, NEEDS_REVIEW. */
+  stage?: string;
+  stageReason?: string | null;
+  /** Appearances -> unique plans -> EPO excluded -> expected, as the canonical reading counts them. */
+  reconciliation?: { plan_appearances: number; unique_plans: number; unique_ppo: number; unique_epo: number; expected: number } | null;
+  excluded?: { name: string; plan_code: string | null; reason: string }[];
   fix?: "read" | "audit" | "correct" | "refresh" | null;
   fixId?: number;
-  steps: { source: VerifyStep | null; extraction: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
+  steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
 }
 /** One auditor's plan count: every option found on the document, the EPO plans left out on purpose, and the rest. */
 export interface AuditCount {
+  appearances?: number | null;
   found: number | null;
   epoExcluded: number | null;
   expected: number | null;
@@ -395,8 +404,9 @@ export interface Verification {
 const STEP_NAMES = [
   ["source", "Source"],
   ["extraction", "Extraction"],
+  ["validation", "Validation"],
   ["claude", "Claude Audit"],
-  ["chatgpt", "ChatGPT Audit"],
+  ["chatgpt", "OpenAI Audit"],
   ["grid", "Grid"],
 ] as const;
 
@@ -404,8 +414,14 @@ const STEP_NAMES = [
 function checkTitle(c: VerifyCell): string {
   const mark = (st: VerifyStep | null) => (!st ? "-" : st.ok ? "✓" : st.busy ? "…" : "✗");
   const line = STEP_NAMES.map(([k, label]) => `${label} ${mark(c.steps[k])}`).join(" · ");
-  const detail = STEP_NAMES.filter(([k]) => c.steps[k]).map(([k, label]) => `${label}: ${c.steps[k]!.note}`);
-  return [line, ...detail, ...(c.stuck ? [`Needs a person: ${c.stuck}`] : [])].join("\n");
+  const detail = STEP_NAMES.filter(([k]) => c.steps[k]).flatMap(([k, label]) => [
+    `${label}: ${c.steps[k]!.note}`,
+    ...(c.steps[k]!.checks || []).map((ck) => `   ${ck.ok ? "✓" : "✗"} ${ck.label}${ck.ok ? "" : ` - ${ck.note}`}`),
+  ]);
+  const rc = c.reconciliation;
+  const counts = rc ? [`Plans: ${rc.plan_appearances} appearances → ${rc.unique_plans} unique (${rc.unique_ppo} PPO, ${rc.unique_epo} EPO excluded) → ${rc.expected} expected · database ${c.counts.stored ?? "-"} · grid ${c.counts.grid ?? "-"}`] : [];
+  const excluded = c.excluded && c.excluded.length ? [`Excluded on purpose: ${c.excluded.map((e) => `${e.name}${e.plan_code ? ` [${e.plan_code}]` : ""}`).join("; ")}`] : [];
+  return [line, ...(c.stage ? [`State: ${c.stage}`] : []), ...counts, ...excluded, ...detail, ...(c.stuck ? [`Needs review: ${c.stuck}`] : [])].join("\n");
 }
 
 /** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
@@ -428,7 +444,7 @@ function useVerify(token: string) {
   return { v, load };
 }
 
-/** Five small squares, one per step: green passed, blue being fixed by the AI, orange needs a person, grey not reached. */
+/** Six small squares, one per step: green passed, blue being fixed by the AI, orange needs review, grey not reached. */
 function StepStrip({ c }: { c: VerifyCell }) {
   return (
     <span style={{ display: "inline-flex", gap: 2 }}>
@@ -441,7 +457,7 @@ function StepStrip({ c }: { c: VerifyCell }) {
             title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : c.state === "stuck" ? "needs a person" : "the AI is fixing it"}${st ? ` - ${st.note}` : ""}`}
             style={{ width: 13, height: 13, borderRadius: 2, background: bg, color: st ? "#fff" : C.ghost, fontSize: 9, fontWeight: 700, lineHeight: "13px", textAlign: "center" }}
           >
-            {"SECGR"[i]}
+            {"SEVCOG"[i]}
           </span>
         );
       })}
@@ -485,8 +501,8 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
           {t.verified} of {t.filed} proposals Verified
         </strong>
         {fixing > 0 && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
-        {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} a person</span>}
-        <span style={{ color: C.faint }}>Verified: the source, the extraction, a Claude audit and an independent ChatGPT audit of this exact reading, and the group's Medical Plans grid all agree - same plans, same count.</span>
+        {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} review</span>}
+        <span style={{ color: C.faint }}>Verified: the source, the extraction, every deterministic check (no duplicates, four rates, plan/rate pairing, counts reconciled), a Claude audit and an independent OpenAI audit of this exact reading, and the group's Medical Plans grid all agree.</span>
       </div>
       {stuck.length > 0 && (
         <table style={{ marginTop: 8, borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>
@@ -1008,7 +1024,7 @@ function SlotCell({
           // Only an upload that has not read yet - nothing in force in this slot.
           <>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
-              {working ? "AI reading…" : "⚠ needs a person"}
+              {working ? `${(check.stage || "reading").toLowerCase()}…` : "⚠ needs review"}
             </div>
             <div style={{ marginTop: 2 }}>
               <StepStrip c={check} />
@@ -1028,7 +1044,7 @@ function SlotCell({
               <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
                 <StepStrip c={check} />
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
-                  {verified ? "dual audit passed" : working ? "AI fixing" : "needs a person"}
+                  {verified ? "dual audit passed" : working ? (check.stage || "AI fixing").toLowerCase().replace("_", " ") : "needs review"}
                 </span>
               </div>
             )}

@@ -5,6 +5,13 @@
 //
 //   Source         the original document is on file, whole.
 //   Extraction     the read finished: plans, each named and rated.
+//   Validation     every deterministic check passes (server/plan-validate.js):
+//                  current version, no duplicate plans / codes / names / IDs,
+//                  required fields, four numeric tier rates, source pages or
+//                  sheet rows for identity, benefits and rates, no data mixed
+//                  in from another plan code, no unresolved conflicting
+//                  appearances, and the plan count reconciled (appearances ->
+//                  unique -> EPO excluded -> expected = stored).
 //   Claude Audit   Claude counted the plans on the document (found, EPO
 //                  excluded, expected), read every stored plan's four rates
 //                  off the page, and found nothing - and its count is the
@@ -21,6 +28,8 @@
 // Pure arithmetic over what is stored - no model call - so the whole book is
 // checked in milliseconds, and each failing box names the repair (`fix`) the
 // server's steward carries out on its own.
+
+import { validatePlans } from "./plan-validate.js";
 
 const TIERS = ["EE", "ES", "EC", "FAM"];
 
@@ -60,6 +69,20 @@ export function gridCounts(plans, slot, tiers) {
 const busyRow = (r, reading) => r.status === "analyzing" || reading.has(r.id);
 
 /**
+ * The processing state a box's proposal is in: UPLOADED, MAPPING, EXTRACTING,
+ * EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED or NEEDS_REVIEW. Only
+ * VERIFIED is ever shown to a client as checked.
+ */
+function stageOf(c, row, correcting) {
+  if (c.state === "verified") return "VERIFIED";
+  if (c.state === "stuck" || c.failedAt === "source") return "NEEDS_REVIEW";
+  if (c.failedAt === "extraction") return row && (row.stage === "MAPPING" || row.stage === "UPLOADED") && c.state === "working" ? row.stage : "EXTRACTING";
+  if (c.failedAt === "validation" || c.failedAt === "grid") return c.fix === "correct" && row && correcting.has(row.id) ? "CORRECTING" : "VALIDATING";
+  if (row && correcting.has(row.id)) return "CORRECTING";
+  return c.fix === "correct" ? "CORRECTING" : "AUDITING";
+}
+
+/**
  * Check every group. `groups`: [{ name, slots, tiers }] - live groups, the
  * slots each is quoted in, and its enrolled count per tier. `rows`: every
  * proposal row as stored. `served(name)`: the proposals the group's own page
@@ -81,7 +104,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       // A newer upload waiting beside the proposal in force: still being
       // read, or its read failed. It takes over only once it reads.
       const waiting = inSlot.filter((r) => !row || r.id !== row.id);
-      const steps = { source: null, extraction: null, claude: null, chatgpt: null, grid: null };
+      const steps = { source: null, extraction: null, validation: null, claude: null, chatgpt: null, grid: null };
       const cell = {
         slot,
         proposalId: row ? row.id : null,
@@ -117,11 +140,11 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         settle("extraction", "read", w.id, busy);
         continue;
       }
-      if (!(row.size > 0)) {
+      if (!(row.size > 0) || !row.source_sha) {
         steps.source = { ok: false, note: "The original document is not on file." };
         cell.state = "stuck";
         cell.failedAt = "source";
-        cell.stuck = "The original document is missing - upload it again.";
+        cell.stuck = row.size > 0 ? "The source document's hash is not recorded yet." : "The original document is missing - upload it again.";
         continue;
       }
       steps.source = { ok: true, note: row.filename };
@@ -165,6 +188,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       }
       steps.extraction = { ok: true, note: scorecard ? "Read." : `${storedDistinct} plan${storedDistinct === 1 ? "" : "s"} read, each named and rated.` };
       if (scorecard) {
+        steps.validation = { ok: true, note: "A scorecard carries no plans to validate." };
         steps.claude = { ok: true, note: "A scorecard carries no rates to audit." };
         steps.chatgpt = { ok: true, note: "A scorecard carries no rates to audit." };
         steps.grid = { ok: true, note: "Admin only - not part of the 2027 options." };
@@ -172,7 +196,20 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         continue;
       }
 
-      // Claude Audit and ChatGPT Audit: both, of this exact reading.
+      // Validation: everything code can check, before either model is asked.
+      const groupIds = list.filter((pp) => pp.slot !== slot).flatMap((pp) => (pp.plans || []).map((pl) => pl.optionId).filter(Boolean));
+      const val = validatePlans({ extracted: x, sourceSha: row.source_sha, groupOptionIds: groupIds, textSource: !/pdf|image/i.test(String(row.mime || "")) });
+      steps.validation = val.ok
+        ? { ok: true, note: (val.checks.find((c) => c.key === "reconciliation") || {}).note || "Every check passed.", checks: val.checks }
+        : { ok: false, busy: correcting.has(row.id), note: val.failures.join(" "), checks: val.checks };
+      cell.reconciliation = x.reconciliation || null;
+      cell.excluded = Array.isArray(x.excluded) ? x.excluded.map((e) => ({ name: e.name, plan_code: e.plan_code, reason: e.reason })) : [];
+      if (!val.ok) {
+        settle("validation", val.fix, row.id, correcting.has(row.id));
+        continue;
+      }
+
+      // Claude Audit and OpenAI Audit: both, of this exact reading of this exact document.
       if (auditing.has(row.id) || correcting.has(row.id)) {
         const note = correcting.has(row.id) ? "Correcting the database against the document now." : "Auditing against the document now.";
         steps.claude = { ok: false, busy: true, note };
@@ -180,7 +217,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
         settle("claude", null, row.id, true);
         continue;
       }
-      const current = !!(a && a.version && readingVersion && a.version === readingVersion(x));
+      const current = !!(a && a.version && readingVersion && a.version === readingVersion(x) && (!a.sourceSha || a.sourceSha === row.source_sha));
       const auditStep = (re) => {
         if (!a) return { ok: false, note: "Not audited yet." };
         if (!current) return { ok: false, note: "Audited an earlier reading - pending a fresh audit of this one." };
@@ -240,6 +277,12 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       };
       cell.state = "verified";
     }
+    for (const c of cells) {
+      if (c.state === "missing") continue;
+      const r = mine.find((rr) => rr.id === (c.proposalId ?? c.fixId));
+      c.stage = stageOf(c, r, correcting);
+      c.stageReason = c.state === "stuck" ? c.stuck || null : c.failedAt && c.steps[c.failedAt] ? c.steps[c.failedAt].note : null;
+    }
     const filed = cells.filter((c) => c.state !== "missing");
     out.push({ group: g.name, cells, filed: filed.length, verified: filed.filter((c) => c.state === "verified").length });
   }
@@ -253,7 +296,7 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       working: all.filter((c) => c.state === "working").length,
       failing: all.filter((c) => c.state === "fail").length,
       stuck: all.filter((c) => c.state === "stuck").length,
-      byStep: Object.fromEntries(["source", "extraction", "claude", "chatgpt", "grid"].map((k) => [k, all.filter((c) => c.state !== "verified" && c.failedAt === k).length])),
+      byStep: Object.fromEntries(["source", "extraction", "validation", "claude", "chatgpt", "grid"].map((k) => [k, all.filter((c) => c.state !== "verified" && c.failedAt === k).length])),
     },
   };
 }

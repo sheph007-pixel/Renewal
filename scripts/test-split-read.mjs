@@ -1,15 +1,45 @@
-// A proposal whose reading does not fit in one answer is read in halves,
-// down to single pages, and folded back into one - not failed with "longer
-// than one reading can hold" on every retry, as Boss Logistics' UHC Level
-// Funded quote was. A local stand-in for the Messages API answers
-// max_tokens for any request spanning more than two pages, and one plan
-// per page otherwise.
+// Reading long proposals, against a local stand-in for the Messages API:
+//  1. A proposal too long for one answer is halved down to single pages and
+//     the halves' appearances fold into canonical plans - a plan printed on
+//     page 1 and again on page 5 is one plan with both pages.
+//  2. A long PDF is mapped first; only its medical pages are read, as an
+//     excerpt, and a plan whose benefits sit on page 3 and whose rates sit on
+//     page 20 comes back as ONE plan with both, merged by its plan code, its
+//     provenance in original page numbers.
+//  3. When the relevant-page reading cannot account for the plans the map
+//     saw, the whole document is read instead.
 import assert from "node:assert/strict";
 import http from "node:http";
 import { PDFDocument } from "pdf-lib";
 
-const PAGES = 5;
+let doc = "short";
 const seen = [];
+const rates = (n) => ({ EE: 500 + n, ES: 1000, EC: 900, FAM: 1500 });
+const bens = { doctor_visit: "$30", specialist: "$60", imaging: "", urgent_care: "$75", emergency_room: "$350", hospital: "20%", rx: "$10/$40", coinsurance: "20%", hsa_eligible: "no" };
+const blankBens = Object.fromEntries(Object.keys(bens).map((k) => [k, ""]));
+const plan = (o) => ({ name: "", plan_code: null, network: "Choice Plus", plan_type: "PPO", deductible: null, oop_max: null, benefits: blankBens, rates: { EE: null, ES: null, EC: null, FAM: null }, monthly_total: null, source_pages: { identity: [], benefits: [], rates: [] }, source_sheet: "", source_rows: "", ...o });
+
+/** What each original page of the stand-in document shows. `pos` is its position in the file sent. */
+function onPage(page, pos) {
+  if (doc === "short") {
+    const out = [plan({ name: `Plan p${page}`, plan_code: `P${page}`, deductible: "$1,000", oop_max: "$5,000", benefits: bens, rates: rates(page), source_pages: { identity: [pos], benefits: [pos], rates: [pos] } })];
+    // The headline plan is printed again on the last page.
+    if (page === 5) out.push(plan({ name: "Plan p1", plan_code: "P1", source_pages: { identity: [pos], benefits: [], rates: [] } }));
+    return out;
+  }
+  if (page === 3) return [plan({ name: "Plan A", plan_code: "A1", deductible: "$1,000", oop_max: "$5,000", benefits: bens, source_pages: { identity: [pos], benefits: [pos], rates: [] } })];
+  if (page === 4) return [plan({ name: "Plan B", plan_code: "B1", deductible: "$2,000", oop_max: "$6,000", benefits: bens, source_pages: { identity: [pos], benefits: [pos], rates: [] } })];
+  if (page === 20) return [plan({ name: "Plan A", plan_code: "A1", rates: rates(1), source_pages: { identity: [pos], benefits: [], rates: [pos] } })];
+  if (page === 21) return [plan({ name: "Plan B", plan_code: "B1", rates: rates(2), source_pages: { identity: [pos], benefits: [], rates: [pos] } })];
+  return [];
+}
+
+const expand = (desc) => desc.split(",").flatMap((part) => {
+  const [a, b] = part.trim().split("-").map(Number);
+  return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a];
+});
+
+let mapSays = null;
 const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (d) => (body += d));
@@ -17,50 +47,50 @@ const server = http.createServer((req, res) => {
     const j = JSON.parse(body || "{}");
     const content = j.messages[0].content;
     const text = content.filter((c) => c.type === "text").map((c) => c.text).join("\n");
-    const m = /This is pages (\d+)-(\d+) of a (\d+)-page proposal/.exec(text);
-    const [first, last] = m ? [Number(m[1]), Number(m[2])] : [1, PAGES];
-    const doc = content.find((c) => c.type === "document");
-    const pages = (await PDFDocument.load(Buffer.from(doc.source.data, "base64"))).getPageCount();
-    assert.equal(pages, last - first + 1, "the part sent is exactly the pages it says it is");
-    seen.push(`${first}-${last}`);
-    const tooLong = pages > 2;
-    const reading = {
-      carrier: "UnitedHealthcare",
-      funding: "level funded",
-      quotes_medical: true,
-      quote_id: null,
-      // Only the first page names the employer, as on a real quote.
-      group_name_on_document: first === 1 ? "BOSS LOGISTICS" : null,
-      matched_group: first === 1 ? "Boss Logistics, LLC" : null,
-      confidence: first === 1 ? 0.95 : 0,
-      effective_date: "2027-01-01",
-      proposal_type: "renewal",
-      enrolled_on_document: 12,
-      plans: Array.from({ length: pages }, (_, i) => ({
-        name: `Plan p${first + i}`,
-        plan_code: `P${first + i}`,
-        network: "Choice Plus",
-        plan_type: "PPO",
-        deductible: "$1,000",
-        oop_max: "$5,000",
-        benefits: { doctor_visit: "", specialist: "", imaging: "", urgent_care: "", hospital: "", rx: "" },
-        rates: { EE: 500 + first + i, ES: 1000, EC: 900, FAM: 1500 },
-        monthly_total: null,
-      })),
-      total_monthly: null,
-      summary: `pages ${first}-${last}`,
-      audit_flags: [],
-    };
-    // The headline plan is printed again on the last page: one plan, not two.
-    if (last === PAGES) reading.plans.push({ ...reading.plans[0], name: "Plan p1", plan_code: "P1", rates: { EE: 501, ES: 1000, EC: 900, FAM: 1500 } });
-    const out = tooLong ? JSON.stringify(reading).slice(0, 200) : JSON.stringify(reading);
+    const system = Array.isArray(j.system) ? j.system.map((b) => b.text).join("") : String(j.system || "");
+    const pdfDoc = content.find((c) => c.type === "document");
+    const count = (await PDFDocument.load(Buffer.from(pdfDoc.source.data, "base64"))).getPageCount();
+    let out;
+    let stop = "end_turn";
+    if (/You map a carrier's medical proposal/.test(system)) {
+      seen.push(`map:${count}`);
+      out = mapSays;
+    } else {
+      const m = /its pages are the original pages ([\d,\s-]+), in that order/.exec(text);
+      const pages = m ? expand(m[1]) : Array.from({ length: count }, (_, i) => i + 1);
+      assert.equal(pages.length, count, "the excerpt holds exactly the pages it says it does");
+      seen.push(m ? m[1].replace(/\s/g, "") : `1-${count}`);
+      const plans = pages.flatMap((pg, i) => onPage(pg, i + 1));
+      const appearances = plans.length;
+      out = {
+        carrier: "UnitedHealthcare",
+        funding: "level funded",
+        quotes_medical: true,
+        quote_id: null,
+        group_name_on_document: pages.includes(1) ? "BOSS LOGISTICS" : null,
+        matched_group: pages.includes(1) ? "Boss Logistics, LLC" : null,
+        confidence: pages.includes(1) ? 0.95 : 0,
+        effective_date: "2027-01-01",
+        proposal_type: "renewal",
+        enrolled_on_document: 12,
+        plans,
+        plan_appearances: appearances,
+        unique_plans_found: new Set(plans.map((p) => p.plan_code)).size,
+        unique_epo_found: 0,
+        total_monthly: null,
+        summary: `pages ${pages.join(",")}`,
+        audit_flags: [],
+      };
+      if (count > (doc === "short" ? 2 : 2)) stop = "max_tokens";
+    }
+    const text2 = stop === "max_tokens" ? JSON.stringify(out).slice(0, 200) : JSON.stringify(out);
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
     ev("message_start", { message: { id: "m", type: "message", role: "assistant", model: j.model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } });
     ev("content_block_start", { index: 0, content_block: { type: "text", text: "" } });
-    ev("content_block_delta", { index: 0, delta: { type: "text_delta", text: out } });
+    ev("content_block_delta", { index: 0, delta: { type: "text_delta", text: text2 } });
     ev("content_block_stop", { index: 0 });
-    ev("message_delta", { delta: { stop_reason: tooLong ? "max_tokens" : "end_turn", stop_sequence: null }, usage: { output_tokens: 1 } });
+    ev("message_delta", { delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: 1 } });
     ev("message_stop", {});
     res.end();
   });
@@ -71,20 +101,61 @@ process.env.ANTHROPIC_API_KEY = "test";
 delete process.env.KENNION_FAKE_AI;
 
 const { analyzeProposal } = await import("../server/ai.js");
-const pdf = await PDFDocument.create();
-for (let i = 0; i < PAGES; i++) pdf.addPage([200, 200]).drawText(`page ${i + 1}`);
-const buffer = Buffer.from(await pdf.save());
+const pdfOf = async (n) => {
+  const pdf = await PDFDocument.create();
+  for (let i = 0; i < n; i++) pdf.addPage([200, 200]).drawText(`page ${i + 1}`);
+  return Buffer.from(await pdf.save());
+};
+const roster = [{ name: "Boss Logistics, LLC", enrolled: 12, tpa: null }];
 
-const out = await analyzeProposal({ filename: "BOSS LOGISTICS WC UHC LF GRX.pdf", prepared: { kind: "pdf", buffer }, context: null }, [{ name: "Boss Logistics, LLC", enrolled: 12, tpa: null }]);
-assert.deepEqual(
-  out.plans.map((p) => p.name),
-  ["Plan p1", "Plan p2", "Plan p3", "Plan p4", "Plan p5"],
-  "every page's plans, in order, and the repeat of the headline plan once",
-);
+// 1. Halved down to fit, folded into canonical plans.
+let out = await analyzeProposal({ filename: "BOSS LOGISTICS WC UHC LF GRX.pdf", prepared: { kind: "pdf", buffer: await pdfOf(5) }, context: null }, roster);
+assert.deepEqual(out.plans.map((p) => p.name), ["Plan p1", "Plan p2", "Plan p3", "Plan p4", "Plan p5"], "every page's plans, in order, the repeat of the headline plan merged into it");
+assert.deepEqual(out.plans[0].source.identity, [1, 5], "the repeat on page 5 is evidence for plan p1, not another plan");
+assert.deepEqual(out.plans[3].source.rates, [4], "pages are the carrier's page numbers, not positions in a half");
 assert.equal(out.matched_group, "Boss Logistics, LLC");
 assert.equal(out.confidence, 0.95, "parts that name no employer do not drag the match down");
-assert.ok(out.audit_flags.some((f) => /Read in \d+ parts/.test(f)));
-assert.deepEqual(seen, ["1-5", "1-3", "1-2", "3-3", "4-5"], "halved until each part fits");
+assert.equal(out.reconciliation.unique_plans, 5);
+assert.equal(out.reconciliation.appearances_read, 6);
+assert.equal(out.extraction.method, "split");
+assert.deepEqual(seen, ["1-5", "1-3", "1-2", "3", "4-5"], "halved until each part fits");
+
+// 2. A 25-page proposal: mapped, only the medical pages read, benefits and
+//    rates on distant pages paired by plan code.
+doc = "long";
+seen.length = 0;
+mapSays = {
+  carrier: "UnitedHealthcare",
+  effective_date: "2027-01-01",
+  page_count: 25,
+  document_type: "digital",
+  pages: Array.from({ length: 25 }, (_, i) => ({ page: i + 1, kinds: [3, 4].includes(i + 1) ? ["plan_identity", "benefit_detail"] : [20, 21].includes(i + 1) ? ["rates"] : ["cover_or_boilerplate"] })),
+  approx_unique_ppo: 2,
+  approx_unique_epo: 0,
+  notes: "",
+};
+out = await analyzeProposal({ filename: "long.pdf", prepared: { kind: "pdf", buffer: await pdfOf(25) }, context: null }, roster);
+assert.equal(seen[0], "map:25", "mapped first");
+assert.ok(!seen.includes("1-25"), "the whole document is not read when the excerpt suffices");
+assert.equal(out.extraction.method, "mapped");
+assert.deepEqual(out.extraction.relevantPages, [3, 4, 20, 21]);
+assert.equal(out.plans.length, 2, "benefit pages and rate pages are one plan each");
+const a = out.plans.find((p) => p.plan_code === "A1");
+assert.equal(a.deductible, "$1,000");
+assert.equal(a.rates.EE, 501, "plan A's rates are plan A's, paired by code across the gap");
+assert.deepEqual(a.source.benefits, [3]);
+assert.deepEqual(a.source.rates, [20]);
+const b = out.plans.find((p) => p.plan_code === "B1");
+assert.equal(b.rates.EE, 502);
+assert.deepEqual(b.source.rates, [21]);
+
+// 3. The map saw more plans than the excerpt produced: read the whole document.
+seen.length = 0;
+mapSays = { ...mapSays, approx_unique_ppo: 5 };
+out = await analyzeProposal({ filename: "long.pdf", prepared: { kind: "pdf", buffer: await pdfOf(25) }, context: null }, roster);
+assert.ok(seen.includes("1-25"), "fell back to the whole document");
+assert.equal(out.extraction.method, "split");
+assert.equal(out.plans.length, 2);
 
 server.close();
-console.log("split read: a proposal too long for one answer is read in parts and merged - ok");
+console.log("split read: halved long reads fold into canonical plans; long PDFs mapped, relevant pages read and paired by plan code; fallback to the whole document - ok");

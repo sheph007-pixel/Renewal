@@ -33,6 +33,7 @@ import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
+import { validatePlans } from "./plan-validate.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -2654,9 +2655,19 @@ function clientUhc(g) {
 /** A group's current proposals as a client sees them: PPO plans only, and no Cobalt or Angle Scorecard - both stay admin-only. */
 function clientProposals(name) {
   const list = (currentProposals[name] || []).filter((p) => p.slot !== "Cobalt" && p.slot !== "Angle Scorecard");
-  if (!ppoOnly()) return list;
-  return list.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
+  // Verified comes from the full check (source, extraction, validation, both
+  // audits of this exact reading, grid) and nothing else: a proposal still
+  // being read, validated, audited or corrected is "pending" to the client,
+  // its plan cards and the assistant alike.
+  const withStatus = list.map((p) => {
+    const v = verifiedProposals.get(p.id);
+    return { ...p, verified: !!v, audit: v ? { status: "pass", completedAt: v } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
+  });
+  if (!ppoOnly()) return withStatus;
+  return withStatus.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !isEpoPlan(pl)) }));
 }
+/** Proposal id -> when its dual audit completed, for every proposal the check currently calls Verified. */
+const verifiedProposals = new Map();
 
 /** The newest client invoice filed under a group, without its bytes; null if none. */
 /** The roster group an invoice file's own name points to, or null when it names none. */
@@ -4488,6 +4499,9 @@ const proposalStore = db
           context: p.context || null,
           slot: p.slot || null,
           superseded_by: null,
+          source_sha: p.data ? crypto.createHash("sha256").update(p.data).digest("hex") : null,
+          stage: "UPLOADED",
+          stage_reason: null,
         };
         memProposals.unshift(row);
         return stripBytes(row);
@@ -5075,7 +5089,18 @@ function matchByFilename(filename, context) {
 function planBenefits(b) {
   if (!b || typeof b !== "object") return null;
   const str = (v) => (v == null || v === "" ? null : String(v).slice(0, 120));
-  return { doctorVisit: str(b.doctor_visit), specialist: str(b.specialist), imaging: str(b.imaging), urgentCare: str(b.urgent_care), hospital: str(b.hospital), rx: str(b.rx) };
+  const hsa = str(b.hsa_eligible);
+  return {
+    doctorVisit: str(b.doctor_visit),
+    specialist: str(b.specialist),
+    imaging: str(b.imaging),
+    urgentCare: str(b.urgent_care),
+    er: str(b.emergency_room),
+    hospital: str(b.hospital),
+    rx: str(b.rx),
+    coinsurance: str(b.coinsurance),
+    hsaEligible: hsa == null ? null : /^y/i.test(hsa) ? true : /^n/i.test(hsa) ? false : null,
+  };
 }
 
 /** A proposal read before the reader asked for per-plan benefits: its cards show only deductible and OOP max. */
@@ -5162,9 +5187,19 @@ async function runProposalAudit(id) {
     const row = (await proposalStore.listProposals()).find((r) => r.id === id);
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
     if (!row || !f) return;
-    const audit = await auditProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted || {} });
+    // Both audits are of one exact reading of one exact document; a result
+    // that comes back after either has changed is discarded, never written.
+    const startVersion = readingVersion(row.extracted || {});
+    const startSha = row.source_sha || null;
+    await setStage(id, "AUDITING");
+    const audit = await auditProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted || {}, sourceSha: startSha });
+    const now = (await proposalStore.listProposals()).find((r) => r.id === id);
+    if (!now || (now.source_sha || null) !== startSha || readingVersion(now.extracted || {}) !== startVersion) {
+      console.log(`proposal ${id} audit of an earlier version discarded`);
+      return;
+    }
     await proposalStore.updateProposal(id, { audit });
-    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} mismatches)` : ""}`);
+    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings)` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}`);
   } catch (e) {
     console.error(`proposal ${id} audit failed:`, e.message);
     await proposalStore.updateProposal(id, { audit: { completedAt: new Date().toISOString(), status: "unreadable", models: [], mismatches: [], notes: `The audit failed: ${e.message}` } }).catch(() => undefined);
@@ -5231,7 +5266,20 @@ async function runAnalysis(id, file, keepAssignment) {
     }
     const roster = liveRoster();
     const prepared = await prepareForModel(file);
-    const out = await withReadSlot(() => analyzeProposal({ filename: file.filename, prepared, context: file.context || null }, roster));
+    // The version of the document this reading is of. A result that comes
+    // back after the row's document has changed is discarded, never applied.
+    const before = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const startSha = (before && before.source_sha) || (file.buffer ? crypto.createHash("sha256").update(file.buffer).digest("hex") : null);
+    const out = await withReadSlot(() =>
+      analyzeProposal({ filename: file.filename, prepared, context: file.context || null, onStage: (st) => void setStage(id, st) }, roster),
+    );
+    out.extraction = { ...(out.extraction || {}), sourceSha: startSha };
+    const after = (await proposalStore.listProposals()).find((r) => r.id === id);
+    if (!after) return;
+    if (after.source_sha && startSha && after.source_sha !== startSha) {
+      console.log(`proposal ${id}: reading of an earlier version of the document discarded`);
+      return;
+    }
     const flags = Array.isArray(out.audit_flags) ? [...out.audit_flags] : [];
     // The reader copies the roster name when it can; when it mirrors the
     // paper's spelling instead, or names no roster group at all, the employer
@@ -5273,7 +5321,10 @@ async function runAnalysis(id, file, keepAssignment) {
     // Numbers handed out while EPO twins were still stored (an EPO plan
     // holding one, before or in this reading) belong to the old sequence:
     // none is carried over, and the numbering step starts this slot again.
-    const oldRule = priorPlans.some((pl) => isEpoPlan(pl) && pl.option_id) || (Array.isArray(out.plans) && out.plans.some((pl) => isEpoPlan(pl) && pl.option_id));
+    const oldRule =
+      priorPlans.some((pl) => isEpoPlan(pl) && pl.option_id) ||
+      (Array.isArray(out.plans) && out.plans.some((pl) => isEpoPlan(pl) && pl.option_id)) ||
+      (Array.isArray(out.excluded) && out.excluded.some((e) => e.option_id));
     if (Array.isArray(out.plans)) out.plans = out.plans.filter((pl) => !isEpoPlan(pl)).map((pl) => (oldRule ? { ...pl, option_id: null } : pl));
     // Optimyl always quotes the same 4 standard plans, numbered by plan_code
     // ("OPTIMYL PLAN 1".."OPTIMYL PLAN 4"). A misread sometimes doubles one
@@ -5306,6 +5357,8 @@ async function runAnalysis(id, file, keepAssignment) {
       summary: out.summary || null,
       confidence: conf,
       error: null,
+      stage: "EXTRACTED",
+      stage_reason: null,
     };
     // The slot comes from what was read, unless staff already set one.
     if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical, file.filename);
@@ -5353,8 +5406,8 @@ async function runAnalysis(id, file, keepAssignment) {
       Object.assign(fields, { group_name: null, status: "unassigned", assigned_by: null });
     }
     await proposalStore.updateProposal(id, { ...fields, audit: null });
-    // A fresh reading is checked against the document before it is trusted.
-    if (Array.isArray(fields.extracted.plans) && fields.extracted.plans.length) void runProposalAudit(id);
+    // A fresh reading is audited once it has been numbered and passes the
+    // deterministic checks - the steward's next pass sees to both.
   } catch (e) {
     console.error(`proposal ${id} analysis failed:`, e.message);
     // A failed read leaves a proposal where it was filed; only one that was
@@ -5363,9 +5416,29 @@ async function runAnalysis(id, file, keepAssignment) {
     await proposalStore.updateProposal(id, {
       status: keepAssignment || (prev && prev.group_name) ? "assigned" : "unassigned",
       error: e.message,
+      stage: "EXTRACTING",
+      stage_reason: `The read failed: ${e.message}`,
     });
   }
   await proposalsChanged();
+}
+
+/** Hash, once, the source document of every proposal stored before the hash was kept. */
+async function backfillSourceSha() {
+  const rows = (await proposalStore.listProposals()).filter((r) => !r.source_sha && r.kind !== "invoice" && r.status !== "container");
+  let n = 0;
+  for (const r of rows) {
+    const f = await proposalStore.getProposalFile(r.id).catch(() => null);
+    if (!f || !f.data) continue;
+    await proposalStore.updateProposal(r.id, { source_sha: crypto.createHash("sha256").update(f.data).digest("hex") });
+    n++;
+  }
+  if (n) console.log(`proposals: recorded the source document hash of ${n} proposal(s)`);
+}
+
+/** Record where a proposal is in processing (see stageOf in proposal-verify.js). */
+async function setStage(id, stage, reason = null) {
+  await proposalStore.updateProposal(id, { stage, stage_reason: reason }).catch(() => undefined);
 }
 
 /**
@@ -5638,7 +5711,10 @@ async function settleGravieQuotes() {
   for (const r of rows) {
     try {
       const plans = (r.extracted && r.extracted.plans) || [];
-      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || plans.some((pl) => isEpoPlan(pl)) || !plans.length;
+      // Also stale: a reading without per-plan provenance (sheet and row) or
+      // not tied to the version of the workbook on file.
+      const ext = (r.extracted && r.extracted.extraction) || null;
+      const stale = plans.some((pl) => /LocalPlus|Narrow/i.test(pl.network || "")) || plans.some((pl) => isEpoPlan(pl)) || !plans.length || plans.some((pl) => !pl.source) || !ext || (r.source_sha && ext.sourceSha !== r.source_sha);
       const quote = have.get(r.group_name);
       const wanted = quote && quote.proposalId === r.id && quote.planCount === plans.length && !stale;
       if (!stale && wanted) continue;
@@ -5646,7 +5722,7 @@ async function settleGravieQuotes() {
       if (!f) continue;
       const parsed = parseGravieWorkbook(f.data);
       if (stale) {
-        const extracted = { ...gravieExtracted(parsed), matched_group: r.group_name };
+        const extracted = gravieReading(parsed, r.group_name, r.source_sha, plans);
         await proposalStore.updateProposal(r.id, { extracted, summary: extracted.summary });
         reread++;
       }
@@ -5660,6 +5736,21 @@ async function settleGravieQuotes() {
   if (reread || written) console.log(`gravie: re-read ${reread} workbook(s), wrote ${written} quote(s); ${total} Gravie quote(s) stored as rows`);
   if (reread) await proposalsChanged();
   return { reread, written, total };
+}
+
+/**
+ * A Gravie workbook's reading: the parser's plans (canonical, with sheet and
+ * row provenance), tied to the workbook version it was parsed from, and -
+ * on a re-parse - the numbers its plans held, so every design keeps its ID.
+ */
+function gravieReading(parsed, groupName, sourceSha, priorPlans) {
+  const x = gravieExtracted(parsed);
+  return {
+    ...x,
+    matched_group: groupName,
+    extraction: { ...(x.extraction || {}), sourceSha: sourceSha || null },
+    ...(priorPlans && priorPlans.length ? { previous_plan_ids: priorPlans.filter((p) => p.option_id && !isEpoPlan(p)).map((p) => ({ option_id: p.option_id, plan_code: p.plan_code || null, name: p.name })) } : {}),
+  };
 }
 
 /**
@@ -5707,7 +5798,6 @@ async function ingestGravieZip(buf, by) {
       skipped.push(g.name);
       continue;
     }
-    const extracted = { ...gravieExtracted(parsed), matched_group: g.name };
     const row = await proposalStore.addProposal({
       group_name: g.name,
       carrier: "Gravie",
@@ -5721,11 +5811,13 @@ async function ingestGravieZip(buf, by) {
       assigned_by: by || "gravie-workbook",
       uploaded_by: by,
     });
+    const extracted = gravieReading(parsed, g.name, row.source_sha, []);
     await proposalStore.updateProposal(row.id, {
       extracted,
       summary: extracted.summary,
       confidence: 1,
       slot: "Gravie",
+      stage: "EXTRACTED",
     });
     await storeGravieQuote(g, parsed, base, row.id, by);
     stored.push({ group: g.name, id: row.id, plans: extracted.plans.length });
@@ -5831,7 +5923,7 @@ const correcting = new Set();
  */
 function proposalVerification(rows) {
   const live = groups.filter((g) => !g.archived && g.eligible);
-  return verifyProposals({
+  const v = verifyProposals({
     groups: live.map((g) => ({ name: g.name, slots: [...slotsForGroup(g), "Angle Scorecard"], tiers: clientGroupView(g).tiers || {} })),
     rows,
     // What the group's own page is given, plus the scorecard (admin only).
@@ -5844,6 +5936,34 @@ function proposalVerification(rows) {
     readingVersion,
     gaveUp: (id) => (stewardState && stewardState[id] && stewardState[id].gaveUp) || null,
   });
+  verifiedProposals.clear();
+  for (const g of v.groups) {
+    for (const c of g.cells) {
+      if (c.state !== "verified" || c.proposalId == null) continue;
+      const r = rows.find((rr) => rr.id === c.proposalId);
+      verifiedProposals.set(c.proposalId, (r && r.audit && r.audit.completedAt) || new Date().toISOString());
+    }
+  }
+  return v;
+}
+
+/**
+ * Persist each proposal's processing stage (and, for NEEDS_REVIEW, why) as
+ * the check sees it, so the database says where every proposal stands. A
+ * proposal with a job in flight keeps the stage that job set.
+ */
+async function syncStages(v, rows) {
+  for (const g of v.groups) {
+    for (const c of g.cells) {
+      if (c.state === "missing" || !c.stage || c.state === "working") continue;
+      const id = c.proposalId ?? c.fixId;
+      const r = rows.find((rr) => rr.id === id);
+      if (!r) continue;
+      const reason = c.stage === "NEEDS_REVIEW" || c.stage === "VERIFIED" ? (c.stage === "VERIFIED" ? null : c.stageReason) : c.stageReason;
+      if (r.stage === c.stage && (r.stage_reason || null) === (reason || null)) continue;
+      await proposalStore.updateProposal(id, { stage: c.stage, stage_reason: reason ? String(reason).slice(0, 1000) : null }).catch(() => undefined);
+    }
+  }
 }
 
 /** One line for the book, and one per box that is not verified - the check, readable in the deploy log. */
@@ -5851,7 +5971,7 @@ async function logProposalCheck() {
   await loadSteward();
   const v = proposalVerification(await proposalStore.listProposals());
   const t = v.totals;
-  console.log(`proposal check: ${t.verified} of ${t.filed} verified, ${t.working} being fixed now, ${t.failing} to fix, ${t.stuck} the AI could not fix`);
+  console.log(`proposal check: ${t.verified} of ${t.filed} Verified, ${t.working} in progress, ${t.failing} queued, ${t.stuck} NEEDS_REVIEW (by step: ${Object.entries(t.byStep).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"})`);
   for (const g of v.groups) {
     for (const c of g.cells) {
       if (c.state === "verified" || c.state === "missing") continue;
@@ -5907,36 +6027,72 @@ async function stewardRead(row) {
  * audit again. When the corrector changes nothing - every finding was the
  * auditor's mistake - and the counts agree, the third reading settles it.
  */
-async function runProposalCorrection(id, tiers) {
+async function runProposalCorrection(id) {
   if (correcting.has(id)) return;
   correcting.add(id);
+  let reaudit = false;
   try {
     const row = (await proposalStore.listProposals()).find((r) => r.id === id);
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
     if (!row || !f || !row.extracted) return;
-    const plans = Array.isArray(row.extracted.plans) ? row.extracted.plans : [];
+    await setStage(id, "CORRECTING");
+    const x = row.extracted;
+    const startVersion = readingVersion(x);
+    const plans = Array.isArray(x.plans) ? x.plans : [];
+    const textSource = !/pdf|image/i.test(String(row.mime || ""));
     const missingRates = [];
     plans.forEach((pl, index) => {
       for (const t of ["EE", "ES", "EC", "FAM"]) {
-        if (tiers && tiers[t] && (!pl.rates || pl.rates[t] == null) && !(Array.isArray(pl.unpriced) && pl.unpriced.includes(t))) missingRates.push({ index, tier: t });
+        // All four tiers: a plan's rate set is complete, or the carrier's
+        // document is confirmed not to price that tier.
+        if ((!pl.rates || pl.rates[t] == null) && !(Array.isArray(pl.unpriced) && pl.unpriced.includes(t))) missingRates.push({ index, tier: t });
       }
     });
-    const mismatches = ((row.audit && row.audit.mismatches) || []).map((m) => ({ plan: m.plan, field: m.field, stored: m.stored, on_document: m.onDocument }));
-    const c = await withReadSlot(() => correctProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted, mismatches, missingRates }));
-    const { extracted, log } = applyCorrection(row.extracted, c);
-    const at = new Date().toISOString();
-    extracted.corrections = [...(row.extracted.corrections || []), ...log.map((l) => ({ ...l, at }))].slice(-300);
+    // What to settle: the current audit's findings, what deterministic
+    // validation found, and any conflict between two appearances of a plan.
+    const auditCurrent = row.audit && row.audit.version === startVersion;
+    const findings = auditCurrent ? (row.audit.mismatches || []).map((m) => ({ plan: m.plan, field: m.field, stored: m.stored, on_document: m.onDocument, by: m.by })) : [];
+    const val = validatePlans({ extracted: x, sourceSha: row.source_sha, textSource });
+    for (const c of val.checks) if (!c.ok && c.fix === "correct") findings.push({ plan: "(deterministic validation)", field: c.key, stored: "", on_document: c.note, by: "validation" });
+    const conflicts = plans.flatMap((pl, index) => (Array.isArray(pl.conflicts) ? pl.conflicts : []).map((k) => ({ index, plan: pl.name, plan_code: pl.plan_code || null, field: k.field, values: k.values })));
+    // Targeted: when every finding is about a value on a named plan whose
+    // pages are known, only those pages go to the corrector. A missing,
+    // extra or duplicated plan, or a count problem, needs the whole document.
+    const structural =
+      findings.some((m) => /missing_plan|extra_plan|plan_count|duplicate/.test(m.field) || (m.plan && !m.plan.startsWith("(") && !plans.some((pl) => pl.name === m.plan))) ||
+      val.checks.some((c) => !c.ok && ["unique", "codes", "reconciliation", "plans"].includes(c.key));
+    let pages = null;
+    if (!structural && !textSource) {
+      const affected = plans.filter((pl, index) => findings.some((m) => m.plan === pl.name) || conflicts.some((k) => k.index === index) || missingRates.some((mr) => mr.index === index));
+      const pgs = [...new Set(affected.flatMap((pl) => (pl.source ? [...(pl.source.identity || []), ...(pl.source.benefits || []), ...(pl.source.rates || [])] : [])))].sort((a, b) => a - b);
+      if (affected.length && pgs.length && affected.every((pl) => pl.source && (pl.source.rates || []).length)) pages = pgs;
+    }
+    const c = await withReadSlot(() => correctProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: x, mismatches: findings, missingRates, conflicts, pages }));
+    // Stale guard: the reading or the document changed while the corrector
+    // worked - its answer is about a version that is gone.
+    const now = (await proposalStore.listProposals()).find((r) => r.id === id);
+    if (!now || now.source_sha !== row.source_sha || readingVersion(now.extracted || {}) !== startVersion) {
+      console.log(`proposal ${id} correction of an earlier version discarded`);
+      return;
+    }
+    const { extracted, log } = applyCorrection(x, c, { proposalId: id, version: startVersion, by: `Claude (claude-sonnet-5) correction${pages ? `, pages ${pages.join(",")}` : ", whole document"}` });
+    extracted.corrections = [...(x.corrections || []), ...log].slice(-300);
     // Whatever the corrector concluded - even "the auditors were wrong,
     // nothing to change" - only a fresh audit by both models can turn the
     // box green. The corrector never settles a finding on its own word.
     await proposalStore.updateProposal(id, { extracted, audit: null });
-    console.log(`proposal ${id} corrected against the document: ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
+    console.log(`proposal ${id} corrected against the document${pages ? ` (pages ${pages.join(",")})` : " (whole document)"}: ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.optionId || l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
+    // Re-audit only a reading that now passes the deterministic checks
+    // (IDs aside - they are handed out on the next settle).
+    const recheck = validatePlans({ extracted, sourceSha: row.source_sha, textSource });
+    reaudit = recheck.checks.every((k) => k.ok || k.key === "ids");
   } catch (e) {
     console.error(`proposal ${id} correction failed:`, e.message);
   } finally {
     correcting.delete(id);
   }
-  await runProposalAudit(id);
+  if (reaudit) await runProposalAudit(id);
+  else await proposalsChanged();
 }
 
 /** Carry out one box's repair, within the limits. */
@@ -5951,8 +6107,31 @@ async function stewardRepair(cell, tiers) {
     console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: ${why}`);
   };
   const read = async () => {
-    if (workbook) return giveUp("A Gravie workbook is parsed, not read - upload the workbook again.");
-    if (st.reads >= 2) return giveUp(`The document would not read into plans in ${st.reads} tries - it may not be a rate quote (a case summary, say). Upload the quote itself.`);
+    if (workbook) {
+      // A Gravie workbook is parsed by code: parse it again, deterministically.
+      if (st.reads >= 2) return giveUp("The Gravie workbook could not be parsed into plans - upload the workbook again.");
+      st.reads++;
+      await saveSteward();
+      const f = await proposalStore.getProposalFile(row.id).catch(() => null);
+      if (!f) return giveUp("The Gravie workbook is not on file.");
+      try {
+        const parsed = parseGravieWorkbook(f.data);
+        const extracted = gravieReading(parsed, row.group_name, row.source_sha, (row.extracted && row.extracted.plans) || []);
+        await proposalStore.updateProposal(row.id, { extracted, summary: extracted.summary, audit: null, stage: "EXTRACTED", error: null });
+        console.log(`steward: #${row.id} ${row.group_name} / Gravie: workbook parsed again (${extracted.plans.length} plans)`);
+      } catch (e) {
+        await proposalStore.updateProposal(row.id, { error: e.message });
+      }
+      return proposalsChanged();
+    }
+    if (st.reads >= 2) {
+      const newer = cell.proposalId != null && row.id !== cell.proposalId;
+      const why =
+        cell.failedAt === "extraction"
+          ? `${newer ? `The newer upload ${row.filename} would not read into plans` : "The document would not read into plans"} in ${st.reads} tries - it may not be a rate quote (a case summary, say). ${newer ? "The proposal on file stays in force; upload the quote itself to replace it." : "Upload the quote itself."}`
+          : `Read ${st.reads} times and still: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : "not verified"}`;
+      return giveUp(why);
+    }
     st.reads++;
     st.audits = 0;
     st.corrections = 0;
@@ -5976,7 +6155,7 @@ async function stewardRepair(cell, tiers) {
     st.corrections++;
     await saveSteward();
     console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: correcting against the document (${st.corrections}/3)`);
-    return runProposalCorrection(row.id, tiers);
+    return runProposalCorrection(row.id);
   }
   if (cell.fix === "refresh") {
     if (st.refresh >= 2) return giveUp(`The group's grid does not match the database after a rebuild: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);
@@ -6009,7 +6188,9 @@ async function stewardPass() {
     do {
       stewardAgain = false;
       await loadSteward();
-      const v = proposalVerification(await proposalStore.listProposals());
+      const rowsNow = await proposalStore.listProposals();
+      const v = proposalVerification(rowsNow);
+      await syncStages(v, rowsNow);
       // A box that is green again starts fresh the next time it changes.
       let cleaned = false;
       for (const g of v.groups) {
@@ -6024,9 +6205,13 @@ async function stewardPass() {
       const tiersOf = new Map(groups.map((g) => [g.name, clientGroupView(g).tiers || {}]));
       // Group by group: each group's boxes are worked together, two groups
       // at a time, and each group reports where it stands when it is done.
+      // A group with a box that has nothing usable on the grid at all (no
+      // reading in force) goes first; then every other group in book order.
+      const empty = (c) => c.failedAt === "extraction" && c.proposalId == null ? 0 : c.failedAt === "extraction" && c.fixId === c.proposalId && !(c.counts && c.counts.stored) ? 0 : 1;
       const byGroup = v.groups
-        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null) }))
-        .filter((x) => x.jobs.length);
+        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).sort((a, b) => empty(a) - empty(b)) }))
+        .filter((x) => x.jobs.length)
+        .sort((a, b) => Math.min(...a.jobs.map(empty)) - Math.min(...b.jobs.map(empty)));
       if (!byGroup.length) break;
       console.log(`steward: ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) to fix across ${byGroup.length} group(s)`);
       const queue = [...byGroup];
@@ -6299,6 +6484,9 @@ async function boot() {
   await loadPlanCatalogue();
   await loadCarrierPlanLimits();
   await loadMarketingResources();
+  // Every proposal's source document gets its version hash, once; each
+  // extraction and audit is then tied to it.
+  await backfillSourceSha().catch((e) => console.error("proposals: source hash:", e.message));
   await proposalsChanged();
   await refreshAudit();
   // Gravie workbooks already on file, re-read with the current parser and

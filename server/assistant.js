@@ -500,9 +500,15 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
   for (const pr of props) {
     const head = [pr.carrier || pr.slot, pr.funding ? `${pr.funding}` : null, pr.effectiveDate ? `effective ${pr.effectiveDate}` : null, pr.enrolledOnDocument != null ? `priced on ${pr.enrolledOnDocument} enrolled` : null].filter(Boolean).join(", ");
     out.push(`\n### ${pr.slot} - ${head}`);
+    // The same canonical plan records the client's grid shows; whether the
+    // dual audit has passed on this exact reading says how firmly to state them.
+    out.push(pr.verified ? "Status: Verified - every plan below passed Kennion's dual audit against the carrier's proposal." : "Status: still being checked by Kennion - quote these figures as the carrier's proposal shows them and say they are being verified.");
     if (pr.summary) out.push(pr.summary);
+    // Every plan, not a sample: a client can ask about any plan on the grid,
+    // and the assistant answers from the same records the grid shows. (1M
+    // context; a 142-plan quote is ~15K tokens.)
     const list = pr.plans || [];
-    const shown = list.slice(0, 40);
+    const shown = list;
     for (const pl of shown) {
       const rates = TIER_KEYS.map((k) => `${k} ${pl.rates && pl.rates[k] != null ? money(pl.rates[k]) : "-"}`).join(", ");
       const b = pl.benefits || {};
@@ -514,6 +520,8 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.hospital ? `hospital ${b.hospital}` : null,
         b.er ? `ER ${b.er}` : null,
         b.rx ? `Rx ${b.rx}` : null,
+        b.coinsurance ? `coinsurance ${b.coinsurance}` : null,
+        b.hsaEligible === true ? "HSA-eligible" : b.hsaEligible === false ? "not HSA-eligible" : null,
       ].filter(Boolean).join("; ");
       // A plan that is one of the carrier's standard designs: the catalogue's
       // family figures and out-of-network cover too.
