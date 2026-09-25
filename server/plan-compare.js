@@ -42,8 +42,12 @@ export const AUDIT_STANDARD = 2;
  *    Scan)"): each part is matched to one with the same figures and a
  *    service word in common, so a figure moved to another service is caught.
  *    Prescription tiers stay in tier order.
+ * 5: hospital is the inpatient stay (the reading rule): where a value labels
+ *    its inpatient and outpatient parts ("OP Ded+$750, IP Ded+$1500"), the
+ *    inpatient part is what is compared; a part repeated word for word
+ *    ("Ded+100%, Ded+100%") is one part.
  */
-export const COMPARE_VERSION = 4;
+export const COMPARE_VERSION = 5;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -166,9 +170,38 @@ function sameLabelledParts(a, b) {
  * (the setting labels a carrier prints per part aside). `field` "rx" compares
  * the retail part only.
  */
+/** The inpatient part of a hospital value that labels its settings ("OP Ded+$750, IP Ded+$1500" -> "Ded+$1500"); the value as is otherwise. */
+export function inpatientPart(v) {
+  const parts = String(v ?? "").split(/;|,(?!\d)/).map((p) => p.trim()).filter(Boolean);
+  const ip = parts.filter((p) => /^(?:ip|inpatient|in-patient)\b\s*:?/i.test(p));
+  return ip.length ? ip.map((p) => p.replace(/^(?:ip|inpatient|in-patient)\b\s*:?\s*/i, "")).join(", ") : String(v ?? "");
+}
+
+/** A part repeated word for word is one part: "Ded+100%, Ded+100%" -> "Ded+100%". */
+const onceEach = (v) => {
+  // A comma inside a figure ("$1,500") is not a separator.
+  const parts = String(v ?? "").split(/;|,(?!\d)/);
+  const seen = new Set();
+  const out = [];
+  let repeated = false;
+  for (let i = 0; i < parts.length; i++) {
+    const k = fold(parts[i]);
+    if (!k) continue;
+    if (seen.has(k)) {
+      repeated = true;
+      continue;
+    }
+    seen.add(k);
+    out.push(parts[i].trim());
+  }
+  // Only a value that repeats a part is rewritten; any other stays as it is.
+  return repeated ? out.join(", ") : String(v ?? "");
+};
+
 export function sameBenefit(a, b, field = null) {
-  const pa = field === "rx" ? retailRx(a) : a;
-  const pb = field === "rx" ? retailRx(b) : b;
+  const prep = (v) => (field === "rx" ? retailRx(v) : onceEach(field === "hospital" ? inpatientPart(v) : v));
+  const pa = prep(a);
+  const pb = prep(b);
   const fa = figures(pa);
   const fb = figures(pb);
   // Parts each labelled with their service on both sides: matched by service,
