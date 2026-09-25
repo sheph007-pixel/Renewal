@@ -20,7 +20,7 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
 import { withUsage, setUsageSink, memoryUsage, summarize } from "./ai-usage.js";
-import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION } from "./plan-compare.js";
+import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION, optimylNumber, optimylLabel } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -5024,6 +5024,7 @@ async function proposalsChanged() {
       // already on file is fixed without waiting on staff to press Re-read.
       if (Array.isArray(r.extracted && r.extracted.plans)) {
         let plans = r.extracted.plans.filter((pl) => !isBlankPlan(pl));
+        let renamed = false;
         if (/optimyl/i.test(r.carrier || (r.extracted && r.extracted.carrier) || "")) {
           const seen = new Set();
           plans = plans.filter((pl) => {
@@ -5033,8 +5034,16 @@ async function proposalsChanged() {
             seen.add(code);
             return true;
           });
+          // Its document prints a plan number and no name: each plan is
+          // stored under the fixed label for its number, never a made-up name.
+          plans = plans.map((pl) => {
+            const n = optimylNumber(pl.plan_code);
+            if (n == null || pl.name === optimylLabel(n)) return pl;
+            renamed = true;
+            return { ...pl, name: optimylLabel(n) };
+          });
         }
-        if (plans.length !== r.extracted.plans.length) {
+        if (renamed || plans.length !== r.extracted.plans.length) {
           r.extracted = { ...r.extracted, plans };
           await proposalStore.updateProposal(r.id, { extracted: r.extracted });
           remapped = true;
@@ -5492,13 +5501,15 @@ async function runAnalysis(id, file, keepAssignment) {
     // staff rather than stored silently.
     if (Array.isArray(out.plans) && /optimyl/i.test(out.carrier || "")) {
       const seen = new Set();
-      out.plans = out.plans.filter((pl) => {
-        const code = pl.plan_code || "";
-        if (!/^OPTIMYL PLAN /i.test(code)) return true;
-        if (seen.has(code)) return false;
-        seen.add(code);
-        return true;
-      });
+      out.plans = out.plans
+        .filter((pl) => {
+          const code = pl.plan_code || "";
+          if (!/^OPTIMYL PLAN /i.test(code)) return true;
+          if (seen.has(code)) return false;
+          seen.add(code);
+          return true;
+        })
+        .map((pl) => (optimylNumber(pl.plan_code) != null ? { ...pl, name: optimylLabel(optimylNumber(pl.plan_code)) } : pl));
       if (out.plans.length !== 4) {
         flags.push(`Optimyl always quotes exactly 4 plans; this reading found ${out.plans.length} - re-check the document.`);
       }

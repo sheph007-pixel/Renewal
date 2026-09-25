@@ -47,7 +47,21 @@ assert.ok(sameBenefit("Ded+100%", "Ded+100%, Ded+100%", "hospital"));
 assert.ok(!sameBenefit("Ded+$750", "OP Ded+$750, IP Ded+$1500", "hospital"), "the outpatient figure is not the inpatient stay");
 assert.ok(!sameBenefit("$250 copay", "IP $500 copay", "hospital"));
 assert.ok(sameBenefit("$1,500 copay", "OP $750 copay, IP $1,500 copay", "hospital"), "a comma inside a figure is not a separator");
-assert.ok(!sameBenefit("$750", "OP $750, IP $1500", "imaging"), "only hospital narrows to the inpatient part");
+assert.ok(!sameBenefit("$750", "OP $750, IP $1500", "doctor_visit"), "only hospital narrows to the inpatient part");
+// v6: imaging is advanced imaging (MRI, CT, PET); labs and X-ray are not.
+assert.ok(sameBenefit("D&C", "D&C (Maj Diag); 0%, 0% (X-ray & Lab)", "imaging"));
+assert.ok(sameBenefit("MD Ded+100%: DDP", "MD Ded+100%: DDP; X-ray Ded+100%, Lab Ded+100%: DDP", "imaging"));
+assert.ok(sameBenefit("$500", "$500 (MRI/CT); $40 (Lab/X-Ray)", "imaging"));
+assert.ok(!sameBenefit("$40", "$500 (MRI/CT); $40 (Lab/X-Ray)", "imaging"), "the lab figure is not the imaging cost");
+assert.ok(!sameBenefit("0%, 0%", "D&C", "imaging"));
+// Optimyl: a plan number and no printed name.
+{
+  const op = { name: "Optimyl Plan 1", plan_code: "OPTIMYL PLAN 1", network: "", deductible: "$1,000", oop_max: "$5,000", benefits: {}, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
+  const rd = { name: "", plan_code: "1", network: "", deductible: "$1,000", oop_max: "$5,000", EE: 1, ES: 2, EC: 3, FAM: 4 };
+  assert.deepEqual(comparePlan(op, rd), []);
+  assert.deepEqual(comparePlan({ ...op, name: "Optimyl RBP Plan 1" }, rd).map((d) => d.field), ["name"], "a made-up name is still a finding");
+  assert.deepEqual(comparePlan(op, { ...rd, plan_code: "2" }).map((d) => d.field), ["plan_code"], "another plan number is a finding");
+}
 // A Gravie rate workbook is compared on what its rate rows state: the static Benefits Grid is not the plan's record.
 {
   const st = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna OAP", deductible: "$1000", oop_max: "$6000", benefits: { coinsurance: "20%" }, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
