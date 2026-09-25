@@ -32,6 +32,18 @@ assert.ok(sameBenefit("D&C", "OP D&C, IP D&C"));
 assert.ok(sameBenefit("Deductible and coinsurance", "D&C"));
 assert.ok(!sameBenefit("D&C", "IP D&C, OP $250 copay"), "a figure on one side is compared as a figure");
 assert.ok(!sameBenefit("Not covered", "D&C"));
+// v3: service labels on word-only parts; Ded+Coins.
+assert.ok(sameBenefit("Lab/X-Ray Ded+Coins; MRI/CT Ded+Coins", "Ded+Coins"));
+assert.ok(sameBenefit("D&C", "D&C (Maj Diag); D&C, D&C (X-ray & Lab)"));
+assert.ok(!sameBenefit("D&C", "D&C (Maj Diag); 0%, 0% (X-ray & Lab)"), "a stated figure is never dropped");
+// A Gravie rate workbook is compared on what its rate rows state: the static Benefits Grid is not the plan's record.
+{
+  const st = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna OAP", deductible: "$1000", oop_max: "$6000", benefits: { coinsurance: "20%" }, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };
+  const rd = { name: "Gravie Copay $1000", plan_code: null, network: "Cigna OAP", deductible: "$1000", oop_max: "$6000", coinsurance: "20%", doctor_visit: "$25 Copay", rx: "$10/$40/$80", EE: 1, ES: 2, EC: 3, FAM: 4 };
+  assert.deepEqual(comparePlan(st, rd, { benefitFields: ["coinsurance"] }), []);
+  assert.deepEqual(comparePlan(st, rd).map((d) => d.field), ["benefit doctor_visit", "benefit rx"], "any other source is compared on every benefit");
+  assert.deepEqual(comparePlan({ ...st, benefits: { coinsurance: "30%" } }, rd, { benefitFields: ["coinsurance"] }).map((d) => d.field), ["benefit coinsurance"]);
+}
 assert.deepEqual(figures("$3,000 / $6,000"), ["3000", "6000"]);
 assert.ok(sameAmount("$3,000", "$3,000 / $6,000"), "the individual figure agrees; the stored value states no family figure");
 assert.ok(!sameAmount("$3,000 / $6,000", "$3,000 / $7,000"), "a family figure both state must agree");
