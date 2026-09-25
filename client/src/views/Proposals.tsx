@@ -988,17 +988,28 @@ function SlotCell({
   // Queued or in hand: either way the AI is on it.
   const working = state === "working" || state === "fail";
   const filled = !!current || state !== "missing";
-  const edge = !filled ? C.border : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? "#fff" : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  // An empty slot - no proposal from that carrier - is blank. It still takes
+  // a file: hovering or dragging one over it shows where it will land.
+  const [hover, setHover] = useState(false);
+  const reveal = hover || busy;
+  const edge = !filled ? (reveal ? C.border : "transparent") : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal ? "#fff" : "transparent") : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
   const tone = verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
   return (
     <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
       <div
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setHover(true);
+        }}
+        onDragLeave={() => setHover(false)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         onDrop={(e) => {
           e.preventDefault();
+          setHover(false);
           void send(Array.from(e.dataTransfer.files));
         }}
         title={check && filled ? checkTitle(check) : undefined}
@@ -1037,8 +1048,13 @@ function SlotCell({
               title={`${current.filename}${quote ? ` · quote ${quote}` : ""}`}
               style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: tone, textAlign: "left", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
             >
-              {verified ? "✓ Verified · " : working ? "… " : "⚠ "}
-              {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : slot === "Angle Scorecard" ? "on file" : "no plans"}
+              {plans
+                ? `${verified ? "✓ Verified · " : working ? "… " : "⚠ "}${plans} plan${plans === 1 ? "" : "s"}`
+                : slot === "Angle Scorecard"
+                  ? `${verified ? "✓ " : ""}on file`
+                  : working
+                    ? "Reading proposal…"
+                    : "⚠ no plans read"}
             </button>
             {check && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
@@ -1078,7 +1094,7 @@ function SlotCell({
           <button
             onClick={() => ref.current?.click()}
             disabled={busy}
-            style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+            style={{ ...linkBtn, fontSize: 12, color: C.faint, visibility: reveal ? "visible" : "hidden" }}
             title={`Upload the ${slot} proposal for ${group}`}
           >
             {busy ? "uploading…" : "+ add"}
