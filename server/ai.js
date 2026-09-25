@@ -255,7 +255,7 @@ const SCHEMA = {
               imaging: { type: "string", description: "Labs, X-ray and advanced imaging (MRI, CT)." },
               urgent_care: { type: "string" },
               hospital: { type: "string", description: "Inpatient hospital stay." },
-              rx: { type: "string", description: "Retail prescription drug copays or coinsurance by tier, in tier order (\"$10 / $40 / $80\"); mail order left out." },
+              rx: { type: "string", description: "Retail prescription drug copays or coinsurance by tier, in tier order - every tier printed, a specialty tier included (\"$10 / $40 / $80 / 20% after deductible\"); mail order left out." },
             },
           },
           rates: {

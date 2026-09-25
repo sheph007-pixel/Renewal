@@ -77,7 +77,7 @@ export const FIELD_GUIDE = `How to read each value (in-network, for this plan on
 - deductible, oop_max: the in-network amounts as printed, individual first and then family where both are printed (e.g. "$3,000 / $6,000").
 - coinsurance: the member's in-network coinsurance as printed (e.g. "20%", "0%").
 - doctor_visit (primary care office visit), specialist, imaging (labs, X-ray, MRI/CT), urgent_care, emergency_room, hospital (inpatient stay): the member's in-network cost as printed, short and verbatim (e.g. "$30 copay", "20% after deductible", "No charge").
-- rx: the retail prescription cost by tier, in tier order, as printed (e.g. "$10 / $40 / $80"); leave mail order out.
+- rx: the retail prescription cost by tier, in tier order, as printed - every tier the document prints, a specialty tier included (e.g. "$10 / $40 / $80 / 20% after deductible"); leave mail order out.
 - hsa_eligible: "yes" when the document says the plan is HSA-eligible / HSA-qualified, "no" when it says it is not.
 - EE, ES, EC, FAM: the monthly rate per tier (employee only, employee + spouse, employee + children, family) as a plain number, e.g. 612.45.
 Use an empty string for any text value the document does not state for this plan, and null for a rate the document does not price for that tier.`;
@@ -176,7 +176,7 @@ const coverageSignature = (extracted) => {
  * here (comparePlan) - a difference is a finding whether or not the model
  * reported it. `indices`: the stored plans this answer was asked for.
  */
-export function shape(who, r, stored, indices = stored.map((_, i) => i)) {
+export function shape(who, r, stored, indices = stored.map((_, i) => i), compareOpts = {}) {
   const modelVerdict = ["pass", "issues", "unreadable"].includes(r && r.verdict) ? r.verdict : "unreadable";
   const mismatches = Array.isArray(r && r.mismatches)
     ? r.mismatches.slice(0, 80).map((m) => ({ plan: String(m.plan || ""), field: String(m.field || ""), stored: String(m.stored ?? ""), onDocument: String(m.on_document ?? "") }))
@@ -197,7 +197,7 @@ export function shape(who, r, stored, indices = stored.map((_, i) => i)) {
       continue;
     }
     if (c.benefits_belong === false) mismatches.push({ plan: pl.name, ...at, field: "benefits", stored: "stored benefits", onDocument: "belong to another plan or differ from this plan's own" });
-    for (const d of comparePlan(pl, c)) {
+    for (const d of comparePlan(pl, c, compareOpts)) {
       const key = `${pl.name}|${d.field}`.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -713,6 +713,11 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   if (!stored.length) return { completedAt, status: "pending", models: [], mismatches: [], notes: "No plans stored to check.", version, standard: AUDIT_STANDARD, counts: { stored: 0 } };
   const epo = canonicalPlans(extracted).filter(isEpoPlan).length;
   const exactRows = !!(extracted && extracted.extraction && extracted.extraction.method === "parser");
+  // A Gravie rate workbook's rows state each plan's deductible, out-of-pocket
+  // max and coinsurance; its other benefits are Gravie's static Benefits
+  // Grid, the same for every group - supplemental and attributed, never the
+  // plan's own record - so they are not compared against it.
+  const compareOpts = extracted && extracted.coverage && extracted.coverage.parser === "gravie" ? { benefitFields: ["coinsurance"] } : {};
   const saved = { ...(jobs || {}) };
   const save = async (id, value) => {
     saved[id] = value;
@@ -772,11 +777,11 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
       const key = combinedKey(docKey, batchKeys[0]);
       const prev = saved[`${provider}:doc`];
       const range = { from: indices[0], to: indices[indices.length - 1] };
-      if (prev && prev.key === key) return composeModel(who, { ...shapeDoc(who, prev.answer, stored), reused: true }, [{ ...shape(who, prev.answer, stored, indices), ...range, source: { full: true }, reused: true }], stored.length);
+      if (prev && prev.key === key) return composeModel(who, { ...shapeDoc(who, prev.answer, stored), reused: true }, [{ ...shape(who, prev.answer, stored, indices, compareOpts), ...range, source: { full: true }, reused: true }], stored.length);
       try {
         const r = await answer({ who, provider, kind: "combined", batch: 0, indices, packet: { full: true }, payload: docPayload(stored, version, sourceSha, extracted, true) });
         await save(`${provider}:doc`, { key, combined: true, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r, source: { full: true } });
-        return composeModel(who, shapeDoc(who, r, stored), [{ ...shape(who, r, stored, indices), ...range, source: { full: true } }], stored.length);
+        return composeModel(who, shapeDoc(who, r, stored), [{ ...shape(who, r, stored, indices, compareOpts), ...range, source: { full: true } }], stored.length);
       } catch (e) {
         return composeModel(who, { model: who, verdict: "error", mismatches: [], notes: `Audit: ${e.message}` }, [], stored.length);
       }
@@ -801,13 +806,13 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
       const prev = saved[id];
       const range = { from: indices[0], to: indices[indices.length - 1] };
       if (prev && prev.key === batchKeys[b]) {
-        parts.push({ ...shape(who, prev.answer, stored, indices), ...range, source: prev.source || null, reused: true });
+        parts.push({ ...shape(who, prev.answer, stored, indices, compareOpts), ...range, source: prev.source || null, reused: true });
         continue;
       }
       try {
         let packet = await packetFor(indices);
         let r = await answer({ who, provider, kind: "batch", batch: b, indices, packet, payload: fieldPayload(stored, indices, version, sourceSha, b, batches.length, packet.full ? null : packet.note || `pages ${packetDescribe(packet)} of the ${packet.of}-page proposal, in that order (original page numbers).`) });
-        let part = shape(who, r, stored, indices);
+        let part = shape(who, r, stored, indices, compareOpts);
         // A packet that did not hold everything - the auditor says so, or a
         // listed plan was not found in it, or a plan came back unconfirmed -
         // is never taken as a finding: the batch is read against the whole
@@ -816,7 +821,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
         if (short) {
           packet = { full: true, reason: r.insufficient_context ? "the auditor said the packet lacked context" : "a plan was not found in the packet" };
           r = await answer({ who, provider, kind: "batch", batch: b, indices, packet, payload: fieldPayload(stored, indices, version, sourceSha, b, batches.length, null) });
-          part = shape(who, r, stored, indices);
+          part = shape(who, r, stored, indices, compareOpts);
         }
         const source = packet.full ? { full: true, reason: packet.reason || null } : { full: false, pages: packet.pages || null, sheets: packet.sheets || null, lines: packet.lines || null };
         await save(id, { key: batchKeys[b], indices, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r, source });

@@ -33,8 +33,12 @@ export const AUDIT_STANDARD = 2;
  *    inpatient / outpatient labels aside ("D&C" = "OP D&C, IP D&C"); network
  *    "+" is "plus" (so "Choice +" = "Choice Plus", never "Choice") and the
  *    carriers' abbreviations INS / NATL read as words.
+ * 3: word-only parts drop their service labels ("Lab/X-Ray Ded+Coins" and
+ *    "D&C (X-ray & Lab)" are "D&C"; "Ded+Coins" is "D&C"); a Gravie rate
+ *    workbook read by the parser is compared on what its rate rows state -
+ *    the static Benefits Grid is supplemental, never the plan's own record.
  */
-export const COMPARE_VERSION = 2;
+export const COMPARE_VERSION = 3;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -107,13 +111,17 @@ export function retailRx(v) {
 
 /** Plain cost-sharing wording, one term per listed part: "D&C", "Deductible and coinsurance" -> "dc". */
 const COST_TERMS = [
-  [/\b(?:d\s*&\s*c|ded(?:uctible)?\s*(?:&|and|\/)\s*coins(?:urance)?)\b/g, " dc "],
+  [/\b(?:d\s*&\s*c|ded(?:uctible)?\s*(?:&|and|\/|\+)\s*coins(?:urance)?)\b/g, " dc "],
 ];
 const SETTING_LABEL = /^(?:ip|op|inpatient|outpatient|in-patient|out-patient|facility|professional)\b\s*:?\s*/;
 const wordTerms = (v) => {
   let s = fold(v);
   for (const [re, to] of COST_TERMS) s = s.replace(re, to);
-  return [...new Set(s.split(/[,;]/).map((part) => part.trim().replace(SETTING_LABEL, "").replace(/[^a-z0-9]+/g, "")).filter(Boolean))].sort();
+  s = s.replace(/\([^)]*\)/g, " "); // a service label in brackets: "(X-ray & Lab)"
+  // A part that states deductible-and-coinsurance is that, whatever service
+  // label it carries ("Lab/X-Ray Ded+Coins"); any other part keeps its words.
+  const term = (part) => (/(?:^|\s)dc(?:\s|$)/.test(part) ? "dc" : part.replace(SETTING_LABEL, "").replace(/[^a-z0-9]+/g, ""));
+  return [...new Set(s.split(/[,;]/).map((part) => term(part.trim())).filter(Boolean))].sort();
 };
 
 /**
@@ -196,7 +204,7 @@ const sameRate = (a, b) => (a == null && b == null) || (a != null && b != null &
  *    document states them for the plan; a value the document states that the
  *    database lacks is a disagreement (the client would see a blank).
  */
-export function comparePlan(stored, read) {
+export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS } = {}) {
   const out = [];
   const diff = (field, st, doc) => out.push({ field, stored: st == null ? "" : String(st), onDocument: doc == null || String(doc) === "" ? "not stated" : String(doc) });
   if (nameForCompare(stored.name) !== nameForCompare(read.name)) diff("name", stored.name, read.name);
@@ -209,7 +217,7 @@ export function comparePlan(stored, read) {
     if (blank(st) || blank(doc) || !sameAmount(st, doc)) diff(f, st, doc);
   }
   const benefits = stored.benefits || {};
-  for (const f of BENEFIT_FIELDS) {
+  for (const f of benefitFields) {
     const doc = read[f];
     if (blank(doc)) continue;
     const st = benefits[f];
