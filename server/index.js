@@ -4714,16 +4714,18 @@ function slotFor(carrier, funding, quotesMedical, filename) {
 function guessSlotFromFilename(filename) {
   const f = String(filename || "");
   if (/scorecard/i.test(f) && /angle/i.test(f)) return "Angle Scorecard";
-  if (/\buhc\b|united\s*health/i.test(f)) {
-    if (/\blf\b|level.?fund/i.test(f)) return "UHC Level Funded";
-    if (/\bfi\b|fully.?insur/i.test(f)) return "UHC Fully Insured";
-    return null; // UnitedHealthcare named, but the funding isn't in the name
-  }
   if (/gravie/i.test(f)) return "Gravie";
   if (/nationwide/i.test(f)) return "Nationwide";
   if (/optimyl/i.test(f)) return "Optimyl";
   if (/\bangle\b/i.test(f)) return "Angle";
-  return null;
+  // Of every carrier this app tracks, only UnitedHealthcare splits a slot by
+  // funding - "fully insured" and "level funded" name that split and nothing
+  // else, so either wording identifies UHC on its own, even when the file
+  // never spells out "UHC" or "United" - live example: "TPI Global
+  // Solutions, Inc. Ex MPE Fully Ins Med 3.pdf".
+  if (/\blf\b|level.?fund/i.test(f)) return "UHC Level Funded";
+  if (/\bfi\b|fully.?ins/i.test(f)) return "UHC Fully Insured";
+  return null; // UnitedHealthcare may be named, but the funding isn't
 }
 
 /**
