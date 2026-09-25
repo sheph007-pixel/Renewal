@@ -1336,19 +1336,7 @@ export default function Proposals({ token, groups }: Props) {
     reading: proposals.filter((p) => p.status === "analyzing").length,
     assigned: proposals.filter((p) => p.status === "assigned").length,
   };
-  const childCounts: Record<number, number> = {};
-  items.forEach((p) => {
-    if (p.parent_id != null) childCounts[p.parent_id] = (childCounts[p.parent_id] || 0) + 1;
-  });
-
   const sortedGroups = [...groups].sort((a, b) => a.name.localeCompare(b.name));
-
-  // By group: every roster group with its proposals attached, the unassigned
-  // ones first, and the groups still waiting on a proposal at the end.
-  const byGroup = sortedGroups.map((g) => ({
-    g,
-    rows: proposals.filter((p) => p.group_name === g.name && matches(p)),
-  }));
   const unassignedRows = proposals.filter((p) => !p.group_name && matches(p));
 
   // The grid: one row per group, one column per slot, holding that group's
@@ -1419,8 +1407,6 @@ export default function Proposals({ token, groups }: Props) {
   const otherRows = proposals.filter(
     (p) => p.group_name && !p.slot && p.status !== "analyzing" && !isAncillary(p) && !needsSlot(p) && matches(p),
   );
-  const withRows = byGroup.filter((x) => x.rows.length);
-  const without = byGroup.filter((x) => !x.rows.length && !proposals.some((p) => p.group_name === x.g.name));
 
   return (
     <>
@@ -1581,71 +1567,6 @@ export default function Proposals({ token, groups }: Props) {
               onChanged={() => void load()}
             />
             <Bucket title="Other Carriers" rows={otherRows} tone={C.faint} collapsed token={token} groups={sortedGroups} onChanged={() => void load()} />
-          </div>
-        ) : layout === "groups" ? (
-          <div>
-            {unassignedRows.length > 0 && (
-              <section style={{ padding: "12px 0 4px" }}>
-                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.amber }}>
-                  Not Yet Assigned <span style={{ fontWeight: 400, color: C.faint }}>· {unassignedRows.length}</span>
-                </h2>
-                {unassignedRows.map((p) => (
-                  <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} />
-                ))}
-              </section>
-            )}
-            {withRows.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 0 6px", borderBottom: `1px solid ${C.hairline}`, fontSize: 12.5, color: C.muted }}>
-                <span>Plan names are read exactly as the carrier prints them; proposals read before that rule may still carry placement labels.</span>
-                <button
-                  onClick={() => {
-                    if (!window.confirm("Re-read every current proposal with the models? Each is read again and then audited. This takes a while and uses the AI budget.")) return;
-                    void fetch("/api/admin/proposals/reanalyze", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) }).then(() => load());
-                  }}
-                  style={{ ...linkBtn, fontWeight: 600 }}
-                >
-                  Re-read every proposal
-                </button>
-              </div>
-            )}
-            {withRows.map(({ g, rows: rs }) => (
-              <section key={g.name} style={{ padding: "12px 0 4px" }}>
-                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.ink, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                  <Link href={groupPath(g.name)}>{g.name}</Link>
-                  <span style={{ fontWeight: 400, fontSize: 12.5, color: C.faint }}>
-                    {g.enrolled} enrolled · {g.tpa || "-"} · {rs.length} proposal{rs.length === 1 ? "" : "s"}
-                  </span>
-                  <SlotChips rows={rs} />
-                </h2>
-                {[...rs]
-                  .sort((a, b) => Number(!!a.superseded_by) - Number(!!b.superseded_by))
-                  .map((p) => (
-                    <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} fixedGroup={g.name} />
-                  ))}
-              </section>
-            ))}
-            {!withRows.length && !unassignedRows.length && (
-              <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>
-                {items.length ? "Nothing matches." : "No proposals yet. Drop the first batch above."}
-              </div>
-            )}
-            {without.length > 0 && !q && (
-              <section style={{ padding: "14px 0 10px", borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.faint }}>
-                  No Proposal Yet · {without.length} group{without.length === 1 ? "" : "s"}
-                </h2>
-                <div style={{ marginTop: 6, fontSize: 12.5, color: C.faint, lineHeight: 1.8 }}>
-                  {without.map(({ g }, i) => (
-                    <span key={g.name}>
-                      <Link href={groupPath(g.name)} style={{ color: C.body }}>
-                        {g.name}
-                      </Link>
-                      {i < without.length - 1 ? " · " : ""}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
           </div>
       </div>
     </>

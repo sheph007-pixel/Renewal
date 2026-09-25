@@ -837,7 +837,7 @@ export function createDb(url) {
          VALUES ($1, $2, $3, $4, $5, now())
          ON CONFLICT (group_name, slot) DO UPDATE SET
            dtq = EXCLUDED.dtq, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [groupName, slot, !dtq, dtq, by || null],
+        [groupName, slot, true, !!dtq, by || null],
       );
     },
 
