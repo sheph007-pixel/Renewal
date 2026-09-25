@@ -1,17 +1,20 @@
 // The four-step check behind every filled box on the Proposals grid.
 //
-// For each live group and each slot it quotes, the proposal on file is taken
-// through the same four questions, in order, and the box turns green only
-// when all four pass:
+// For each live group and each slot that has a proposal on file, the
+// proposal is held to four questions, in order, and the box turns green only
+// when all four pass - with the plan count, the same at every step:
 //
-//   1. Filed    - a proposal is on file for this group, in this slot.
-//   2. Read     - its read finished: plans, each with a name and a rate, each
-//                 numbered (UH3, GR12...), and no newer upload stuck beside it.
-//   3. Audited  - both models checked the stored plans against the document
-//                 and found nothing.
-//   4. Loaded   - the plans stored are the plans the group's 2027 Medical
-//                 Plans grid shows: the same count reaches the group's page,
-//                 and every one is priced at the group's own census.
+//   1. On file   - a proposal is on file for this group, in this slot.
+//   2. Scanned   - the document has been read for its plans and the AI has
+//                  counted every plan option it prices (EPO twins aside).
+//   3. Database  - the database holds exactly that many plans, and both
+//                  audit models agree every stored value matches the page.
+//   4. Grid      - every one of those plans is in the group's 2027 Medical
+//                  Plans grid, priced at the group's own census.
+//
+// An empty slot is not checked: it is just blank. Anything that fails names
+// the repair that fixes it (`fix`), and the server's steward carries it out
+// on its own - read again, audit, or correct against the document.
 //
 // Pure arithmetic over what is already stored - no model call - so the whole
 // book is checked in milliseconds and the answer is the same every time.
@@ -19,6 +22,7 @@
 const TIERS = ["EE", "ES", "EC", "FAM"];
 
 const normName = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+const planKey = (pl) => `${normName(pl.name)}|${TIERS.map((t) => (pl.rates && pl.rates[t] != null ? pl.rates[t] : "")).join(",")}`;
 
 /**
  * How the client's proposalPlans (client/src/lib/model.ts) treats a group's
@@ -35,12 +39,8 @@ export function gridCounts(plans, slot, tiers) {
   const unpriced = [];
   for (const pl of plans || []) {
     const rates = pl.rates || {};
-    if (!TIERS.some((t) => rates[t] != null)) {
-      unpriced.push(pl.name || pl.optionId || "?");
-      continue;
-    }
-    if (TIERS.some((t) => counts[t] && rates[t] == null)) {
-      unpriced.push(pl.name || pl.optionId || "?");
+    if (!TIERS.some((t) => rates[t] != null) || TIERS.some((t) => counts[t] && rates[t] == null)) {
+      unpriced.push(pl);
       continue;
     }
     const k = `${slot}|${normName(pl.name)}|${TIERS.map((t) => rates[t] ?? "").join(",")}`;
@@ -54,132 +54,172 @@ export function gridCounts(plans, slot, tiers) {
   return { shown, repeats, unpriced };
 }
 
+const busyRow = (r, reading) => r.status === "analyzing" || reading.has(r.id);
+
 /**
  * Check every group. `groups`: [{ name, slots, tiers }] - live groups, the
  * slots each is quoted in, and its enrolled count per tier. `rows`: every
  * proposal row as stored. `served(name)`: the proposals the group's own page
  * is given (clientProposals). `isEpoPlan` / `isBlankPlan`: the server's own
- * rules for what is never offered or never a plan. `reading`: ids with a
- * read in flight.
+ * rules for what is never offered or never a plan. `reading` / `auditing` /
+ * `correcting`: ids with that step in flight. `gaveUp(id)`: the steward's
+ * note when it has run out of repairs to try on a proposal.
  */
-export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, reading = new Set(), auditing = new Set() }) {
+export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, reading = new Set(), auditing = new Set(), correcting = new Set(), gaveUp = () => null }) {
   const out = [];
   for (const g of groups) {
     const mine = rows.filter((r) => r.group_name === g.name && r.status !== "container" && r.kind !== "invoice" && r.kind !== "email");
     const list = served(g.name) || [];
     const cells = [];
     for (const slot of g.slots) {
-      const inSlot = mine.filter((r) => r.slot === slot && r.status === "assigned" && !r.superseded_by);
+      const inSlot = mine.filter((r) => r.slot === slot && (r.status === "assigned" || r.status === "analyzing") && !r.superseded_by);
       const sv = list.find((p) => p.slot === slot);
       const row = (sv && inSlot.find((r) => r.id === sv.id)) || null;
       // A newer upload waiting beside the proposal in force: still being
       // read, or its read failed. It takes over only once it reads.
       const waiting = inSlot.filter((r) => !row || r.id !== row.id);
       const steps = { filed: null, read: null, audited: null, loaded: null };
-      const cell = { slot, proposalId: row ? row.id : null, filename: row ? row.filename : null, plans: 0, steps, waiting: waiting.map((r) => ({ id: r.id, filename: r.filename, reading: r.status === "analyzing" || reading.has(r.id), error: r.error || null })) };
+      const cell = {
+        slot,
+        proposalId: row ? row.id : null,
+        filename: row ? row.filename : null,
+        plans: 0,
+        counts: { document: null, stored: null, grid: null },
+        steps,
+        waiting: waiting.map((r) => ({ id: r.id, filename: r.filename, reading: busyRow(r, reading), error: r.error || null })),
+      };
       cells.push(cell);
+      const settle = (step, fix, id, busy) => {
+        cell.failedAt = step;
+        cell.fix = fix;
+        cell.fixId = id;
+        cell.state = busy ? "working" : "fail";
+        const why = gaveUp(id);
+        if (!busy && why) {
+          cell.state = "stuck";
+          cell.stuck = why;
+        }
+      };
 
-      // 1. Filed
+      // 1. On file. An empty slot is simply blank - nothing to check.
       if (!row && !waiting.length) {
-        steps.filed = { ok: false, note: "No proposal on file." };
         cell.state = "missing";
         continue;
       }
       if (!row) {
-        // Only an upload that has not read yet: filed, but nothing in force.
         const w = waiting[0];
         steps.filed = { ok: true, note: w.filename };
-        steps.read = w.status === "analyzing" || reading.has(w.id) ? { ok: false, busy: true, note: "Being read now." } : { ok: false, note: w.error ? `The read failed: ${w.error}` : "Not read yet." };
-        cell.state = steps.read.busy ? "working" : "fail";
-        cell.failedAt = "read";
-        cell.fixId = w.id;
-        cell.fix = steps.read.busy ? null : "read";
+        const busy = busyRow(w, reading);
+        steps.read = { ok: false, busy, note: busy ? "Being read now." : w.error ? `The read failed: ${w.error}` : "Not read yet." };
+        settle("read", "read", w.id, busy);
         continue;
       }
       steps.filed = { ok: true, note: row.filename };
-
-      // 2. Read
+      const scorecard = slot === "Angle Scorecard";
       const x = row.extracted || {};
       const stored = (Array.isArray(x.plans) ? x.plans : []).filter((pl) => !isBlankPlan(pl) && !isEpoPlan(pl));
-      const scorecard = slot === "Angle Scorecard";
-      const readProblems = [];
-      if (row.status === "analyzing" || reading.has(row.id)) readProblems.push("Being read now.");
-      else if (!row.extracted) readProblems.push(row.error ? `The read failed: ${row.error}` : "Not read yet.");
-      else if (!scorecard) {
-        if (!stored.length) readProblems.push("The reading has no plans.");
-        const noName = stored.filter((pl) => !String(pl.name || "").trim()).length;
-        if (noName) readProblems.push(`${noName} plan${noName === 1 ? " has" : "s have"} no name.`);
-        const noRate = stored.filter((pl) => !TIERS.some((t) => pl.rates && pl.rates[t] != null)).length;
-        if (noRate) readProblems.push(`${noRate} plan${noRate === 1 ? " has" : "s have"} no rate at all.`);
-        const noId = stored.filter((pl) => !pl.option_id).length;
-        if (noId) readProblems.push(`${noId} plan${noId === 1 ? " is" : "s are"} not numbered.`);
-      }
-      for (const w of waiting) {
-        readProblems.push(
-          w.status === "analyzing" || reading.has(w.id)
-            ? `A newer upload (${w.filename}) is being read; it replaces this one once it reads.`
-            : `A newer upload (${w.filename}) could not be read${w.error ? `: ${w.error}` : ""}. This one stays in force until it does.`,
-        );
-      }
-      const busy = row.status === "analyzing" || reading.has(row.id) || waiting.some((w) => w.status === "analyzing" || reading.has(w.id));
-      steps.read = readProblems.length ? { ok: false, busy, note: readProblems.join(" ") } : { ok: true, note: scorecard ? "Read." : `${stored.length} plan${stored.length === 1 ? "" : "s"} read, each named, rated and numbered.` };
-      if (!steps.read.ok) {
-        cell.state = busy ? "working" : "fail";
-        cell.failedAt = "read";
-        const failedWaiting = waiting.find((w) => !(w.status === "analyzing" || reading.has(w.id)));
-        cell.fixId = !row.extracted || !stored.length ? row.id : failedWaiting ? failedWaiting.id : row.id;
-        cell.fix = busy ? null : failedWaiting && row.extracted && stored.length ? "read-waiting" : "read";
-        cell.plans = stored.length;
-        if (!row.extracted || (!stored.length && !scorecard)) continue;
-      }
+      const storedDistinct = new Set(stored.map(planKey)).size;
+      cell.counts.stored = storedDistinct;
+      cell.plans = storedDistinct;
 
-      // 3. Audited
+      // 2. Scanned: read for its plans, and every plan counted on the page.
       const a = row.audit;
-      if (scorecard) steps.audited = { ok: true, note: "A scorecard carries no rates to audit." };
-      else if (auditing.has(row.id)) steps.audited = { ok: false, busy: true, note: "Being audited now." };
-      else if (!a) steps.audited = { ok: false, note: "Not audited yet." };
-      else if (a.status === "pass") steps.audited = { ok: true, note: `Both models agree with the document (${String(a.completedAt || "").slice(0, 10)}).` };
-      else if (a.status === "issues") steps.audited = { ok: false, note: `${(a.mismatches || []).length} value${(a.mismatches || []).length === 1 ? "" : "s"} the document contradicts.`, mismatches: (a.mismatches || []).slice(0, 12) };
-      else steps.audited = { ok: false, note: a.notes || "The audit could not run." };
-
-      // 4. Loaded
-      if (scorecard) {
-        steps.loaded = { ok: true, note: "Admin only - not part of the 2027 options." };
-      } else {
-        const sentPlans = sv ? sv.plans || [] : [];
-        const g4 = gridCounts(sentPlans, slot, g.tiers);
+      const docCount = a && Number.isInteger(a.documentPlanCount) ? a.documentPlanCount : null;
+      cell.counts.document = docCount;
+      const readBusy = busyRow(row, reading) || waiting.some((w) => busyRow(w, reading));
+      const failedWaiting = waiting.find((w) => !busyRow(w, reading));
+      if (readBusy) {
+        steps.read = { ok: false, busy: true, note: "Being read now." };
+        settle("read", "read", row.id, true);
+        continue;
+      }
+      if (!row.extracted || (!scorecard && !stored.length)) {
+        steps.read = { ok: false, note: row.error ? `The read failed: ${row.error}` : row.extracted ? "The document read with no plans on it." : "Not read yet." };
+        settle("read", "read", row.id, false);
+        continue;
+      }
+      if (!scorecard) {
         const problems = [];
-        if (sentPlans.length !== stored.length) problems.push(`${stored.length} stored but ${sentPlans.length} reach the group's page.`);
-        if (g4.unpriced.length) problems.push(`${g4.unpriced.length} plan${g4.unpriced.length === 1 ? " lacks" : "s lack"} a rate for a tier this group has people in, so ${g4.unpriced.length === 1 ? "it is" : "they are"} not shown: ${g4.unpriced.slice(0, 4).join(", ")}${g4.unpriced.length > 4 ? "…" : ""}.`);
-        if (!g4.shown) problems.push("Nothing shows in the group's grid.");
-        cell.plans = g4.shown;
-        cell.repeats = g4.repeats;
-        steps.loaded = problems.length
-          ? { ok: false, note: problems.join(" ") }
-          : { ok: true, note: `${g4.shown} plan${g4.shown === 1 ? "" : "s"} in the group's 2027 Medical Plans grid${g4.repeats ? ` (${g4.repeats} printed twice on the quote, shown once)` : ""}.` };
+        const noName = stored.filter((pl) => !String(pl.name || "").trim()).length;
+        if (noName) problems.push(`${noName} plan${noName === 1 ? " has" : "s have"} no name.`);
+        const noRate = stored.filter((pl) => !TIERS.some((t) => pl.rates && pl.rates[t] != null)).length;
+        if (noRate) problems.push(`${noRate} plan${noRate === 1 ? " has" : "s have"} no rate at all.`);
+        if (problems.length) {
+          steps.read = { ok: false, note: problems.join(" ") };
+          settle("read", "correct", row.id, correcting.has(row.id));
+          continue;
+        }
       }
-
-      if (cell.state) continue; // a read problem already decided it
-      const order = ["read", "audited", "loaded"];
-      const first = order.find((k) => !steps[k].ok);
-      if (!first) {
+      if (failedWaiting) {
+        steps.read = { ok: false, note: `A newer upload (${failedWaiting.filename}) could not be read${failedWaiting.error ? `: ${failedWaiting.error}` : ""}. This one stays in force until it does.` };
+        settle("read", "read", failedWaiting.id, false);
+        continue;
+      }
+      if (scorecard) {
+        steps.read = { ok: true, note: "Read." };
+        steps.audited = { ok: true, note: "A scorecard carries no rates to check." };
+        steps.loaded = { ok: true, note: "Admin only - not part of the 2027 options." };
         cell.state = "verified";
-      } else {
-        cell.state = steps[first].busy ? "working" : "fail";
-        cell.failedAt = first;
-        cell.fixId = row.id;
-        // What one click can do about it: audit an unaudited reading, re-read
-        // one the audit found wrong or that does not load. Nothing else.
-        cell.fix = steps[first].busy ? null : first === "audited" && (!a || a.status !== "issues") ? "audit" : "read";
+        continue;
       }
+      if (docCount == null) {
+        const busy = auditing.has(row.id);
+        steps.read = { ok: false, busy, note: busy ? "Counting the plans on the document now." : "The plans on the document have not been counted yet." };
+        settle("read", "audit", row.id, busy);
+        continue;
+      }
+      steps.read = { ok: true, note: `${docCount} plan${docCount === 1 ? "" : "s"} on the document.` };
+
+      // 3. Database: the same count, and every value agreed by both models.
+      if (auditing.has(row.id) || correcting.has(row.id)) {
+        steps.audited = { ok: false, busy: true, note: correcting.has(row.id) ? "Correcting the database against the document now." : "Checking the database against the document now." };
+        settle("audited", null, row.id, true);
+        continue;
+      }
+      const problems3 = [];
+      if (storedDistinct !== docCount) problems3.push(`The document has ${docCount} plan${docCount === 1 ? "" : "s"}; the database has ${storedDistinct}.`);
+      if (a.status === "issues") problems3.push(`${(a.mismatches || []).length} value${(a.mismatches || []).length === 1 ? "" : "s"} differ from the document.`);
+      if (a.status === "unreadable") problems3.push(a.notes || "The check could not run.");
+      if (problems3.length) {
+        steps.audited = { ok: false, note: problems3.join(" "), mismatches: (a.mismatches || []).slice(0, 12) };
+        settle("audited", a.status === "unreadable" && storedDistinct === docCount ? "audit" : "correct", row.id, false);
+        continue;
+      }
+      steps.audited = { ok: true, note: `${storedDistinct} plan${storedDistinct === 1 ? "" : "s"} in the database, every value matching the document (checked ${String(a.completedAt || "").slice(0, 10)}).` };
+
+      // 4. Grid: every plan in the group's Medical Plans grid. The one plan
+      // it may leave out is one the document itself does not price for a
+      // tier this group has people in - confirmed against the page.
+      const sentPlans = sv ? sv.plans || [] : [];
+      const g4 = gridCounts(sentPlans, slot, g.tiers);
+      const confirmedUnpriced = g4.unpriced.filter((pl) => Array.isArray(pl.unpriced) && TIERS.some((t) => g.tiers && g.tiers[t] && pl.rates && pl.rates[t] == null && pl.unpriced.includes(t)));
+      const unexplained = g4.unpriced.length - confirmedUnpriced.length;
+      const expected = storedDistinct - confirmedUnpriced.length;
+      cell.counts.grid = g4.shown;
+      cell.plans = g4.shown;
+      if (sentPlans.length !== stored.length) {
+        steps.loaded = { ok: false, note: `${stored.length} stored but ${sentPlans.length} reach the group's page.` };
+        settle("loaded", "refresh", row.id, false);
+        continue;
+      }
+      if (unexplained) {
+        steps.loaded = { ok: false, note: `${unexplained} plan${unexplained === 1 ? " is" : "s are"} missing a rate for a tier this group has people in.` };
+        settle("loaded", "correct", row.id, false);
+        continue;
+      }
+      if (g4.shown !== expected) {
+        steps.loaded = { ok: false, note: `${g4.shown} of ${expected} plans in the group's grid.` };
+        settle("loaded", "refresh", row.id, false);
+        continue;
+      }
+      steps.loaded = {
+        ok: true,
+        note: `${g4.shown} plan${g4.shown === 1 ? "" : "s"} in the group's 2027 Medical Plans grid${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in)` : ""}.`,
+      };
+      cell.state = "verified";
     }
     const filed = cells.filter((c) => c.state !== "missing");
-    out.push({
-      group: g.name,
-      cells,
-      filed: filed.length,
-      verified: filed.filter((c) => c.state === "verified").length,
-    });
+    out.push({ group: g.name, cells, filed: filed.length, verified: filed.filter((c) => c.state === "verified").length });
   }
   const all = out.flatMap((g) => g.cells).filter((c) => c.state !== "missing");
   return {
@@ -190,10 +230,11 @@ export function verifyProposals({ groups, rows, served, isEpoPlan, isBlankPlan, 
       verified: all.filter((c) => c.state === "verified").length,
       working: all.filter((c) => c.state === "working").length,
       failing: all.filter((c) => c.state === "fail").length,
+      stuck: all.filter((c) => c.state === "stuck").length,
       byStep: {
-        read: all.filter((c) => c.state === "fail" && c.failedAt === "read").length,
-        audited: all.filter((c) => c.state === "fail" && c.failedAt === "audited").length,
-        loaded: all.filter((c) => c.state === "fail" && c.failedAt === "loaded").length,
+        read: all.filter((c) => c.state !== "verified" && c.failedAt === "read").length,
+        audited: all.filter((c) => c.state !== "verified" && c.failedAt === "audited").length,
+        loaded: all.filter((c) => c.state !== "verified" && c.failedAt === "loaded").length,
       },
     },
   };

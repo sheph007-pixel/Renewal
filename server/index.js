@@ -18,7 +18,7 @@ import { createDb } from "./db.js";
 import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
-import { auditForClient, auditProposal } from "./proposal-audit.js";
+import { auditForClient, auditProposal, correctProposal, applyCorrection, offeredCount } from "./proposal-audit.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -4911,6 +4911,8 @@ async function proposalsChanged() {
               oopMax: pl.oop_max || null,
               benefits: planBenefits(pl.benefits),
               rates: pl.rates || { EE: null, ES: null, EC: null, FAM: null },
+              // Tiers the document itself does not price, confirmed by the steward.
+              unpriced: Array.isArray(pl.unpriced) && pl.unpriced.length ? pl.unpriced : null,
               monthlyTotal: pl.monthly_total ?? null,
             }))
           : [],
@@ -4925,6 +4927,8 @@ async function proposalsChanged() {
     proposalCounts = counts;
     invoiceByGroup = invoices;
     rebuild();
+    // Something changed: let the steward look at the check again.
+    scheduleSteward();
   } catch (e) {
     console.error("could not settle proposals:", e.message);
   }
@@ -5697,11 +5701,14 @@ app.post("/api/admin/proposals/audit", requireStaff, async (req, res) => {
 
 /** Proposals being read again by a fix, so the check shows them busy and a second click does not double up. */
 const rereading = new Set();
+/** Proposals being corrected against their document right now. */
+const correcting = new Set();
 
 /**
- * The four-step check - filed, read, audited, loaded - for every live group
- * and slot (server/proposal-verify.js). Arithmetic over what is stored, so it
- * runs in milliseconds; the Proposals grid colours each box from it.
+ * The four-step check - on file, scanned, database, grid - for every live
+ * group and slot (server/proposal-verify.js). Arithmetic over what is stored,
+ * so it runs in milliseconds; the Proposals grid colours each box from it,
+ * and the steward below repairs whatever it finds.
  */
 function proposalVerification(rows) {
   const live = groups.filter((g) => !g.archived && g.eligible);
@@ -5714,85 +5721,232 @@ function proposalVerification(rows) {
     isBlankPlan,
     reading: rereading,
     auditing,
+    correcting,
+    gaveUp: (id) => (stewardState && stewardState[id] && stewardState[id].gaveUp) || null,
   });
 }
 
 /** One line for the book, and one per box that is not verified - the check, readable in the deploy log. */
 async function logProposalCheck() {
+  await loadSteward();
   const v = proposalVerification(await proposalStore.listProposals());
   const t = v.totals;
-  console.log(`proposal check: ${t.verified} of ${t.filed} verified, ${t.working} running, ${t.failing} failing (read ${t.byStep.read}, audit ${t.byStep.audited}, load ${t.byStep.loaded})`);
+  console.log(`proposal check: ${t.verified} of ${t.filed} verified, ${t.working} being fixed now, ${t.failing} to fix, ${t.stuck} the AI could not fix`);
   for (const g of v.groups) {
     for (const c of g.cells) {
-      if (c.state !== "fail" && c.state !== "working") continue;
+      if (c.state === "verified" || c.state === "missing") continue;
       const st = c.failedAt ? c.steps[c.failedAt] : null;
-      console.log(`proposal check: ${g.group} / ${c.slot} #${c.proposalId ?? c.fixId}: ${c.state} at ${c.failedAt || "?"} - ${st ? st.note : ""}`);
+      console.log(`proposal check: ${g.group} / ${c.slot} #${c.proposalId ?? c.fixId}: ${c.state} at ${c.failedAt || "?"} (${c.fix || "-"}) - ${c.stuck || (st ? st.note : "")}`);
     }
   }
 }
 
+// ---------------------------------------------------------------------------
+// The steward: the AI that works the check. Every box that fails a step names
+// its repair; the steward carries it out, then checks again, until the box is
+// green or it has run out of honest things to try:
+//   read     - read the document again (in parts when it is long)
+//   audit    - count the plans on the document and check every stored value
+//   correct  - have Claude settle the audit's findings against the page:
+//              fix wrong values, add missing plans, fill missing rates,
+//              drop what is not on the document - then audit again
+//   refresh  - rebuild what the group's page is served
+// Limits per proposal: two reads, two audits that could not run, three
+// corrections per reading (then one fresh read and three more). A box still
+// failing after that is marked for a person, with why. What the AI changed is
+// logged on the row (extracted.corrections). Runs at boot, after any change
+// to the proposals, and every ten minutes.
+
+const STEWARD_KEY = "proposals.steward";
+let stewardState = null;
+async function loadSteward() {
+  if (stewardState) return stewardState;
+  stewardState = (db && (await db.getSetting(STEWARD_KEY).catch(() => null))) || {};
+  return stewardState;
+}
+async function saveSteward() {
+  if (db && stewardState) await db.setSetting(STEWARD_KEY, stewardState, "steward").catch((e) => console.error("steward: could not save:", e.message));
+}
+const stewardEntry = (id) => (stewardState[id] = stewardState[id] || { reads: 0, audits: 0, corrections: 0, refresh: 0, gaveUp: null });
+
+/** Read a proposal's document again, keeping it where it is filed. */
+async function stewardRead(row) {
+  const f = await proposalStore.getProposalFile(row.id).catch(() => null);
+  if (!f) return false;
+  rereading.add(row.id);
+  try {
+    await runAnalysis(row.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: row.context || null }, true);
+  } finally {
+    rereading.delete(row.id);
+  }
+  return true;
+}
+
+/**
+ * Settle an audit's findings against the document, apply the corrections and
+ * audit again. When the corrector changes nothing - every finding was the
+ * auditor's mistake - and the counts agree, the third reading settles it.
+ */
+async function runProposalCorrection(id, tiers) {
+  if (correcting.has(id)) return;
+  correcting.add(id);
+  let reaudit = true;
+  try {
+    const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
+    if (!row || !f || !row.extracted) return;
+    const plans = Array.isArray(row.extracted.plans) ? row.extracted.plans : [];
+    const missingRates = [];
+    plans.forEach((pl, index) => {
+      for (const t of ["EE", "ES", "EC", "FAM"]) {
+        if (tiers && tiers[t] && (!pl.rates || pl.rates[t] == null) && !(Array.isArray(pl.unpriced) && pl.unpriced.includes(t))) missingRates.push({ index, tier: t });
+      }
+    });
+    const mismatches = ((row.audit && row.audit.mismatches) || []).map((m) => ({ plan: m.plan, field: m.field, stored: m.stored, on_document: m.onDocument }));
+    const c = await withReadSlot(() => correctProposal({ filename: f.filename, mime: f.mime, buffer: f.data, extracted: row.extracted, mismatches, missingRates }));
+    const { extracted, log } = applyCorrection(row.extracted, c);
+    const at = new Date().toISOString();
+    extracted.corrections = [...(row.extracted.corrections || []), ...log.map((l) => ({ ...l, at }))].slice(-300);
+    if (!log.length && Number.isInteger(c.document_plan_count) && c.document_plan_count === offeredCount(row.extracted) && row.audit) {
+      // Nothing to change, and the document's count is the database's: the
+      // findings were the auditors' own misreads.
+      await proposalStore.updateProposal(id, {
+        audit: { ...row.audit, status: "pass", documentPlanCount: c.document_plan_count, settled: { at, findings: row.audit.mismatches || [], by: "Claude, re-reading the document" }, mismatches: [] },
+      });
+      console.log(`proposal ${id} correction: nothing to change; ${mismatches.length} finding(s) settled against the document`);
+      reaudit = false;
+      return;
+    }
+    await proposalStore.updateProposal(id, { extracted, audit: null });
+    console.log(`proposal ${id} corrected against the document: ${log.length} change(s)${log.length ? ` - ${log.slice(0, 5).map((l) => `${l.plan} ${l.field}: ${l.from ?? "-"} -> ${l.to}`).join("; ")}${log.length > 5 ? "…" : ""}` : ""}`);
+  } catch (e) {
+    console.error(`proposal ${id} correction failed:`, e.message);
+  } finally {
+    correcting.delete(id);
+  }
+  if (reaudit) await runProposalAudit(id);
+  else await proposalsChanged();
+}
+
+/** Carry out one box's repair, within the limits. */
+async function stewardRepair(cell, tiers) {
+  const st = stewardEntry(cell.fixId);
+  const row = (await proposalStore.listProposals()).find((r) => r.id === cell.fixId);
+  if (!row) return;
+  const workbook = !!(row.context && row.context.source === "gravie-workbook");
+  const giveUp = async (why) => {
+    st.gaveUp = why;
+    await saveSteward();
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: ${why}`);
+  };
+  const read = async () => {
+    if (workbook) return giveUp("A Gravie workbook is parsed, not read - upload the workbook again.");
+    if (st.reads >= 2) return giveUp(`The document would not read into plans in ${st.reads} tries - it may not be a rate quote (a case summary, say). Upload the quote itself.`);
+    st.reads++;
+    st.audits = 0;
+    st.corrections = 0;
+    await saveSteward();
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: reading again (${st.reads}/2)`);
+    await stewardRead(row);
+  };
+  if (cell.fix === "read") return read();
+  if (cell.fix === "audit") {
+    if (st.audits >= 2) return giveUp(`The check could not run in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
+    st.audits++;
+    await saveSteward();
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: checking against the document (${st.audits}/2)`);
+    return runProposalAudit(row.id);
+  }
+  if (cell.fix === "correct") {
+    if (st.corrections >= 3) {
+      if (!workbook && st.reads < 2) return read();
+      return giveUp(`Still differs from the document after ${st.corrections} corrections and a fresh read: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);
+    }
+    st.corrections++;
+    await saveSteward();
+    console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: correcting against the document (${st.corrections}/3)`);
+    return runProposalCorrection(row.id, tiers);
+  }
+  if (cell.fix === "refresh") {
+    if (st.refresh >= 2) return giveUp(`The group's grid does not match the database after a rebuild: ${cell.steps[cell.failedAt] ? cell.steps[cell.failedAt].note : ""}`);
+    st.refresh++;
+    await saveSteward();
+    return proposalsChanged();
+  }
+}
+
+let stewardRunning = false;
+let stewardAgain = false;
+let stewardTimer = null;
+/** Ask for a pass soon; many changes in a row make one pass. */
+function scheduleSteward(ms = 3000) {
+  if (!aiEnabled() || process.env.KENNION_STEWARD === "0") return;
+  if (stewardTimer) return;
+  stewardTimer = setTimeout(() => {
+    stewardTimer = null;
+    void stewardPass().catch((e) => console.error("steward:", e.message));
+  }, ms);
+}
+
+async function stewardPass() {
+  if (stewardRunning) {
+    stewardAgain = true;
+    return;
+  }
+  stewardRunning = true;
+  try {
+    do {
+      stewardAgain = false;
+      await loadSteward();
+      const v = proposalVerification(await proposalStore.listProposals());
+      // A box that is green again starts fresh the next time it changes.
+      let cleaned = false;
+      for (const g of v.groups) {
+        for (const c of g.cells) {
+          if (c.state === "verified" && c.proposalId != null && stewardState[c.proposalId]) {
+            delete stewardState[c.proposalId];
+            cleaned = true;
+          }
+        }
+      }
+      if (cleaned) await saveSteward();
+      const tiersOf = new Map(groups.map((g) => [g.name, clientGroupView(g).tiers || {}]));
+      const jobs = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).map((c) => ({ c, tiers: tiersOf.get(g.group) })));
+      if (!jobs.length) break;
+      console.log(`steward: ${jobs.length} box(es) to fix`);
+      const queue = [...jobs];
+      await Promise.all(
+        Array.from({ length: Math.min(2, queue.length) }, async () => {
+          while (queue.length) {
+            const j = queue.shift();
+            await stewardRepair(j.c, j.tiers).catch((e) => console.error(`steward: #${j.c.fixId}:`, e.message));
+          }
+        }),
+      );
+      stewardAgain = true;
+    } while (stewardAgain);
+  } finally {
+    stewardRunning = false;
+  }
+  await logProposalCheck().catch(() => undefined);
+}
+
 app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
   try {
-    res.json(proposalVerification(await proposalStore.listProposals()));
+    await loadSteward();
+    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0" } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-/**
- * Put right what the check can put right on its own: read (again) a proposal
- * whose read failed, never ran, or was found wrong by the audit; audit a
- * reading that has not been audited. `{id, fix}` does one box; no body does
- * every failing box in the book. A fix never moves a proposal off its group.
- * Reads queue behind the read throttle, and each finished read audits itself.
- */
-app.post("/api/admin/proposals/fix", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
-  const rows = await proposalStore.listProposals();
-  const body = req.body || {};
-  let todo;
-  if (body.id != null) {
-    if (!["read", "read-waiting", "audit"].includes(body.fix)) return res.status(400).json({ error: "fix must be read or audit." });
-    todo = [{ id: Number(body.id), fix: body.fix }];
-  } else {
-    todo = proposalVerification(rows)
-      .groups.flatMap((g) => g.cells)
-      .filter((c) => c.state === "fail" && c.fix && c.fixId)
-      .map((c) => ({ id: c.fixId, fix: c.fix }));
-  }
-  const reads = [];
-  const audits = [];
-  const skipped = [];
-  for (const t of todo) {
-    const r = rows.find((x) => x.id === t.id);
-    if (!r) continue;
-    if (t.fix === "audit") {
-      audits.push(r.id);
-      continue;
-    }
-    // A Gravie workbook is parsed, not read by a model; the boot pass re-parses it.
-    if (r.context && r.context.source === "gravie-workbook") {
-      skipped.push({ id: r.id, why: "Gravie workbook - re-upload it to re-parse" });
-      continue;
-    }
-    if (!aiEnabled()) {
-      skipped.push({ id: r.id, why: "AI reading is off" });
-      continue;
-    }
-    if (r.status === "analyzing" || rereading.has(r.id)) continue;
-    const f = await proposalStore.getProposalFile(r.id).catch(() => null);
-    if (!f) {
-      skipped.push({ id: r.id, why: "file missing" });
-      continue;
-    }
-    // The row keeps its status (and whatever reading it has stays in force on
-    // the group's page) while the new read runs; `rereading` marks it busy.
-    rereading.add(r.id);
-    reads.push(r.id);
-    void runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, !!r.group_name).finally(() => rereading.delete(r.id));
-  }
-  if (audits.length) void auditInParallel(audits);
-  console.log(`proposals fix: ${reads.length} read(s), ${audits.length} audit(s) queued${skipped.length ? `, ${skipped.length} skipped` : ""}`);
-  res.json({ reading: reads.length, auditing: audits.length, skipped });
+/** Run the steward now, and give every box it gave up on one more round. */
+app.post("/api/admin/proposals/fix", requireStaff, async (req, res) => {
+  await loadSteward();
+  for (const k of Object.keys(stewardState)) delete stewardState[k];
+  await saveSteward();
+  scheduleSteward(0);
+  res.json({ ok: true });
 });
 
 /** Assign, reassign, confirm, or relabel a proposal. */
@@ -6044,6 +6198,10 @@ async function boot() {
   // The four-step check, logged, so the state of every box is in the deploy
   // log. Read-only; never blocks boot.
   void logProposalCheck().catch((e) => console.error("proposals: check:", e.message));
+  // The steward works whatever the check found, and looks again every ten
+  // minutes in case anything slipped past the change hooks.
+  scheduleSteward(20000);
+  setInterval(() => scheduleSteward(0), 10 * 60 * 1000).unref();
   // Proposals read before the reader asked for per-plan benefits, re-read in
   // the background so the plan cards fill in. Never blocks boot.
   void backfillPlanBenefits().catch((e) => console.error("proposals: benefits re-read:", e.message));

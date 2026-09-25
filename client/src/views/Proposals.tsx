@@ -362,10 +362,13 @@ export interface VerifyCell {
   filename: string | null;
   /** Plans the group's 2027 Medical Plans grid shows from this proposal. */
   plans: number;
-  repeats?: number;
-  state: "verified" | "fail" | "working" | "missing";
+  /** The plan count at each stage: on the document, in the database, in the group's grid. */
+  counts: { document: number | null; stored: number | null; grid: number | null };
+  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
+  state: "verified" | "fail" | "working" | "stuck" | "missing";
+  stuck?: string;
   failedAt?: "read" | "audited" | "loaded";
-  fix?: "read" | "read-waiting" | "audit" | null;
+  fix?: "read" | "audit" | "correct" | "refresh" | null;
   fixId?: number;
   steps: { filed: VerifyStep | null; read: VerifyStep | null; audited: VerifyStep | null; loaded: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
@@ -373,14 +376,15 @@ export interface VerifyCell {
 export interface Verification {
   checkedAt: string;
   groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
-  totals: { filed: number; verified: number; working: number; failing: number; byStep: { read: number; audited: number; loaded: number } };
+  totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: { read: number; audited: number; loaded: number } };
+  steward?: { running: boolean; enabled: boolean };
 }
 
 const STEP_NAMES = [
-  ["filed", "Filed"],
-  ["read", "Read"],
-  ["audited", "Audited"],
-  ["loaded", "Loaded"],
+  ["filed", "Proposal on file"],
+  ["read", "Scanned: every plan on the document counted"],
+  ["audited", "Database matches the document, checked by two models"],
+  ["loaded", "Every plan in the group's Medical Plans grid"],
 ] as const;
 
 /** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
@@ -393,37 +397,27 @@ function useVerify(token: string) {
   useEffect(() => {
     void load();
   }, [load]);
-  const busy = !!v && v.totals.working > 0;
+  // While the AI has anything left to fix, keep the boxes current.
+  const busy = !!v && v.totals.working + v.totals.failing > 0;
   useEffect(() => {
     if (!busy) return;
-    const t = setInterval(() => void load(), 5000);
+    const t = setInterval(() => void load(), 8000);
     return () => clearInterval(t);
   }, [busy, load]);
   return { v, load };
 }
 
-async function runFix(token: string, body: { id?: number; fix?: string } = {}) {
-  const r = await fetch("/api/admin/proposals/fix", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return r.ok ? ((await r.json()) as { reading: number; auditing: number; skipped: { id: number; why: string }[] }) : null;
-}
-
-const fixLabel = (c: VerifyCell) => (c.fix === "audit" ? "audit" : c.fix === "read-waiting" ? "re-read new upload" : c.fix === "read" ? "re-read" : "");
-
-/** Four small numbered squares: green passed, amber failed, blue running, grey not reached. */
+/** Four small numbered squares: green passed, blue being fixed by the AI, orange needs a person, grey not reached. */
 function StepStrip({ c }: { c: VerifyCell }) {
   return (
     <span style={{ display: "inline-flex", gap: 2 }}>
       {STEP_NAMES.map(([k, label], i) => {
         const st = c.steps[k];
-        const bg = !st ? "#eef1f2" : st.ok ? C.green : st.busy ? "#2f6db3" : C.orange;
+        const bg = !st ? "#eef1f2" : st.ok ? C.green : c.state === "stuck" ? C.orange : "#2f6db3";
         return (
           <span
             key={k}
-            title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : st.busy ? "running" : "failed"}${st ? ` - ${st.note}` : ""}`}
+            title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : c.state === "stuck" ? "needs a person" : "the AI is fixing it"}${st ? ` - ${st.note}` : ""}`}
             style={{ width: 13, height: 13, borderRadius: 2, background: bg, color: st ? "#fff" : C.ghost, fontSize: 9, fontWeight: 700, lineHeight: "13px", textAlign: "center" }}
           >
             {i + 1}
@@ -436,33 +430,30 @@ function StepStrip({ c }: { c: VerifyCell }) {
 
 /**
  * The check across the whole book, above the grid: how many boxes are
- * verified, what is running, and every box that is not, with its failing
- * step, why, and the one click that puts it right.
+ * verified, how many the AI is fixing, and - only when it could not - the
+ * boxes that need a person, with why.
  */
 function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [open, setOpen] = useState(true);
   if (!v) return null;
   const t = v.totals;
-  const bad = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "fail" || c.state === "working").map((c) => ({ group: g.group, c })));
-  const all = t.filed && t.verified === t.filed;
-  const fixAll = async () => {
+  const fixing = t.working + t.failing;
+  const stuck = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "stuck").map((c) => ({ group: g.group, c })));
+  const all = t.filed > 0 && t.verified === t.filed;
+  const again = async () => {
     setBusy(true);
-    const r = await runFix(token);
+    await fetch("/api/admin/proposals/fix", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
     setBusy(false);
-    setMsg(r ? `${r.reading} re-read${r.reading === 1 ? "" : "s"} and ${r.auditing} audit${r.auditing === 1 ? "" : "s"} started${r.skipped.length ? ` · ${r.skipped.length} need a person (${[...new Set(r.skipped.map((x) => x.why))].join("; ")})` : ""}.` : "Could not start the fixes.");
     onChanged();
   };
-  const stepOf = (c: VerifyCell) => (c.failedAt ? STEP_NAMES.findIndex(([k]) => k === c.failedAt) + 1 : 0);
   return (
     <div
       style={{
         margin: "6px 0 12px",
         padding: "10px 12px",
         borderRadius: 6,
-        border: `1px solid ${all ? C.greenEdge : C.amberEdge}`,
-        background: all ? C.greenTint : C.amberTint,
+        border: `1px solid ${all ? C.greenEdge : stuck.length ? C.amberEdge : "#c9dbef"}`,
+        background: all ? C.greenTint : stuck.length ? C.amberTint : "#f2f7fc",
         fontSize: 13,
         color: C.body,
       }}
@@ -472,72 +463,32 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
           {all ? "✓ " : ""}
           {t.verified} of {t.filed} proposals verified
         </strong>
-        <span style={{ color: C.faint }}>
-          1 Filed · 2 Read · 3 Audited · 4 Loaded in the group's Medical Plans grid
-          {t.working ? ` · ${t.working} running now` : ""}
-          {t.failing ? ` · ${t.failing} need attention (read ${t.byStep.read}, audit ${t.byStep.audited}, load ${t.byStep.loaded})` : ""}
-        </span>
-        <span style={{ flex: 1 }} />
-        {t.failing > 0 && (
-          <button
-            onClick={() => void fixAll()}
-            disabled={busy}
-            title="Re-read every proposal whose read failed or that the audit found wrong, and audit every one not yet audited"
-            style={{ padding: "6px 12px", fontSize: 12.5, fontWeight: 600, borderRadius: 4, cursor: "pointer", color: "#fff", background: C.blue, border: `1px solid ${C.blue}` }}
-          >
-            {busy ? "Starting…" : "Fix all"}
-          </button>
-        )}
-        {bad.length > 0 && (
-          <button onClick={() => setOpen((o) => !o)} style={{ ...linkBtn, fontSize: 12.5 }} aria-expanded={open}>
-            {open ? "hide list" : "show list"}
-          </button>
-        )}
+        {fixing > 0 && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
+        {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} a person</span>}
+        <span style={{ color: C.faint }}>Green means the document, the database and the group's Medical Plans grid all hold the same plans, every value checked by two models.</span>
       </div>
-      {msg && <div style={{ marginTop: 6, fontSize: 12.5, color: C.body }}>{msg}</div>}
-      {open && bad.length > 0 && (
+      {stuck.length > 0 && (
         <table style={{ marginTop: 8, borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>
           <tbody>
-            {bad.map(({ group, c }) => {
-              const st = c.failedAt ? c.steps[c.failedAt] : null;
-              return (
-                <tr key={`${group}|${c.slot}`} style={{ borderTop: `1px solid ${C.amberEdge}` }}>
-                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
-                    <Link href={groupPath(group)}>{group}</Link>
-                  </td>
-                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap", color: C.ink }}>{c.slot}</td>
-                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
-                    <StepStrip c={c} />
-                  </td>
-                  <td style={{ padding: "4px 10px 4px 0", color: c.state === "working" ? "#2f6db3" : C.amber }}>
-                    {c.state === "working" ? "Running: " : `Step ${stepOf(c)}: `}
-                    {st ? st.note : ""}
-                    {st && st.mismatches && st.mismatches.length > 0 && (
-                      <span style={{ color: C.faint }}>
-                        {" "}
-                        ({st.mismatches.slice(0, 3).map((m) => `${m.plan} ${m.field}: ${m.stored || "-"} vs ${m.onDocument || "-"}`).join("; ")}
-                        {st.mismatches.length > 3 ? "…" : ""})
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: "4px 0", textAlign: "right", whiteSpace: "nowrap" }}>
-                    {c.state === "fail" && c.fix && c.fixId != null && (
-                      <button
-                        onClick={async () => {
-                          await runFix(token, { id: c.fixId, fix: c.fix! });
-                          onChanged();
-                        }}
-                        style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600 }}
-                      >
-                        {fixLabel(c)}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {stuck.map(({ group, c }) => (
+              <tr key={`${group}|${c.slot}`} style={{ borderTop: `1px solid ${C.amberEdge}` }}>
+                <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
+                  <Link href={groupPath(group)}>{group}</Link>
+                </td>
+                <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap", color: C.ink }}>{c.slot}</td>
+                <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
+                  <StepStrip c={c} />
+                </td>
+                <td style={{ padding: "4px 0", color: C.amber }}>{c.stuck}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
+      )}
+      {stuck.length > 0 && (
+        <button onClick={() => void again()} disabled={busy} style={{ ...linkBtn, fontSize: 12, marginTop: 6 }} title="Let the AI try these again, e.g. after a new document is uploaded">
+          {busy ? "…" : "let the AI try these again"}
+        </button>
       )}
     </div>
   );
@@ -997,7 +948,8 @@ function SlotCell({
   const quote = current?.extracted?.quote_id;
   const state = check ? check.state : current ? "verified" : "missing";
   const verified = state === "verified";
-  const working = state === "working";
+  // Queued or in hand: either way the AI is on it.
+  const working = state === "working" || state === "fail";
   const filled = !!current || state !== "missing";
   const edge = !filled ? C.border : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
   const fill = !filled ? "#fff" : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
@@ -1034,23 +986,11 @@ function SlotCell({
         {!current && filled && check ? (
           // Only an upload that has not read yet - nothing in force in this slot.
           <>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }}>{working ? "reading…" : "⚠ not read"}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
+              {working ? "AI reading…" : "⚠ needs a person"}
+            </div>
+            <div style={{ marginTop: 2 }}>
               <StepStrip c={check} />
-              {check.fix && check.fixId != null && (
-                <button
-                  onClick={async () => {
-                    setBusy(true);
-                    await runFix(token, { id: check.fixId, fix: check.fix! });
-                    setBusy(false);
-                    onChanged();
-                  }}
-                  style={{ ...linkBtn, fontSize: 11 }}
-                  disabled={busy}
-                >
-                  {fixLabel(check)}
-                </button>
-              )}
             </div>
           </>
         ) : current ? (
@@ -1065,27 +1005,9 @@ function SlotCell({
             {check && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
                 <StepStrip c={check} />
-                {verified ? (
-                  <span style={{ fontSize: 10.5, fontWeight: 600, color: C.green }}>verified</span>
-                ) : check.state === "fail" && check.fix && check.fixId != null ? (
-                  <button
-                    onClick={async () => {
-                      setBusy(true);
-                      await runFix(token, { id: check.fixId, fix: check.fix! });
-                      setBusy(false);
-                      onChanged();
-                    }}
-                    title={failing ? failing.note : undefined}
-                    style={{ ...linkBtn, fontSize: 11, fontWeight: 600 }}
-                    disabled={busy}
-                  >
-                    {fixLabel(check)}
-                  </button>
-                ) : (
-                  <span style={{ fontSize: 10.5, color: tone }} title={failing ? failing.note : undefined}>
-                    {working ? "running" : "check"}
-                  </span>
-                )}
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
+                  {verified ? "verified" : working ? "AI fixing" : "needs a person"}
+                </span>
               </div>
             )}
             <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -1219,7 +1141,7 @@ export default function Proposals({ token, groups }: Props) {
     await Promise.all([loadProposals(), loadVerify()]);
   }, [loadProposals, loadVerify]);
   // A check that is still running refreshes the proposals with it.
-  const checkRunning = !!verify && verify.totals.working > 0;
+  const checkRunning = !!verify && verify.totals.working + verify.totals.failing > 0;
   useEffect(() => {
     if (!checkRunning) return;
     const t = setInterval(() => void loadProposals(), 5000);
@@ -1316,7 +1238,7 @@ export default function Proposals({ token, groups }: Props) {
       if (manager !== "All" && g.manager !== manager) return false;
       if (need === "missing" && have === of) return false;
       if (need === "complete" && have !== of) return false;
-      if (need === "attention" && !SLOTS.some((sl) => ["fail", "working"].includes(checkOf.get(`${g.name}||${sl}`)?.state || ""))) return false;
+      if (need === "attention" && !SLOTS.some((sl) => ["fail", "working", "stuck"].includes(checkOf.get(`${g.name}||${sl}`)?.state || ""))) return false;
       if (need === "verified") {
         const cells = SLOTS.map((sl) => checkOf.get(`${g.name}||${sl}`)).filter((c) => c && c.state !== "missing");
         if (!cells.length || cells.some((c) => c!.state !== "verified")) return false;
