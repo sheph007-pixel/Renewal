@@ -1301,8 +1301,6 @@ export default function Proposals({ token, groups }: Props) {
   }, [checkRunning, loadProposals]);
   const checkOf = new Map<string, VerifyCell>();
   (verify?.groups || []).forEach((g) => g.cells.forEach((c) => checkOf.set(`${g.group}||${c.slot}`, c)));
-  const [view, setView] = useState<"all" | "queue" | "assigned">("all");
-  const [layout, setLayout] = useState<"grid" | "list" | "groups">("grid");
   const [query, setQuery] = useState("");
   const [manager, setManager] = useState<"All" | "debbie" | "tracy">("All");
   const [need, setNeed] = useState<"All" | "missing" | "complete" | string>("All");
@@ -1315,12 +1313,6 @@ export default function Proposals({ token, groups }: Props) {
     `${p.filename} ${p.carrier || ""} ${p.group_name || ""} ${p.summary || ""} ${p.context?.subject || ""} ${p.context?.from || ""}`
       .toLowerCase()
       .includes(q);
-  const rows = items.filter(
-    (p) =>
-      (view === "all" ||
-        (view === "queue" ? isProposal(p) && p.status !== "assigned" : p.status === "assigned")) &&
-      matches(p),
-  );
   const proposals = items.filter(isProposal);
   const counts = {
     health: proposals.filter((p) => !isAncillary(p) && (!!p.slot || !!p.extracted)).length,
@@ -1331,19 +1323,7 @@ export default function Proposals({ token, groups }: Props) {
     reading: proposals.filter((p) => p.status === "analyzing").length,
     assigned: proposals.filter((p) => p.status === "assigned").length,
   };
-  const childCounts: Record<number, number> = {};
-  items.forEach((p) => {
-    if (p.parent_id != null) childCounts[p.parent_id] = (childCounts[p.parent_id] || 0) + 1;
-  });
-
   const sortedGroups = [...groups].sort((a, b) => a.name.localeCompare(b.name));
-
-  // By group: every roster group with its proposals attached, the unassigned
-  // ones first, and the groups still waiting on a proposal at the end.
-  const byGroup = sortedGroups.map((g) => ({
-    g,
-    rows: proposals.filter((p) => p.group_name === g.name && matches(p)),
-  }));
   const unassignedRows = proposals.filter((p) => !p.group_name && matches(p));
 
   // The grid: one row per group, one column per slot, holding that group's
@@ -1414,8 +1394,6 @@ export default function Proposals({ token, groups }: Props) {
   const otherRows = proposals.filter(
     (p) => p.group_name && !p.slot && p.status !== "analyzing" && !isAncillary(p) && !needsSlot(p) && matches(p),
   );
-  const withRows = byGroup.filter((x) => x.rows.length);
-  const without = byGroup.filter((x) => !x.rows.length && !proposals.some((p) => p.group_name === x.g.name));
 
   return (
     <>
@@ -1480,232 +1458,99 @@ export default function Proposals({ token, groups }: Props) {
             aria-label="Search proposals"
             style={{ flex: "1 1 240px", minWidth: 200, padding: "8px 11px", fontSize: 13.5, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 4, outline: "none" }}
           />
-          <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Layout">
-            {(
-              [
-                ["grid", "Grid"],
-                ["list", "List"],
-                ["groups", "By group"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setLayout(k)}
-                aria-pressed={layout === k}
-                style={{
-                  padding: "7px 13px",
-                  fontSize: 13,
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  ...(layout === k
-                    ? { color: "#fff", background: C.headerBg, border: `1px solid ${C.headerBg}`, fontWeight: 500 }
-                    : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
-                }}
-              >
-                {label}
-              </button>
+          <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
+            <option value="All">All managers</option>
+            <option value="debbie">Debbie</option>
+            <option value="tracy">Tracy</option>
+          </select>
+          <select aria-label="Which groups" value={need} onChange={(e) => setNeed(e.target.value)} style={gridFilter}>
+            <option value="All">All groups</option>
+            <option value="missing">Missing a proposal</option>
+            <option value="complete">Every quote in</option>
+            <option value="attention">Needs attention (not verified)</option>
+            <option value="verified">Every proposal verified</option>
+            {SLOTS.map((sl) => (
+              <option key={sl} value={sl}>
+                Missing {sl}
+              </option>
             ))}
-          </div>
-          {layout === "grid" && (
-            <>
-              <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
-                <option value="All">All managers</option>
-                <option value="debbie">Debbie</option>
-                <option value="tracy">Tracy</option>
-              </select>
-              <select aria-label="Which groups" value={need} onChange={(e) => setNeed(e.target.value)} style={gridFilter}>
-                <option value="All">All groups</option>
-                <option value="missing">Missing a proposal</option>
-                <option value="complete">Every quote in</option>
-                <option value="attention">Needs attention (not verified)</option>
-                <option value="verified">Every proposal verified</option>
-                {SLOTS.map((sl) => (
-                  <option key={sl} value={sl}>
-                    Missing {sl}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => download(`kennion-proposals-${new Date().toISOString().slice(0, 10)}.csv`, gridCsv(gridRows))}
-                title="Download the rows shown, with the current search, filters and sort, as a CSV for Excel"
-                style={{ padding: "7px 13px", fontSize: 13, borderRadius: 4, cursor: "pointer", color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }}
-              >
-                Export CSV
-              </button>
-            </>
-          )}
-          {layout === "list" && (
-            <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Which proposals">
-              {(
-                [
-                  ["all", `All (${proposals.length})`],
-                  ["queue", `To assign (${counts.queue + counts.reading})`],
-                  ["assigned", `Assigned (${counts.assigned})`],
-                ] as const
-              ).map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setView(k)}
-                  aria-pressed={view === k}
-                  style={{
-                    padding: "7px 13px",
-                    fontSize: 13,
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    ...(view === k
-                      ? { color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }
-                      : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          </select>
+          <button
+            onClick={() => download(`kennion-proposals-${new Date().toISOString().slice(0, 10)}.csv`, gridCsv(gridRows))}
+            title="Download the rows shown, with the current search, filters and sort, as a CSV for Excel"
+            style={{ padding: "7px 13px", fontSize: 13, borderRadius: 4, cursor: "pointer", color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }}
+          >
+            Export CSV
+          </button>
         </div>
         {error && (
           <div role="alert" style={{ margin: "12px 0", fontSize: 13, color: C.red }}>
             {error}
           </div>
         )}
-        {layout === "grid" ? (
-          <div>
-            <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
-            <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
-              {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
-              Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
-                <thead>
-                  <tr>
-                    <GridTh k="name" label="Group" align="left" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                    <GridTh k="enrolled" label="Enrolled" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                    {SLOTS.map((sl) => (
-                      <GridTh key={sl} k={sl} label={sl} sort={gridSort} dir={gridDir} onSort={gridSortBy} />
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {gridRows.map(({ g, slots, applies, have, of }) => (
-                    <tr key={g.name}>
-                      <td style={{ padding: "5px 8px 5px 0", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
-                        <Link href={groupPath(g.name)} style={{ fontWeight: 500 }}>
-                          {g.name}
-                        </Link>
-                        <div style={{ fontSize: 11.5, color: C.ghost }}>
-                          {g.manager ? `${g.manager === "debbie" ? "Debbie" : "Tracy"} · ` : ""}
-                          {have} of {of}
-                        </div>
-                      </td>
-                      <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ink, fontVariantNumeric: "tabular-nums" }}>
-                        {g.enrolled}
-                      </td>
-                      {SLOTS.map((sl, i) =>
-                        applies.has(sl) ? (
-                          <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} check={checkOf.get(`${g.name}||${sl}`)} token={token} onChanged={() => void load()} />
-                        ) : (
-                          <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
-                            - 
-                          </td>
-                        ),
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {!gridRows.length && (
-              <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>Nothing matches.</div>
-            )}
-            <Bucket title="To Assign" rows={unassignedRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
-            <Bucket title="Group Health, Waiting For A Slot" rows={slotlessRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
-            <Bucket
-              title="Ancillary Proposals"
-              note="Dental, vision, life and disability. No medical rates, so they fill no slot and stay out of the 2027 options."
-              rows={ancillaryRows}
-              tone={C.faint}
-              collapsed
-              token={token}
-              groups={sortedGroups}
-              onChanged={() => void load()}
-            />
-            <Bucket title="Other Carriers" rows={otherRows} tone={C.faint} collapsed token={token} groups={sortedGroups} onChanged={() => void load()} />
+        <div>
+          <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
+          <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
+            {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
+            Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
           </div>
-        ) : layout === "groups" ? (
-          <div>
-            {unassignedRows.length > 0 && (
-              <section style={{ padding: "12px 0 4px" }}>
-                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.amber }}>
-                  Not Yet Assigned <span style={{ fontWeight: 400, color: C.faint }}>· {unassignedRows.length}</span>
-                </h2>
-                {unassignedRows.map((p) => (
-                  <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} />
-                ))}
-              </section>
-            )}
-            {withRows.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "10px 0 6px", borderBottom: `1px solid ${C.hairline}`, fontSize: 12.5, color: C.muted }}>
-                <span>Plan names are read exactly as the carrier prints them; proposals read before that rule may still carry placement labels.</span>
-                <button
-                  onClick={() => {
-                    if (!window.confirm("Re-read every current proposal with the models? Each is read again and then audited. This takes a while and uses the AI budget.")) return;
-                    void fetch("/api/admin/proposals/reanalyze", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) }).then(() => load());
-                  }}
-                  style={{ ...linkBtn, fontWeight: 600 }}
-                >
-                  Re-read every proposal
-                </button>
-              </div>
-            )}
-            {withRows.map(({ g, rows: rs }) => (
-              <section key={g.name} style={{ padding: "12px 0 4px" }}>
-                <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: C.ink, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                  <Link href={groupPath(g.name)}>{g.name}</Link>
-                  <span style={{ fontWeight: 400, fontSize: 12.5, color: C.faint }}>
-                    {g.enrolled} enrolled · {g.tpa || "-"} · {rs.length} proposal{rs.length === 1 ? "" : "s"}
-                  </span>
-                  <SlotChips rows={rs} />
-                </h2>
-                {[...rs]
-                  .sort((a, b) => Number(!!a.superseded_by) - Number(!!b.superseded_by))
-                  .map((p) => (
-                    <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} fixedGroup={g.name} />
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 880 }}>
+              <thead>
+                <tr>
+                  <GridTh k="name" label="Group" align="left" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                  <GridTh k="enrolled" label="Enrolled" sort={gridSort} dir={gridDir} onSort={gridSortBy} />
+                  {SLOTS.map((sl) => (
+                    <GridTh key={sl} k={sl} label={sl} sort={gridSort} dir={gridDir} onSort={gridSortBy} />
                   ))}
-              </section>
-            ))}
-            {!withRows.length && !unassignedRows.length && (
-              <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>
-                {items.length ? "Nothing matches." : "No proposals yet. Drop the first batch above."}
-              </div>
-            )}
-            {without.length > 0 && !q && (
-              <section style={{ padding: "14px 0 10px", borderTop: `1px solid ${C.border}`, marginTop: 8 }}>
-                <h2 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: C.faint }}>
-                  No Proposal Yet · {without.length} group{without.length === 1 ? "" : "s"}
-                </h2>
-                <div style={{ marginTop: 6, fontSize: 12.5, color: C.faint, lineHeight: 1.8 }}>
-                  {without.map(({ g }, i) => (
-                    <span key={g.name}>
-                      <Link href={groupPath(g.name)} style={{ color: C.body }}>
+                </tr>
+              </thead>
+              <tbody>
+                {gridRows.map(({ g, slots, applies, have, of }) => (
+                  <tr key={g.name}>
+                    <td style={{ padding: "5px 8px 5px 0", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
+                      <Link href={groupPath(g.name)} style={{ fontWeight: 500 }}>
                         {g.name}
                       </Link>
-                      {i < without.length - 1 ? " · " : ""}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
+                      <div style={{ fontSize: 11.5, color: C.ghost }}>
+                        {g.manager ? `${g.manager === "debbie" ? "Debbie" : "Tracy"} · ` : ""}
+                        {have} of {of}
+                      </div>
+                    </td>
+                    <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ink, fontVariantNumeric: "tabular-nums" }}>
+                      {g.enrolled}
+                    </td>
+                    {SLOTS.map((sl, i) =>
+                      applies.has(sl) ? (
+                        <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} check={checkOf.get(`${g.name}||${sl}`)} token={token} onChanged={() => void load()} />
+                      ) : (
+                        <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
+                          -
+                        </td>
+                      ),
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        ) : !rows.length ? (
-          <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>
-            {items.length ? "Nothing matches." : "No proposals yet. Drop the first batch above."}
-          </div>
-        ) : (
-          rows.map((p) => (
-            <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} children={childCounts[p.id]} />
-          ))
-        )}
+          {!gridRows.length && (
+            <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>Nothing matches.</div>
+          )}
+          <Bucket title="To Assign" rows={unassignedRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
+          <Bucket title="Group Health, Waiting For A Slot" rows={slotlessRows} tone={C.amber} token={token} groups={sortedGroups} onChanged={() => void load()} />
+          <Bucket
+            title="Ancillary Proposals"
+            note="Dental, vision, life and disability. No medical rates, so they fill no slot and stay out of the 2027 options."
+            rows={ancillaryRows}
+            tone={C.faint}
+            collapsed
+            token={token}
+            groups={sortedGroups}
+            onChanged={() => void load()}
+          />
+          <Bucket title="Other Carriers" rows={otherRows} tone={C.faint} collapsed token={token} groups={sortedGroups} onChanged={() => void load()} />
+        </div>
       </div>
     </>
   );
