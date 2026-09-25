@@ -5350,7 +5350,13 @@ async function runProposalAudit(id) {
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${k} ${n}`)
       .join(", ");
-    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings: ${byField})` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}; ${reused} job(s) reused, ${targeted} batch(es) from targeted packets`);
+    // A few examples, so a rule that judges two renderings of one value
+    // differently shows in the log (stored vs what the document prints).
+    const examples = audit.mismatches
+      .slice(0, 3)
+      .map((m) => `${m.optionId || m.plan} ${m.field}: "${String(m.stored).slice(0, 60)}" vs "${String(m.onDocument).slice(0, 60)}" (${m.by || "?"})`)
+      .join("; ");
+    console.log(`proposal ${id} audit: ${audit.status}${audit.mismatches.length ? ` (${audit.mismatches.length} findings: ${byField}; e.g. ${examples})` : ""} - ${audit.models.map((m) => `${m.model.replace(/\s*\(.*\)$/, "")} ${m.verdict}`).join(", ")}; ${reused} job(s) reused, ${targeted} batch(es) from targeted packets`);
   } catch (e) {
     console.error(`proposal ${id} audit failed:`, e.message);
     await proposalStore.updateProposal(id, { audit: { completedAt: new Date().toISOString(), status: "unreadable", models: [], mismatches: [], notes: `The audit failed: ${e.message}` } }).catch(() => undefined);
@@ -6815,11 +6821,9 @@ async function boot() {
   // so every plan a client can open carries a verdict.
   if (aiEnabled() && process.env.KENNION_FAKE_AI !== "1") {
     (async () => {
-      const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
-      if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
-      await auditInParallel(rows.map((r) => r.id));
-      // An audit composed under older comparison rules is composed again
-      // from its saved answers: every job is reused, no model is called.
+      // First, and quickly: an audit composed under older comparison rules
+      // is composed again from its saved answers - every job is reused, no
+      // model is called - before any long audit can hold it up.
       const current = (await proposalStore.listProposals().catch(() => [])).filter(
         (r) => r.status === "assigned" && r.slot && !r.superseded_by && r.audit && r.audit.version && r.extracted && r.audit.version === readingVersion(r.extracted) && (r.audit.compare || 1) !== COMPARE_VERSION,
       );
@@ -6830,6 +6834,9 @@ async function boot() {
       }
       if (recompose.length) console.log(`proposal audit: ${recompose.length} audit(s) composed again under comparison rules v${COMPARE_VERSION} from their saved answers (no model calls)`);
       await auditInParallel(recompose);
+      const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
+      if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
+      await auditInParallel(rows.map((r) => r.id));
     })().catch((e) => console.error("proposal audit sweep:", e.message));
   }
   rebuild();
