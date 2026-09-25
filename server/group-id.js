@@ -1,10 +1,11 @@
-// Group identifiers: four letters from the company name plus the plan year,
-// e.g. Johnson Storage & Moving Co. Holdings, LLC -> JSMH2027.
+// Group identifiers: four letters from the company name plus two random digits,
+// e.g. Johnson Storage & Moving Co. Holdings, LLC -> JSMH47.
 //
 // Four or more significant words give their initials; anything shorter falls
 // back to the first four letters of the name run together, which reads better
-// than padding initials ("DAHL2027", not "DGAH2027"). Legal-form and filler
+// than padding initials ("DAHL47", not "DGAH47"). Legal-form and filler
 // words are ignored so "Co.", "LLC" and "The" never eat a slot.
+// Codes are evergreen - they do not change year to year.
 
 const NOISE = new Set([
   "the", "of", "and", "a", "an", "for", "at", "in", "on", "to", "dba",
@@ -38,30 +39,43 @@ export function stemFor(name) {
 }
 
 /**
- * Assign a unique code to every group. Deterministic for a given set: names are
- * processed in sorted order so the same roster always yields the same codes.
- * A clash replaces the last letter with a digit (JSMH2027 -> JSM22027) rather
- * than lengthening the code, so every code stays eight characters.
+ * Generate a deterministic two-digit suffix from a name and collision counter.
+ * Uses name hash to make the digits consistent for the same name.
  */
-export function assignCodes(names, year = 2027) {
+function suffixFor(name, collision = 0) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash = hash & hash; // Keep it within 32-bit int range
+  }
+  const base = Math.abs(hash) % 90; // Maps to 0-89
+  const digit1 = Math.floor((base + collision) / 10) % 10;
+  const digit2 = (base + collision) % 10;
+  return String(digit1) + String(digit2);
+}
+
+/**
+ * Assign a unique evergreen code to every group. Codes are 4 letters + 2 digits
+ * (e.g., ADOB47) and do not change year to year. Deterministic for a given set:
+ * names are processed in sorted order so the same roster always yields the same codes.
+ */
+export function assignCodes(names) {
   const taken = new Set();
   const out = new Map();
 
   for (const name of [...names].sort((a, b) => a.localeCompare(b))) {
     const stem = stemFor(name);
-    let code = stem + year;
-    if (taken.has(code)) {
-      for (const d of "23456789") {
-        const alt = stem.slice(0, 3) + d + year;
-        if (!taken.has(alt)) {
-          code = alt;
-          break;
-        }
-      }
+    let suffix = suffixFor(name);
+    let code = stem + suffix;
+
+    // Handle collisions by incrementing the suffix
+    let collision = 0;
+    while (taken.has(code)) {
+      collision++;
+      suffix = suffixFor(name, collision);
+      code = stem + suffix;
     }
-    // Pathological last resort: still clashing after every digit.
-    let n = 2;
-    while (taken.has(code)) code = stem.slice(0, 2) + String(n++).padStart(2, "0") + year;
+
     taken.add(code);
     out.set(name, code);
   }
