@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
+import { parseGravieWorkbook, gravieExtracted, gravieDrift } from "../server/gravie-parse.js";
 
 const PORT = 5091;
 const CODE = "delete-test-code";
@@ -72,6 +73,12 @@ const rows = (await (await fetch(`${base}/api/admin/proposals`, { headers: auth 
 const row = rows.find((r) => r.group_name === g.name && r.slot === "Gravie");
 const id = row.id;
 assert.equal(row.extracted.plans.length, 4, "all four plans stored");
+// The stored reading is exactly what the workbook says: the boot check
+// (settleGravieQuotes) finds no drift, so it never re-parses a good reading.
+const wbBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+assert.equal(gravieDrift(row.extracted.plans, gravieExtracted(parseGravieWorkbook(wbBuf)).plans), null);
+// A correction that rewrote a network is drift: the workbook wins.
+assert.match(gravieDrift(row.extracted.plans.map((pl, i) => (i ? pl : { ...pl, network: "Cigna Healthcare LocalPlus Cigna Healthcare Open Access Plus" })), gravieExtracted(parseGravieWorkbook(wbBuf)).plans), /1 plan\(s\) differ/);
 assert.deepEqual(
   { u: row.extracted.reconciliation.unique_plans, ppo: row.extracted.reconciliation.unique_ppo, epo: row.extracted.reconciliation.unique_epo, exp: row.extracted.reconciliation.expected },
   { u: 4, ppo: 2, epo: 2, exp: 4 },
