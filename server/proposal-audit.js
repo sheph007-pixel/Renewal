@@ -16,7 +16,13 @@ const apiKey = () => process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
 const chatgptKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
 const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
-const CLAUDE_MODEL = "claude-opus-5";
+/**
+ * The audit agent's Claude half, and the correction agent: Claude Sonnet 5,
+ * the same model family the extraction agent reads with - checking every
+ * stored value against the page. ChatGPT is the other half of the audit on
+ * purpose: a different model family catches what Claude might misread twice.
+ */
+const CLAUDE_MODEL = "claude-sonnet-5";
 
 const RESULT_SCHEMA = {
   type: "object",
@@ -292,7 +298,7 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
   const response = await client.messages
     .stream({
       model: CLAUDE_MODEL,
-      max_tokens: 64000,
+      max_tokens: 128000,
       output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
       system: CORRECTION_INSTRUCTIONS,
       messages: [{ role: "user", content }],
