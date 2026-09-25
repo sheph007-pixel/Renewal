@@ -48,15 +48,11 @@ const FIELDS: { key: string; label: string; width?: number }[] = [
  * too: anyone holding it is signed in as that group.
  */
 function ClientLink({
-  name,
   code,
-  token,
   archived,
   onReset,
 }: {
-  name: string;
   code: string;
-  token: string | null;
   archived: boolean;
   onReset: () => Promise<void>;
 }) {
@@ -290,8 +286,6 @@ export default function GroupDetail({ group, token, onChanged, onBack, onOpenRat
 
             <ClientLink
               code={group.code}
-              name={group.name}
-              token={group.linkToken || null}
               archived={!!group.archived}
               onReset={async () => {
                 const r = await fetch("/api/admin/group-link/reset", {
