@@ -32,8 +32,6 @@ export interface Proposal {
   context?: { subject?: string; from?: string; date?: string | null; body?: string; emailFilename?: string } | null;
   /** The two-model check of the stored reading against the document. */
   audit?: ProposalAudit | null;
-  /** Set when the group has declined to quote for this slot. */
-  dtq?: boolean;
 }
 
 export interface ProposalAudit {
@@ -377,7 +375,7 @@ export interface VerifyCell {
     client?: number | null;
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
-  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
+  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`) · dtq: declined to quote. */
   state: "verified" | "fail" | "working" | "stuck" | "missing" | "dtq";
   stuck?: string;
   failedAt?: "source" | "extraction" | "validation" | "claude" | "chatgpt" | "grid";
@@ -397,8 +395,6 @@ export interface VerifyCell {
   fixId?: number;
   steps: { source: VerifyStep | null; extraction: VerifyStep | null; validation: VerifyStep | null; claude: VerifyStep | null; chatgpt: VerifyStep | null; grid: VerifyStep | null };
   waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
-  /** Whether this slot has been marked as Decline to Quote. */
-  dtq?: boolean;
 }
 /** One auditor's plan count: every option found on the document, the EPO plans left out on purpose, and the rest. */
 export interface AuditCount {
@@ -1047,18 +1043,17 @@ function SlotCell({
   const when = current?.extracted?.effective_date || current?.uploaded_at?.slice(0, 10) || "";
   const quote = current?.extracted?.quote_id;
   const state = check ? check.state : current ? "verified" : "missing";
-  const isDtq = state === "dtq";
   const verified = state === "verified";
+  const isDtq = state === "dtq";
   // Queued or in hand: either way the AI is on it.
   const working = state === "working" || state === "fail";
-  const filled = !!current || state !== "missing" || isDtq;
+  const filled = !!current || state !== "missing";
   // An empty slot - no proposal from that carrier - is blank. It still takes
   // a file: hovering or dragging one over it shows where it will land.
   const [hover, setHover] = useState(false);
-  const [pendingDTQ, setPendingDTQ] = useState(false);
   const reveal = hover || busy;
-  const edge = !filled ? (reveal || pendingDTQ ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
-  const fill = !filled ? (reveal || pendingDTQ ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const edge = !filled ? (reveal ? C.border : "transparent") : isDtq ? C.blue : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? (reveal ? "#fff" : "transparent") : isDtq ? C.blueTint : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
   const tone = isDtq ? C.blue : verified ? C.green : working ? "#2f6db3" : C.amber;
   const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
@@ -1176,39 +1171,31 @@ function SlotCell({
             </div>
           </>
         ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", visibility: reveal ? "visible" : "hidden" }}>
             <button
               onClick={() => ref.current?.click()}
-              disabled={busy || pendingDTQ}
-              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.ghost : C.faint, opacity: pendingDTQ ? 0.5 : 1 }}
+              disabled={busy}
+              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
               title={`Upload the ${slot} proposal for ${group}`}
             >
               {busy ? "uploading…" : "+ add"}
             </button>
             <button
-              onClick={() => {
-                setPendingDTQ(true);
-                void setDTQ();
-              }}
+              onClick={() => void setDTQ()}
               disabled={busy}
-              style={{ ...linkBtn, fontSize: 12, color: pendingDTQ ? C.blue : C.faint, fontWeight: pendingDTQ ? 600 : 400 }}
+              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
               title={`Mark as Decline to Quote for ${group}`}
             >
-              {pendingDTQ ? "DTQ (selected)" : "DTQ"}
+              DTQ
             </button>
-            {pendingDTQ && (
-              <button
-                onClick={() => {
-                  setPendingDTQ(false);
-                  void removeDTQ();
-                }}
-                disabled={busy}
-                style={{ ...linkBtn, fontSize: 12, color: C.ghost }}
-                title={`Clear DTQ for ${group}`}
-              >
-                delete
-              </button>
-            )}
+            <button
+              onClick={() => void removeDTQ()}
+              disabled={busy}
+              style={{ ...linkBtn, fontSize: 12, color: C.faint }}
+              title={`Clear DTQ for ${group}`}
+            >
+              delete
+            </button>
           </div>
         )}
       </div>
@@ -1314,6 +1301,8 @@ export default function Proposals({ token, groups }: Props) {
   }, [checkRunning, loadProposals]);
   const checkOf = new Map<string, VerifyCell>();
   (verify?.groups || []).forEach((g) => g.cells.forEach((c) => checkOf.set(`${g.group}||${c.slot}`, c)));
+  const [view, setView] = useState<"all" | "queue" | "assigned">("all");
+  const [layout, setLayout] = useState<"grid" | "list" | "groups">("grid");
   const [query, setQuery] = useState("");
   const [manager, setManager] = useState<"All" | "debbie" | "tracy">("All");
   const [need, setNeed] = useState<"All" | "missing" | "complete" | string>("All");
@@ -1326,6 +1315,12 @@ export default function Proposals({ token, groups }: Props) {
     `${p.filename} ${p.carrier || ""} ${p.group_name || ""} ${p.summary || ""} ${p.context?.subject || ""} ${p.context?.from || ""}`
       .toLowerCase()
       .includes(q);
+  const rows = items.filter(
+    (p) =>
+      (view === "all" ||
+        (view === "queue" ? isProposal(p) && p.status !== "assigned" : p.status === "assigned")) &&
+      matches(p),
+  );
   const proposals = items.filter(isProposal);
   const counts = {
     health: proposals.filter((p) => !isAncillary(p) && (!!p.slot || !!p.extracted)).length,
@@ -1485,7 +1480,33 @@ export default function Proposals({ token, groups }: Props) {
             aria-label="Search proposals"
             style={{ flex: "1 1 240px", minWidth: 200, padding: "8px 11px", fontSize: 13.5, color: C.ink, border: `1px solid ${C.inputEdge}`, borderRadius: 4, outline: "none" }}
           />
-          {(
+          <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Layout">
+            {(
+              [
+                ["grid", "Grid"],
+                ["list", "List"],
+                ["groups", "By group"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setLayout(k)}
+                aria-pressed={layout === k}
+                style={{
+                  padding: "7px 13px",
+                  fontSize: 13,
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  ...(layout === k
+                    ? { color: "#fff", background: C.headerBg, border: `1px solid ${C.headerBg}`, fontWeight: 500 }
+                    : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {layout === "grid" && (
             <>
               <select aria-label="Account manager" value={manager} onChange={(e) => setManager(e.target.value as typeof manager)} style={gridFilter}>
                 <option value="All">All managers</option>
@@ -1513,13 +1534,42 @@ export default function Proposals({ token, groups }: Props) {
               </button>
             </>
           )}
+          {layout === "list" && (
+            <div style={{ display: "flex", gap: 2 }} role="group" aria-label="Which proposals">
+              {(
+                [
+                  ["all", `All (${proposals.length})`],
+                  ["queue", `To assign (${counts.queue + counts.reading})`],
+                  ["assigned", `Assigned (${counts.assigned})`],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setView(k)}
+                  aria-pressed={view === k}
+                  style={{
+                    padding: "7px 13px",
+                    fontSize: 13,
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    ...(view === k
+                      ? { color: "#fff", background: C.blue, border: `1px solid ${C.blue}`, fontWeight: 500 }
+                      : { color: C.body, background: "#fff", border: `1px solid ${C.inputEdge}` }),
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {error && (
           <div role="alert" style={{ margin: "12px 0", fontSize: 13, color: C.red }}>
             {error}
           </div>
         )}
-        <div>
+        {layout === "grid" ? (
+          <div>
             <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
             <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
               {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
@@ -1647,6 +1697,14 @@ export default function Proposals({ token, groups }: Props) {
               </section>
             )}
           </div>
+        ) : !rows.length ? (
+          <div style={{ padding: "26px 0", textAlign: "center", fontSize: 13, color: C.faint }}>
+            {items.length ? "Nothing matches." : "No proposals yet. Drop the first batch above."}
+          </div>
+        ) : (
+          rows.map((p) => (
+            <ProposalRow key={p.id} p={p} token={token} groups={sortedGroups} onChanged={() => void load()} children={childCounts[p.id]} />
+          ))
         )}
       </div>
     </>
