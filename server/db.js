@@ -900,8 +900,8 @@ export function createDb(url) {
       const { rows } = await pool.query(
         `INSERT INTO kennion.proposals
            (group_name, carrier, filename, mime, size, data, status, assigned_by, uploaded_by,
-            kind, parent_id, context)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            kind, parent_id, context, slot)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          RETURNING id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                    status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
                    kind, parent_id, context, slot, superseded_by`,
@@ -909,6 +909,7 @@ export function createDb(url) {
           p.group_name || null, p.carrier || null, p.filename, p.mime, p.size, p.data,
           p.status || "analyzing", p.assigned_by || null, p.uploaded_by || null,
           p.kind || "file", p.parent_id || null, p.context ? JSON.stringify(p.context) : null,
+          p.slot || null,
         ],
       );
       return rows[0];
