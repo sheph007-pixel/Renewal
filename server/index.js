@@ -28,7 +28,7 @@ import { auditData, compareToExport } from "./data-audit.js";
 import { expandUpload, prepareForModel, classify, SUPPORTED } from "./intake.js";
 import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
-import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
+import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows, gravieDrift } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
 import { applyBenefitsGrid } from "./standard-designs.js";
 import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
@@ -5934,13 +5934,19 @@ async function settleGravieQuotes() {
       // not tied to the version of the workbook on file.
       const ext = (r.extracted && r.extracted.extraction) || null;
       const stale = !plans.length || plans.some((pl) => !pl.source) || !ext || ext.parser !== GRAVIE_PARSER || (r.source_sha && ext.sourceSha !== r.source_sha);
-      const quote = have.get(r.group_name);
-      const wanted = quote && String(quote.proposalId) === String(r.id) && quote.planCount === plans.length && !stale;
-      if (!stale && wanted) continue;
       const f = await proposalStore.getProposalFile(r.id);
       if (!f) continue;
       const parsed = parseGravieWorkbook(f.data);
-      if (stale) {
+      // Also stale: a reading that no longer says what the workbook's cells
+      // say - a model's correction changed a name, network or rate the
+      // parser read exactly (Johnson Storage's networks were overwritten with
+      // the header line naming both networks). The workbook is the source.
+      const drifted = !stale && gravieDrift(plans, gravieExtracted(parsed).plans || []);
+      if (drifted) console.log(`gravie: #${r.id} ${r.group_name}: the stored reading differs from its workbook (${drifted}); parsed again`);
+      const quote = have.get(r.group_name);
+      const wanted = quote && String(quote.proposalId) === String(r.id) && quote.planCount === plans.length && !stale && !drifted;
+      if (!stale && !drifted && wanted) continue;
+      if (stale || drifted) {
         const extracted = gravieReading(parsed, r.group_name, r.source_sha, plans);
         await proposalStore.updateProposal(r.id, { extracted, summary: extracted.summary });
         reread++;

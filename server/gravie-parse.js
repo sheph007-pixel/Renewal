@@ -249,3 +249,30 @@ export function gravieExtracted(p) {
     audit_flags: [],
   };
 }
+
+/**
+ * How a stored Gravie reading differs from a fresh parse of its workbook,
+ * on what the rate rows state (name, network, deductible, out-of-pocket max,
+ * coinsurance, four rates) - a short description, or null when they agree.
+ */
+export function gravieDrift(stored, fresh) {
+  const sig = (pl) =>
+    JSON.stringify([
+      String(pl.name || "").trim(),
+      String(pl.network || "").trim(),
+      String(pl.deductible ?? ""),
+      String(pl.oop_max ?? ""),
+      String((pl.benefits && pl.benefits.coinsurance) || ""),
+      ...["EE", "ES", "EC", "FAM"].map((t) => (pl.rates && pl.rates[t] != null ? Number(pl.rates[t]) : null)),
+    ]);
+  if (stored.length !== fresh.length) return `${stored.length} plans stored, ${fresh.length} in the workbook`;
+  const want = new Map();
+  for (const pl of fresh) want.set(sig(pl), (want.get(sig(pl)) || 0) + 1);
+  let off = 0;
+  for (const pl of stored) {
+    const k = sig(pl);
+    if (want.get(k)) want.set(k, want.get(k) - 1);
+    else off++;
+  }
+  return off ? `${off} plan(s) differ` : null;
+}
