@@ -191,7 +191,7 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
   const mixed = [];
   for (const pl of plans) {
     const own = normCode(pl.plan_code);
-    const codesSeen = (pl.source && Array.isArray(pl.source.codes) ? pl.source.codes : []).filter(Boolean);
+    const codesSeen = (pl.source && Array.isArray(pl.source.codes) ? pl.source.codes : []).map(normCode).filter(Boolean);
     const foreign = codesSeen.filter((c) => c !== own);
     if (foreign.length) mixed.push(`"${pl.name}" [${pl.plan_code || "no code"}] has data from plan code ${foreign.join(", ")}.`);
     for (const k of Array.isArray(pl.conflicts) ? pl.conflicts : []) {

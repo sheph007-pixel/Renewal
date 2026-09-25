@@ -10,7 +10,7 @@
 //     exactly once per model, all batches tied to one reading and document;
 //     a missing or failed batch leaves the audit pending, never a pass.
 import assert from "node:assert/strict";
-import { comparePlan, figures, sameBenefit, sameAmount, sameNetwork, nameForCompare, AUDIT_STANDARD } from "../server/plan-compare.js";
+import { comparePlan, figures, sameBenefit, sameAmount, sameNetwork, nameForCompare, AUDIT_STANDARD, sameName, labelSharedNames } from "../server/plan-compare.js";
 import { auditProposal, auditBatches, AUDIT_BATCH, readingVersion } from "../server/proposal-audit.js";
 
 // 1. Comparison-only normalization.
@@ -54,6 +54,22 @@ assert.ok(sameBenefit("MD Ded+100%: DDP", "MD Ded+100%: DDP; X-ray Ded+100%, Lab
 assert.ok(sameBenefit("$500", "$500 (MRI/CT); $40 (Lab/X-Ray)", "imaging"));
 assert.ok(!sameBenefit("$40", "$500 (MRI/CT); $40 (Lab/X-Ray)", "imaging"), "the lab figure is not the imaging cost");
 assert.ok(!sameBenefit("0%, 0%", "D&C", "imaging"));
+// v7: Kennion's label for a shared printed name - the plan's own code, then the name.
+assert.ok(sameName("EZ18 Open Access", "Open Access", "EZ18"));
+assert.ok(sameName("Open Access", "Open Access", "EZ18"));
+assert.ok(!sameName("EZ2T Open Access", "Open Access", "EZ18"), "another plan's code is not this plan's label");
+assert.ok(!sameName("EZ18 Open Access Direct", "Open Access", "EZ18"));
+{
+  const shared = labelSharedNames([
+    { name: "Open Access", plan_code: "EZ18" },
+    { name: "Open Access", plan_code: "EZ2T" },
+    { name: "EZ3D Open Access", plan_code: "EZ3D" },
+    { name: "Choice Plus Gold", plan_code: "P1000" },
+    { name: "Plan A", plan_code: "aaa67100-1b51-5545-8956-affca4dbc6ae" },
+    { name: "Plan A", plan_code: "3ebf7a66-4c00-56fe-86c2-cb376525514b" },
+  ]);
+  assert.deepEqual(shared.map((p) => p.name), ["EZ18 Open Access", "EZ2T Open Access", "EZ3D Open Access", "Choice Plus Gold", "Plan A", "Plan A"], "a shared name takes each plan's short code; a unique name and a long plan ID are left alone");
+}
 // Optimyl: a plan number and no printed name.
 {
   const op = { name: "Optimyl Plan 1", plan_code: "OPTIMYL PLAN 1", network: "", deductible: "$1,000", oop_max: "$5,000", benefits: {}, rates: { EE: 1, ES: 2, EC: 3, FAM: 4 } };

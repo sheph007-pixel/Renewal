@@ -35,7 +35,7 @@ import { prepareForModel } from "./intake.js";
 import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
-import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork } from "./plan-compare.js";
+import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork, sameName } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
 import { recordUsage, anthropicUsage, openaiUsage } from "./ai-usage.js";
 
@@ -1092,7 +1092,7 @@ export function applyCorrection(extracted, c, meta = {}) {
     const sameAlready =
       stored != null &&
       String(stored).trim() !== "" &&
-      (BENEFIT_FIELDS.includes(f.field) && f.field !== "hsa_eligible" ? sameBenefit(stored, f.value, f.field) : f.field === "network" ? sameNetwork(stored, f.value) : f.field === "deductible" || f.field === "oop_max" ? sameAmount(stored, f.value) : false);
+      (BENEFIT_FIELDS.includes(f.field) && f.field !== "hsa_eligible" ? sameBenefit(stored, f.value, f.field) : f.field === "network" ? sameNetwork(stored, f.value) : f.field === "deductible" || f.field === "oop_max" ? sameAmount(stored, f.value) : f.field === "name" ? sameName(stored, f.value, pl.plan_code) : false);
     if (sameAlready) {
       if (Array.isArray(pl.conflicts) && pl.conflicts.some((k) => k.field === f.field)) {
         settle(pl, f.field);

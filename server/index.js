@@ -20,7 +20,7 @@ import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
 import { withUsage, setUsageSink, memoryUsage, summarize } from "./ai-usage.js";
-import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION, optimylNumber, optimylLabel } from "./plan-compare.js";
+import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION, optimylNumber, optimylLabel, labelSharedNames } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
 import { comparisonTable, renderChangesReport, renderComparison, renderPicksReport, renderPlanCardPdf, renderPlanSheet, renderSignupConfirmation } from "./documents.js";
@@ -5043,6 +5043,13 @@ async function proposalsChanged() {
             return { ...pl, name: optimylLabel(n) };
           });
         }
+        // One printed name on several plan codes: each plan carries Kennion's
+        // label, its code then that name (plan-compare.js labelSharedNames).
+        const labelled = labelSharedNames(plans);
+        if (labelled.some((pl, i) => pl !== plans[i])) {
+          plans = labelled;
+          renamed = true;
+        }
         if (renamed || plans.length !== r.extracted.plans.length) {
           r.extracted = { ...r.extracted, plans };
           await proposalStore.updateProposal(r.id, { extracted: r.extracted });
@@ -5510,6 +5517,9 @@ async function runAnalysis(id, file, keepAssignment) {
           return true;
         })
         .map((pl) => (optimylNumber(pl.plan_code) != null ? { ...pl, name: optimylLabel(optimylNumber(pl.plan_code)) } : pl));
+    }
+    if (Array.isArray(out.plans)) out.plans = labelSharedNames(out.plans);
+    if (Array.isArray(out.plans) && /optimyl/i.test(out.carrier || "")) {
       if (out.plans.length !== 4) {
         flags.push(`Optimyl always quotes exactly 4 plans; this reading found ${out.plans.length} - re-check the document.`);
       }

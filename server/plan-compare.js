@@ -52,8 +52,12 @@ export const AUDIT_STANDARD = 2;
  *    numbers: the fixed code "OPTIMYL PLAN 1" is the printed "1", and a plan
  *    the document names nothing is stored under the fixed label "Optimyl
  *    Plan 1".
+ * 7: a plan named by Kennion's label - its own printed code, then the name
+ *    the document prints ("EZ18 Open Access" for "Open Access", code EZ18) -
+ *    matches that printed name. Used where one printed name sits on several
+ *    plan codes (UnitedHealthcare fully insured).
  */
-export const COMPARE_VERSION = 6;
+export const COMPARE_VERSION = 7;
 
 /** The benefit fields BenSync stores (plan.benefits), in the order they are shown. */
 export const BENEFIT_FIELDS = ["doctor_visit", "specialist", "imaging", "urgent_care", "emergency_room", "hospital", "rx", "coinsurance", "hsa_eligible"];
@@ -291,6 +295,49 @@ const sameRate = (a, b) => (a == null && b == null) || (a != null && b != null &
  *    document states them for the plan; a value the document states that the
  *    database lacks is a disagreement (the client would see a blank).
  */
+/**
+ * The stored name agrees with the printed one: the same words, or Kennion's
+ * label for a plan whose printed name is shared - its own code, then the
+ * printed name ("EZ18 Open Access" = "Open Access" on code EZ18).
+ */
+export function sameName(stored, printed, code) {
+  const a = nameForCompare(stored);
+  const b = nameForCompare(printed);
+  if (a === b) return true;
+  const c = nameForCompare(code);
+  return !!c && !!b && a === `${c} ${b}`;
+}
+
+/** A short carrier code that reads well in a name (not a long plan ID). */
+export const labelCode = (code) => {
+  const c = String(code || "").trim();
+  return c.length > 0 && c.length <= 16 && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(c) ? c : null;
+};
+
+/**
+ * Kennion's label for plans whose printed name is shared by several plan
+ * codes: each such plan is named by its own code, then the printed name
+ * ("Open Access" on EZ18 and EZ2T -> "EZ18 Open Access", "EZ2T Open
+ * Access"), so every plan the client sees has a distinct name. A name
+ * already carrying its code, a plan without a short code, and a name used
+ * once are left as they are. Returns the plans (new objects where renamed).
+ */
+export function labelSharedNames(plans) {
+  const codesByName = new Map();
+  for (const pl of plans || []) {
+    const k = nameForCompare(pl.name);
+    if (!k || !labelCode(pl.plan_code)) continue;
+    codesByName.set(k, new Set([...(codesByName.get(k) || []), normCode(pl.plan_code)]));
+  }
+  return (plans || []).map((pl) => {
+    const code = labelCode(pl.plan_code);
+    const k = nameForCompare(pl.name);
+    if (!code || !k || (codesByName.get(k) || new Set()).size < 2) return pl;
+    if (k.startsWith(`${nameForCompare(code)} `)) return pl;
+    return { ...pl, name: `${code} ${String(pl.name).trim()}` };
+  });
+}
+
 /** Optimyl's fixed plan code "OPTIMYL PLAN <n>" -> n; null for any other code. */
 export const optimylNumber = (code) => {
   const m = /^OPTIMYL PLAN (\d+)$/i.exec(String(code || "").trim());
@@ -307,7 +354,7 @@ export function comparePlan(stored, read, { benefitFields = BENEFIT_FIELDS } = {
   // the name when the document names nothing, and "OPTIMYL PLAN <n>" is the
   // printed "<n>".
   const optimylUnnamed = optimylNo != null && blank(read.name) && nameForCompare(stored.name) === nameForCompare(optimylLabel(optimylNo));
-  if (!optimylUnnamed && nameForCompare(stored.name) !== nameForCompare(read.name)) diff("name", stored.name, read.name);
+  if (!optimylUnnamed && !sameName(stored.name, read.name, stored.plan_code)) diff("name", stored.name, read.name);
   const readNo = /^\s*(?:optimyl\s+)?(?:plan\s*)?#?\s*(\d+)\s*$/i.exec(String(read.plan_code ?? ""));
   const optimylCode = optimylNo != null && readNo && Number(readNo[1]) === optimylNo;
   if (!optimylCode && normCode(stored.plan_code) !== normCode(read.plan_code)) diff("plan_code", stored.plan_code, read.plan_code);
