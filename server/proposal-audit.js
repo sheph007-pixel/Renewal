@@ -1074,6 +1074,10 @@ export function applyCorrection(extracted, c, meta = {}) {
       }
       continue;
     }
+    // A "fix" with nothing in it is not a reading: the corrector could not
+    // read a value, and the stored one stays. A plan's name, code or network
+    // is never blanked by a correction.
+    if (f.value == null || !String(f.value).trim()) continue;
     let from;
     let to;
     if (TIERS.includes(f.field)) {
@@ -1117,7 +1121,7 @@ export function applyCorrection(extracted, c, meta = {}) {
     const sp = a.source_pages || {};
     const m = (arr) => [...new Set((Array.isArray(arr) ? arr : []).map((p) => mapPage(p, pageMap)).filter(Boolean))].sort((x, y) => x - y);
     for (const f of ["name", "network", "plan_type", "deductible", "oop_max"]) {
-      if (a[f] != null && String(a[f]) !== String(pl[f] ?? "")) {
+      if (a[f] != null && String(a[f]).trim() && String(a[f]) !== String(pl[f] ?? "")) {
         entry(pl, f, pl[f] ?? null, a[f], null, "The plan is on the document under this value; corrected in place, not removed.");
         pl[f] = a[f];
       }

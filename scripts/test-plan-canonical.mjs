@@ -218,4 +218,16 @@ assert.deepEqual(
   "the document's count is not inflated by the EPO plans it already includes",
 );
 
+// A "fix" with an empty value is no reading: the stored name, code, network
+// and rates stay (a correction once blanked every Gravie plan name this way).
+const blankFix = applyCorrection(epoReading, { document_plan_count: 2, remove: [], unpriced: [], add: [{ name: "", plan_code: "A1", rates: {} }], fixes: [
+  { index: 0, field: "name", verdict: "fix", value: "", source_page: 0, reason: "" },
+  { index: 0, field: "plan_code", verdict: "fix", value: "  ", source_page: 0, reason: "" },
+  { index: 1, field: "network", verdict: "fix", value: "", source_page: 0, reason: "" },
+  { index: 1, field: "EE", verdict: "fix", value: "", source_page: 0, reason: "" },
+] });
+assert.deepEqual(blankFix.extracted.plans.map((p) => [p.name, p.plan_code, p.network]), [["Plan A", "A1", good().network], ["Plan A EPO", "A1E", "Core EPO"]]);
+assert.equal(blankFix.extracted.plans[1].rates.EE, good().rates.EE);
+assert.deepEqual(blankFix.log, [], "nothing changed, nothing logged");
+
 console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation, unique names and codes enforced - ok");

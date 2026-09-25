@@ -5336,7 +5336,7 @@ async function runProposalAudit(id) {
     await setStage(id, "AUDITING");
     const jobs = await auditJobs.list(id).catch(() => ({}));
     const before = auditProgress(row.extracted || {}, startSha, jobs);
-    console.log(`proposal ${id} audit: resuming - Claude ${before.claude.next || "complete"}, OpenAI ${before.openai.next || "complete"}`);
+    console.log(`proposal ${id} audit: resuming - ${before.claude.next || "Claude complete"}, ${before.openai.next || "OpenAI complete"}`);
     const audit = await withUsage(usageScope(row), () =>
       auditProposal({
         filename: f.filename,
