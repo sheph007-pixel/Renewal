@@ -357,10 +357,13 @@ export default function App() {
     (async () => {
       try {
         if (!s || s.kind === "group") {
+          // When the URL has a short code (/JOHN11), use that instead of a saved session.
+          const codeFromUrl = asked.kind === "group" && asked.code ? asked.code : undefined;
+          const codeToUse = codeFromUrl || (s ? s.code : undefined);
           const r = await fetch("/api/signin", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(s ? { code: s.code } : {}),
+            body: JSON.stringify(codeToUse ? { code: codeToUse } : {}),
           });
           if (!r.ok) throw new Error("expired");
           const p = await r.json();
