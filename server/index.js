@@ -4700,7 +4700,11 @@ async function assignOptionIds(rows, bySlot) {
   for (const r of rows) {
     if (!r.group_name || !r.extracted || !Array.isArray(r.extracted.plans)) continue;
     const taken = takenByGroup.get(r.group_name) || new Map();
-    for (const pl of r.extracted.plans) {
+    // The numbers a re-read is handing back to its surviving plans
+    // (previous_plan_ids) are taken too: a plan new on this reading must
+    // never be given one of them.
+    const prev = Array.isArray(r.extracted.previous_plan_ids) ? r.extracted.previous_plan_ids : [];
+    for (const pl of [...r.extracted.plans, ...prev]) {
       const m = OPTION_ID.exec(String(pl.option_id || ""));
       if (!m) continue;
       const set = taken.get(m[1]) || new Set();
@@ -4772,7 +4776,8 @@ async function assignOptionIds(rows, bySlot) {
     const nextFree = (prefix) => {
       const set = taken.get(prefix) || new Set();
       let n = 1;
-      while (set.has(n)) n++;
+      // Never a number a plan in the group already holds or has just claimed.
+      while (set.has(n) || held.has(`${prefix}${n}`)) n++;
       set.add(n);
       taken.set(prefix, set);
       return n;
