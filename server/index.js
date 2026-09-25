@@ -6579,6 +6579,9 @@ app.post("/api/admin/proposal-slots", requireStaff, express.json({ limit: "4kb" 
     } catch (e) {
       return res.status(500).json({ error: "Could not save: " + e.message });
     }
+    // Update in-memory cache
+    const existing = slotVisibility.get(`${groupName}||${slot}`) || { groupName, slot, clientEnabled: true, updatedBy: null, updatedAt: new Date().toISOString() };
+    slotVisibility.set(`${groupName}||${slot}`, { ...existing, dtq: b.dtq, updatedBy: req.staffEmail || null, updatedAt: new Date().toISOString() });
     console.log(`proposal slot ${groupName} / ${slot}: ${b.dtq ? "marked DTQ" : "removed DTQ"} (${req.staffEmail || "staff"})`);
     await proposalsChanged();
     res.json({ ok: true, dtq: b.dtq });
