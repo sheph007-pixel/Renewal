@@ -230,4 +230,17 @@ assert.deepEqual(blankFix.extracted.plans.map((p) => [p.name, p.plan_code, p.net
 assert.equal(blankFix.extracted.plans[1].rates.EE, good().rates.EE);
 assert.deepEqual(blankFix.log, [], "nothing changed, nothing logged");
 
+// A fix that restates the stored value in other words changes nothing: no
+// flip-flopping between two renderings of the same figures.
+const worded = { ...epoReading, plans: epoReading.plans.map((p, i) => (i === 0 ? { ...p, network: "Insurance Choice +", benefits: { ...(p.benefits || {}), rx: "$10/$35/$75/$250, 2.5 MO (AdvSMCS PDL)" } } : p)) };
+const restated = applyCorrection(worded, { document_plan_count: 2, remove: [], unpriced: [], add: [], fixes: [
+  { index: 0, field: "rx", verdict: "fix", value: "$10/$35/$75/$250", source_page: 1, reason: "" },
+  { index: 0, field: "network", verdict: "fix", value: "INS-Choice +", source_page: 1, reason: "" },
+  { index: 0, field: "doctor_visit", verdict: "fix", value: "$45 copay", source_page: 1, reason: "" },
+] });
+assert.equal(restated.extracted.plans[0].benefits.rx, "$10/$35/$75/$250, 2.5 MO (AdvSMCS PDL)");
+assert.equal(restated.extracted.plans[0].network, "Insurance Choice +");
+assert.equal(restated.extracted.plans[0].benefits.doctor_visit, "$45 copay", "a real difference is still corrected");
+assert.deepEqual(restated.log.map((l) => l.field), ["doctor_visit"]);
+
 console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation, unique names and codes enforced - ok");
