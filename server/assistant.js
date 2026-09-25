@@ -182,6 +182,7 @@ How to work:
 - The plans in the figures below are exactly the plans on the client's Medical Plans grid - the same records, every one of them. Help the client narrow them: filter by what they ask (lowest cost, HSA only, a network, a deductible ceiling, the lowest family rates), compare a handful, and recommend a few. A recommendation or shortlist highlights plans; it never removes the others, and never claims a plan the grid shows is unavailable. Network and plan type (PPO, EPO, LocalPlus) are attributes to explain - an EPO has no out-of-network cover, LocalPlus is a narrower network - not reasons to leave a plan out.
 - One carrier, one funding type. A group's 2027 program is with a single carrier and a single funding arrangement: it cannot offer Gravie plans beside UnitedHealthcare plans, and with UnitedHealthcare it is all fully insured or all level funded, never a mix. Compare across carriers freely - that is the advice - but every recommendation, shortlist or plan lineup you give is one carrier and one funding type, and when the client proposes a mix say so and help them choose which way to go. Sign Up holds to the same rule.
 - Never invent a number. If the figures do not cover a question - a plan's benefits, a carrier that has not quoted, a rate that is missing - say what is missing and that the account manager can get it, rather than estimating.
+- Where a figure comes from matters. A plan's name, code, network, type, deductible, out-of-pocket max, benefits and rates in the figures below are what the carrier's proposal for this group says; state them as the quote's terms. A value marked as the carrier's standard plan design is supplemental - Kennion's copy of the carrier's standard design, not this group's proposal: say so when you use it ("per the carrier's standard design"), and where the two differ the proposal's figure applies. When the proposal does not state something (HSA eligibility, a copay, a network), say it is not stated and do not infer it from the plan's name or type.
 - Be brief. Answer the question that was asked and stop: usually two to five sentences, or a short list - under 120 words unless the client asked for a comparison, a walkthrough, or a document. Lead with the answer; give the reasoning in one line. Round to whole dollars unless cents matter.
 - When you give a web address - a provider directory, a carrier page, a form - write it as a Markdown link with a short label, e.g. [Cigna provider directory](https://…), never a bare address.
 - Do not end answers with an offer or a question ("Want me to…?", "Want the full side-by-side on the Assistant page?"). Answer, then stop. Mention the Assistant page at most once in a conversation, and only when the client asks for something the small box cannot show (a full table, a long walkthrough). When the client says yes, go ahead, or asks for more, deliver the thing itself - the numbers, the comparison, the document - rather than offering it again.
@@ -524,19 +525,34 @@ export function describeGroup({ group, proposals, funding, manager, splits, sign
         b.coinsurance ? `coinsurance ${b.coinsurance}` : null,
         b.hsaEligible === true ? "HSA-eligible" : b.hsaEligible === false ? "not HSA-eligible" : null,
       ].filter(Boolean).join("; ");
-      // A plan that is one of the carrier's standard designs: the catalogue's
-      // family figures and out-of-network cover too.
+      // Proposal values above are facts about this group's quote. A plan that
+      // is one of the carrier's standard designs also carries that design - a
+      // separate, labelled source (Kennion's catalogue of the carrier's plan
+      // designs), never the proposal - for gaps the proposal leaves.
       const dz = pl.design || null;
       const oon = dz && dz.outOfNetwork;
+      const db = (dz && dz.benefits) || {};
       const std = dz
         ? [
+            dz.deductible ? `deductible ${dz.deductible}` : null,
+            dz.oopMax ? `out-of-pocket max ${dz.oopMax}` : null,
             dz.inNetwork && dz.inNetwork.deductibleFamily != null ? `family deductible ${money0(dz.inNetwork.deductibleFamily)}, family out-of-pocket max ${money0(dz.inNetwork.oopMaxFamily)}` : null,
+            db.doctorVisit ? `PCP ${db.doctorVisit}` : null,
+            db.specialist ? `specialist ${db.specialist}` : null,
+            db.urgentCare ? `urgent care ${db.urgentCare}` : null,
+            db.er ? `ER ${db.er}` : null,
+            db.hospital ? `inpatient ${db.hospital}` : null,
+            db.rx ? `Rx ${db.rx}` : null,
             oon && oon.deductibleIndividual != null ? `out-of-network deductible ${money0(oon.deductibleIndividual)}, out-of-network out-of-pocket max ${money0(oon.oopMaxIndividual)}${oon.coinsurance != null ? `, ${Math.round(oon.coinsurance * 100)}% coinsurance` : ""}` : null,
             dz.deductibleEmbedded === false ? "family deductible not embedded (the whole family deductible must be met before the plan pays for any one person)" : null,
           ].filter(Boolean).join("; ")
         : "";
+      const differs = dz && Array.isArray(dz.disagreements) && dz.disagreements.length
+        ? ` The proposal and the standard design differ on ${dz.disagreements.map((d) => `${d.field === "oopMax" ? "out-of-pocket max" : d.field} (proposal ${d.proposal}, standard design ${d.standardDesign})`).join(" and ")} - the proposal's figure is the one that applies.`
+        : "";
+      const NS = "not stated on the proposal";
       out.push(
-        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || "-"}, out-of-pocket max ${pl.oopMax || "-"}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits - ${bens}` : ""}${std ? `; standard design - ${std}` : ""}`,
+        `- ${pl.optionId ? `Option ${pl.optionId} - ` : ""}${pl.name}${pl.planCode ? ` [${pl.planCode}]` : ""}${pl.planType ? ` (${pl.planType})` : ""}${pl.network ? `, ${pl.network} network` : ""}: deductible ${pl.deductible || NS}, out-of-pocket max ${pl.oopMax || NS}; rates ${rates}${pl.monthlyTotal != null ? `; monthly at the group's census ${money(pl.monthlyTotal)}` : ""}${bens ? `; benefits on the proposal - ${bens}` : ""}${std ? `; ${dz.source || "carrier's standard plan design"} (supplemental, not from this group's proposal) - ${std}.${differs}` : ""}`,
       );
     }
     if (list.length > shown.length) out.push(`- …and ${list.length - shown.length} more options on this quote (see New 2027 Medical Options).`);

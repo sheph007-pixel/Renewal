@@ -7,7 +7,6 @@ import PDFDocument from "pdfkit";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { networkLabel } from "./proposal-kind.js";
 import * as XLSX from "xlsx";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle } from "docx";
 
@@ -41,6 +40,9 @@ const signed = (n) => (n == null ? "-" : (n < 0 ? "-" : "+") + money0(Math.abs(n
 const round2 = (n) => Math.round(n * 100) / 100;
 const today = () => new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 const safeName = (s) => String(s || "document").replace(/[^A-Za-z0-9 _-]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) || "document";
+
+/** What a document prints where the proposal does not state a value: never one borrowed from elsewhere. */
+const NOT_STATED = "Not stated";
 
 const slotCarrier = (slot, carrier) => {
   if (/^UHC|Surest/.test(slot || "")) return "UnitedHealthcare";
@@ -157,9 +159,10 @@ export function comparisonTable({ group: g, proposals, plans, includeCurrent = t
       name: pl.optionId ? `${slotCarrier(pr.slot, pr.carrier)} Option ${pl.optionId}\n${pl.name}` : pl.name,
       carrier: slotCarrier(pr.slot, pr.carrier),
       funding: slotFunding(pr.slot),
-      network: networkLabel(pl.network) || "-",
-      deductible: pl.deductible || "-",
-      oopMax: pl.oopMax || "-",
+      // Exactly as the proposal states them; "Not stated" where it is silent.
+      network: pl.network || NOT_STATED,
+      deductible: pl.deductible || NOT_STATED,
+      oopMax: pl.oopMax || NOT_STATED,
       rates,
       enrolled: g.enrolled,
       monthly,
@@ -382,12 +385,12 @@ export async function renderComparison({ format, title, group: g, table }) {
         doc.moveDown(0.3);
         const bcols = [
           { key: "name", label: "Plan", width: 150, align: "left", text: (r) => r.name, strong: () => true },
-          { key: "pcp", label: "Doctor visit", width: 90, align: "left", text: (r) => r.benefits.doctorVisit || "-" },
-          { key: "spec", label: "Specialist", width: 90, align: "left", text: (r) => r.benefits.specialist || "-" },
-          { key: "uc", label: "Urgent care", width: 90, align: "left", text: (r) => r.benefits.urgentCare || "-" },
-          { key: "img", label: "Imaging / labs", width: 100, align: "left", text: (r) => r.benefits.imaging || "-" },
-          { key: "hosp", label: "Hospital", width: 100, align: "left", text: (r) => r.benefits.hospital || "-" },
-          { key: "rx", label: "Prescriptions", width: 110, align: "left", text: (r) => r.benefits.rx || "-" },
+          { key: "pcp", label: "Doctor visit", width: 90, align: "left", text: (r) => r.benefits.doctorVisit || NOT_STATED },
+          { key: "spec", label: "Specialist", width: 90, align: "left", text: (r) => r.benefits.specialist || NOT_STATED },
+          { key: "uc", label: "Urgent care", width: 90, align: "left", text: (r) => r.benefits.urgentCare || NOT_STATED },
+          { key: "img", label: "Imaging / labs", width: 100, align: "left", text: (r) => r.benefits.imaging || NOT_STATED },
+          { key: "hosp", label: "Hospital", width: 100, align: "left", text: (r) => r.benefits.hospital || NOT_STATED },
+          { key: "rx", label: "Prescriptions", width: 110, align: "left", text: (r) => r.benefits.rx || NOT_STATED },
         ];
         pdfTable(doc, { columns: bcols, rows: withBenefits });
       }
@@ -425,7 +428,7 @@ export function renderPlanSheet({ group: g, columns, rows, contribution }) {
     ["Enrolled", TIER_KEYS.reduce((n, k) => n + (counts[k] || 0), 0)],
     ...(contribution ? [["Employer contribution applied", `${TIER_KEYS.map((k) => `${TIER_LABEL[k]} ${money(contribution[k])}`).join(", ")} per month; employees pay the rest of their tier's rate.`]] : []),
     [],
-    ["Every 2027 plan quoted for the group, one row each, with the same details the plan card shows: benefits as printed on the carrier's quote, monthly composite rates by tier, and the split at the employer contribution applied on the Medical Plans page."],
+    ["Every 2027 plan quoted for the group, one row each, with the same details the plan card shows: benefits as printed on the carrier's quote (a value marked \"standard design\" is not stated on the quote and comes from the carrier's standard plan design), monthly composite rates by tier, and the split at the employer contribution applied on the Medical Plans page."],
   ];
   const wa = XLSX.utils.aoa_to_sheet(about);
   wa["!cols"] = [{ wch: 30 }, { wch: 110 }];
@@ -695,7 +698,7 @@ export async function renderPicksReport({ group: g, proposals, recommendations: 
     const blockOf = (p) => {
       const r = rowFor(p);
       const facts = r
-        ? [r.network !== "-" ? `Network ${r.network}` : null, r.deductible !== "-" ? `Deductible ${r.deductible}` : null, r.oopMax !== "-" ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
+        ? [r.network !== NOT_STATED ? `Network ${r.network}` : null, r.deductible !== NOT_STATED ? `Deductible ${r.deductible}` : null, r.oopMax !== NOT_STATED ? `Out-of-pocket max ${r.oopMax}` : null, r.rates.EE != null ? `Employee-only rate ${money(r.rates.EE)}` : null].filter(Boolean).join("  ·  ")
         : "";
       const bill = r && r.monthly != null
         ? `Total monthly bill ${money0(r.monthly)} for ${enrolled} enrolled${r.er != null ? `  ·  your company pays ${money0(r.er)}, employees pay ${money0(r.ee)}` : ""}`
@@ -950,13 +953,6 @@ export async function renderDocument({ format, title, markdown, group: g }) {
 
 // ------------------------------------------------ 2027 Program Overview
 
-/** The network a slot's plans run on, the way the pages say it; a fixed rule for the carriers on one network, the quote's own word otherwise. */
-const slotNetwork = (slot, network) => {
-  if (/^UHC|^Surest/.test(slot || "")) return "United Choice Plus";
-  if (slot === "Gravie" || slot === "Angle") return "Cigna";
-  if (slot === "Nationwide") return "Nationwide";
-  return networkLabel(network) || "On the proposal";
-};
 /** How a slot's carrier reads on a client's page: UnitedHealthcare for every UHC slot, Angle Health for Angle. */
 const slotName = (slot, carrier) => {
   if (/^UHC|^Surest/.test(slot || "")) return "UnitedHealthcare";
@@ -965,10 +961,13 @@ const slotName = (slot, carrier) => {
 };
 
 /**
- * The 2027 options a group can see, one row per priced plan: the same rule
- * the Medical Plans page applies. A plan is priced when the carrier quoted
- * every tier the group has people in; a plan quoted twice at the same rates
- * is one row; Cobalt is not offered.
+ * The 2027 options a group can see, one row per canonical plan: the same
+ * plans the Medical Plans page shows. Plans are told apart by their carrier
+ * identity within their own proposal (plan code, else exact name on its
+ * network) - never by name and rates, and never across proposals. A plan
+ * the carrier did not price for a tier the group has people in is still an
+ * option, with no monthly figure. The name and network are the proposal's,
+ * exactly as printed. Cobalt is not offered.
  */
 function optionRows(g, proposals) {
   const counts = g.tiers || { EE: 0, ES: 0, EC: 0, FAM: 0 };
@@ -979,19 +978,14 @@ function optionRows(g, proposals) {
     for (const pl of pr.plans || []) {
       const rates = {};
       TIER_KEYS.forEach((k) => (rates[k] = pl.rates && pl.rates[k] != null ? Number(pl.rates[k]) : null));
-      if (!TIER_KEYS.some((k) => rates[k] != null)) continue;
-      let monthly = 0;
+      let monthly = TIER_KEYS.some((k) => rates[k] != null) ? 0 : null;
       for (const k of TIER_KEYS) {
-        if (!counts[k]) continue;
-        if (rates[k] == null) {
-          monthly = null;
-          break;
-        }
-        monthly += rates[k] * counts[k];
+        if (!counts[k] || monthly == null) continue;
+        if (rates[k] == null) monthly = null;
+        else monthly += rates[k] * counts[k];
       }
-      if (monthly == null) continue;
-      const name = pr.slot === "Surest" && !/surest/i.test(pl.name || "") ? `Surest ${pl.name}` : pl.name || "-";
-      const key = `${pr.slot}|${name.toLowerCase()}|${TIER_KEYS.map((k) => rates[k] ?? "").join(",")}`;
+      const identity = pl.identity || (pl.planCode ? `code:${String(pl.planCode).trim().toUpperCase()}` : `name:${String(pl.name || "").toLowerCase()}|${String(pl.network || "").toLowerCase()}`);
+      const key = `${pr.id ?? pr.slot}|${identity}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({
@@ -1000,12 +994,12 @@ function optionRows(g, proposals) {
         // Title Case, the way the page's own headings and labels read.
         funding: slotFunding(pr.slot) === "Fully insured" ? "Fully Insured" : "Level Funded",
         optionId: pl.optionId || null,
-        name,
-        network: slotNetwork(pr.slot, pl.network),
-        deductible: pl.deductible || "-",
-        oopMax: pl.oopMax || "-",
+        name: pl.name || "-",
+        network: pl.network || NOT_STATED,
+        deductible: pl.deductible || NOT_STATED,
+        oopMax: pl.oopMax || NOT_STATED,
         rates,
-        monthly: round2(monthly),
+        monthly: monthly == null ? null : round2(monthly),
       });
     }
   }

@@ -57,8 +57,10 @@ assert.equal(lookupDesign(index, "Angle Health", { name: "Traditional 5000", pla
 assert.equal(lookupDesign(index, "Angle Health", { name: "Angle Traditional 2000" }), null);
 assert.equal(lookupDesign(index, "Gravie", { name: "ANG TRAD 5000 7000" }), null, "a code is the carrier's own");
 
-// A quoted proposal: the catalogue design's figures replace the reader's on
-// the plan that is a design; a plan that is not stays as read.
+// A quoted proposal: the catalogue is SUPPLEMENTAL. The plan that is a design
+// keeps exactly what its proposal states and carries the design beside it,
+// labelled; a figure the two state differently is listed, the proposal's
+// kept. A plan that is not a design stays as read.
 const proposal = {
   id: 1,
   slot: "Angle",
@@ -70,11 +72,21 @@ const proposal = {
 };
 const applied = applyCatalogue(proposal, index, "Angle Health");
 assert.notEqual(applied, proposal, "a new proposal object when a plan was matched");
-assert.equal(applied.plans[0].deductible, "$5,000");
-assert.equal(applied.plans[0].oopMax, "$7,000");
-assert.equal(applied.plans[0].planType, "Traditional", "the design family stands in for a plan type the reader did not give");
-assert.equal(applied.plans[0].benefits.er, "$300 copay after deductible");
-assert.equal(applied.plans[0].benefits.imaging, "$25 copay labs · 20% after deductible X-ray · 20% after deductible imaging");
+assert.equal(applied.plans[0].deductible, "$5000", "the proposal's deductible, exactly as read");
+assert.equal(applied.plans[0].oopMax, "7000");
+assert.equal(applied.plans[0].planType, null, "no plan type is filled in from the design family");
+assert.deepEqual(applied.plans[0].benefits, proposal.plans[0].benefits, "the proposal's benefits, untouched: blanks stay blank");
+assert.equal(applied.plans[0].design.kind, "catalogue");
+assert.match(applied.plans[0].design.source, /^Angle Health standard plan design ANG TRAD 5000 7000 \(Kennion's Angle Health plan catalogue, plan year 2027\)$/);
+assert.equal(applied.plans[0].design.deductible, "$5,000");
+assert.equal(applied.plans[0].design.oopMax, "$7,000");
+assert.equal(applied.plans[0].design.family, "Traditional");
+assert.equal(applied.plans[0].design.benefits.er, "$300 copay after deductible");
+assert.equal(applied.plans[0].design.benefits.imaging, "$25 copay labs · 20% after deductible X-ray · 20% after deductible imaging");
+assert.deepEqual(applied.plans[0].design.disagreements, [], "$5000 and $5,000 are the same figure");
+const differs = applyCatalogue({ ...proposal, plans: [{ ...proposal.plans[0], deductible: "$4,500" }] }, index, "Angle Health").plans[0];
+assert.equal(differs.deductible, "$4,500", "the proposal wins");
+assert.deepEqual(differs.design.disagreements, [{ field: "deductible", proposal: "$4,500", standardDesign: "$5,000" }], "and the disagreement is listed");
 assert.equal(applied.plans[0].design.planCode, "ANG TRAD 5000 7000");
 assert.equal(applied.plans[0].design.services.length, 20);
 assert.equal(applied.plans[0].design.services[0].text, "$25 copay");
@@ -87,10 +99,12 @@ assert.equal(applyCatalogue(proposal, index, "Gravie"), proposal, "another carri
 const seed = JSON.parse(readFileSync(new URL("../server/data/kennion.json", import.meta.url), "utf8"));
 const g = seed.groups[0];
 const text = describeGroup({ group: { ...g, rates: {}, planTiers: {} }, proposals: [{ ...applied, funding: "level funded", effectiveDate: "2027-01-01", summary: null }], funding: null, manager: null, splits: {}, signup: null, renewal: null, planDesigns: seed.planDesigns });
-assert.match(text, /Option AN1 - ANG TRAD 5000 7000 \(Traditional\): deductible \$5,000, out-of-pocket max \$7,000/);
-assert.match(text, /benefits - PCP \$25 copay; specialist \$75 copay; urgent care \$85 copay; imaging \$25 copay labs[^;]*; hospital 20% after deductible; ER \$300 copay after deductible; Rx \$20 \/ \$60 \/ \$85 \/ 20% after deductible/);
-assert.match(text, /standard design - family deductible \$10,000, family out-of-pocket max \$14,000; out-of-network deductible \$10,000, out-of-network out-of-pocket max \$14,000, 50% coinsurance/);
-assert.ok(!/Option AN2[^\n]*standard design/.test(text), "no standard design line on a plan that is not one");
+// The proposal's own figures are stated as the quote's; the design follows,
+// labelled as the carrier's standard design and never as the proposal.
+assert.match(text, /Option AN1 - ANG TRAD 5000 7000: deductible \$5000, out-of-pocket max 7000; rates [^;]*; benefits on the proposal - PCP \$25; specialist \$75; hospital 20%; Angle Health standard plan design ANG TRAD 5000 7000 \(Kennion's Angle Health plan catalogue, plan year 2027\) \(supplemental, not from this group's proposal\) - /);
+assert.match(text, /\(supplemental, not from this group's proposal\) - deductible \$5,000; out-of-pocket max \$7,000; family deductible \$10,000, family out-of-pocket max \$14,000; PCP \$25 copay; specialist \$75 copay; urgent care \$85 copay; ER \$300 copay after deductible; inpatient 20% after deductible; Rx \$20 \/ \$60 \/ \$85 \/ 20% after deductible; out-of-network deductible \$10,000, out-of-network out-of-pocket max \$14,000, 50% coinsurance/);
+assert.match(text, /Option AN2 - Angle Custom 1000 \(Traditional\): deductible \$1,000/);
+assert.ok(!/Option AN2[^\n]*standard plan design/.test(text), "no standard design on a plan that is not one");
 
 // A workbook that is not a catalogue is refused, not half-read.
 assert.throws(() => parseCatalogueWorkbook(Buffer.from("not a workbook"), { carrier: "Angle Health" }));
@@ -170,15 +184,18 @@ for (let i = 0; i < 80 && !pr; i++) {
 }
 assert.ok(pr, "the Angle proposal reached the group's page");
 const [p1, p2] = pr.plans;
-assert.equal(p1.deductible, "$5,000");
-assert.equal(p1.oopMax, "$7,000");
-assert.equal(p1.planType, "Traditional");
-assert.equal(p1.benefits.urgentCare, "$85 copay", "a benefit the reader left blank is filled from the catalogue");
-assert.equal(p1.benefits.er, "$300 copay after deductible");
+assert.equal(p1.deductible, "$5000", "served exactly as the proposal states it");
+assert.equal(p1.oopMax, "$7000");
+assert.equal(p1.planType, null);
+assert.equal(p1.benefits.urgentCare, null, "a benefit the proposal leaves blank stays blank on the plan");
+assert.equal(p1.benefits.doctorVisit, "$25");
+assert.equal(p1.design.benefits.urgentCare, "$85 copay", "the catalogue's value is served beside it, as the standard design");
+assert.equal(p1.design.benefits.er, "$300 copay after deductible");
 assert.equal(p1.design.planId, trad.planId);
 assert.equal(p1.design.services.length, 20);
 assert.equal(p2.design.deductibleEmbedded, false);
-assert.equal(p2.benefits.doctorVisit, "No cost after deductible");
+assert.equal(p2.benefits.doctorVisit, null);
+assert.equal(p2.design.benefits.doctorVisit, "No cost after deductible");
 assert.equal(p2.rates.EE, 452.98);
 
 console.log("plan catalogue: 19 Angle Health designs parsed, matched by code, listed and loaded by staff, on the group's page and in the assistant's figures - ok");

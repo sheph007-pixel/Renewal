@@ -14,7 +14,7 @@ import { C, h3, panel, textInput } from "@/lib/ui";
 import Link from "@/lib/Link";
 import { carrierOf, fundingOf } from "@/views/PlanCard";
 import { useNarrow } from "@/lib/narrow";
-import { money0, networkTypeOf } from "@/lib/model";
+import { money0, networkTypeOf, planKey } from "@/lib/model";
 import CarrierMark from "@/views/CarrierMark";
 import { exportSignupConfirmation } from "@/lib/chat";
 
@@ -300,7 +300,7 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
   const sortOnPlan = (key: PlanSortKey) => setPlanSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
   const planQuery = planSearch.trim().toLowerCase();
   const visiblePlans = planQuery ? carrierPlansSorted.filter((p) => p.plan.toLowerCase().includes(planQuery)) : carrierPlansSorted;
-  const short = carrierPlans.filter((p) => selected[p.plan]);
+  const short = carrierPlans.filter((p) => selected[planKey(p)]);
   const tier = carrier && short.length ? planLimitFor(short[0].carrier, g.enrolled) : null;
   const cap = tier ? tier.maxWithUnderwriting ?? tier.maxPlans : null;
   const overLimit = cap != null && short.length > cap;
@@ -328,13 +328,13 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
     setPlanSort({ key: "plan", dir: 1 });
     // A plan checked earlier from the Options grid, under a different
     // carrier, cannot ride along - one carrier, one election.
-    const keep = new Set(plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === key).map((p) => p.plan));
+    const keep = new Set(plans.filter((p) => `${carrierOf(p)} ${fundingOf(p)}` === key).map((p) => planKey(p)));
     Object.keys(selected).forEach((p) => selected[p] && !keep.has(p) && onToggleSelected(p));
   };
 
   const submit = () => {
     onSubmit({
-      plans: short.map((s) => s.plan),
+      plans: short.map((s) => (s.optionId ? `${s.optionId} · ${s.plan}` : s.plan)),
       dental,
       vision,
       employerLife,
@@ -555,12 +555,12 @@ export default function SignUp({ data, g, selected, sent, submitting, submitErro
                         </tr>
                       )}
                       {visiblePlans.map((p, i) => {
-                        const on = !!selected[p.plan];
+                        const on = !!selected[planKey(p)];
                         const cell = { padding: "10px 10px", borderBottom: `1px solid ${C.hairline}`, color: C.ink };
                         return (
                           <tr
-                            key={p.plan}
-                            onClick={() => onToggleSelected(p.plan)}
+                            key={planKey(p)}
+                            onClick={() => onToggleSelected(planKey(p))}
                             style={{ background: on ? C.blueTint : i % 2 ? C.zebra : C.card, cursor: "pointer" }}
                           >
                             <td style={{ ...cell, whiteSpace: "nowrap", fontWeight: 700, color: p.optionId ? C.ink : C.faint }}>{p.optionId ?? "-"}</td>

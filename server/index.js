@@ -28,6 +28,7 @@ import JSZip from "jszip";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
+import { applyBenefitsGrid } from "./standard-designs.js";
 import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.js";
 import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
@@ -5110,10 +5111,11 @@ async function proposalsChanged() {
     for (const list of bySlot.values()) {
       const r = list[0];
       const x = r.extracted || {};
-      // A plan that is one of the carrier's standard designs takes its
-      // benefits from the catalogue, the same for every group.
+      // A plan that is one of the carrier's standard designs carries that
+      // design beside it, labelled (plan-catalogue.js, standard-designs.js):
+      // supplemental, never written over what the proposal states.
       const carrierName = (SLOT_BASIS[r.slot] && SLOT_BASIS[r.slot][0]) || r.carrier || x.carrier || null;
-      (current[r.group_name] = current[r.group_name] || []).push(applyCatalogue({
+      (current[r.group_name] = current[r.group_name] || []).push(applyBenefitsGrid(applyCatalogue({
         id: r.id,
         slot: r.slot,
         carrier: r.carrier || x.carrier || null,
@@ -5143,6 +5145,12 @@ async function proposalsChanged() {
               // Tiers the document itself does not price, confirmed by the steward.
               unpriced: Array.isArray(pl.unpriced) && pl.unpriced.length ? pl.unpriced : null,
               monthlyTotal: pl.monthly_total ?? null,
+              // Where on the proposal the plan was read (pages, or sheet and
+              // rows) and any source cells kept before normalization.
+              source: pl.source
+                ? { pages: { identity: pl.source.identity || [], benefits: pl.source.benefits || [], rates: pl.source.rates || [] }, sheet: pl.source.sheet || null, rows: pl.source.rows || null }
+                : null,
+              raw: pl.raw || null,
             }))
           : [],
         totalMonthly: x.total_monthly ?? null,
@@ -5150,7 +5158,7 @@ async function proposalsChanged() {
         filename: r.filename,
         uploadedAt: r.uploaded_at,
         audit: auditForClient(r.audit, r.extracted),
-      }, planCatalogueIndex, carrierName));
+      }, planCatalogueIndex, carrierName), carrierName));
     }
     currentProposals = current;
     proposalCounts = counts;
@@ -5776,7 +5784,8 @@ async function storeGravieQuote(g, parsed, filename, proposalId, by) {
       quoteNumber: parsed.quoteNumber || null,
       effectiveDate: parsed.effectiveDate || null,
       generated: parsed.generated || null,
-      network: "Cigna Open Access Plus",
+      // The network exactly as the workbook's header prints it.
+      network: parsed.network || null,
       tiers: parsed.tiers || {},
       filename,
       proposalId,
@@ -5847,7 +5856,7 @@ async function settleGravieQuotes() {
  * on a re-parse - the numbers its plans held, so every design keeps its ID.
  */
 /** The Gravie parser's version: a workbook parsed by an older one is parsed again at boot. v2 reads the EPO sheet too; v3 records every sheet (source coverage); v4 reads the Narrow Network (Cigna LocalPlus) sheet too. */
-const GRAVIE_PARSER = "gravie-v4";
+const GRAVIE_PARSER = "gravie-v5";
 function gravieReading(parsed, groupName, sourceSha, priorPlans) {
   const x = gravieExtracted(parsed);
   return {

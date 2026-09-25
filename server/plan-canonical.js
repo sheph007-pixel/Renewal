@@ -127,6 +127,8 @@ export function canonicalizePlans(appearances, { reportedAppearances = null, rep
         monthly_total: pl.monthly_total ?? null,
         ...(pl.option_id ? { option_id: pl.option_id } : {}),
         ...(Array.isArray(pl.unpriced) && pl.unpriced.length ? { unpriced: pl.unpriced } : {}),
+        // The source cells before normalization (a parser's raw values), kept for provenance.
+        ...(pl.raw && typeof pl.raw === "object" ? { raw: { ...pl.raw } } : {}),
         source: { identity: [], benefits: [], rates: [], sheet: "", rows: "", appearances: 0, codes: [] },
         conflicts: [],
       };

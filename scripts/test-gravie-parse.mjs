@@ -53,6 +53,10 @@ assert.deepEqual(p.plans[0].rates, { EE: 360, ES: 720, EC: 620, FAM: 1030 });
 assert.equal(p.plans[0].coinsurance, 0);
 assert.equal(p.plans[0].sheet, "PPO");
 assert.equal(p.plans[0].row, 18, "each plan knows the sheet row it came from");
+// Only what the workbook states: the plan type exactly as its column prints
+// it, and none where the sheet has no Plan Type column (never read off the name).
+assert.equal(p.plans[3].planType, null, "the Narrow Network sheet has no Plan Type column: no type, though the name says Copay");
+assert.deepEqual(p.plans[3].raw, { coinsurance: 0.2, network: "Cigna Healthcare Open Access Plus Network" }, "the source cells, before normalization");
 
 const x = gravieExtracted(p);
 assert.equal(x.carrier, "Gravie");
@@ -67,6 +71,13 @@ assert.equal(new Set(x.plans.map((pl) => `${pl.name}|${pl.network}`)).size, 5);
 assert.deepEqual(x.plans[0].source, { identity: [], benefits: [], rates: [], sheet: "PPO", rows: "row 18", appearances: 1, codes: [] });
 assert.equal(x.plans[0].monthly_total, 360 * 10 + 720 * 2 + 620 * 1 + 1030 * 3, "priced on the quoted tiers");
 assert.equal(x.plans[0].deductible, "$5000/$10000");
+// SOURCE NORMALIZATION with the source kept: 0.2 is stored as the "20%" it
+// means, and the cell itself stays beside it with the sheet and row.
+const narrow = x.plans.find((pl) => pl.network === "Cigna LocalPlus (PPO)");
+assert.equal(narrow.benefits.coinsurance, "20%");
+assert.deepEqual(narrow.raw, { coinsurance: 0.2, network: "Cigna Healthcare Open Access Plus Network", sheet: "NARROW NETWORK", row: 19 });
+assert.equal(narrow.plan_type, null);
+assert.ok(x.plans.every((pl) => !("hsa_eligible" in (pl.benefits || {}))), "HSA eligibility is never filled in: the workbook does not state it");
 
 const rows = gravieQuoteRows(p);
 assert.equal(rows.length, 5);

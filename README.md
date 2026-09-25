@@ -298,35 +298,46 @@ want the whole book rather than the block the portal serves.
 
 ## Proposals
 
-### Stored vs shown: every plan in the database, PPO only on the page
+### Stored vs shown: every plan in the database, every Verified plan on the page
 
-Two separate layers.
+**Stored: every plan on every proposal.** A proposal's unique plans (PPO,
+EPO, LocalPlus and the rest, each with its exact name, plan code and four
+tier rates) are all loaded into `kennion.proposals.extracted.plans`,
+counted, validated and dual-audited. If a proposal shows 100 unique plans,
+the database holds 100 and the check says 100.
 
-**Stored: every plan on every proposal.** A proposal's unique plans - PPO
-and EPO alike, each with its exact name, plan code and four tier rates - are
-all loaded into `kennion.proposals.extracted.plans`, counted, validated and
-dual-audited. If a proposal shows 100 unique plans, the database holds 100
-and the check says 100. Gravie's workbook is read on both its PPO and EPO
-sheets (134 plans).
+**Shown: every Verified plan of every slot that is ON.**
+`clientAvailablePlans(group)` in `server/index.js` is the one resolver for
+the grid, cards, comparison, documents, the AI Assistant and Sign Up.
+Network and plan type are filters and sorts on the grid, never reasons to
+hide a plan. The one control is the proposal slot per group (Proposals page,
+"Client ON/OFF"; `POST /api/admin/proposal-slots`), kept in
+`kennion.proposal_slot_visibility` apart from the proposal data, so a re-read
+never changes it. OFF shows none of the slot's plans while they stay stored,
+audited and Verified. `KENNION_CLIENT_VERIFIED_ONLY=0` also shows proposals
+not yet Verified.
 
-**Shown: decided by rules, in one place** (`server/plan-visibility.js`).
-`VISIBILITY_RULES` is a list of `{ key, reason, hides(plan, group) }`; a
-plan any rule hides stays in the database but is marked `hidden` when the
-group's proposals are built (`currentProposals`), and `clientProposals`
-leaves it out of the client's grid, plan cards, documents and the AI
-Assistant. There is one rule today: **EPO - Kennion offers PPO plans
-only.** UnitedHealthcare's menu carries an E-coded EPO twin of most P-coded
-PPO plans, and Gravie prices every design twice; the EPO sits a few dollars
-under the PPO and adds a choice without adding a decision. Per-group or
-per-carrier show/exclude choices go in the same list later without touching
-extraction, storage or the audit. The admin grid shows both numbers ("134
-loaded · 67 shown to client · 67 hidden") and the hover names each hidden
-plan with its reason. The UHC menu still drops its E-coded plans, and a
-current plan the UHC mapping had pointed at an EPO is mapped to its PPO twin
-(same deductible, out-of-pocket max and coinsurance). The switch that once
-turned the rule off is gone (`POST /api/admin/market-rules` accepts
-`ppo-only` and nothing else), and the client itself drops any EPO row that
-reaches it.
+### Data integrity: the canonical plan is only what the proposal says
+
+Nothing is invented, inferred, renamed or borrowed into a canonical plan
+field. A blank stays null and reads "Not stated".
+- A missing network is never filled with the carrier's usual one.
+- A plan type is never read off the plan's name.
+- HSA eligibility counts only when the proposal states it.
+- The plan name is exactly as printed; no "Surest" prefix is added.
+
+Deterministic normalizations are allowed, with the source cell kept in the
+plan's `raw`. For example, Gravie's coinsurance cell `0.2` is stored as
+"20%".
+
+A carrier's standard plan design is SUPPLEMENTAL and is served beside the
+plan under `design`, with a `source` label. That covers Kennion's plan
+catalogue and Gravie's Benefits Grid (`server/standard-designs.js`).
+- A screen may use a design value only where the proposal is blank, marked
+  "(standard design)" with its source named.
+- Where the two disagree, the proposal wins and `design.disagreements` says so.
+
+Full rule and categories: `docs/proposal-pipeline.md`, section 1a.
 
 ### When the pipeline runs, and what replace and delete do
 
@@ -1189,13 +1200,15 @@ server reads the workbook, seeds `kennion.carrier_plan_designs` where the
 carrier has no rows yet (one row per carrier, plan year and plan code; rows
 in the database win over the file), and keeps the catalogue in memory keyed
 by carrier and plan code (`server/plan-catalogue.js`). Every quoted plan
-whose printed name or code is a catalogue code then carries the catalogue's
-figures wherever the plan appears - its card, the printed proposal, the
-comparison, the assistant's figures - in place of what the reader made of
-the carrier's PDF: the deductible and OOP max, the design family as its type,
-the six benefit rows plus the emergency room, and the whole design (family
-figures, out-of-network cover, whether the family deductible is embedded,
-all 20 lines) under `design`. The group's own rates are never touched. A plan
+whose printed name or code is a catalogue code then carries the design
+beside it, under `design`, as SUPPLEMENTAL data. The design has a `source`
+label, its own deductible, OOP max, family and benefit rows, family figures,
+out-of-network cover, whether the family deductible is embedded, all 20
+lines, and any `disagreements` with the proposal.
+- The plan's own values stay exactly what the group's proposal states.
+- The card, grid, documents and assistant use a design value only where
+  the proposal is blank, and mark it "(standard design)".
+- The group's own rates are never touched. A plan
 that is not a catalogue design is left as read. On the Import tab, **Plan
 Design Catalogue** lists each carrier's designs and takes a catalogue
 workbook for a carrier (`POST /api/admin/plan-catalogue/:carrier`, the same

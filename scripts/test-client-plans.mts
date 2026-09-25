@@ -90,6 +90,13 @@ for (const pl of pr.plans) {
   assert.deepEqual([pl.name, pl.network, pl.optionId, pl.rates, pl.deductible, pl.oopMax], [st.name, st.network, st.option_id, st.rates, st.deductible, st.oop_max]);
 }
 assert.equal(new Set(pr.plans.map((p: { identity: string }) => p.identity)).size, 100, "no duplicates");
+// One carrier-neutral record per plan: the same fields whatever the carrier,
+// with its provenance and the proposal's verification status.
+const COMMON = ["optionId", "identity", "name", "planCode", "network", "planType", "deductible", "oopMax", "benefits", "rates", "source"];
+for (const pl of pr.plans) for (const k of COMMON) assert.ok(k in pl, `${pl.planCode} carries ${k}`);
+assert.ok(pr.plans.every((pl: { source: unknown }) => pl.source), "every plan says where on the proposal it was read");
+assert.deepEqual([pr.slot, pr.carrier, pr.funding, pr.verified], [SLOT, "Nationwide", "level funded", true]);
+assert.deepEqual(pr.plans.slice(0, 2).map((pl: { benefits: { hsaEligible: boolean } }) => pl.benefits.hsaEligible), [true, false], "HSA as the proposal states it (yes, no), normalized to a boolean");
 const epo = pr.plans.filter((p: { network: string }) => /EPO/.test(p.network)).length;
 const localPlus = pr.plans.filter((p: { network: string }) => /LocalPlus/.test(p.network)).length;
 assert.deepEqual([epo, localPlus], [20, 20], "EPO and LocalPlus plans shown like any other");
