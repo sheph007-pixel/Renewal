@@ -349,6 +349,200 @@ function useProposals(token: string, group?: string) {
   return { items, ai, durable, error, load, setError };
 }
 
+/** One box of the grid through the four-step check (server/proposal-verify.js). */
+export interface VerifyStep {
+  ok: boolean;
+  busy?: boolean;
+  note: string;
+  mismatches?: { plan: string; field: string; stored: string; onDocument: string; by: string }[];
+}
+export interface VerifyCell {
+  slot: string;
+  proposalId: number | null;
+  filename: string | null;
+  /** Plans the group's 2027 Medical Plans grid shows from this proposal. */
+  plans: number;
+  repeats?: number;
+  state: "verified" | "fail" | "working" | "missing";
+  failedAt?: "read" | "audited" | "loaded";
+  fix?: "read" | "read-waiting" | "audit" | null;
+  fixId?: number;
+  steps: { filed: VerifyStep | null; read: VerifyStep | null; audited: VerifyStep | null; loaded: VerifyStep | null };
+  waiting: { id: number; filename: string; reading: boolean; error: string | null }[];
+}
+export interface Verification {
+  checkedAt: string;
+  groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
+  totals: { filed: number; verified: number; working: number; failing: number; byStep: { read: number; audited: number; loaded: number } };
+}
+
+const STEP_NAMES = [
+  ["filed", "Filed"],
+  ["read", "Read"],
+  ["audited", "Audited"],
+  ["loaded", "Loaded"],
+] as const;
+
+/** The four-step check for the whole book; refreshed with the proposals, and every few seconds while a fix runs. */
+function useVerify(token: string) {
+  const [v, setV] = useState<Verification | null>(null);
+  const load = useCallback(async () => {
+    const r = await fetch("/api/admin/proposals/verify", { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) setV(await r.json());
+  }, [token]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const busy = !!v && v.totals.working > 0;
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => void load(), 5000);
+    return () => clearInterval(t);
+  }, [busy, load]);
+  return { v, load };
+}
+
+async function runFix(token: string, body: { id?: number; fix?: string } = {}) {
+  const r = await fetch("/api/admin/proposals/fix", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return r.ok ? ((await r.json()) as { reading: number; auditing: number; skipped: { id: number; why: string }[] }) : null;
+}
+
+const fixLabel = (c: VerifyCell) => (c.fix === "audit" ? "audit" : c.fix === "read-waiting" ? "re-read new upload" : c.fix === "read" ? "re-read" : "");
+
+/** Four small numbered squares: green passed, amber failed, blue running, grey not reached. */
+function StepStrip({ c }: { c: VerifyCell }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 2 }}>
+      {STEP_NAMES.map(([k, label], i) => {
+        const st = c.steps[k];
+        const bg = !st ? "#eef1f2" : st.ok ? C.green : st.busy ? "#2f6db3" : C.orange;
+        return (
+          <span
+            key={k}
+            title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : st.busy ? "running" : "failed"}${st ? ` - ${st.note}` : ""}`}
+            style={{ width: 13, height: 13, borderRadius: 2, background: bg, color: st ? "#fff" : C.ghost, fontSize: 9, fontWeight: 700, lineHeight: "13px", textAlign: "center" }}
+          >
+            {i + 1}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/**
+ * The check across the whole book, above the grid: how many boxes are
+ * verified, what is running, and every box that is not, with its failing
+ * step, why, and the one click that puts it right.
+ */
+function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: string; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [open, setOpen] = useState(true);
+  if (!v) return null;
+  const t = v.totals;
+  const bad = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "fail" || c.state === "working").map((c) => ({ group: g.group, c })));
+  const all = t.filed && t.verified === t.filed;
+  const fixAll = async () => {
+    setBusy(true);
+    const r = await runFix(token);
+    setBusy(false);
+    setMsg(r ? `${r.reading} re-read${r.reading === 1 ? "" : "s"} and ${r.auditing} audit${r.auditing === 1 ? "" : "s"} started${r.skipped.length ? ` · ${r.skipped.length} need a person (${[...new Set(r.skipped.map((x) => x.why))].join("; ")})` : ""}.` : "Could not start the fixes.");
+    onChanged();
+  };
+  const stepOf = (c: VerifyCell) => (c.failedAt ? STEP_NAMES.findIndex(([k]) => k === c.failedAt) + 1 : 0);
+  return (
+    <div
+      style={{
+        margin: "6px 0 12px",
+        padding: "10px 12px",
+        borderRadius: 6,
+        border: `1px solid ${all ? C.greenEdge : C.amberEdge}`,
+        background: all ? C.greenTint : C.amberTint,
+        fontSize: 13,
+        color: C.body,
+      }}
+    >
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+        <strong style={{ color: all ? C.green : C.ink }}>
+          {all ? "✓ " : ""}
+          {t.verified} of {t.filed} proposals verified
+        </strong>
+        <span style={{ color: C.faint }}>
+          1 Filed · 2 Read · 3 Audited · 4 Loaded in the group's Medical Plans grid
+          {t.working ? ` · ${t.working} running now` : ""}
+          {t.failing ? ` · ${t.failing} need attention (read ${t.byStep.read}, audit ${t.byStep.audited}, load ${t.byStep.loaded})` : ""}
+        </span>
+        <span style={{ flex: 1 }} />
+        {t.failing > 0 && (
+          <button
+            onClick={() => void fixAll()}
+            disabled={busy}
+            title="Re-read every proposal whose read failed or that the audit found wrong, and audit every one not yet audited"
+            style={{ padding: "6px 12px", fontSize: 12.5, fontWeight: 600, borderRadius: 4, cursor: "pointer", color: "#fff", background: C.blue, border: `1px solid ${C.blue}` }}
+          >
+            {busy ? "Starting…" : "Fix all"}
+          </button>
+        )}
+        {bad.length > 0 && (
+          <button onClick={() => setOpen((o) => !o)} style={{ ...linkBtn, fontSize: 12.5 }} aria-expanded={open}>
+            {open ? "hide list" : "show list"}
+          </button>
+        )}
+      </div>
+      {msg && <div style={{ marginTop: 6, fontSize: 12.5, color: C.body }}>{msg}</div>}
+      {open && bad.length > 0 && (
+        <table style={{ marginTop: 8, borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>
+          <tbody>
+            {bad.map(({ group, c }) => {
+              const st = c.failedAt ? c.steps[c.failedAt] : null;
+              return (
+                <tr key={`${group}|${c.slot}`} style={{ borderTop: `1px solid ${C.amberEdge}` }}>
+                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
+                    <Link href={groupPath(group)}>{group}</Link>
+                  </td>
+                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap", color: C.ink }}>{c.slot}</td>
+                  <td style={{ padding: "4px 10px 4px 0", whiteSpace: "nowrap" }}>
+                    <StepStrip c={c} />
+                  </td>
+                  <td style={{ padding: "4px 10px 4px 0", color: c.state === "working" ? "#2f6db3" : C.amber }}>
+                    {c.state === "working" ? "Running: " : `Step ${stepOf(c)}: `}
+                    {st ? st.note : ""}
+                    {st && st.mismatches && st.mismatches.length > 0 && (
+                      <span style={{ color: C.faint }}>
+                        {" "}
+                        ({st.mismatches.slice(0, 3).map((m) => `${m.plan} ${m.field}: ${m.stored || "-"} vs ${m.onDocument || "-"}`).join("; ")}
+                        {st.mismatches.length > 3 ? "…" : ""})
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: "4px 0", textAlign: "right", whiteSpace: "nowrap" }}>
+                    {c.state === "fail" && c.fix && c.fixId != null && (
+                      <button
+                        onClick={async () => {
+                          await runFix(token, { id: c.fixId, fix: c.fix! });
+                          onChanged();
+                        }}
+                        style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600 }}
+                      >
+                        {fixLabel(c)}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 /** Plans and rates Claude read off the document, as a small table. */
 function Extracted({ x }: { x: Extraction }) {
   const all = x.plans || [];
@@ -762,12 +956,15 @@ function SlotCell({
   group,
   slot,
   current,
+  check,
   token,
   onChanged,
 }: {
   group: string;
   slot: string;
   current: Proposal | undefined;
+  /** This box through the four-step check; green only when all four pass. */
+  check?: VerifyCell;
   token: string;
   onChanged: () => void;
 }) {
@@ -793,9 +990,19 @@ function SlotCell({
       setConfirmDelete(false);
     }
   };
-  const plans = current?.extracted?.plans?.length || 0;
+  // The count is what the group's Medical Plans grid shows, as the check
+  // counted it; the stored count only while the check has not loaded.
+  const plans = check && check.state !== "missing" ? check.plans : current?.extracted?.plans?.length || 0;
   const when = current?.extracted?.effective_date || current?.uploaded_at?.slice(0, 10) || "";
   const quote = current?.extracted?.quote_id;
+  const state = check ? check.state : current ? "verified" : "missing";
+  const verified = state === "verified";
+  const working = state === "working";
+  const filled = !!current || state !== "missing";
+  const edge = !filled ? C.border : verified ? C.green : working ? "#9dbbe0" : C.amberEdge;
+  const fill = !filled ? "#fff" : verified ? C.greenTint : working ? "#eef4fb" : C.amberTint;
+  const tone = verified ? C.green : working ? "#2f6db3" : C.amber;
+  const failing = check && check.failedAt ? check.steps[check.failedAt] : null;
 
   return (
     <td style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, verticalAlign: "top" }}>
@@ -805,9 +1012,10 @@ function SlotCell({
           e.preventDefault();
           void send(Array.from(e.dataTransfer.files));
         }}
+        title={check && filled ? STEP_NAMES.map(([k, label], i) => `${i + 1}. ${label}: ${check.steps[k] ? `${check.steps[k]!.ok ? "✓" : check.steps[k]!.busy ? "…" : "✗"} ${check.steps[k]!.note}` : "-"}`).join("\n") : undefined}
         style={{
-          border: `1px solid ${current ? C.greenEdge : C.border}`,
-          background: current ? C.greenTint : "#fff",
+          border: `${verified ? 2 : 1}px solid ${edge}`,
+          background: fill,
           borderRadius: 4,
           padding: "6px 8px",
           minHeight: 40,
@@ -823,15 +1031,63 @@ function SlotCell({
           onChange={(e) => void send(Array.from(e.target.files || []))}
           style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden" }}
         />
-        {current ? (
+        {!current && filled && check ? (
+          // Only an upload that has not read yet - nothing in force in this slot.
+          <>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: tone }}>{working ? "reading…" : "⚠ not read"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+              <StepStrip c={check} />
+              {check.fix && check.fixId != null && (
+                <button
+                  onClick={async () => {
+                    setBusy(true);
+                    await runFix(token, { id: check.fixId, fix: check.fix! });
+                    setBusy(false);
+                    onChanged();
+                  }}
+                  style={{ ...linkBtn, fontSize: 11 }}
+                  disabled={busy}
+                >
+                  {fixLabel(check)}
+                </button>
+              )}
+            </div>
+          </>
+        ) : current ? (
           <>
             <button
               onClick={() => void openFile(current.id, token)}
               title={`${current.filename}${quote ? ` · quote ${quote}` : ""}`}
-              style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: C.green, textAlign: "left", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
+              style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: tone, textAlign: "left", maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
             >
-              ✓ {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : "on file"}
+              {verified ? "✓" : working ? "…" : "⚠"} {plans ? `${plans} plan${plans === 1 ? "" : "s"}` : slot === "Angle Scorecard" ? "on file" : "no plans"}
             </button>
+            {check && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
+                <StepStrip c={check} />
+                {verified ? (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: C.green }}>verified</span>
+                ) : check.state === "fail" && check.fix && check.fixId != null ? (
+                  <button
+                    onClick={async () => {
+                      setBusy(true);
+                      await runFix(token, { id: check.fixId, fix: check.fix! });
+                      setBusy(false);
+                      onChanged();
+                    }}
+                    title={failing ? failing.note : undefined}
+                    style={{ ...linkBtn, fontSize: 11, fontWeight: 600 }}
+                    disabled={busy}
+                  >
+                    {fixLabel(check)}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 10.5, color: tone }} title={failing ? failing.note : undefined}>
+                    {working ? "running" : "check"}
+                  </span>
+                )}
+              </div>
+            )}
             <div style={{ fontSize: 11, color: C.ghost, display: "flex", gap: 8, flexWrap: "wrap" }}>
               <span>{when ? fmtDay(when) : ""}</span>
               <button onClick={() => ref.current?.click()} style={{ ...linkBtn, fontSize: 11 }} disabled={busy}>
@@ -957,7 +1213,20 @@ interface Props {
 
 /** The Proposals tab: upload in bulk, review what the AI matched, assign the rest. */
 export default function Proposals({ token, groups }: Props) {
-  const { items, ai, durable, error, load } = useProposals(token);
+  const { items, ai, durable, error, load: loadProposals } = useProposals(token);
+  const { v: verify, load: loadVerify } = useVerify(token);
+  const load = useCallback(async () => {
+    await Promise.all([loadProposals(), loadVerify()]);
+  }, [loadProposals, loadVerify]);
+  // A check that is still running refreshes the proposals with it.
+  const checkRunning = !!verify && verify.totals.working > 0;
+  useEffect(() => {
+    if (!checkRunning) return;
+    const t = setInterval(() => void loadProposals(), 5000);
+    return () => clearInterval(t);
+  }, [checkRunning, loadProposals]);
+  const checkOf = new Map<string, VerifyCell>();
+  (verify?.groups || []).forEach((g) => g.cells.forEach((c) => checkOf.set(`${g.group}||${c.slot}`, c)));
   const [view, setView] = useState<"all" | "queue" | "assigned">("all");
   const [layout, setLayout] = useState<"grid" | "list" | "groups">("grid");
   const [query, setQuery] = useState("");
@@ -1007,7 +1276,12 @@ export default function Proposals({ token, groups }: Props) {
   // current proposal in it. Everything the page is for, on one screen.
   const currentBySlot = new Map<string, Proposal>();
   proposals.forEach((p) => {
-    if (isCurrent(p) && p.group_name && p.slot) currentBySlot.set(`${p.group_name}||${p.slot}`, p);
+    if (!isCurrent(p) || !p.group_name || !p.slot) return;
+    const k = `${p.group_name}||${p.slot}`;
+    // A newer upload that has not read yet waits beside the proposal in
+    // force; the check says which one the group's page is built from.
+    const inForce = checkOf.get(k)?.proposalId;
+    if (inForce != null ? p.id === inForce : !currentBySlot.has(k)) currentBySlot.set(k, p);
   });
   // A grid column's sort value: the group's own fields, or - for a slot
   // column - whether that group has a current proposal in it (filled sorts
@@ -1042,6 +1316,11 @@ export default function Proposals({ token, groups }: Props) {
       if (manager !== "All" && g.manager !== manager) return false;
       if (need === "missing" && have === of) return false;
       if (need === "complete" && have !== of) return false;
+      if (need === "attention" && !SLOTS.some((sl) => ["fail", "working"].includes(checkOf.get(`${g.name}||${sl}`)?.state || ""))) return false;
+      if (need === "verified") {
+        const cells = SLOTS.map((sl) => checkOf.get(`${g.name}||${sl}`)).filter((c) => c && c.state !== "missing");
+        if (!cells.length || cells.some((c) => c!.state !== "verified")) return false;
+      }
       if (SLOTS.includes(need as (typeof SLOTS)[number])) {
         // A slot that does not apply to the group is not "missing" from it.
         if (!applies.has(need)) return false;
@@ -1171,6 +1450,8 @@ export default function Proposals({ token, groups }: Props) {
                 <option value="All">All groups</option>
                 <option value="missing">Missing a proposal</option>
                 <option value="complete">Every quote in</option>
+                <option value="attention">Needs attention (not verified)</option>
+                <option value="verified">Every proposal verified</option>
                 {SLOTS.map((sl) => (
                   <option key={sl} value={sl}>
                     Missing {sl}
@@ -1222,6 +1503,7 @@ export default function Proposals({ token, groups }: Props) {
         )}
         {layout === "grid" ? (
           <div>
+            <VerifyPanel v={verify} token={token} onChanged={() => void load()} />
             <div style={{ margin: "4px 0 10px", fontSize: 12.5, color: C.faint }}>
               {gridRows.length} group{gridRows.length === 1 ? "" : "s"} · {filled} of {slotsInPlay} slots filled.
               Drop a file on any box, or on the batch uploader above - a newer proposal replaces the one in that slot and the old one is kept.
@@ -1254,7 +1536,7 @@ export default function Proposals({ token, groups }: Props) {
                       </td>
                       {SLOTS.map((sl, i) =>
                         applies.has(sl) ? (
-                          <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} token={token} onChanged={() => void load()} />
+                          <SlotCell key={sl} group={g.name} slot={sl} current={slots[i]} check={checkOf.get(`${g.name}||${sl}`)} token={token} onChanged={() => void load()} />
                         ) : (
                           <td key={sl} style={{ padding: "5px 6px", borderBottom: `1px solid ${C.hairline}`, textAlign: "center", color: C.ghost, fontSize: 12 }} title={`${sl} is not quoted for this group`}>
                             - 

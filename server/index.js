@@ -32,6 +32,7 @@ import { loadPlanDocumentFiles, parseSimpleDocFilename } from "./plan-documents.
 import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow, networkLabel } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
+import { verifyProposals } from "./proposal-verify.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
 import { parseCarrierStats } from "./carrier-stats.js";
 import { runAudit, auditFingerprint } from "./audit.js";
@@ -4735,6 +4736,10 @@ function guessSlotFromFilename(filename) {
  * summary that calls itself ancillary, or one that names only ancillary
  * products and quoted no plan with a rate.
  */
+/** A proposal whose read finished with something to show: plans, or a scorecard's reading. */
+const hasReading = (r) =>
+  !!(r.extracted && Array.isArray(r.extracted.plans) && (r.extracted.plans.length || r.slot === "Angle Scorecard"));
+
 /**
  * After any change: recount proposals per group for the Groups page, and
  * settle supersession - within a group and slot, the newest assigned proposal
@@ -4853,6 +4858,14 @@ async function proposalsChanged() {
     rows.forEach((r) => want.set(r.id, null));
     for (const list of bySlot.values()) {
       list.sort((a, b) => new Date(b.uploaded_at) - new Date(a.uploaded_at) || b.id - a.id);
+      // A newer upload whose read is still running, or failed, never
+      // replaces a proposal that was read: it waits beside it, unsuperseded,
+      // and takes over (deleting the old one) only once it has plans of its
+      // own. Before this, a re-upload of Boss Logistics' UHC Level Funded
+      // quote that failed to read deleted the good reading it was replacing
+      // and left the group with no UHC Level Funded plans at all.
+      const ready = list.findIndex(hasReading);
+      if (ready > 0) list.splice(0, ready);
       const current = list[0];
       list.slice(1).forEach((r) => want.set(r.id, current.id));
     }
@@ -5682,6 +5695,106 @@ app.post("/api/admin/proposals/audit", requireStaff, async (req, res) => {
   res.json({ queued: todo.length });
 });
 
+/** Proposals being read again by a fix, so the check shows them busy and a second click does not double up. */
+const rereading = new Set();
+
+/**
+ * The four-step check - filed, read, audited, loaded - for every live group
+ * and slot (server/proposal-verify.js). Arithmetic over what is stored, so it
+ * runs in milliseconds; the Proposals grid colours each box from it.
+ */
+function proposalVerification(rows) {
+  const live = groups.filter((g) => !g.archived && g.eligible);
+  return verifyProposals({
+    groups: live.map((g) => ({ name: g.name, slots: [...slotsForGroup(g), "Angle Scorecard"], tiers: clientGroupView(g).tiers || {} })),
+    rows,
+    // What the group's own page is given, plus the scorecard (admin only).
+    served: (name) => [...clientProposals(name), ...(currentProposals[name] || []).filter((p) => p.slot === "Angle Scorecard")],
+    isEpoPlan,
+    isBlankPlan,
+    reading: rereading,
+    auditing,
+  });
+}
+
+/** One line for the book, and one per box that is not verified - the check, readable in the deploy log. */
+async function logProposalCheck() {
+  const v = proposalVerification(await proposalStore.listProposals());
+  const t = v.totals;
+  console.log(`proposal check: ${t.verified} of ${t.filed} verified, ${t.working} running, ${t.failing} failing (read ${t.byStep.read}, audit ${t.byStep.audited}, load ${t.byStep.loaded})`);
+  for (const g of v.groups) {
+    for (const c of g.cells) {
+      if (c.state !== "fail" && c.state !== "working") continue;
+      const st = c.failedAt ? c.steps[c.failedAt] : null;
+      console.log(`proposal check: ${g.group} / ${c.slot} #${c.proposalId ?? c.fixId}: ${c.state} at ${c.failedAt || "?"} - ${st ? st.note : ""}`);
+    }
+  }
+}
+
+app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
+  try {
+    res.json(proposalVerification(await proposalStore.listProposals()));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * Put right what the check can put right on its own: read (again) a proposal
+ * whose read failed, never ran, or was found wrong by the audit; audit a
+ * reading that has not been audited. `{id, fix}` does one box; no body does
+ * every failing box in the book. A fix never moves a proposal off its group.
+ * Reads queue behind the read throttle, and each finished read audits itself.
+ */
+app.post("/api/admin/proposals/fix", requireStaff, express.json({ limit: "4kb" }), async (req, res) => {
+  const rows = await proposalStore.listProposals();
+  const body = req.body || {};
+  let todo;
+  if (body.id != null) {
+    if (!["read", "read-waiting", "audit"].includes(body.fix)) return res.status(400).json({ error: "fix must be read or audit." });
+    todo = [{ id: Number(body.id), fix: body.fix }];
+  } else {
+    todo = proposalVerification(rows)
+      .groups.flatMap((g) => g.cells)
+      .filter((c) => c.state === "fail" && c.fix && c.fixId)
+      .map((c) => ({ id: c.fixId, fix: c.fix }));
+  }
+  const reads = [];
+  const audits = [];
+  const skipped = [];
+  for (const t of todo) {
+    const r = rows.find((x) => x.id === t.id);
+    if (!r) continue;
+    if (t.fix === "audit") {
+      audits.push(r.id);
+      continue;
+    }
+    // A Gravie workbook is parsed, not read by a model; the boot pass re-parses it.
+    if (r.context && r.context.source === "gravie-workbook") {
+      skipped.push({ id: r.id, why: "Gravie workbook - re-upload it to re-parse" });
+      continue;
+    }
+    if (!aiEnabled()) {
+      skipped.push({ id: r.id, why: "AI reading is off" });
+      continue;
+    }
+    if (r.status === "analyzing" || rereading.has(r.id)) continue;
+    const f = await proposalStore.getProposalFile(r.id).catch(() => null);
+    if (!f) {
+      skipped.push({ id: r.id, why: "file missing" });
+      continue;
+    }
+    // The row keeps its status (and whatever reading it has stays in force on
+    // the group's page) while the new read runs; `rereading` marks it busy.
+    rereading.add(r.id);
+    reads.push(r.id);
+    void runAnalysis(r.id, { buffer: f.data, mime: f.mime, filename: f.filename, context: r.context || null }, !!r.group_name).finally(() => rereading.delete(r.id));
+  }
+  if (audits.length) void auditInParallel(audits);
+  console.log(`proposals fix: ${reads.length} read(s), ${audits.length} audit(s) queued${skipped.length ? `, ${skipped.length} skipped` : ""}`);
+  res.json({ reading: reads.length, auditing: audits.length, skipped });
+});
+
 /** Assign, reassign, confirm, or relabel a proposal. */
 /**
  * Re-read every proposal whose extraction predates the current questions - 
@@ -5928,6 +6041,9 @@ async function boot() {
   } catch (e) {
     console.error("invoice audit:", e.message);
   }
+  // The four-step check, logged, so the state of every box is in the deploy
+  // log. Read-only; never blocks boot.
+  void logProposalCheck().catch((e) => console.error("proposals: check:", e.message));
   // Proposals read before the reader asked for per-plan benefits, re-read in
   // the background so the plan cards fill in. Never blocks boot.
   void backfillPlanBenefits().catch((e) => console.error("proposals: benefits re-read:", e.message));

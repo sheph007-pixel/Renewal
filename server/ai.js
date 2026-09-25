@@ -35,13 +35,13 @@ const HAIKU_MAX_PAGES = 30;
  */
 const MAX_PDF_PAGES = 300;
 
-/** Cut a long PDF into readable parts, each at most MAX_PDF_PAGES. */
-async function splitPdf(buffer) {
+/** Cut a PDF into readable parts of at most `size` pages (MAX_PDF_PAGES by default). */
+async function splitPdf(buffer, size = MAX_PDF_PAGES) {
   const src = await PDFDocument.load(buffer);
   const total = src.getPageCount();
   const parts = [];
-  for (let start = 0; start < total; start += MAX_PDF_PAGES) {
-    const end = Math.min(start + MAX_PDF_PAGES, total);
+  for (let start = 0; start < total; start += size) {
+    const end = Math.min(start + size, total);
     const doc = await PDFDocument.create();
     const pages = await doc.copyPages(
       src,
@@ -51,6 +51,25 @@ async function splitPdf(buffer) {
     parts.push({ buffer: Buffer.from(await doc.save()), first: start + 1, last: end, total });
   }
   return parts;
+}
+
+/** Thrown by readOnce when the model's answer ran past max_tokens. */
+class TooLongError extends Error {}
+
+/**
+ * The same plan printed twice - once in a summary table, again on its own
+ * page - lands in two parts of a split reading. Identical name, code and
+ * tier rates is one plan; anything that differs is kept.
+ */
+function dedupePlans(plans) {
+  const seen = new Set();
+  return plans.filter((pl) => {
+    const r = pl.rates || {};
+    const k = [String(pl.name || "").toLowerCase().replace(/\s+/g, " ").trim(), pl.plan_code || "", pl.network || "", r.EE ?? "", r.ES ?? "", r.EC ?? "", r.FAM ?? ""].join("|");
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 /**
@@ -76,12 +95,19 @@ function mergeReadings(readings) {
     group_name_on_document: firstSet("group_name_on_document"),
     matched_group: firstSet("matched_group"),
     // The least sure part governs: a match the whole document does not support
-    // should not read as certain because its first pages did.
-    confidence: Math.min(...readings.map((r) => Number(r.confidence) || 0)),
+    // should not read as certain because its first pages did. A part that
+    // names no group at all - the back half of a rate book, with no employer
+    // on it - has no say; two parts naming different groups is no match.
+    confidence: (() => {
+      const named = readings.filter((r) => r.matched_group);
+      if (!named.length) return Math.min(...readings.map((r) => Number(r.confidence) || 0));
+      if (new Set(named.map((r) => r.matched_group)).size > 1) return 0;
+      return Math.min(...named.map((r) => Number(r.confidence) || 0));
+    })(),
     effective_date: firstSet("effective_date"),
     enrolled_on_document: firstSet("enrolled_on_document"),
     total_monthly: firstSet("total_monthly"),
-    plans: readings.flatMap((r) => (Array.isArray(r.plans) ? r.plans : [])),
+    plans: dedupePlans(readings.flatMap((r) => (Array.isArray(r.plans) ? r.plans : []))),
     summary: readings.map((r) => r.summary).filter(Boolean).join(" "),
     audit_flags: [
       `Read in ${readings.length} parts: the document is longer than one reading holds.`,
@@ -318,6 +344,59 @@ export async function analyzeProposal(file, roster) {
   // How long the quote is decides which model reads it, and whether it can be
   // read in one go at all.
   let model = PROPOSAL_MODEL;
+  const partNote = (first, last, total) =>
+    `\n\nThis is pages ${first}-${last} of a ${total}-page proposal, read in parts. List only the plans printed on these pages; the other parts are read separately and their plans are added to yours.`;
+  const pdfContent = (buf, note) => [
+    {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") },
+      title: file.filename,
+    },
+    { type: "text", text: ask(note) },
+  ];
+  /**
+   * Read a run of pages; when the answer would not fit in one reading - a
+   * quote listing more plans than 64K tokens of output holds, which is what
+   * left Boss Logistics' UHC Level Funded quote unread on every retry - cut
+   * the run in half and read each half, down to a single page. Never gives
+   * up on a document merely for being long.
+   */
+  const readPages = async (buf, first, last, total, depth = 0) => {
+    const note = first === 1 && last === total ? "" : partNote(first, last, total);
+    try {
+      return [await readOnce(client, model, pdfContent(buf, note))];
+    } catch (e) {
+      if (!(e instanceof TooLongError)) throw e;
+      if (last <= first || depth >= 6) throw new Error(`Page ${first} alone is longer than one reading can hold.`);
+      const halves = await splitPdf(buf, Math.ceil((last - first + 1) / 2));
+      console.log(`${file.filename}: pages ${first}-${last} too long for one reading, reading in ${halves.length} parts`);
+      const out = [];
+      for (const h of halves) out.push(...(await readPages(h.buffer, first + h.first - 1, first + h.last - 1, total, depth + 1)));
+      return out;
+    }
+  };
+  /** The same for a text document (a flattened spreadsheet, say): halve it by lines. */
+  const readText = async (text, part = "", depth = 0) => {
+    const content = [
+      { type: "document", source: { type: "text", media_type: "text/plain", data: text || "(empty)" }, title: file.filename },
+      { type: "text", text: ask(part) },
+    ];
+    try {
+      return [await readOnce(client, model, content)];
+    } catch (e) {
+      const lines = String(text || "").split("\n");
+      if (!(e instanceof TooLongError)) throw e;
+      if (lines.length < 2 || depth >= 6) throw new Error("Part of this document is longer than one reading can hold, even read in pieces.");
+      const mid = Math.ceil(lines.length / 2);
+      const note = (a, b) => `\n\nThis is lines ${a}-${b} of the document, read in parts. List only the plans in these lines; the other parts are read separately and their plans are added to yours.`;
+      return [
+        ...(await readText(lines.slice(0, mid).join("\n"), note(1, mid), depth + 1)),
+        ...(await readText(lines.slice(mid).join("\n"), note(mid + 1, lines.length), depth + 1)),
+      ];
+    }
+  };
+  const fold = (readings) => (readings.length === 1 ? readings[0] : mergeReadings(readings));
+
   if (p.kind === "pdf") {
     const { numpages } = await pdfParse(p.buffer).catch(() => ({ numpages: 0 }));
     if (numpages > HAIKU_MAX_PAGES) model = LONG_PROPOSAL_MODEL;
@@ -328,49 +407,20 @@ export async function analyzeProposal(file, roster) {
     if (numpages > MAX_PDF_PAGES) {
       const parts = await splitPdf(p.buffer);
       const readings = [];
-      for (const part of parts) {
-        readings.push(
-          await readOnce(client, model, [
-            {
-              type: "document",
-              source: { type: "base64", media_type: "application/pdf", data: part.buffer.toString("base64") },
-              title: file.filename,
-            },
-            {
-              type: "text",
-              text: ask(
-                `\n\nThis is pages ${part.first}-${part.last} of a ${part.total}-page proposal, read in parts. List only the plans printed on these pages; the other parts are read separately and their plans are added to yours.`,
-              ),
-            },
-          ]),
-        );
-      }
-      return mergeReadings(readings);
+      for (const part of parts) readings.push(...(await readPages(part.buffer, part.first, part.last, part.total)));
+      return fold(readings);
     }
+    if (numpages > 0) return fold(await readPages(p.buffer, 1, numpages, numpages));
+    return readOnce(client, model, pdfContent(p.buffer, ""));
   }
-
-  const content = [];
-  if (p.kind === "pdf") {
-    content.push({
-      type: "document",
-      source: { type: "base64", media_type: "application/pdf", data: p.buffer.toString("base64") },
-      title: file.filename,
-    });
-  } else if (p.kind === "image") {
-    content.push({
-      type: "image",
-      source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") },
-    });
-  } else {
-    // Text: a CSV, a spreadsheet or Word file already flattened, or an email body.
-    content.push({
-      type: "document",
-      source: { type: "text", media_type: "text/plain", data: p.text || "(empty)" },
-      title: file.filename,
-    });
+  if (p.kind === "image") {
+    return readOnce(client, model, [
+      { type: "image", source: { type: "base64", media_type: p.mime, data: p.buffer.toString("base64") } },
+      { type: "text", text: ask() },
+    ]);
   }
-  content.push({ type: "text", text: ask() });
-  return readOnce(client, model, content);
+  // Text: a CSV, a spreadsheet or Word file already flattened, or an email body.
+  return fold(await readText(p.text));
 }
 
 /**
@@ -434,7 +484,7 @@ async function readOnce(client, model, content) {
       throw new Error("The model declined to read this document.");
     }
     if (response.stop_reason === "max_tokens") {
-      throw new Error("This proposal is longer than one reading can hold - the result would be cut off mid-plan.");
+      throw new TooLongError("This proposal is longer than one reading can hold - the result would be cut off mid-plan.");
     }
     // The output format constrains the reply to JSON matching the schema, so the
     // text blocks concatenate to the object.
