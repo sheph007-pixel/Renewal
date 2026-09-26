@@ -336,4 +336,28 @@ assert.deepEqual(Object.keys(auditForClient(a, x)).sort(), ["completedAt", "stat
 assert.equal(auditForClient(a, x).status, "pass");
 assert.equal(auditForClient(a, x2), null, "an audit of another reading is no audit of this one");
 
+// 18. A ChatGPT model switch: ChatGPT's half of the audit is done again by
+//     the new model; Claude's saved jobs are used as they are, with no call.
+{
+  delete process.env.CHATGPT_MODEL;
+  const xm = reading(30);
+  const sm = store();
+  await run(xm, pdf120, auditors(xm), sm);
+  const openaiJobs = Object.entries(sm.jobs).filter(([k]) => k.startsWith("openai:"));
+  assert.ok(openaiJobs.length >= 2 && openaiJobs.every(([, j]) => j.model === "gpt-5"), "a ChatGPT job records its model");
+  assert.ok(Object.entries(sm.jobs).filter(([k]) => k.startsWith("claude:")).every(([, j]) => j.model === undefined));
+  process.env.CHATGPT_MODEL = "gpt-6-astra";
+  const prog = auditProgress(xm, "sha-1", sm.jobs);
+  assert.equal(prog.claude.next, null, "Claude's saved audit still counts");
+  assert.match(prog.openai.next, /OpenAI document reconciliation/, "ChatGPT's jobs by gpt-5 no longer count");
+  const t2 = auditors(xm);
+  const a2 = await run(xm, pdf120, t2, sm);
+  assert.equal(t2.calls.filter((c) => c.provider === "claude").length, 0, "Claude is not asked again");
+  assert.equal(t2.calls.filter((c) => c.provider === "openai").length, openaiJobs.length, "every ChatGPT job runs again");
+  assert.equal(a2.status, "pass");
+  assert.ok(Object.entries(sm.jobs).filter(([k]) => k.startsWith("openai:")).every(([, j]) => j.model === "gpt-6-astra"), "saved as the new model's jobs");
+  assert.equal(auditProgress(xm, "sha-1", sm.jobs).openai.next, null);
+  delete process.env.CHATGPT_MODEL;
+}
+
 console.log("audit cost: one document reconciliation per model, targeted field packets, every plan once per model, resumable and versioned jobs, full-source fallback, 1h cache, usage telemetry - ok");
