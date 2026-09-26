@@ -101,35 +101,46 @@ export function openaiUsage(json) {
 const QUOTA_ERROR = /usage limits|monthly API usage threshold|credit balance is too low|insufficient_quota|exceeded your current quota|billing/i;
 export const isQuotaError = (msg) => QUOTA_ERROR.test(String(msg || ""));
 let quotaErrors = 0;
-let quotaBlock = null; // { provider, at, until, message }
+const quotaBlocks = {}; // provider -> { provider, at, until, message }
 /** How many quota errors have been seen (a caller compares before and after a step). */
 export const quotaErrorCount = () => quotaErrors;
 /**
- * The current block, while one is in force. It is re-tested every
+ * A provider's block while it is in force. It is re-tested every
  * QUOTA_PROBE_MS: the next call is let through, and a success ends it (the
  * limit may be raised before the date the error names).
  */
 const QUOTA_PROBE_MS = Number(process.env.KENNION_QUOTA_PROBE_MS || 30 * 60 * 1000);
-export function aiQuotaBlock(now = Date.now()) {
-  if (!quotaBlock) return null;
-  if (quotaBlock.until && now >= new Date(quotaBlock.until).getTime()) return null;
-  if (now - new Date(quotaBlock.at).getTime() >= QUOTA_PROBE_MS) return null;
-  return quotaBlock;
+export function providerBlock(provider, now = Date.now()) {
+  const b = quotaBlocks[provider];
+  if (!b) return null;
+  if (b.until && now >= new Date(b.until).getTime()) return null;
+  if (now - new Date(b.at).getTime() >= QUOTA_PROBE_MS) return null;
+  return b;
 }
-/** The last block seen, in force or being re-tested (what the page shows). */
-export const lastQuotaBlock = () => quotaBlock;
+/** Both providers blocked: nothing that needs a model can run (the steward pauses). */
+export const allProvidersBlocked = (now = Date.now()) => !!(providerBlock("anthropic", now) && providerBlock("openai", now));
+/** The block when every provider is blocked (the steward's pause), else null. */
+export const aiQuotaBlock = (now = Date.now()) => (allProvidersBlocked(now) ? providerBlock("anthropic", now) : null);
+/** Every block seen, in force or being re-tested (what the page shows). */
+export const lastQuotaBlocks = () => Object.values(quotaBlocks);
+export const lastQuotaBlock = () => lastQuotaBlocks()[0] || null;
+/** Record a provider's spending-limit error seen outside recordUsage (a failover caught it). */
+export function noteProviderBlock(provider, error) {
+  noteQuota({ provider, ok: false }, error);
+}
 function noteQuota(r, error) {
   if (r.ok !== false && !error) {
-    // A call to the blocked provider that worked: the limit is lifted.
-    if (quotaBlock && r.provider === quotaBlock.provider) quotaBlock = null;
+    // A call to a blocked provider that worked: its limit is lifted.
+    if (r.provider && quotaBlocks[r.provider]) delete quotaBlocks[r.provider];
     return;
   }
   if (!isQuotaError(error)) return;
   quotaErrors++;
   const m = /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{2}:\d{2}))?/i.exec(String(error));
   const until = m ? new Date(`${m[1]}T${m[2] || "00:00"}:00Z`).toISOString() : null;
-  if (!quotaBlock) console.error(`ai usage: ${r.provider} spending limit reached${until ? ` until ${until}` : ""} - AI repairs pause until it is lifted`);
-  quotaBlock = { provider: r.provider || "?", at: new Date().toISOString(), until, message: String(error).slice(0, 300) };
+  const p = r.provider || "?";
+  if (!quotaBlocks[p]) console.error(`ai usage: ${p} spending limit reached${until ? ` until ${until}` : ""} - its work goes to the other provider where it can, and waits where it cannot`);
+  quotaBlocks[p] = { provider: p, at: new Date().toISOString(), until, message: String(error).slice(0, 300) };
 }
 
 let sink = null;
