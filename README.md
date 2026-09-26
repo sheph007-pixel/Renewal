@@ -1433,6 +1433,21 @@ those to survive. The admin screen states which of the three modes is in effect.
 A database that is configured but unreachable is logged and the site serves the
 shipped census rather than failing to boot.
 
+### Claude batches
+
+Background Claude work - the steward's re-reads, dual-audit steps and
+corrections, and the boot audit sweep - goes through Anthropic's Message
+Batches API at half the standard price (`server/claude-batch.js`). Calls made
+within `BATCH_WINDOW_MS` (15 s) go as one batch; each caller still gets its own
+Message, usually within minutes (at most 24 hours), so the pipeline's code is
+unchanged. An upload someone is watching, the Assistant and the admin
+explanations still call Claude directly. Batches open when the server restarts
+are followed again from `kennion.settings`, and a result no one was left
+waiting for is kept in `kennion.claude_batch_results` for the same request
+asked again - used once - so nothing is paid for twice. Usage records carry
+`batched` and are costed at half. `KENNION_CLAUDE_BATCH=0` sends everything
+directly again.
+
 ### Backups
 
 The Railway plan keeps no volume backups, so the app keeps its own

@@ -7,6 +7,7 @@
 // Nothing here is authoritative: the staff can reassign any proposal, and the
 // extracted figures are stored for review, not pushed into the rate tables.
 import { recordUsage, anthropicUsage } from "./ai-usage.js";
+import { claudeMessage, batching } from "./claude-batch.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
@@ -657,8 +658,7 @@ const MAP_SYSTEM = `You map a carrier's medical proposal so it can be read in se
 /** Map a long PDF: which pages carry medical plan identities, benefits and rates. */
 async function mapDocument(client, buffer, filename, numpages) {
   const started = Date.now();
-  const response = await client.messages
-    .stream({
+  const response = await claudeMessage(client, {
       model: PROPOSAL_MODEL,
       max_tokens: 32000,
       system: MAP_SYSTEM,
@@ -672,8 +672,7 @@ async function mapDocument(client, buffer, filename, numpages) {
           ],
         },
       ],
-    })
-    .finalMessage();
+    });
   recordUsage({ purpose: "source-map", provider: "anthropic", model: PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
   if (response.stop_reason !== "end_turn") throw new Error(`map ended ${response.stop_reason}`);
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
@@ -774,6 +773,13 @@ async function readOnce(client, model, content, meta = {}) {
     for (let drop = 0; ; drop++) {
       drops = drop;
       try {
+        // Background work (the steward) goes through the Message Batches
+        // API at half the price (server/claude-batch.js); the server-side
+        // fallback beta is a streaming-endpoint feature and stays with it.
+        if (batching()) {
+          response = await claudeMessage(client, params);
+          break;
+        }
         if (beta) {
           try {
             response = await client.beta.messages
