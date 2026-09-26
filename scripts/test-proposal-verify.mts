@@ -125,6 +125,15 @@ dup = { ...good, extracted: noSource, audit: { ...dualPass(noSource), sourceSha:
 cell = cellOf(run([dup], served([dup])));
 assert.equal(cell.fix, "read", "a reading without provenance is extracted again");
 
+// ChatGPT's half by an earlier ChatGPT model is pending an audit by the one it runs on now.
+process.env.CHATGPT_MODEL = "gpt-6-astra";
+cell = cellOf(run([good], served([good])));
+assert.equal(cell.failedAt, "chatgpt", "a gpt-5 audit no longer counts once ChatGPT runs on gpt-6-astra");
+assert.equal(cell.fix, "audit", "re-audited, not re-read");
+assert.ok(cell.steps.claude.ok, "Claude's half still stands");
+assert.match(cell.steps.chatgpt.note, /Audited by gpt-5 - pending an audit by gpt-6-astra/);
+delete process.env.CHATGPT_MODEL;
+
 // An audit of another version of the document is stale.
 cell = cellOf(run([{ ...good, audit: { ...good.audit, sourceSha: "sha-older" } }], served([good])));
 assert.equal(cell.failedAt, "claude");

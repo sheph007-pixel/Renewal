@@ -432,6 +432,14 @@ export function batchJobKey(stored, indices, sourceSha) {
   return hash({ s: sourceSha || null, std: AUDIT_STANDARD, v: PACKET_VERSION, plans: indices.map((i) => { const { id, ...rest } = stored[i] || {}; return [i, rest]; }) });
 }
 
+/**
+ * Whether a saved job still counts: its key matches the reading now, and a
+ * ChatGPT job was answered by the model ChatGPT runs on now - a switch of
+ * CHATGPT_MODEL has ChatGPT's half of every audit done again by the new
+ * model (Claude's saved jobs are untouched).
+ */
+export const jobCounts = (provider, job, key) => !!(job && job.key === key && (provider !== "openai" || job.model === openaiModel()));
+
 /** Which jobs a model's audit consists of, and the key each must match to count. */
 /** A one-batch proposal's single combined job depends on both. */
 export const combinedKey = (docKey, batchKey) => hash({ combined: [docKey, batchKey] });
@@ -454,8 +462,8 @@ export function auditProgress(extracted, sourceSha, jobs = {}) {
   const out = {};
   for (const [p, label] of [["claude", "Claude"], ["openai", "OpenAI"]]) {
     const doc = jobs[`${p}:doc`];
-    const docOk = !!(doc && doc.key === (single ? combinedKey(docKey, batchKeys[0]) : docKey));
-    const done = batchKeys.map((k, b) => (single ? docOk : !!(jobs[`${p}:batch:${b}`] && jobs[`${p}:batch:${b}`].key === k)));
+    const docOk = jobCounts(p, doc, single ? combinedKey(docKey, batchKeys[0]) : docKey);
+    const done = batchKeys.map((k, b) => (single ? docOk : jobCounts(p, jobs[`${p}:batch:${b}`], k)));
     const nextBatch = done.indexOf(false);
     out[p] = {
       document: docOk,
@@ -727,6 +735,8 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   const compareOpts = gravieParsed ? { benefitFields: ["coinsurance"], networkFromSheet: true } : {};
   const saved = { ...(jobs || {}) };
   const save = async (id, value) => {
+    // A ChatGPT job records the model that answered it (see jobCounts).
+    if (id.startsWith("openai:")) value = { ...value, model: openaiModel() };
     saved[id] = value;
     if (saveJob) await saveJob(id, value);
   };
@@ -781,7 +791,10 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
     // A provider at its spending limit does not audit (and is not asked):
     // its part waits, its saved jobs stay, and the next run resumes there.
     // The audit never fails over - Verified needs both independent checks.
-    if (!transport && !read && !canned && providerBlock(provider === "claude" ? "anthropic" : "openai")) {
+    // A provider whose every job is already saved and current needs no call:
+    // its answers are used as they are, blocked or not.
+    const complete = !auditProgress(extracted, sourceSha, saved)[provider].next;
+    if (!complete && !transport && !read && !canned && providerBlock(provider === "claude" ? "anthropic" : "openai")) {
       return composeModel(who, { model: who, verdict: "error", mismatches: [], notes: `${provider === "claude" ? "Claude" : "ChatGPT"} is at its spending limit - its audit waits until it is back.` }, [], stored.length);
     }
     // A proposal that fits in one batch: one call does both jobs.
@@ -790,7 +803,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
       const key = combinedKey(docKey, batchKeys[0]);
       const prev = saved[`${provider}:doc`];
       const range = { from: indices[0], to: indices[indices.length - 1] };
-      if (prev && prev.key === key) return composeModel(who, { ...shapeDoc(who, prev.answer, stored), reused: true }, [{ ...shape(who, prev.answer, stored, indices, compareOpts), ...range, source: { full: true }, reused: true }], stored.length);
+      if (jobCounts(provider, prev, key)) return composeModel(who, { ...shapeDoc(who, prev.answer, stored), reused: true }, [{ ...shape(who, prev.answer, stored, indices, compareOpts), ...range, source: { full: true }, reused: true }], stored.length);
       try {
         const r = await answer({ who, provider, kind: "combined", batch: 0, indices, packet: { full: true }, payload: docPayload(stored, version, sourceSha, extracted, true) });
         await save(`${provider}:doc`, { key, combined: true, readingVersion: version, sourceSha, standard: AUDIT_STANDARD, at: new Date().toISOString(), answer: r, source: { full: true } });
@@ -802,7 +815,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
     // 1. The document-level reconciliation.
     let docPart;
     const prevDoc = saved[`${provider}:doc`];
-    if (prevDoc && prevDoc.key === docKey) docPart = { ...shapeDoc(who, prevDoc.answer, stored), reused: true };
+    if (jobCounts(provider, prevDoc, docKey)) docPart = { ...shapeDoc(who, prevDoc.answer, stored), reused: true };
     else {
       try {
         const r = await answer({ who, provider, kind: "doc", indices: stored.map((_, i) => i), packet: { full: true }, payload: docPayload(stored, version, sourceSha, extracted) });
@@ -818,7 +831,7 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
       const id = `${provider}:batch:${b}`;
       const prev = saved[id];
       const range = { from: indices[0], to: indices[indices.length - 1] };
-      if (prev && prev.key === batchKeys[b]) {
+      if (jobCounts(provider, prev, batchKeys[b])) {
         parts.push({ ...shape(who, prev.answer, stored, indices, compareOpts), ...range, source: prev.source || null, reused: true });
         continue;
       }

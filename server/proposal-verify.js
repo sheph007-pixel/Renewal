@@ -34,6 +34,7 @@ import { validatePlans } from "./plan-validate.js";
 import { hiddenReason } from "./plan-visibility.js";
 import { TIERS, identityKey, canonicalPlans } from "./plan-canonical.js";
 import { AUDIT_STANDARD } from "./plan-compare.js";
+import { openaiModel } from "./ai-failover.js";
 
 // Plan identity everywhere below is the canonical carrier identity
 // (identityKey: the plan code when printed, else the exact printed name on
@@ -262,6 +263,9 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
         if (!current) return { ok: false, note: (a.standard || 1) < AUDIT_STANDARD && a.version === (readingVersion ? readingVersion(x) : null) ? "Audited on rates alone - pending a field-by-field audit." : "Audited an earlier reading - pending a fresh audit of this one." };
         const m = (a.models || []).find((mm) => re.test(mm.model));
         if (!m) return { ok: false, note: "Did not run." };
+        // ChatGPT's half by an earlier ChatGPT model: a model switch has it done again by the new one.
+        const by = /^ChatGPT \((gpt[^)]*)\)$/i.exec(String(m.model || ""));
+        if (by && by[1] !== openaiModel()) return { ok: false, note: `Audited by ${by[1]} - pending an audit by ${openaiModel()}.` };
         const c = m.plansFoundTotal != null ? `${m.planAppearances != null ? `${m.planAppearances} appearances, ` : ""}${m.plansFoundTotal} unique plans on the document (${m.epoExcluded ?? 0} EPO); database ${storedDistinct}` : null;
         if (m.verdict === "pass" && m.documentPlanCount === storedDistinct) return { ok: true, note: `Pass. ${c}; all ${m.of} plans read off the document${m.batches && m.batches.length > 1 ? ` in ${m.batches.length} batches` : ""} - name, code, network, deductible, out-of-pocket max, benefits and four rates compared in code.` };
         if (m.verdict === "off" || m.verdict === "error") return { ok: false, note: `Pending - ${m.verdict === "off" ? "not configured" : "did not complete"}: ${m.notes || ""}` };
