@@ -15,7 +15,35 @@ import https from "node:https";
 import { isQuotaError, providerBlock, noteProviderBlock } from "./ai-usage.js";
 
 export const openaiKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
-export const openaiModel = () => process.env.CHATGPT_MODEL || "gpt-5";
+// CHATGPT_MODEL picks ChatGPT's model; gpt-5 is the default and the fallback.
+// When OpenAI refuses the configured model itself (unknown name, no access,
+// a parameter that model does not take), ChatGPT switches to the fallback
+// for the rest of the run instead of failing every call.
+export const OPENAI_FALLBACK_MODEL = "gpt-5";
+let rejectedModel = null;
+export const openaiModel = () => {
+  const m = process.env.CHATGPT_MODEL || OPENAI_FALLBACK_MODEL;
+  return m === rejectedModel ? OPENAI_FALLBACK_MODEL : m;
+};
+/**
+ * An error answer from OpenAI for `model`: when it is the configured model
+ * being refused (a 400/403/404 about the model), remember it and return true
+ * - the caller asks again with openaiModel(), now the fallback.
+ */
+export function noteModelRejected(model, status, error) {
+  if (!model || model === OPENAI_FALLBACK_MODEL || model !== process.env.CHATGPT_MODEL) return false;
+  if (![400, 403, 404].includes(Number(status))) return false;
+  const code = error && typeof error === "object" ? error.code : null;
+  const msg = String((error && typeof error === "object" ? error.message : error) || "");
+  if (code !== "model_not_found" && !/model/i.test(msg)) return false;
+  if (rejectedModel !== model) console.error(`ai failover: OpenAI refused ${model} (${msg.slice(0, 200) || `HTTP ${status}`}) - ChatGPT uses ${OPENAI_FALLBACK_MODEL} instead`);
+  rejectedModel = model;
+  return true;
+}
+/** Tests: forget a refused model. */
+export const _resetModelRejection = () => {
+  rejectedModel = null;
+};
 const OPENAI_MAX_OUTPUT = 128000;
 
 let poster = null; // tests: a stand-in for the Chat Completions endpoint
@@ -138,7 +166,11 @@ export async function openaiMessage(params, { name = "result" } = {}) {
     try {
       const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${openaiKey()}` }, body, 30 * 60 * 1000);
       if (r.ok) return fromOpenAI(r.json);
-      const e = new Error(`ChatGPT (${openaiModel()}): ${(r.json.error && (r.json.error.message || r.json.error.code)) || `HTTP ${r.status}`}${r.json.error && r.json.error.code ? ` [${r.json.error.code}]` : ""}`);
+      if (noteModelRejected(body.model, r.status, r.json.error)) {
+        body.model = openaiModel();
+        continue;
+      }
+      const e = new Error(`ChatGPT (${body.model}): ${(r.json.error && (r.json.error.message || r.json.error.code)) || `HTTP ${r.status}`}${r.json.error && r.json.error.code ? ` [${r.json.error.code}]` : ""}`);
       e.status = r.status;
       throw e;
     } catch (e) {

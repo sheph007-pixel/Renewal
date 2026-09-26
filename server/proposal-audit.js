@@ -36,7 +36,7 @@ import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
 import { claudeMessage } from "./claude-batch.js";
-import { withFailover, openaiModel } from "./ai-failover.js";
+import { withFailover, openaiModel, noteModelRejected } from "./ai-failover.js";
 import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork, sameName } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
 import { recordUsage, anthropicUsage, openaiUsage, providerBlock } from "./ai-usage.js";
@@ -57,7 +57,7 @@ export const AUDIT_BATCH = 25;
 const apiKey = () => process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
 const fakeAi = () => process.env.KENNION_FAKE_AI === "1";
 const chatgptKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
-const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
+const CHATGPT_MODEL = () => openaiModel();
 /**
  * The audit agent's Claude half, and the correction agent: Claude Sonnet 5,
  * the same model family the extraction agent reads with - checking every
@@ -657,7 +657,11 @@ async function callOpenAI({ purpose, schema, name, filename, prepared, packet, t
     try {
       const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000);
       if (!r.ok) {
-        last = new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(r.json.error && r.json.error.message) || `HTTP ${r.status}`}`);
+        if (noteModelRejected(body.model, r.status, r.json.error)) {
+          body.model = CHATGPT_MODEL();
+          continue;
+        }
+        last = new Error(`ChatGPT (${body.model}): ${(r.json.error && r.json.error.message) || `HTTP ${r.status}`}`);
         last.status = r.status;
         if (r.status === 429 || r.status >= 500) {
           retries++;
@@ -666,7 +670,7 @@ async function callOpenAI({ purpose, schema, name, filename, prepared, packet, t
         }
         throw last;
       }
-      recordUsage({ purpose, provider: "openai", model: CHATGPT_MODEL(), servedModel: r.json.model || CHATGPT_MODEL(), usage: openaiUsage(r.json), durationMs: Date.now() - started, retries, ok: true, ...meta });
+      recordUsage({ purpose, provider: "openai", model: body.model, servedModel: r.json.model || body.model, usage: openaiUsage(r.json), durationMs: Date.now() - started, retries, ok: true, ...meta });
       const out = r.json.choices && r.json.choices[0] && r.json.choices[0].message ? String(r.json.choices[0].message.content || "") : "";
       if (!out) throw new Error("ChatGPT returned no text.");
       return JSON.parse(out);
@@ -676,7 +680,7 @@ async function callOpenAI({ purpose, schema, name, filename, prepared, packet, t
       retries++;
     }
   }
-  recordUsage({ purpose, provider: "openai", model: CHATGPT_MODEL(), durationMs: Date.now() - started, retries, ok: false, error: last && last.message, ...meta });
+  recordUsage({ purpose, provider: "openai", model: body.model, durationMs: Date.now() - started, retries, ok: false, error: last && last.message, ...meta });
   throw last;
 }
 
