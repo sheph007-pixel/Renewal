@@ -20,6 +20,18 @@ import { TIERS, identityKey, normCode, exactName, isEpoPlan, canonicalPlans, bra
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+// Shared plan names a person has confirmed once for every proposal: the same
+// carrier plan name on the same plan codes turns up on many groups' quotes
+// (UHC's "Surest PPO" on its Surest codes), and one confirmation covers them
+// all. Each entry is { name, codes, carrier, by, at }; a proposal's group of
+// same-named plans passes when the name matches exactly and every one of its
+// codes is among the confirmed codes - a code no one has confirmed still asks.
+let sharedNameConfirmations = [];
+/** Load the confirmations (index.js, from kennion.settings). */
+export const setSharedNameConfirmations = (list) => {
+  sharedNameConfirmations = Array.isArray(list) ? list : [];
+};
+
 /**
  * `extracted`: the proposal's stored reading. `sourceSha`: the row's source
  * document hash. `groupOptionIds`: every option ID on the group's other
@@ -125,8 +137,10 @@ export function validatePlans({ extracted, sourceSha, groupOptionIds = [], textS
       continue;
     }
     if (new Set(codesOf).size < codesOf.length) continue; // a repeated code: the codes check has it
-    const ok = confirmed.some((cf) => exactName(cf.name).toLowerCase() === exactName(group[0].name).toLowerCase() && Array.isArray(cf.codes) && [...cf.codes].map(normCode).sort().join("|") === [...codesOf].sort().join("|"));
-    if (ok) continue;
+    const sameName = (cf) => exactName(cf.name).toLowerCase() === exactName(group[0].name).toLowerCase() && Array.isArray(cf.codes);
+    const ok = confirmed.some((cf) => sameName(cf) && [...cf.codes].map(normCode).sort().join("|") === [...codesOf].sort().join("|"));
+    const okEverywhere = sharedNameConfirmations.some((cf) => sameName(cf) && codesOf.every((c) => cf.codes.map(normCode).includes(c)));
+    if (ok || okEverywhere) continue;
     nameFailures.push(`The document's plan name "${group[0].name}" is on ${group.length} different plan codes (${group.map((pl) => pl.plan_code).join(", ")}) - confirm the carrier uses one name for these plans.`);
     nameFix = nameFix || "review";
   }
