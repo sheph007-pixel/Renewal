@@ -77,7 +77,7 @@ export const FIELD_GUIDE = `How to read each value (in-network, for this plan on
 - plan_code: the carrier's plan or benefit code, or the plan ID the document prints for the plan however long, exactly as printed; empty when the plan has none.
 - network: the network the plan is priced on, as printed; null when the document names none for this plan.
 - deductible, oop_max: the in-network amounts as printed, individual first and then family where both are printed (e.g. "$3,000 / $6,000").
-- coinsurance: the member's in-network coinsurance as printed (e.g. "20%", "0%").
+- coinsurance: the member's in-network coinsurance - the share the employee pays after the deductible (e.g. "20%", "0%"); where the document prints the share the plan pays ("80%", "Plan pays 80%"), the member's share ("20%").
 - doctor_visit (primary care office visit), specialist, imaging (advanced imaging - MRI, CT, PET - as a Summary of Benefits prints it; labs and X-ray are not imaging), urgent_care, emergency_room, hospital (inpatient stay): the member's in-network cost as printed, short and verbatim (e.g. "$30 copay", "20% after deductible", "No charge").
 - rx: the retail prescription cost by tier, in tier order, as printed - every tier the document prints, a specialty tier included (e.g. "$10 / $40 / $80 / 20% after deductible"); leave mail order out.
 - hsa_eligible: "yes" when the document says the plan is HSA-eligible / HSA-qualified, "no" when it says it is not.

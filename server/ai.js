@@ -251,7 +251,7 @@ const SCHEMA = {
             properties: {
               doctor_visit: { type: "string", description: "Primary care office visit." },
               emergency_room: { type: "string", description: "Emergency room visit." },
-              coinsurance: { type: "string", description: "The plan's in-network coinsurance, e.g. \"20%\" or \"0%\"." },
+              coinsurance: { type: "string", description: "The member's in-network coinsurance - the share the employee pays after the deductible - e.g. \"20%\" or \"0%\". Where the document prints the share the plan pays (\"80%\", \"Plan pays 80%\"), give the member's share (\"20%\")." },
               hsa_eligible: { type: "string", description: "\"yes\" only when the document itself states the plan is HSA-eligible or HSA-qualified, \"no\" only when it states it is not, empty when it does not say. Never infer it from the plan's name, type, deductible or an \"HDHP\" label." },
               specialist: { type: "string", description: "Specialist office visit." },
               imaging: { type: "string", description: "Advanced imaging - MRI, CT, PET - the member's in-network cost as printed (a Summary of Benefits' \"Imaging\" row). Labs and X-ray are not imaging: leave them out." },
