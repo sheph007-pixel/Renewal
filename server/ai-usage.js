@@ -193,8 +193,10 @@ export function recordUsage(r) {
     };
     noteQuota(r, rec.error);
     // A Claude call made in a batch scope went through the Message Batches
-    // API (server/claude-batch.js): billed at half the standard price.
-    rec.batched = r.provider === "anthropic" && (r.batched ?? batching());
+    // API (server/claude-batch.js); a ChatGPT call says itself whether it
+    // went through OpenAI's Batch API (server/openai-batch.js). Either way
+    // billed at half the standard price.
+    rec.batched = r.provider === "anthropic" ? !!(r.batched ?? batching()) : !!r.batched;
     const cost = estimateCost(rec.servedModel, { ...u, cacheWrite5mTokens: u.cacheWrite5mTokens || 0 });
     rec.costUsd = cost == null ? null : rec.batched ? Math.round(cost * 5000) / 10000 : cost;
     memory.push(rec);

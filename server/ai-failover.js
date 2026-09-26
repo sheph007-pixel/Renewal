@@ -13,6 +13,7 @@
 // waits (proposal-audit.js).
 import https from "node:https";
 import { isQuotaError, providerBlock, noteProviderBlock } from "./ai-usage.js";
+import { openaiPost } from "./openai-batch.js";
 
 export const openaiKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
 // CHATGPT_MODEL picks ChatGPT's model; gpt-5 is the default and the fallback.
@@ -164,8 +165,9 @@ export async function openaiMessage(params, { name = "result" } = {}) {
   let last;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${openaiKey()}` }, body, 30 * 60 * 1000);
-      if (r.ok) return fromOpenAI(r.json);
+      // In a batch scope (the steward) the request goes through the Batch API (server/openai-batch.js).
+      const r = await openaiPost(body, () => postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${openaiKey()}` }, body, 30 * 60 * 1000));
+      if (r.ok) return { ...fromOpenAI(r.json), _batched: !!r.batched };
       if (noteModelRejected(body.model, r.status, r.json.error)) {
         body.model = openaiModel();
         continue;

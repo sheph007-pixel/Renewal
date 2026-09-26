@@ -30,6 +30,8 @@ import JSZip from "jszip";
 import pg from "pg";
 import { s3Store, runBackup, pruneBackups, listBackups } from "./backup.js";
 import { configureBatches, dbStore as batchDbStore, withBatch, batching, batchState } from "./claude-batch.js";
+import { configureOpenAIBatches, fetchTransport as openaiBatchTransport, dbStore as openaiBatchDbStore, openaiBatchState } from "./openai-batch.js";
+import { openaiKey } from "./ai-failover.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows, gravieDrift } from "./gravie-parse.js";
@@ -6655,7 +6657,7 @@ app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
     await loadSteward();
     const block = aiQuotaBlock();
     const blocks = lastQuotaBlocks();
-    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: "all", until: block.until, since: block.at } : null, blocked: blocks.map((b) => ({ provider: b.provider, until: b.until, since: b.at })), batches: batchState() } });
+    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: "all", until: block.until, since: block.at } : null, blocked: blocks.map((b) => ({ provider: b.provider, until: b.until, since: b.at })), batches: batchState(), openaiBatches: openaiBatchState() } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -7115,6 +7117,9 @@ async function boot() {
   const key = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
   if (key) await configureBatches({ client: () => new Anthropic({ apiKey: key, maxRetries: 3, timeout: 10 * 60 * 1000 }), persist: db ? batchDbStore(db) : undefined }).catch((e) => console.error("claude batch:", e.message));
 }
+// ChatGPT's share of the same background work goes through OpenAI's Batch
+// API, also at half the price (server/openai-batch.js).
+if (openaiKey()) await configureOpenAIBatches({ transport: openaiBatchTransport(openaiKey), persist: db ? openaiBatchDbStore(db) : undefined }).catch((e) => console.error("openai batch:", e.message));
 
 await boot();
 

@@ -1448,6 +1448,22 @@ asked again - used once - so nothing is paid for twice. Usage records carry
 `batched` and are costed at half. `KENNION_CLAUDE_BATCH=0` sends everything
 directly again.
 
+### OpenAI batches
+
+ChatGPT's share of the same background work - its reads and corrections on
+failover, its half of the dual audit - goes through OpenAI's Batch API, also
+at half price (`server/openai-batch.js`). Calls made in the batch window are
+written as JSONL (each line the exact Chat Completions body, its strict
+`json_schema` response_format included), uploaded through `/v1/files` and
+started through `/v1/batches`; the open batches are kept in
+`kennion.settings` and followed again after a restart, and every proposal
+with a request waiting carries the batch's id in
+`kennion.proposals.openai_batch_id` until it ends. Each caller gets its own
+answer, so the reading continues through the canonical-plan and validation
+steps unchanged. A batch that cannot be made, or ends without an answer for
+a request (failed, expired), makes that request directly instead. An upload
+someone is watching is never batched. `KENNION_OPENAI_BATCH=0` turns it off.
+
 ### Provider failover
 
 When one AI account reaches its spending limit, work keeps going on the other

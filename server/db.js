@@ -291,6 +291,9 @@ ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage text;
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS stage_reason text;
 -- Decline to Quote: set when a group explicitly declines a quote for a slot.
 ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS dtq bool DEFAULT false;
+-- The OpenAI Batch API batch a proposal has a request waiting in
+-- (server/openai-batch.js); cleared when the batch ends.
+ALTER TABLE kennion.proposals ADD COLUMN IF NOT EXISTS openai_batch_id text;
 
 -- Employee Navigator's Carrier Stats report, one row per upload. The latest
 -- one is the independent check the XML import is reconciled against.
@@ -792,6 +795,17 @@ export function createDb(url) {
       );
     },
 
+    /** Mark the proposals with a request in an OpenAI batch (openai-batch.js). */
+    async markOpenAIBatch(proposalIds, batchId) {
+      if (!proposalIds.length) return;
+      await pool.query("UPDATE kennion.proposals SET openai_batch_id = $1 WHERE id = ANY($2::bigint[])", [batchId, proposalIds.map(String)]);
+    },
+
+    /** An OpenAI batch ended: its proposals no longer wait on it. */
+    async clearOpenAIBatch(batchId) {
+      await pool.query("UPDATE kennion.proposals SET openai_batch_id = NULL WHERE openai_batch_id = $1", [batchId]);
+    },
+
     /** A batch result kept for a request that will ask again (claude-batch.js). */
     async keepBatchResult(customId, batchId, result) {
       await pool.query(
@@ -1106,7 +1120,7 @@ export function createDb(url) {
       const { rows } = await pool.query(
         `SELECT id, group_name, carrier, filename, mime, size, extracted, summary, confidence,
                 status, assigned_by, error, uploaded_by, uploaded_at, updated_at,
-                kind, parent_id, context, slot, superseded_by, audit, source_sha, stage, stage_reason
+                kind, parent_id, context, slot, superseded_by, audit, source_sha, stage, stage_reason, openai_batch_id
            FROM kennion.proposals ORDER BY uploaded_at DESC, id DESC`,
       );
       return rows;
