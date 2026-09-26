@@ -40,7 +40,7 @@ import { categorizeResource } from "./resources.js";
 import { medicalFromDocument, isAncillaryRow } from "./proposal-kind.js";
 import { matchRosterGroup, groupNamedIn } from "./proposal-match.js";
 import { verifyProposals } from "./proposal-verify.js";
-import { validatePlans } from "./plan-validate.js";
+import { validatePlans, setSharedNameConfirmations } from "./plan-validate.js";
 import { hiddenReason } from "./plan-visibility.js";
 import { identityKey, isBlankPlan, exactName, normCode, foldPlacementDuplicates, isEpoPlan as isEpoCanon } from "./plan-canonical.js";
 import { logInboxKey, logPresignedUploads, ingestInbox } from "./inbox.js";
@@ -5337,7 +5337,7 @@ async function runProposalAudit(id) {
   auditing.add(id);
   let progressed = false;
   try {
-    const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
     if (!row || !f) return { progressed };
     // Both audits are of one exact reading of one exact document; a result
@@ -5363,7 +5363,7 @@ async function runProposalAudit(id) {
         },
       }),
     );
-    const now = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const now = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     if (!now || (now.source_sha || null) !== startSha || readingVersion(now.extracted || {}) !== startVersion) {
       console.log(`proposal ${id} audit of an earlier version discarded`);
       return { progressed };
@@ -5456,7 +5456,7 @@ async function runAnalysis(id, file, keepAssignment) {
     const prepared = await prepareForModel(file);
     // The version of the document this reading is of. A result that comes
     // back after the row's document has changed is discarded, never applied.
-    const before = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const before = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     const startSha = (before && before.source_sha) || (file.buffer ? crypto.createHash("sha256").update(file.buffer).digest("hex") : null);
     const out = await withReadSlot(() =>
       withUsage({ proposalId: id, groupName: (before && before.group_name) || null, slot: (before && before.slot) || null, sourceSha: startSha, readingVersion: null, auditStandard: null }, () =>
@@ -5466,7 +5466,7 @@ async function runAnalysis(id, file, keepAssignment) {
     out.extraction = { ...(out.extraction || {}), sourceSha: startSha };
     // The coverage record is of this version of the document, and no other.
     if (out.coverage) out.coverage = { ...out.coverage, sourceSha: startSha };
-    const after = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const after = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     if (!after) return;
     if (after.source_sha && startSha && after.source_sha !== startSha) {
       console.log(`proposal ${id}: reading of an earlier version of the document discarded`);
@@ -5489,7 +5489,7 @@ async function runAnalysis(id, file, keepAssignment) {
         `roster: ${found ? `${found.name} (${found.how})` : "no match"}`,
     );
 
-    const current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const current = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     // Audit against what we know: enrollment on the paper vs the roster.
     const compareName = keepAssignment && current ? current.group_name : matched && matched.name;
     const compare = roster.find((g) => g.name === compareName) || null;
@@ -5599,7 +5599,7 @@ async function runAnalysis(id, file, keepAssignment) {
     console.error(`proposal ${id} analysis failed:`, e.message);
     // A failed read leaves a proposal where it was filed; only one that was
     // never filed stays unassigned.
-    const prev = (await proposalStore.listProposals().catch(() => [])).find((r) => r.id === id);
+    const prev = (await proposalStore.listProposals().catch(() => [])).find((r) => String(r.id) === String(id));
     await proposalStore.updateProposal(id, {
       status: keepAssignment || (prev && prev.group_name) ? "assigned" : "unassigned",
       error: e.message,
@@ -6199,7 +6199,7 @@ function proposalVerification(rows) {
   for (const g of inForce.groups) {
     for (const c of g.cells) {
       if (c.state !== "verified" || c.proposalId == null) continue;
-      const r = rows.find((rr) => rr.id === c.proposalId);
+      const r = rows.find((rr) => String(rr.id) === String(c.proposalId));
       verifiedProposals.set(c.proposalId, (r && r.audit && r.audit.completedAt) || new Date().toISOString());
     }
   }
@@ -6216,7 +6216,7 @@ async function syncStages(v, rows) {
     for (const c of g.cells) {
       if (c.state === "missing" || !c.stage || c.state === "working") continue;
       const id = c.proposalId ?? c.fixId;
-      const r = rows.find((rr) => rr.id === id);
+      const r = rows.find((rr) => String(rr.id) === String(id));
       if (!r) continue;
       const reason = c.stage === "NEEDS_REVIEW" || c.stage === "VERIFIED" ? (c.stage === "VERIFIED" ? null : c.stageReason) : c.stageReason;
       if (r.stage === c.stage && (r.stage_reason || null) === (reason || null)) continue;
@@ -6310,7 +6310,7 @@ async function runProposalCorrection(id) {
   correcting.add(id);
   let reaudit = false;
   try {
-    const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     const f = row && (await proposalStore.getProposalFile(id).catch(() => null));
     if (!row || !f || !row.extracted) return;
     await setStage(id, "CORRECTING");
@@ -6353,7 +6353,7 @@ async function runProposalCorrection(id) {
     const sent = c._source && !c._source.full ? (pages ? `pages ${pages.join(",")}` : "a targeted packet") : "whole document";
     // Stale guard: the reading or the document changed while the corrector
     // worked - its answer is about a version that is gone.
-    const now = (await proposalStore.listProposals()).find((r) => r.id === id);
+    const now = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     if (!now || now.source_sha !== row.source_sha || readingVersion(now.extracted || {}) !== startVersion) {
       console.log(`proposal ${id} correction of an earlier version discarded`);
       return;
@@ -6402,7 +6402,7 @@ async function stewardRepair(cell, tiers) {
 }
 
 async function stewardRepairStep(cell, tiers, st) {
-  const row = (await proposalStore.listProposals()).find((r) => r.id === cell.fixId);
+  const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(cell.fixId));
   if (!row) return;
   const workbook = !!(row.context && row.context.source === "gravie-workbook");
   const giveUp = async (why) => {
@@ -6651,7 +6651,7 @@ app.get("/api/admin/ai-usage", requireStaff, async (req, res) => {
 /** Where a proposal's dual audit stands, job by job: which saved jobs still count and what runs next. */
 app.get("/api/admin/proposals/:id/audit-progress", requireStaff, async (req, res) => {
   const id = Number(req.params.id);
-  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
   if (!row) return res.status(404).json({ error: "No such proposal." });
   const jobs = await auditJobs.list(id).catch(() => ({}));
   res.json({ proposalId: id, progress: auditProgress(row.extracted || {}, row.source_sha || null, jobs), jobs: Object.fromEntries(Object.entries(jobs).map(([k, v]) => [k, { key: v.key, at: v.at, source: v.source || null, readingVersion: v.readingVersion || null }])) });
@@ -6704,9 +6704,16 @@ app.post("/api/admin/proposal-slots", requireStaff, express.json({ limit: "4kb" 
  * reading with the exact codes, by whom and when; a later change to those
  * codes flags it again. The plans stay separate records with their own IDs.
  */
+const SHARED_NAMES_KEY = "sharedNames.confirmed";
+let sharedNamesConfirmed = [];
+async function loadSharedNames() {
+  const saved = db ? await db.getSetting(SHARED_NAMES_KEY).catch(() => null) : null;
+  sharedNamesConfirmed = Array.isArray(saved) ? saved : [];
+  setSharedNameConfirmations(sharedNamesConfirmed);
+}
 app.post("/api/admin/proposals/:id/confirm-shared-names", requireStaff, async (req, res) => {
   const id = Number(req.params.id);
-  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
   if (!row || !row.extracted) return res.status(404).json({ error: "No such proposal." });
   const plans = Array.isArray(row.extracted.plans) ? row.extracted.plans : [];
   const byName = new Map();
@@ -6719,8 +6726,20 @@ app.post("/api/admin/proposals/:id/confirm-shared-names", requireStaff, async (r
   const at = new Date().toISOString();
   const confirmed = shared.map((g) => ({ name: g[0].name, codes: g.map((pl) => pl.plan_code), by: req.staffEmail || null, at }));
   await proposalStore.updateProposal(id, { extracted: { ...row.extracted, shared_names_confirmed: confirmed } });
+  // The same carrier plan name on the same codes turns up on other groups'
+  // quotes: remembered once, it covers every proposal (plan-validate.js).
+  const everywhere = [...sharedNamesConfirmed];
+  for (const c of confirmed) {
+    const same = everywhere.find((e) => exactName(e.name).toLowerCase() === exactName(c.name).toLowerCase());
+    if (same) same.codes = [...new Set([...same.codes, ...c.codes])];
+    else everywhere.push({ ...c, carrier: row.carrier || null, proposalId: id });
+  }
+  sharedNamesConfirmed = everywhere;
+  setSharedNameConfirmations(sharedNamesConfirmed);
+  if (db) await db.setSetting(SHARED_NAMES_KEY, sharedNamesConfirmed, req.staffEmail || null);
   await loadSteward();
   if (stewardState[id]) stewardState[id].gaveUp = null;
+  for (const st of Object.values(stewardState)) if (st && st.gaveUp && /plan name/i.test(String(st.gaveUp))) st.gaveUp = null;
   await saveSteward();
   console.log(`proposal ${id}: shared plan name(s) confirmed by ${req.staffEmail || "staff"} - ${confirmed.map((c) => `"${c.name}" (${c.codes.join(", ")})`).join("; ")}`);
   await proposalsChanged();
@@ -6762,7 +6781,7 @@ app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" 
   // released and handed out again from 1, the same repair an EPO twin's
   // numbers already get automatically.
   if (renumber === true) {
-    current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    current = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     if (!current) return res.status(404).json({ error: "No such proposal." });
     fields.extracted = { ...(current.extracted || {}), renumber: true };
   }
@@ -6784,7 +6803,7 @@ app.post("/api/admin/proposals/:id", requireStaff, express.json({ limit: "16kb" 
   // Churches never get a UHC Level Funded slot, whether the slot or the
   // group is the field changing on this call.
   if (slot !== undefined || group !== undefined) {
-    if (!current) current = (await proposalStore.listProposals()).find((r) => r.id === id);
+    if (!current) current = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
     const finalSlot = fields.slot !== undefined ? fields.slot : current && current.slot;
     const finalGroup = fields.group_name !== undefined ? fields.group_name : current && current.group_name;
     if (finalSlot === "UHC Level Funded" && finalGroup && isChurch(groups.find((g) => g.name === finalGroup))) {
@@ -6811,7 +6830,7 @@ app.post("/api/admin/proposals/:id/analyze", requireStaff, async (req, res) => {
   const id = Number(req.params.id);
   const f = await proposalStore.getProposalFile(id).catch(() => null);
   if (!f) return res.status(404).json({ error: "No such proposal." });
-  const current = (await proposalStore.listProposals()).find((r) => r.id === id);
+  const current = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
   if (current && current.status === "container") {
     return res.status(400).json({ error: "Re-read the attachments, not the email itself." });
   }
@@ -6824,7 +6843,7 @@ app.post("/api/admin/proposals/:id/analyze", requireStaff, async (req, res) => {
 /** Run the two-model audit on one proposal again. */
 app.post("/api/admin/proposals/:id/audit", requireStaff, async (req, res) => {
   const id = Number(req.params.id);
-  const row = (await proposalStore.listProposals()).find((r) => r.id === id);
+  const row = (await proposalStore.listProposals()).find((r) => String(r.id) === String(id));
   if (!row) return res.status(404).json({ error: "No such proposal." });
   if (!row.extracted || !Array.isArray(row.extracted.plans) || !row.extracted.plans.length) return res.status(400).json({ error: "Nothing read from this proposal yet; re-read it first." });
   void runProposalAudit(id);
@@ -6908,6 +6927,7 @@ async function boot() {
       meta = state.meta || {};
       importedAt = state.importedAt || {};
       recentImports = await db.recentImports();
+      await loadSharedNames();
       carrierStats = await db.latestCarrierStats();
       const fr = await db.latestFunding();
       if (fr) {

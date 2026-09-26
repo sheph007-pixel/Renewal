@@ -500,6 +500,7 @@ function StepStrip({ c }: { c: VerifyCell }) {
  */
 function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   if (!v) return null;
   const t = v.totals;
   const fixing = t.working + t.failing;
@@ -519,7 +520,9 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
   // them as separate plans and records who confirmed it.
   const confirmShared = async (id: number) => {
     setBusy(true);
-    await fetch(`/api/admin/proposals/${id}/confirm-shared-names`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+    setErr(null);
+    const r = await fetch(`/api/admin/proposals/${id}/confirm-shared-names`, { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+    if (!r || !r.ok) setErr((r && ((await r.json().catch(() => ({}))) as { error?: string }).error) || "The confirmation did not go through - try again.");
     setBusy(false);
     onChanged();
   };
@@ -584,6 +587,7 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
           </tbody>
         </table>
       )}
+      {err && <div style={{ marginTop: 6, color: C.red, fontWeight: 600 }}>{err}</div>}
       {stuck.length > 0 && (
         <button onClick={() => void again()} disabled={busy} style={{ ...linkBtn, fontSize: 12, marginTop: 6 }} title="Let the AI try these again, e.g. after a new document is uploaded">
           {busy ? "…" : "let the AI try these again"}
