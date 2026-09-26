@@ -676,7 +676,7 @@ async function mapDocument(client, buffer, filename, numpages) {
     };
   const response = await withFailover(() => claudeMessage(client, mapParams), mapParams, { name: "proposal_map" });
   const mapVia = response._provider === "openai";
-  recordUsage({ purpose: "source-map", provider: mapVia ? "openai" : "anthropic", model: mapVia ? openaiModel() : PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
+  recordUsage({ purpose: "source-map", provider: mapVia ? "openai" : "anthropic", model: mapVia ? openaiModel() : PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), ...(mapVia ? { batched: !!response._batched } : {}), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
   if (response.stop_reason !== "end_turn") throw new Error(`map ended ${response.stop_reason}`);
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   const map = JSON.parse(text);
@@ -810,7 +810,7 @@ async function readOnce(client, model, content, meta = {}) {
     // fallback model ("fallbacks": "default" routes to Claude Opus), which
     // shows here and in the usage record - never silently as Sonnet.
     const viaOpenAI = response._provider === "openai";
-    recordUsage({ purpose: "extraction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : model, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries: drops, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
+    recordUsage({ purpose: "extraction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : model, servedModel: response.model, usage: anthropicUsage(response), ...(viaOpenAI ? { batched: !!response._batched } : {}), durationMs: Date.now() - started, retries: drops, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
     if (!viaOpenAI && response.model && response.model !== model) console.warn(`reading served by ${response.model}, not ${model} (server-side fallback)`);
     if (response.stop_reason === "refusal") {
       throw new Error("The model declined to read this document.");

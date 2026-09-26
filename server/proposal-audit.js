@@ -37,6 +37,7 @@ import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
 import { claudeMessage } from "./claude-batch.js";
 import { withFailover, openaiModel, noteModelRejected } from "./ai-failover.js";
+import { openaiPost } from "./openai-batch.js";
 import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork, sameName } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
 import { recordUsage, anthropicUsage, openaiUsage, providerBlock } from "./ai-usage.js";
@@ -655,7 +656,8 @@ async function callOpenAI({ purpose, schema, name, filename, prepared, packet, t
   // this one call only; every job already done stays done.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const r = await postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000);
+      // In a batch scope (the steward) the audit goes through the Batch API (server/openai-batch.js).
+      const r = await openaiPost(body, () => postJson("https://api.openai.com/v1/chat/completions", { Authorization: `Bearer ${chatgptKey()}` }, body, 20 * 60 * 1000));
       if (!r.ok) {
         if (noteModelRejected(body.model, r.status, r.json.error)) {
           body.model = CHATGPT_MODEL();
@@ -670,7 +672,7 @@ async function callOpenAI({ purpose, schema, name, filename, prepared, packet, t
         }
         throw last;
       }
-      recordUsage({ purpose, provider: "openai", model: body.model, servedModel: r.json.model || body.model, usage: openaiUsage(r.json), durationMs: Date.now() - started, retries, ok: true, ...meta });
+      recordUsage({ purpose, provider: "openai", model: body.model, servedModel: r.json.model || body.model, usage: openaiUsage(r.json), durationMs: Date.now() - started, retries, ok: true, batched: !!r.batched, ...meta });
       const out = r.json.choices && r.json.choices[0] && r.json.choices[0].message ? String(r.json.choices[0].message.content || "") : "";
       if (!out) throw new Error("ChatGPT returned no text.");
       return JSON.parse(out);
@@ -1037,7 +1039,7 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
     throw e;
   }
   const viaOpenAI = response._provider === "openai";
-  recordUsage({ purpose: "correction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
+  recordUsage({ purpose: "correction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), ...(viaOpenAI ? { batched: !!response._batched } : {}), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
   if (response.stop_reason === "refusal") throw new Error(`${viaOpenAI ? "ChatGPT" : "Claude"} declined the correction.`);
   if (response.stop_reason === "max_tokens") throw new Error("The correction was too long for one answer.");
   const text = response.content
