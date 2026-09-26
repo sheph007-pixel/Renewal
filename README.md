@@ -306,7 +306,7 @@ tier rates) are all loaded into `kennion.proposals.extracted.plans`,
 counted, validated and dual-audited. If a proposal shows 100 unique plans,
 the database holds 100 and the check says 100.
 
-**Shown: every Verified plan of every slot that is ON.**
+**Shown: every Verified or Approved plan of every slot that is ON.**
 `clientAvailablePlans(group)` in `server/index.js` is the one resolver for
 the grid, cards, comparison, documents, the AI Assistant and Sign Up.
 Network and plan type are filters and sorts on the grid, never reasons to
@@ -315,7 +315,7 @@ hide a plan. The one control is the proposal slot per group (Proposals page,
 `kennion.proposal_slot_visibility` apart from the proposal data, so a re-read
 never changes it. OFF shows none of the slot's plans while they stay stored,
 audited and Verified. `KENNION_CLIENT_VERIFIED_ONLY=0` also shows proposals
-not yet Verified.
+not yet Approved or Verified.
 
 ### Data integrity: the canonical plan is only what the proposal says
 
@@ -601,11 +601,12 @@ and an audit of an earlier version never counts. A newer upload replaces the
 proposal in force only once it has read successfully.
 
 **Processing states.** `kennion.proposals.stage` is one of UPLOADED,
-MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED
-or NEEDS_REVIEW (`stage_reason` says why). Only a proposal the whole check
-calls Verified is shown to the client, its plan cards and the assistant as
-checked ("✓ Verified · Dual Audit Passed"); anything else reads as being
-reviewed by Kennion.
+MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, APPROVED,
+VERIFIED or NEEDS_REVIEW (`stage_reason` says why). Only a proposal the check
+calls Verified ("✓ Verified · Dual Audit Passed") or Approved ("✓ Approved ·
+Audit Passed") is shown to the client, its plan cards and the assistant;
+anything else - including a proposal being corrected - reads as being
+reviewed by Kennion and is not shown.
 
 ### Verified: the check, and the AI that works it
 
@@ -630,6 +631,17 @@ the carrier's document does not price for a tier the group has people in,
 confirmed against the page. Two independent AI audits sharply cut the risk
 of an error; they are not a mathematical guarantee, and the page says
 "Verified" / "Dual Audit Passed", nothing stronger.
+
+**Approved** - the step before Verified, green with a single-width edge,
+"✓ Approved · 14 plans · ChatGPT audit passed · Claude backup to come" -
+when every step passes except Claude's audit, which has simply not run yet
+(Claude unavailable, not audited, or did not complete) and has no finding
+of its own. ChatGPT's audit of this exact reading passed, every
+deterministic check passed and the grid matches, so the client is shown
+the proposal. The steward still owes Claude's audit as the backup and runs
+it once Claude is available: agreement makes the box Verified; a finding
+of Claude's (or a plan count that disagrees) sends it back to be corrected
+against the document - off the client's grid - until it passes again.
 
 Nobody fixes a box by hand. A server-side **steward** works the check on
 its own - at boot, after every change to the proposals, and every ten

@@ -354,7 +354,7 @@ export interface GroupProposal {
 
 /** Whether the figures read off a proposal were checked against the document, and when. */
 export interface ProposalAudit {
-  status: "pass" | "issues" | "pending" | "unreadable";
+  status: "pass" | "approved" | "issues" | "pending" | "unreadable";
   completedAt: string | null;
 }
 

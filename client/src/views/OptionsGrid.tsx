@@ -89,7 +89,7 @@ function planSheet(list: MarketPlan[], applied: Record<TierKey, number>, counts:
       b["Deductible"], b["Out-of-pocket max"], b["Doctor visit"], b["Specialist"], b["Imaging"], b["Urgent care"], b["Hospital"], b["Prescription drugs"], b["Pharmacy (PBM)"], m.links.formulary?.url ?? null,
       ...m.tiers.flatMap((t) => [cents(t.rate), t.count ? cents(t.er) : null, t.count ? cents(t.ee) : null]),
       cents(m.er), cents(m.ee), cents(m.premium), m.ee == null || !m.enrolled ? null : cents(m.ee / m.enrolled), m.basis,
-      audit ? (audit.status === "pass" ? `Verified${audit.completedAt ? ` ${new Date(audit.completedAt).toLocaleDateString("en-US")}` : ""}` : "Under review") : m.source ? "Not yet audited" : null,
+      audit ? (audit.status === "pass" ? `Verified${audit.completedAt ? ` ${new Date(audit.completedAt).toLocaleDateString("en-US")}` : ""}` : audit.status === "approved" ? "Approved" : "Under review") : m.source ? "Not yet audited" : null,
     ];
   });
   return { columns, rows };
@@ -524,7 +524,7 @@ export default function OptionsGrid({ g, plans, totals, selected, onToggleSelect
       benefits: m.benefits.map(([label, value]) => [label, value, label === "Network" ? m.links.directory?.url ?? null : label === "Pharmacy (PBM)" ? m.links.formulary?.url ?? null : null]),
       tiers: m.tiers.map((t) => ({ label: t.label, count: t.count, rate: t.rate, er: t.er, ee: t.ee })),
       totals: { er: m.er, ee: m.ee, premium: m.premium, enrolled: m.enrolled },
-      audit: audit ? (audit.status === "pass" ? `Verified${audit.completedAt ? ` ${new Date(audit.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}: the name, benefits and rates passed two independent audits against the carrier's own quote.` : "Proposal audit: under review.") : m.source ? "Proposal audit: not yet audited." : null,
+      audit: audit ? (audit.status === "pass" ? `Verified${audit.completedAt ? ` ${new Date(audit.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}: the name, benefits and rates passed two independent audits against the carrier's own quote.` : audit.status === "approved" ? "Approved: the name, benefits and rates passed an independent audit against the carrier's own quote; a second audit follows." : "Proposal audit: under review.") : m.source ? "Proposal audit: not yet audited." : null,
     };
     setCardBusy(true);
     setExportError("");
