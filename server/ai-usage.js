@@ -12,6 +12,7 @@
 // Records go to a sink the server sets (Postgres kennion.ai_usage, else an
 // in-memory list); telemetry never throws into the work it measures.
 import { AsyncLocalStorage } from "node:async_hooks";
+import { batching } from "./claude-batch.js";
 
 const scope = new AsyncLocalStorage();
 
@@ -180,12 +181,16 @@ export function recordUsage(r) {
       error: r.error ? String(r.error).slice(0, 300) : null,
     };
     noteQuota(r, rec.error);
-    rec.costUsd = estimateCost(rec.servedModel, { ...u, cacheWrite5mTokens: u.cacheWrite5mTokens || 0 });
+    // A Claude call made in a batch scope went through the Message Batches
+    // API (server/claude-batch.js): billed at half the standard price.
+    rec.batched = r.provider === "anthropic" && (r.batched ?? batching());
+    const cost = estimateCost(rec.servedModel, { ...u, cacheWrite5mTokens: u.cacheWrite5mTokens || 0 });
+    rec.costUsd = cost == null ? null : rec.batched ? Math.round(cost * 5000) / 10000 : cost;
     memory.push(rec);
     if (memory.length > MEMORY_MAX) memory.splice(0, memory.length - MEMORY_MAX);
     if (sink) Promise.resolve(sink(rec)).catch((e) => console.error("ai usage: could not record:", e.message));
     console.log(
-      `ai usage: ${rec.purpose}${rec.batch != null ? ` #${rec.batch + 1}` : ""} ${rec.servedModel}${rec.servedModel !== rec.model ? ` (asked ${rec.model})` : ""}${rec.proposalId != null ? ` proposal ${rec.proposalId}` : ""}: in ${rec.inputTokens}, cache write ${rec.cacheWriteTokens}, cache read ${rec.cacheReadTokens}, out ${rec.outputTokens}${rec.source ? `, source ${describeSource(rec.source)}` : ""}${rec.costUsd != null ? `, ~$${rec.costUsd}` : ""}, ${rec.durationMs ?? "?"}ms${rec.ok ? "" : ` FAILED: ${rec.error}`}`,
+      `ai usage: ${rec.purpose}${rec.batch != null ? ` #${rec.batch + 1}` : ""}${rec.batched ? " (batch)" : ""} ${rec.servedModel}${rec.servedModel !== rec.model ? ` (asked ${rec.model})` : ""}${rec.proposalId != null ? ` proposal ${rec.proposalId}` : ""}: in ${rec.inputTokens}, cache write ${rec.cacheWriteTokens}, cache read ${rec.cacheReadTokens}, out ${rec.outputTokens}${rec.source ? `, source ${describeSource(rec.source)}` : ""}${rec.costUsd != null ? `, ~$${rec.costUsd}` : ""}, ${rec.durationMs ?? "?"}ms${rec.ok ? "" : ` FAILED: ${rec.error}`}`,
     );
     return rec;
   } catch (e) {

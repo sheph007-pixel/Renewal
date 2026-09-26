@@ -29,6 +29,8 @@ import { expandUpload, prepareForModel, classify, SUPPORTED } from "./intake.js"
 import JSZip from "jszip";
 import pg from "pg";
 import { s3Store, runBackup, pruneBackups, listBackups } from "./backup.js";
+import { configureBatches, dbStore as batchDbStore, withBatch, batching, batchState } from "./claude-batch.js";
+import Anthropic from "@anthropic-ai/sdk";
 import { parseInvoicePdf, groupFromInvoiceFilename, matchInvoiceName } from "./invoice-parse.js";
 import { parseGravieWorkbook, gravieExtracted, gravieQuoteRows, gravieDrift } from "./gravie-parse.js";
 import { parseCatalogueWorkbook, catalogueIndex, applyCatalogue, catalogueKey } from "./plan-catalogue.js";
@@ -5393,9 +5395,11 @@ async function runProposalAudit(id) {
 
 /** Audit a batch a few at a time: both APIs take parallel calls, and one at a time made 70 proposals an afternoon's work. */
 const AUDIT_PARALLEL = Number(process.env.KENNION_AUDIT_PARALLEL || 4);
+/** Background Claude work goes through the Message Batches API (server/claude-batch.js): no per-minute limit to protect, so more runs at once. */
+const BATCH_PARALLEL = Number(process.env.KENNION_BATCH_PARALLEL || 12);
 async function auditInParallel(ids) {
   const queue = [...ids];
-  const workers = Array.from({ length: Math.max(1, Math.min(AUDIT_PARALLEL, queue.length)) }, async () => {
+  const workers = Array.from({ length: Math.max(1, Math.min(batching() ? BATCH_PARALLEL : AUDIT_PARALLEL, queue.length)) }, async () => {
     while (queue.length) await runProposalAudit(queue.shift());
   });
   await Promise.all(workers);
@@ -5416,6 +5420,8 @@ const READ_PARALLEL = Number(process.env.KENNION_READ_PARALLEL || 2);
 let readSlotsInUse = 0;
 const readWaiters = [];
 function withReadSlot(fn) {
+  // A batched read is queued at Anthropic, not streamed: it takes no slot.
+  if (batching()) return Promise.resolve().then(fn);
   return new Promise((resolve, reject) => {
     const run = () => {
       readSlotsInUse++;
@@ -6485,7 +6491,7 @@ async function stewardRepairStep(cell, tiers, st) {
 }
 
 /** Groups worked at once. Reads and corrections still share READ_PARALLEL slots; audits run beside them. */
-const STEWARD_PARALLEL = Math.max(1, Number(process.env.KENNION_STEWARD_PARALLEL || 4));
+const STEWARD_PARALLEL = Math.max(1, Number(process.env.KENNION_STEWARD_PARALLEL || (process.env.KENNION_CLAUDE_BATCH === "0" ? 4 : 12)));
 let stewardRunning = false;
 let stewardAgain = false;
 let stewardTimer = null;
@@ -6559,7 +6565,8 @@ async function stewardPass() {
             const { g, jobs } = queue.shift();
             for (const c of jobs) {
               if (aiQuotaBlock()) break;
-              await stewardRepair(c, tiersOf.get(g.group)).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+              // The steward's Claude calls go into Message Batches: half price.
+              await withBatch(() => stewardRepair(c, tiersOf.get(g.group))).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
             }
             if (aiQuotaBlock()) {
               queue.length = 0;
@@ -6582,7 +6589,7 @@ app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
   try {
     await loadSteward();
     const block = aiQuotaBlock() || lastQuotaBlock();
-    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: block.provider, until: block.until, since: block.at } : null } });
+    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: block.provider, until: block.until, since: block.at } : null, batches: batchState() } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -6940,10 +6947,10 @@ async function boot() {
         if (!p.claude.next && !p.openai.next) recompose.push(r.id);
       }
       if (recompose.length) console.log(`proposal audit: ${recompose.length} audit(s) composed again under comparison rules v${COMPARE_VERSION} from their saved answers (no model calls)`);
-      await auditInParallel(recompose);
+      await withBatch(() => auditInParallel(recompose));
       const rows = (await proposalStore.listProposals().catch(() => [])).filter((r) => r.status === "assigned" && r.slot && !r.superseded_by && !r.audit && r.extracted && Array.isArray(r.extracted.plans) && r.extracted.plans.length);
       if (rows.length) console.log(`proposal audit: ${rows.length} current proposal(s) not yet checked; running`);
-      await auditInParallel(rows.map((r) => r.id));
+      await withBatch(() => auditInParallel(rows.map((r) => r.id)));
     })().catch((e) => console.error("proposal audit sweep:", e.message));
   }
   rebuild();
@@ -7013,6 +7020,14 @@ async function boot() {
       console.error("inbox:", e.message);
     }
   }
+}
+
+// Background Claude work (the steward, the boot audit sweep) goes through
+// the Message Batches API at half the price; batches still open from before
+// a restart are followed again (server/claude-batch.js).
+{
+  const key = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || process.env.CLAUDE || "";
+  if (key) await configureBatches({ client: () => new Anthropic({ apiKey: key, maxRetries: 3, timeout: 10 * 60 * 1000 }), persist: db ? batchDbStore(db) : undefined }).catch((e) => console.error("claude batch:", e.message));
 }
 
 await boot();

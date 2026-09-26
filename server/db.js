@@ -398,6 +398,17 @@ CREATE TABLE IF NOT EXISTS kennion.ai_usage (
 );
 CREATE INDEX IF NOT EXISTS ai_usage_proposal_idx ON kennion.ai_usage (proposal_id, at);
 CREATE INDEX IF NOT EXISTS ai_usage_at_idx ON kennion.ai_usage (at);
+ALTER TABLE kennion.ai_usage ADD COLUMN IF NOT EXISTS batched boolean NOT NULL DEFAULT false;
+
+-- A Message Batch result no one was left waiting for (the server restarted
+-- while the batch ran): kept for the same request asked again, used once
+-- (server/claude-batch.js), so no work is paid for twice.
+CREATE TABLE IF NOT EXISTS kennion.claude_batch_results (
+  custom_id   text PRIMARY KEY,
+  batch_id    text NOT NULL,
+  result      jsonb NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS kennion.carrier_quotes (
   id             bigserial PRIMARY KEY,
   carrier        text NOT NULL,
@@ -781,14 +792,30 @@ export function createDb(url) {
       );
     },
 
+    /** A batch result kept for a request that will ask again (claude-batch.js). */
+    async keepBatchResult(customId, batchId, result) {
+      await pool.query(
+        `INSERT INTO kennion.claude_batch_results (custom_id, batch_id, result) VALUES ($1, $2, $3)
+           ON CONFLICT (custom_id) DO UPDATE SET batch_id = EXCLUDED.batch_id, result = EXCLUDED.result, created_at = now()`,
+        [customId, batchId, JSON.stringify(result)],
+      );
+    },
+
+    /** Take a kept batch result - used once - or null. Results older than 29 days are dropped. */
+    async takeBatchResult(customId) {
+      await pool.query("DELETE FROM kennion.claude_batch_results WHERE created_at < now() - interval '29 days'");
+      const { rows } = await pool.query("DELETE FROM kennion.claude_batch_results WHERE custom_id = $1 RETURNING result", [customId]);
+      return rows[0] ? rows[0].result : null;
+    },
+
     /** One model call's usage record. */
     async recordAiUsage(r) {
       await pool.query(
         `INSERT INTO kennion.ai_usage (at, proposal_id, group_name, slot, source_sha, reading_version, audit_standard, purpose, provider, model, served_model, batch, plans_in_batch, source,
-           input_tokens, cache_write_tokens, cache_write_1h_tokens, cache_read_tokens, output_tokens, cost_usd, duration_ms, retries, ok, error)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+           input_tokens, cache_write_tokens, cache_write_1h_tokens, cache_read_tokens, output_tokens, cost_usd, duration_ms, retries, ok, error, batched)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
         [r.at, r.proposalId, r.groupName, r.slot, r.sourceSha, r.readingVersion, r.auditStandard, r.purpose, r.provider, r.model, r.servedModel, r.batch, r.plansInBatch, r.source ? JSON.stringify(r.source) : null,
-          r.inputTokens, r.cacheWriteTokens, r.cacheWrite1hTokens, r.cacheReadTokens, r.outputTokens, r.costUsd, r.durationMs, r.retries, r.ok, r.error],
+          r.inputTokens, r.cacheWriteTokens, r.cacheWrite1hTokens, r.cacheReadTokens, r.outputTokens, r.costUsd, r.durationMs, r.retries, r.ok, r.error, !!r.batched],
       );
     },
 

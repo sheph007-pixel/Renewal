@@ -35,6 +35,7 @@ import { prepareForModel } from "./intake.js";
 import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
+import { claudeMessage } from "./claude-batch.js";
 import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork, sameName } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
 import { recordUsage, anthropicUsage, openaiUsage } from "./ai-usage.js";
@@ -604,15 +605,13 @@ async function callClaude({ purpose, schema, block, text, meta }) {
   let retries = 0;
   for (;;) {
     try {
-      const response = await client.messages
-        .stream({
-          model: CLAUDE_MODEL,
-          max_tokens: 64000,
-          output_config: { effort: "high", format: { type: "json_schema", schema } },
-          system: [withCache({ type: "text", text: AUDITOR_SYSTEM })],
-          messages: [{ role: "user", content: [block, { type: "text", text }] }],
-        })
-        .finalMessage();
+      const response = await claudeMessage(client, {
+        model: CLAUDE_MODEL,
+        max_tokens: 64000,
+        output_config: { effort: "high", format: { type: "json_schema", schema } },
+        system: [withCache({ type: "text", text: AUDITOR_SYSTEM })],
+        messages: [{ role: "user", content: [block, { type: "text", text }] }],
+      });
       recordUsage({ purpose, provider: "anthropic", model: CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries, ok: response.stop_reason !== "refusal" && response.stop_reason !== "max_tokens", error: response.stop_reason === "refusal" || response.stop_reason === "max_tokens" ? response.stop_reason : null, ...meta });
       if (response.stop_reason === "refusal") throw new Error("Claude declined the check.");
       if (response.stop_reason === "max_tokens") throw new Error("Claude's audit ran past one answer.");
@@ -1011,15 +1010,13 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
   const meta = { plansInBatch: Array.isArray(targetIndices) ? targetIndices.length : stored.length, source: sourceSent(prepared, packet, numpages) };
   let response;
   try {
-    response = await client.messages
-      .stream({
-        model: CLAUDE_MODEL,
-        max_tokens: 128000,
-        output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
-        system: [withCache({ type: "text", text: CORRECTION_INSTRUCTIONS })],
-        messages: [{ role: "user", content }],
-      })
-      .finalMessage();
+    response = await claudeMessage(client, {
+      model: CLAUDE_MODEL,
+      max_tokens: 128000,
+      output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
+      system: [withCache({ type: "text", text: CORRECTION_INSTRUCTIONS })],
+      messages: [{ role: "user", content }],
+    });
   } catch (e) {
     recordUsage({ purpose: "correction", provider: "anthropic", model: CLAUDE_MODEL, durationMs: Date.now() - started, ok: false, error: e.message, ...meta });
     throw e;
