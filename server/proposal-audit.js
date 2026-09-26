@@ -1212,7 +1212,13 @@ export function applyCorrection(extracted, c, meta = {}) {
     // The corrector's own count of the document (every distinct plan, EPO
     // included) replaces the reader's: a reader that listed one plan twice
     // no longer holds the count out of step once the source is re-counted.
-    if (Number.isInteger(c.document_plan_count)) reconciliation.reader_unique_plans = c.document_plan_count;
+    // Only a count of the whole document, though: a corrector shown a
+    // targeted packet counts the plans in the packet (Fetch Freight's Gravie
+    // workbook: 4 of 134). A workbook read by its parser keeps the parser's
+    // exact count, whatever the corrector counted.
+    const parserRead = !!((extracted.coverage && extracted.coverage.parser) || (extracted.extraction && extracted.extraction.method === "parser"));
+    if (parserRead) reconciliation.reader_unique_plans = canon.length;
+    else if (Number.isInteger(c.document_plan_count) && (!c._source || c._source.full !== false)) reconciliation.reader_unique_plans = c.document_plan_count;
   }
   return { extracted: { ...(extracted || {}), plans: kept, ...(reconciliation ? { reconciliation } : {}) }, log };
 }
