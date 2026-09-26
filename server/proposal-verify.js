@@ -26,6 +26,14 @@
 // a stale, failed or one-model audit is pending, never a pass. No finding
 // may be left open. An empty slot is simply blank.
 //
+// Approved (the step before Verified): every step above passes except
+// Claude's audit, which has simply not run yet (Claude unavailable, pending,
+// did not complete) - ChatGPT's audit of this exact reading passed, every
+// deterministic check passed and the grid matches. The client is shown an
+// Approved proposal. Claude audits it later as the backup: agreement makes
+// it Verified; a finding of Claude's sends it back to be corrected against
+// the document (and off the client's grid) until it passes again.
+//
 // Pure arithmetic over what is stored - no model call - so the whole book is
 // checked in milliseconds, and each failing box names the repair (`fix`) the
 // server's steward carries out on its own.
@@ -90,11 +98,12 @@ const busyRow = (r, reading) => r.status === "analyzing" || reading.has(r.id);
 
 /**
  * The processing state a box's proposal is in: UPLOADED, MAPPING, EXTRACTING,
- * EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED or NEEDS_REVIEW. Only
- * VERIFIED is ever shown to a client as checked.
+ * EXTRACTED, VALIDATING, AUDITING, CORRECTING, APPROVED, VERIFIED or
+ * NEEDS_REVIEW. Only APPROVED and VERIFIED are ever shown to a client.
  */
 function stageOf(c, row, correcting) {
   if (c.state === "verified") return "VERIFIED";
+  if (c.state === "approved") return "APPROVED";
   if (c.state === "stuck" || c.failedAt === "source") return "NEEDS_REVIEW";
   if (c.failedAt === "extraction") return row && (row.stage === "MAPPING" || row.stage === "UPLOADED") && c.state === "working" ? row.stage : "EXTRACTING";
   if (c.failedAt === "validation" || c.failedAt === "grid") return c.fix === "correct" && row && correcting.has(row.id) ? "CORRECTING" : "VALIDATING";
@@ -280,7 +289,11 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       const gp = (a && current && (a.models || []).find((mm) => /^chatgpt/i.test(mm.model))) || null;
       cell.counts.document = cl && gp && cl.documentPlanCount === gp.documentPlanCount ? cl.documentPlanCount : null;
       cell.counts.audit = { claude: cl ? { found: cl.plansFoundTotal, epoExcluded: cl.epoExcluded, expected: cl.documentPlanCount } : null, chatgpt: gp ? { found: gp.plansFoundTotal, epoExcluded: gp.epoExcluded, expected: gp.documentPlanCount } : null };
-      if (!steps.claude.ok || !steps.chatgpt.ok) {
+      // ChatGPT passed this exact reading and Claude has not audited it yet
+      // (not run, or did not complete) - no finding of Claude's: Approved,
+      // once the grid below matches. Claude audits it as the backup later.
+      const claudePending = !steps.claude.ok && steps.chatgpt.ok && (!cl || ["off", "error", "incomplete"].includes(cl.verdict)) && !(a.mismatches || []).some((mm) => /^claude/i.test(String(mm.by || "")));
+      if ((!steps.claude.ok || !steps.chatgpt.ok) && !claudePending) {
         // Open findings are corrected against the document; anything else -
         // no audit, a stale one, a model that did not finish - is audited.
         const findings = current && a.status === "issues" && (a.mismatches || []).length > 0;
@@ -350,6 +363,16 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
         ok: true,
         note: `Document ${cell.counts.document}, database ${storedDistinct}, grid ${g4.shown}; ${cell.clientEnabled ? `client ON: all ${g4.shown} shown` : "client OFF: none shown (the slot is turned off for this group)"}${hiddenPlans.length ? ` (${hiddenPlans.length} held back by an advanced exception: ${[...new Set(hiddenPlans.map((pl) => hiddenReason(pl)))].join("; ")})` : ""}${confirmedUnpriced.length ? ` (${confirmedUnpriced.length} the carrier does not price for a tier this group has people in: shown without a monthly figure)` : ""}.`,
       };
+      if (claudePending) {
+        // Shown to the client; the steward still owes Claude's audit.
+        cell.state = "approved";
+        cell.failedAt = "claude";
+        cell.fix = "audit";
+        cell.fixId = row.id;
+        // The steward ran out of tries for Claude: still Approved, not retried.
+        if (gaveUp(row.id)) cell.claudeGaveUp = gaveUp(row.id);
+        continue;
+      }
       cell.state = "verified";
     }
     for (const c of cells) {
@@ -359,7 +382,7 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
       c.stageReason = c.state === "stuck" ? c.stuck || null : c.failedAt && c.steps[c.failedAt] ? c.steps[c.failedAt].note : null;
     }
     const filed = cells.filter((c) => c.state !== "missing");
-    out.push({ group: g.name, cells, filed: filed.length, verified: filed.filter((c) => c.state === "verified").length });
+    out.push({ group: g.name, cells, filed: filed.length, verified: filed.filter((c) => c.state === "verified").length, approved: filed.filter((c) => c.state === "approved").length });
   }
   const all = out.flatMap((g) => g.cells).filter((c) => c.state !== "missing");
   return {
@@ -368,10 +391,11 @@ export function verifyProposals({ groups, rows, served, isBlankPlan, reading = n
     totals: {
       filed: all.length,
       verified: all.filter((c) => c.state === "verified").length,
+      approved: all.filter((c) => c.state === "approved").length,
       working: all.filter((c) => c.state === "working").length,
       failing: all.filter((c) => c.state === "fail").length,
       stuck: all.filter((c) => c.state === "stuck").length,
-      byStep: Object.fromEntries(["source", "extraction", "validation", "claude", "chatgpt", "grid"].map((k) => [k, all.filter((c) => c.state !== "verified" && c.failedAt === k).length])),
+      byStep: Object.fromEntries(["source", "extraction", "validation", "claude", "chatgpt", "grid"].map((k) => [k, all.filter((c) => c.state !== "verified" && c.state !== "approved" && c.failedAt === k).length])),
     },
   };
 }

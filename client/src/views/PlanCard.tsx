@@ -33,7 +33,7 @@ export interface CardModel {
   /** Everyone enrolled, across the tiers - what the employee share is averaged over. */
   enrolled: number;
   /** The proposal the figures came from and whether it was audited; absent for an illustrative plan. */
-  source?: { proposalId: number; audit: { status: "pass" | "issues" | "pending" | "unreadable"; completedAt: string | null } | null } | null;
+  source?: { proposalId: number; audit: { status: "pass" | "approved" | "issues" | "pending" | "unreadable"; completedAt: string | null } | null } | null;
   /** Set only for an Optimyl plan on a 2-50 enrolled group: this rate is preliminary until Optimyl underwrites it. */
   underwritingNote?: string | null;
   /** Where to open the carrier's actual SBC and SOB for this design; null where it is not a catalogue design or the document is not on file. */
@@ -143,6 +143,14 @@ function AuditFoot({ source }: { source: NonNullable<CardModel["source"]> }) {
     return (
       <div className="noprint" style={foot} title="Every value taken from the carrier's proposal - the plan name, network, benefits and rates - passed two independent audits against it. Values marked standard design are not from the proposal and are not part of that audit.">
         <span style={{ color: C.green, fontWeight: 600 }}>✓ Verified · Dual Audit Passed</span>
+        {a.completedAt && <span>{when(a.completedAt)}</span>}
+      </div>
+    );
+  }
+  if (a && a.status === "approved") {
+    return (
+      <div className="noprint" style={foot} title="Every value taken from the carrier's proposal - the plan name, network, benefits and rates - passed an independent audit against it; a second, independent audit follows. Values marked standard design are not from the proposal and are not part of that audit.">
+        <span style={{ color: C.green, fontWeight: 600 }}>✓ Approved · Audit Passed</span>
         {a.completedAt && <span>{when(a.completedAt)}</span>}
       </div>
     );

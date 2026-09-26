@@ -377,11 +377,17 @@ export interface VerifyCell {
     client?: number | null;
     audit: { claude: AuditCount | null; chatgpt: AuditCount | null } | null;
   };
-  /** fail: queued for the AI to fix · working: being fixed · stuck: the AI could not fix it (see `stuck`). */
-  state: "verified" | "fail" | "working" | "stuck" | "missing" | "dtq";
+  /**
+   * approved: ChatGPT's audit, every deterministic check and the grid passed - shown to the client;
+   * Claude's backup audit is still to come · fail: queued for the AI to fix · working: being fixed ·
+   * stuck: the AI could not fix it (see `stuck`).
+   */
+  state: "verified" | "approved" | "fail" | "working" | "stuck" | "missing" | "dtq";
+  /** Approved only: the steward ran out of tries for Claude's backup audit. */
+  claudeGaveUp?: string;
   stuck?: string;
   failedAt?: "source" | "extraction" | "validation" | "claude" | "chatgpt" | "grid";
-  /** Processing state: UPLOADED, MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, VERIFIED, NEEDS_REVIEW. */
+  /** Processing state: UPLOADED, MAPPING, EXTRACTING, EXTRACTED, VALIDATING, AUDITING, CORRECTING, APPROVED, VERIFIED, NEEDS_REVIEW. */
   stage?: string;
   stageReason?: string | null;
   /** Appearances -> unique plans -> EPO excluded -> expected, as the canonical reading counts them. */
@@ -409,8 +415,8 @@ export interface AuditCount {
 }
 export interface Verification {
   checkedAt: string;
-  groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
-  totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: Record<string, number> };
+  groups: { group: string; cells: VerifyCell[]; filed: number; verified: number; approved?: number }[];
+  totals: { filed: number; verified: number; approved?: number; working: number; failing: number; stuck: number; byStep: Record<string, number> };
   steward?: {
     running: boolean;
     enabled: boolean;
@@ -472,17 +478,18 @@ function useVerify(token: string) {
   return { v, load };
 }
 
-/** Six small squares, one per step: green passed, blue being fixed by the AI, orange needs review, grey not reached. */
+/** Six small squares, one per step: green passed, blue being fixed by the AI, orange needs review, grey not reached (or, on an Approved box, Claude's backup audit still to come). */
 function StepStrip({ c }: { c: VerifyCell }) {
   return (
     <span style={{ display: "inline-flex", gap: 2 }}>
       {STEP_NAMES.map(([k, label], i) => {
         const st = c.steps[k];
-        const bg = !st ? "#eef1f2" : st.ok ? C.green : c.state === "stuck" ? C.orange : "#2f6db3";
+        const backup = c.state === "approved" && k === "claude" && !!st && !st.ok;
+        const bg = !st ? "#eef1f2" : st.ok ? C.green : backup ? "#9aa5ab" : c.state === "stuck" ? C.orange : "#2f6db3";
         return (
           <span
             key={k}
-            title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : c.state === "stuck" ? "needs a person" : "the AI is fixing it"}${st ? ` - ${st.note}` : ""}`}
+            title={`${i + 1}. ${label}: ${!st ? "not reached" : st.ok ? "passed" : backup ? "backup audit still to come - the proposal is Approved and shown to the client" : c.state === "stuck" ? "needs a person" : "the AI is fixing it"}${st ? ` - ${st.note}` : ""}`}
             style={{ width: 13, height: 13, borderRadius: 2, background: bg, color: st ? "#fff" : C.ghost, fontSize: 9, fontWeight: 700, lineHeight: "13px", textAlign: "center" }}
           >
             {"SEVCOG"[i]}
@@ -543,6 +550,11 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
           {all ? "✓ " : ""}
           {t.verified} of {t.filed} proposals Verified
         </strong>
+        {!!t.approved && (
+          <span style={{ color: C.green, fontWeight: 600 }} title="ChatGPT's audit, every deterministic check and the group's grid passed: shown to the client. Claude audits each one again as the backup; agreement makes it Verified, a finding sends it back to be corrected.">
+            + {t.approved} Approved (shown to clients; Claude backup audit to come)
+          </span>
+        )}
         {fixing > 0 && !paused && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
         {fixing > 0 && paused && (
           <span style={{ color: C.amber, fontWeight: 600 }} title={`Since ${new Date(paused.since).toLocaleString()}; the AI tries again every half hour.`}>
@@ -1070,7 +1082,9 @@ function SlotCell({
   const quote = current?.extracted?.quote_id;
   const state = check ? check.state : current ? "verified" : "missing";
   const isDtq = state === "dtq";
-  const verified = state === "verified";
+  const approved = state === "approved";
+  // Approved looks like Verified (green), with a single-width edge.
+  const verified = state === "verified" || approved;
   // Queued or in hand: either way the AI is on it.
   const working = state === "working" || state === "fail";
   const filled = !!current || state !== "missing" || isDtq;
@@ -1103,7 +1117,7 @@ function SlotCell({
         }}
         title={check && filled ? checkTitle(check) : undefined}
         style={{
-          border: `${verified ? 2 : 1}px solid ${edge}`,
+          border: `${verified && !approved ? 2 : 1}px solid ${edge}`,
           background: fill,
           borderRadius: 4,
           padding: "6px 8px",
@@ -1151,7 +1165,7 @@ function SlotCell({
               style={{ ...linkBtn, fontSize: 12.5, fontWeight: 600, color: tone, textAlign: "left", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}
             >
               {plans
-                ? `${verified ? "✓ Verified · " : working ? "… " : "⚠ "}${plans} plan${plans === 1 ? "" : "s"}`
+                ? `${approved ? "✓ Approved · " : verified ? "✓ Verified · " : working ? "… " : "⚠ "}${plans} plan${plans === 1 ? "" : "s"}`
                 : working
                     ? "Reading proposal…"
                     : "⚠ no plans read"}
@@ -1160,7 +1174,7 @@ function SlotCell({
               <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "2px 0" }}>
                 <StepStrip c={check} />
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: tone }} title={check.stuck || failing?.note}>
-                  {verified ? "dual audit passed" : working ? (check.stage || "AI fixing").toLowerCase().replace("_", " ") : "needs review"}
+                  {approved ? "ChatGPT audit passed · Claude backup to come" : verified ? "dual audit passed" : working ? (check.stage || "AI fixing").toLowerCase().replace("_", " ") : "needs review"}
                 </span>
               </div>
             )}
@@ -1409,7 +1423,7 @@ export default function Proposals({ token, groups }: Props) {
       if (need === "attention" && !SLOTS.some((sl) => ["fail", "working", "stuck"].includes(checkOf.get(`${g.name}||${sl}`)?.state || ""))) return false;
       if (need === "verified") {
         const cells = SLOTS.map((sl) => checkOf.get(`${g.name}||${sl}`)).filter((c) => c && c.state !== "missing");
-        if (!cells.length || cells.some((c) => c!.state !== "verified")) return false;
+        if (!cells.length || cells.some((c) => c!.state !== "verified" && c!.state !== "approved")) return false;
       }
       if (SLOTS.includes(need as (typeof SLOTS)[number])) {
         // A slot that does not apply to the group is not "missing" from it.
@@ -1510,7 +1524,7 @@ export default function Proposals({ token, groups }: Props) {
                 <option value="missing">Missing a proposal</option>
                 <option value="complete">Every quote in</option>
                 <option value="attention">Needs attention (not verified)</option>
-                <option value="verified">Every proposal verified</option>
+                <option value="verified">Every proposal approved or verified</option>
                 {SLOTS.map((sl) => (
                   <option key={sl} value={sl}>
                     Missing {sl}

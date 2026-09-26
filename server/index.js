@@ -2747,8 +2747,9 @@ const isDtq = (groupName, slot) => {
 };
 
 /**
- * Whether a client is shown only Verified proposals. On by default: the
- * client sees a proposal once the whole check has passed. Set
+ * Whether a client is shown only checked proposals - Verified, or Approved
+ * (ChatGPT's audit, every deterministic check and the grid passed; Claude's
+ * backup audit still to come). On by default. Set
  * KENNION_CLIENT_VERIFIED_ONLY=0 to show proposals still being verified
  * (marked pending) - for a book still mid-way through its first pass.
  */
@@ -2773,15 +2774,18 @@ function clientAvailablePlans(name) {
   const withStatus = list
     .map((p) => {
       const v = verifiedProposals.get(p.id);
-      return { ...p, verified: !!v, audit: v ? { status: "pass", completedAt: v } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
+      const ap = !v && approvedProposals.get(p.id);
+      return { ...p, verified: !!v, approved: !!ap, audit: v ? { status: "pass", completedAt: v } : ap ? { status: "approved", completedAt: ap } : p.audit ? { status: "pending", completedAt: p.audit.completedAt } : null };
     })
-    .filter((p) => p.verified || !clientVerifiedOnly());
+    .filter((p) => p.verified || p.approved || !clientVerifiedOnly());
   return withStatus.map((p) => ({ ...p, plans: (p.plans || []).filter((pl) => !pl.hidden).map(({ hidden, ...pl }) => pl) }));
 }
 /** The same universe, flat: every plan a group's client can see, with its slot. */
 const clientPlanList = (name) => clientAvailablePlans(name).flatMap((p) => p.plans.map((pl) => ({ ...pl, slot: p.slot, proposalId: p.id })));
 /** Proposal id -> when its dual audit completed, for every proposal the check currently calls Verified. */
 const verifiedProposals = new Map();
+/** The same for every proposal the check calls Approved (Claude's backup audit still to come). */
+const approvedProposals = new Map();
 
 /** The newest client invoice filed under a group, without its bytes; null if none. */
 /** The roster group an invoice file's own name points to, or null when it names none. */
@@ -6253,11 +6257,12 @@ function proposalVerification(rows) {
   const waiting = new Set(v.groups.flatMap((g) => g.cells).flatMap((c) => (c.waiting || []).map((w) => w.id)));
   const inForce = waiting.size ? check(rows.filter((r) => !waiting.has(r.id))) : v;
   verifiedProposals.clear();
+  approvedProposals.clear();
   for (const g of inForce.groups) {
     for (const c of g.cells) {
-      if (c.state !== "verified" || c.proposalId == null) continue;
+      if ((c.state !== "verified" && c.state !== "approved") || c.proposalId == null) continue;
       const r = rows.find((rr) => String(rr.id) === String(c.proposalId));
-      verifiedProposals.set(c.proposalId, (r && r.audit && r.audit.completedAt) || new Date().toISOString());
+      (c.state === "verified" ? verifiedProposals : approvedProposals).set(c.proposalId, (r && r.audit && r.audit.completedAt) || new Date().toISOString());
     }
   }
   return v;
@@ -6275,7 +6280,7 @@ async function syncStages(v, rows) {
       const id = c.proposalId ?? c.fixId;
       const r = rows.find((rr) => String(rr.id) === String(id));
       if (!r) continue;
-      const reason = c.stage === "NEEDS_REVIEW" || c.stage === "VERIFIED" ? (c.stage === "VERIFIED" ? null : c.stageReason) : c.stageReason;
+      const reason = c.stage === "VERIFIED" || c.stage === "APPROVED" ? null : c.stageReason;
       if (r.stage === c.stage && (r.stage_reason || null) === (reason || null)) continue;
       await proposalStore.updateProposal(id, { stage: c.stage, stage_reason: reason ? String(reason).slice(0, 1000) : null }).catch(() => undefined);
     }
@@ -6287,10 +6292,10 @@ async function logProposalCheck() {
   await loadSteward();
   const v = proposalVerification(await proposalStore.listProposals());
   const t = v.totals;
-  console.log(`proposal check: ${t.verified} of ${t.filed} Verified, ${t.working} in progress, ${t.failing} queued, ${t.stuck} NEEDS_REVIEW (by step: ${Object.entries(t.byStep).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"})`);
+  console.log(`proposal check: ${t.verified} of ${t.filed} Verified, ${t.approved} Approved (Claude backup audit to come), ${t.working} in progress, ${t.failing} queued, ${t.stuck} NEEDS_REVIEW (by step: ${Object.entries(t.byStep).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"})`);
   for (const g of v.groups) {
     for (const c of g.cells) {
-      if (c.state === "verified" || c.state === "missing") continue;
+      if (c.state === "verified" || c.state === "approved" || c.state === "missing") continue;
       const st = c.failedAt ? c.steps[c.failedAt] : null;
       console.log(`proposal check: ${g.group} / ${c.slot} #${c.proposalId ?? c.fixId}: ${c.state} at ${c.failedAt || "?"} (${c.fix || "-"}) - ${c.stuck || (st ? st.note : "")}`);
     }
@@ -6612,7 +6617,9 @@ async function stewardPass() {
       const cost = (c) => (COST[c.fix] ?? 2);
       const order = (a, b) => empty(a) - empty(b) || cost(a) - cost(b);
       const byGroup = v.groups
-        .map((g) => ({ g, jobs: g.cells.filter((c) => c.state === "fail" && c.fix && c.fixId != null).sort(order) }))
+        // An Approved box still owes Claude's backup audit: worked once
+        // Claude is available, and not after the steward gave up on it.
+        .map((g) => ({ g, jobs: g.cells.filter((c) => (c.state === "fail" || (c.state === "approved" && !c.claudeGaveUp && !providerBlock("anthropic"))) && c.fix && c.fixId != null).sort(order) }))
         .filter((x) => x.jobs.length)
         .sort((a, b) => order(a.jobs[0], b.jobs[0]));
       if (!byGroup.length) break;
@@ -6644,7 +6651,7 @@ async function stewardPass() {
               break;
             }
             const now = proposalVerification(await proposalStore.listProposals()).groups.find((x) => x.group === g.group);
-            if (now) console.log(`steward: ${g.group}: ${now.verified} of ${now.filed} verified${now.cells.filter((c) => c.state === "verified").length ? ` (${now.cells.filter((c) => c.state === "verified").map((c) => `${c.slot} ${c.plans}`).join(", ")})` : ""}`);
+            if (now) console.log(`steward: ${g.group}: ${now.verified} of ${now.filed} verified, ${now.approved} approved${now.cells.filter((c) => c.state === "verified").length ? ` (${now.cells.filter((c) => c.state === "verified").map((c) => `${c.slot} ${c.plans}`).join(", ")})` : ""}`);
           }
         }),
       );

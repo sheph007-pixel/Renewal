@@ -148,11 +148,42 @@ assert.equal(cell.failedAt, "chatgpt");
 assert.equal(cell.fix, "audit");
 assert.equal(cell.steps.claude.ok, true);
 
-// A model that skipped a plan's rates is pending too.
+// Claude skipped a plan's rates (did not complete); ChatGPT passed and the
+// grid matches: Approved - shown to the client, Claude's audit still owed.
 const skipped = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("Claude (claude-sonnet-5)", { verdict: "incomplete", confirmed: 0 }), passModel("ChatGPT (gpt-5)")] } };
 cell = cellOf(run([skipped], served([skipped])));
+assert.equal(cell.state, "approved");
 assert.equal(cell.failedAt, "claude");
+assert.equal(cell.fix, "audit", "the steward still runs Claude's backup audit");
+assert.equal(cell.stage, "APPROVED");
 assert.match(cell.steps.claude.note, /returned 0 of 2/);
+assert.equal(cell.steps.grid.ok, true);
+
+// Claude unavailable (its audit never ran): ChatGPT's pass, every check and the grid -> Approved.
+const chatgptOnly = { ...good, audit: { ...dualPass(), status: "pending", models: [passModel("ChatGPT (gpt-5)")] } };
+let vv = run([chatgptOnly], served([chatgptOnly]));
+cell = cellOf(vv);
+assert.equal(cell.state, "approved", JSON.stringify(cell.steps));
+assert.equal(vv.totals.approved, 1);
+assert.equal(vv.totals.verified, 0, "Approved is not Verified");
+assert.equal(vv.totals.byStep.claude, 0, "an Approved box is not counted as failing");
+assert.equal(vv.groups[0].approved, 1);
+const claudeError = { ...good, audit: { ...dualPass(), status: "pending", models: [{ model: "Claude (claude-sonnet-5)", verdict: "error", mismatches: [], notes: "spending limit" }, passModel("ChatGPT (gpt-5)")] } };
+assert.equal(cellOf(run([claudeError], served([claudeError]))).state, "approved");
+assert.equal(cellOf(run([claudeError], served([claudeError]), () => "tried 3 times")).claudeGaveUp, "tried 3 times", "still Approved when Claude's tries run out");
+// ...but the grid still has to match first.
+cell = cellOf(run([chatgptOnly], () => [{ id: 10, slot: "Gravie", plans: served([chatgptOnly])()[0].plans.slice(0, 1) }]));
+assert.equal(cell.state, "fail");
+assert.equal(cell.failedAt, "grid");
+// Claude's own finding (or its count disagreeing) is never Approved: corrected against the document.
+const claudeFinding = { ...good, audit: { ...dualPass(), status: "issues", mismatches: [{ plan: "Copay 1500 PPO", field: "rate EE", stored: "1", onDocument: "2", by: "Claude (claude-sonnet-5)" }], models: [passModel("Claude (claude-sonnet-5)", { verdict: "issues" }), passModel("ChatGPT (gpt-5)")] } };
+cell = cellOf(run([claudeFinding], served([claudeFinding])));
+assert.equal(cell.state, "fail");
+assert.equal(cell.failedAt, "claude");
+assert.equal(cell.fix, "correct");
+// ChatGPT not passed: never Approved.
+const neither = { ...good, audit: { ...dualPass(), status: "pending", models: [{ model: "ChatGPT (gpt-5)", verdict: "error", mismatches: [], notes: "x" }] } };
+assert.equal(cellOf(run([neither], served([neither]))).state, "fail");
 
 // An audit of an earlier reading does not count: stale -> audit again.
 const changed = canon([plan1({ rates: { EE: 9, ES: 2, EC: 3, FAM: 4 } })]);
