@@ -8,7 +8,7 @@
 // extracted figures are stored for review, not pushed into the rate tables.
 import { recordUsage, anthropicUsage } from "./ai-usage.js";
 import { claudeMessage, batching } from "./claude-batch.js";
-import { withFailover, openaiModel } from "./ai-failover.js";
+import { withFailover, openaiModel, noteModelRejected } from "./ai-failover.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
@@ -915,25 +915,33 @@ export async function explainDataCheck(payload) {
  * explains the arithmetic, it never decides a figure.
  */
 const chatgptKey = () => process.env.CHATGPT_API_KEY || process.env.ChatGPT || process.env.CHATGPT || process.env.OPENAI_API_KEY || "";
-const CHATGPT_MODEL = () => process.env.CHATGPT_MODEL || "gpt-5";
+const CHATGPT_MODEL = () => openaiModel();
 export const chatgptEnabled = () => !!chatgptKey() || fakeAi();
 
 export async function secondReadDataCheck(payload) {
   if (fakeAi()) return "Canned second read (KENNION_FAKE_AI).";
   if (!chatgptKey()) throw new Error("ChatGPT is off: no ChatGPT (or OPENAI_API_KEY) variable is set.");
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatgptKey()}` },
-    body: JSON.stringify({
-      model: CHATGPT_MODEL(),
-      messages: [
-        { role: "system", content: DATA_CHECK_SYSTEM },
-        { role: "user", content: JSON.stringify(payload) },
-      ],
-    }),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`ChatGPT (${CHATGPT_MODEL()}): ${(j.error && j.error.message) || r.statusText}`);
+  const ask = (model) =>
+    fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${chatgptKey()}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: DATA_CHECK_SYSTEM },
+          { role: "user", content: JSON.stringify(payload) },
+        ],
+      }),
+    });
+  let model = CHATGPT_MODEL();
+  let r = await ask(model);
+  let j = await r.json().catch(() => ({}));
+  if (!r.ok && noteModelRejected(model, r.status, j.error)) {
+    model = CHATGPT_MODEL();
+    r = await ask(model);
+    j = await r.json().catch(() => ({}));
+  }
+  if (!r.ok) throw new Error(`ChatGPT (${model}): ${(j.error && j.error.message) || r.statusText}`);
   const text = j.choices && j.choices[0] && j.choices[0].message ? String(j.choices[0].message.content || "").trim() : "";
   if (!text) throw new Error("ChatGPT returned no text.");
   return text;

@@ -1454,7 +1454,9 @@ When one AI account reaches its spending limit, work keeps going on the other
 (`server/ai-failover.js`). Claude blocked: the reader (source map and
 extraction) and the corrector send the same request to ChatGPT
 (`CHATGPT_MODEL`, default `gpt-5`) through the Chat Completions API with a
-strict JSON schema, and the answer comes back in Claude's Message shape.
+strict JSON schema, and the answer comes back in Claude's Message shape. If
+OpenAI refuses the model `CHATGPT_MODEL` names (an unknown name, no access),
+ChatGPT uses `gpt-5` for the rest of the run instead of failing every call.
 ChatGPT blocked: Claude does the reading and correcting as usual. The dual
 audit never fails over - each model audits for itself, so Verified still means
 two independent checks; a blocked model's half of an audit waits and runs
