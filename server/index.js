@@ -4916,6 +4916,14 @@ async function assignOptionIds(rows, bySlot) {
     if (db) await db.setSetting(MENU_KEY, {}, "system");
   }
 }
+/**
+ * UnitedHealthcare under any of its names: the parent, Surest and Optum, and
+ * its own brands - All Savers (its level-funded product), UMR (its TPA) and
+ * Golden Rule. A reading that names one of these is a UHC proposal.
+ */
+const UHC_CARRIER = /united|uhc|surest|optum|all ?savers|\bumr\b|golden ?rule/i;
+/** Angle Health as a word ("Angle", "Angle Health") - never inside another name ("Triangle"). */
+const ANGLE_CARRIER = /\bangle\b/i;
 function slotFor(carrier, funding, quotesMedical, filename) {
   const c = String(carrier || "").toLowerCase();
   // Angle Health's Health Scorecard is not a rate quote and must never land
@@ -4923,18 +4931,38 @@ function slotFor(carrier, funding, quotesMedical, filename) {
   // older one: a scorecard there would delete the group's real proposal. Its
   // filename says what it is even when the reader does not mark it
   // ancillary, so this is checked first. It fills no slot.
-  if (/scorecard/i.test(filename || "") && /angle/.test(c)) return null;
+  if (/scorecard/i.test(filename || "") && ANGLE_CARRIER.test(c)) return null;
   if (quotesMedical === false) return null;
   const f = String(funding || "").toLowerCase();
-  if (/united|uhc|surest|optum/.test(c)) {
+  if (UHC_CARRIER.test(c)) {
+    if (/all ?savers/.test(c)) return "UHC Level Funded"; // All Savers is UHC's level-funded product
     if (/level/.test(f)) return "UHC Level Funded";
     if (/fully/.test(f)) return "UHC Fully Insured";
     return null; // UnitedHealthcare, funding unclear - leave for staff to say
   }
   if (/gravie/.test(c)) return "Gravie";
-  if (/angle/.test(c)) return "Angle";
+  if (ANGLE_CARRIER.test(c)) return "Angle";
   if (/optimyl/.test(c)) return "Optimyl";
   return null; // not a tracked carrier: kept on file, but it fills no slot
+}
+
+/**
+ * What a finished reading says about a slot that was only guessed from the
+ * filename: the slot the document itself gives; null when the document is
+ * definitely not one of the slot's proposals (ancillary-only, or a carrier
+ * outside the slots - an Aetna quote named "... FI.pdf"); undefined when the
+ * reading cannot tell (no carrier read, or UnitedHealthcare with its funding
+ * unclear), and the guess stands.
+ */
+function slotFromReading(x, filename) {
+  if (!x) return undefined;
+  const read = slotFor(x.carrier, x.funding, x.quotes_medical, filename);
+  if (read) return read;
+  if (x.quotes_medical === false) return null;
+  const c = String(x.carrier || "").trim();
+  if (!c || /^unknown$/i.test(c)) return undefined;
+  if (UHC_CARRIER.test(c)) return undefined;
+  return null;
 }
 
 /**
@@ -4964,6 +4992,9 @@ function guessSlotFromFilename(filename) {
   if (/\bfi\b|fully.?ins/i.test(f)) return "UHC Fully Insured";
   return null; // UnitedHealthcare may be named, but the funding isn't
 }
+
+/** A UHC slot the filename alone would give (its "FI" / "LF" wording) - a guess, not a reading. */
+const guessedUhcSlot = (slot, filename) => /^UHC /.test(String(slot || "")) && guessSlotFromFilename(filename) === slot;
 
 /**
  * Whether a proposal quotes no medical at all - dental, vision, life,
@@ -5016,6 +5047,8 @@ async function proposalsChanged() {
       if (!r.slot && r.status === "assigned" && r.group_name && !isAncillaryRow(r)) {
         let guessedSlot = guessSlotFromFilename(r.filename);
         if (guessedSlot === "UHC Level Funded" && isChurch(groups.find((g) => g.name === r.group_name))) guessedSlot = null;
+        // Never back into a UHC slot the document's own reading ruled out (see runAnalysis).
+        if (guessedSlot && guessedUhcSlot(guessedSlot, r.filename) && slotFromReading(r.extracted, r.filename) === null) guessedSlot = null;
         if (guessedSlot) {
           await proposalStore.updateProposal(r.id, { slot: guessedSlot });
           remapped = true;
@@ -5547,8 +5580,19 @@ async function runAnalysis(id, file, keepAssignment) {
       stage: "EXTRACTED",
       stage_reason: null,
     };
-    // The slot comes from what was read, unless staff already set one.
+    // The slot comes from what was read, unless staff already set one. A UHC
+    // slot only guessed from "FI" / "LF" in the filename is not a staff
+    // decision: the document's own carrier and funding settle it. An Aetna
+    // quote named "... FI.pdf" leaves the UHC slot - it never replaces the
+    // group's real UHC proposal - and a UHC quote of the other funding moves.
     if (!current || !current.slot) fields.slot = slotFor(out.carrier, out.funding, out.quotes_medical, file.filename);
+    else if (guessedUhcSlot(current.slot, file.filename)) {
+      const read = slotFromReading(out, file.filename);
+      if (read !== undefined && read !== current.slot) {
+        fields.slot = read;
+        console.log(`proposal ${id}: the document reads as ${out.carrier || "carrier ?"} (${out.funding || "funding ?"}), not the "${current.slot}" its filename suggested - ${read ? `moved to ${read}` : "taken out of the slot"}`);
+      }
+    }
     // Kennion tracks six medical carriers. A document that fills no slot
     // because it is ancillary (dental, vision, life, disability - no medical
     // rates) or because the carrier is not one Kennion shops (a TPA's
@@ -5566,7 +5610,7 @@ async function runAnalysis(id, file, keepAssignment) {
     // name at upload - counts the same as one the read just derived: either
     // way the row already belongs somewhere, so it is never discarded.
     if (!fields.slot && !(current && current.slot) && !(current && current.extracted)) {
-      const carrierTracked = /united|uhc|surest|optum|gravie|nationwide|angle|optimyl/i.test(String(out.carrier || ""));
+      const carrierTracked = UHC_CARRIER.test(String(out.carrier || "")) || /gravie|nationwide|angle|optimyl/i.test(String(out.carrier || ""));
       if (out.quotes_medical === false || !carrierTracked) {
         const ok = await proposalStore.deleteProposal(id).catch(() => false);
         console.log(`proposal ${id} discarded: ${out.quotes_medical === false ? "ancillary" : "untracked carrier"} (${out.carrier || "carrier ?"})${ok ? "" : " - delete failed"}`);
