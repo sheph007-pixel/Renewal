@@ -8,6 +8,7 @@
 // extracted figures are stored for review, not pushed into the rate tables.
 import { recordUsage, anthropicUsage } from "./ai-usage.js";
 import { claudeMessage, batching } from "./claude-batch.js";
+import { withFailover, openaiModel } from "./ai-failover.js";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
@@ -658,7 +659,7 @@ const MAP_SYSTEM = `You map a carrier's medical proposal so it can be read in se
 /** Map a long PDF: which pages carry medical plan identities, benefits and rates. */
 async function mapDocument(client, buffer, filename, numpages) {
   const started = Date.now();
-  const response = await claudeMessage(client, {
+  const mapParams = {
       model: PROPOSAL_MODEL,
       max_tokens: 32000,
       system: MAP_SYSTEM,
@@ -672,8 +673,10 @@ async function mapDocument(client, buffer, filename, numpages) {
           ],
         },
       ],
-    });
-  recordUsage({ purpose: "source-map", provider: "anthropic", model: PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
+    };
+  const response = await withFailover(() => claudeMessage(client, mapParams), mapParams, { name: "proposal_map" });
+  const mapVia = response._provider === "openai";
+  recordUsage({ purpose: "source-map", provider: mapVia ? "openai" : "anthropic", model: mapVia ? openaiModel() : PROPOSAL_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, source: { full: true, of: numpages || null, unit: "pages" } });
   if (response.stop_reason !== "end_turn") throw new Error(`map ended ${response.stop_reason}`);
   const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   const map = JSON.parse(text);
@@ -773,28 +776,28 @@ async function readOnce(client, model, content, meta = {}) {
     for (let drop = 0; ; drop++) {
       drops = drop;
       try {
-        // Background work (the steward) goes through the Message Batches
-        // API at half the price (server/claude-batch.js); the server-side
-        // fallback beta is a streaming-endpoint feature and stays with it.
-        if (batching()) {
-          response = await claudeMessage(client, params);
-          break;
-        }
-        if (beta) {
-          try {
-            response = await client.beta.messages
-              .stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" })
-              .finalMessage();
-          } catch (e) {
-            if (!(e instanceof Anthropic.BadRequestError)) throw e;
-            console.warn("beta fallback request rejected, retrying without it:", e.message);
+        // Claude, or - when Claude is at its spending limit - ChatGPT with
+        // the same request (server/ai-failover.js), so reading never stops
+        // for one provider.
+        response = await withFailover(async () => {
+          // Background work (the steward) goes through the Message Batches
+          // API at half the price (server/claude-batch.js); the server-side
+          // fallback beta is a streaming-endpoint feature and stays with it.
+          if (batching()) return claudeMessage(client, params);
+          if (beta) {
+            try {
+              return await client.beta.messages.stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }).finalMessage();
+            } catch (e) {
+              if (!(e instanceof Anthropic.BadRequestError)) throw e;
+              console.warn("beta fallback request rejected, retrying without it:", e.message);
+            }
           }
-        }
-        if (!response) response = await client.messages.stream(params).finalMessage();
+          return client.messages.stream(params).finalMessage();
+        }, params, { name: "proposal_reading" });
         break;
       } catch (e) {
         if (!droppedConnection(e) || drop >= DROP_RETRIES) {
-          recordUsage({ purpose: "extraction", provider: "anthropic", model, durationMs: Date.now() - started, retries: drop, ok: false, error: e.message, ...meta });
+          recordUsage({ purpose: "extraction", provider: /ChatGPT/.test(e.message || "") ? "openai" : "anthropic", model: /ChatGPT/.test(e.message || "") ? openaiModel() : model, durationMs: Date.now() - started, retries: drop, ok: false, error: e.message, ...meta });
           throw e;
         }
         console.warn(`reading dropped (${e.message}); streaming it again (${drop + 1}/${DROP_RETRIES})`);
@@ -806,8 +809,9 @@ async function readOnce(client, model, content, meta = {}) {
     // declined by Sonnet's safety classifier is re-run server-side on the
     // fallback model ("fallbacks": "default" routes to Claude Opus), which
     // shows here and in the usage record - never silently as Sonnet.
-    recordUsage({ purpose: "extraction", provider: "anthropic", model, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries: drops, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
-    if (response.model && response.model !== model) console.warn(`reading served by ${response.model}, not ${model} (server-side fallback)`);
+    const viaOpenAI = response._provider === "openai";
+    recordUsage({ purpose: "extraction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : model, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, retries: drops, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
+    if (!viaOpenAI && response.model && response.model !== model) console.warn(`reading served by ${response.model}, not ${model} (server-side fallback)`);
     if (response.stop_reason === "refusal") {
       throw new Error("The model declined to read this document.");
     }

@@ -19,7 +19,7 @@ import { assignCodes, sizeFor, normalizeName } from "./group-id.js";
 import { groupSlug } from "./slug.js";
 import { eligibilityOf } from "./eligibility.js";
 import { auditForClient, auditProposal, correctProposal, applyCorrection, readingVersion, auditProgress } from "./proposal-audit.js";
-import { withUsage, setUsageSink, memoryUsage, summarize, aiQuotaBlock, lastQuotaBlock, quotaErrorCount } from "./ai-usage.js";
+import { withUsage, setUsageSink, memoryUsage, summarize, aiQuotaBlock, lastQuotaBlock, lastQuotaBlocks, quotaErrorCount, providerBlock } from "./ai-usage.js";
 import { AUDIT_STANDARD as PLAN_AUDIT_STANDARD, COMPARE_VERSION, optimylNumber, optimylLabel, labelSharedNames } from "./plan-compare.js";
 import { aiEnabled, analyzeProposal, explainReconciliation, explainAudit, explainDataCheck, chatgptEnabled, secondReadDataCheck } from "./ai.js";
 import { DEFAULT_PLAYBOOK, RULE_SUGGESTIONS, assistantEnabled, describeGroup, normalizePlaybook, replyTo, titleFor } from "./assistant.js";
@@ -6358,7 +6358,7 @@ async function runProposalCorrection(id) {
       console.log(`proposal ${id} correction of an earlier version discarded`);
       return;
     }
-    const { extracted, log } = applyCorrection(x, c, { proposalId: id, version: startVersion, by: `Claude (claude-sonnet-5) correction, ${sent}` });
+    const { extracted, log } = applyCorrection(x, c, { proposalId: id, version: startVersion, by: `${c._by || "Claude (claude-sonnet-5)"} correction, ${sent}` });
     extracted.corrections = [...(x.corrections || []), ...log].slice(-300);
     // Whatever the corrector concluded - even "the auditors were wrong,
     // nothing to change" - only a fresh audit by both models can turn the
@@ -6390,7 +6390,7 @@ async function stewardRepair(cell, tiers) {
   const before = { ...st };
   const quotaBefore = quotaErrorCount();
   try {
-    await stewardRepairStep(cell, tiers, st);
+    return await stewardRepairStep(cell, tiers, st);
   } finally {
     if (quotaErrorCount() > quotaBefore) {
       for (const k of Object.keys(st)) delete st[k];
@@ -6447,12 +6447,22 @@ async function stewardRepairStep(cell, tiers, st) {
   };
   if (cell.fix === "read") return read();
   if (cell.fix === "audit") {
+    // A provider at its spending limit cannot audit: when everything this
+    // audit still needs is that provider's part, the box waits for it (no
+    // call, no attempt used); the other provider's part runs meanwhile.
+    const claudeDown = !!providerBlock("anthropic");
+    const openaiDown = !!providerBlock("openai");
+    if (claudeDown || openaiDown) {
+      const p = auditProgress(row.extracted || {}, row.source_sha || null, await auditJobs.list(row.id).catch(() => ({})));
+      if ((!p.claude.next || claudeDown) && (!p.openai.next || openaiDown)) return "wait";
+    }
     if (st.audits >= 3) return giveUp(`Both auditors could not complete in ${st.audits} tries: ${(row.audit && row.audit.notes) || "no result"}`);
     console.log(`steward: #${row.id} ${row.group_name} / ${row.slot}: dual audit against the document (${st.audits + 1}/3)`);
     const res = await runProposalAudit(row.id);
     // A run that completed at least one job made progress (the next run
-    // resumes after it): only a run that completed nothing uses an attempt.
-    if (!(res && res.progressed)) st.audits++;
+    // resumes after it): only a run that completed nothing uses an attempt,
+    // and never while a provider is at its spending limit.
+    if (!(res && res.progressed) && !claudeDown && !openaiDown) st.audits++;
     return saveSteward();
   }
   if (cell.fix === "correct") {
@@ -6559,6 +6569,8 @@ async function stewardPass() {
       }
       console.log(`steward: ${byGroup.reduce((n, x) => n + x.jobs.length, 0)} box(es) to fix across ${byGroup.length} group(s)`);
       const queue = [...byGroup];
+      let worked = 0;
+      let waiting = 0;
       await Promise.all(
         Array.from({ length: Math.min(STEWARD_PARALLEL, queue.length) }, async () => {
           while (queue.length) {
@@ -6566,7 +6578,9 @@ async function stewardPass() {
             for (const c of jobs) {
               if (aiQuotaBlock()) break;
               // The steward's Claude calls go into Message Batches: half price.
-              await withBatch(() => stewardRepair(c, tiersOf.get(g.group))).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+              const r = await withBatch(() => stewardRepair(c, tiersOf.get(g.group))).catch((e) => console.error(`steward: #${c.fixId}:`, e.message));
+              if (r === "wait") waiting++;
+              else worked++;
             }
             if (aiQuotaBlock()) {
               queue.length = 0;
@@ -6577,6 +6591,13 @@ async function stewardPass() {
           }
         }),
       );
+      // Every box left is waiting on a provider at its spending limit: look
+      // again in half an hour (a probe tests the limit then), not in a loop.
+      if (!worked && waiting) {
+        console.log(`steward: ${waiting} box(es) wait on ${lastQuotaBlocks().map((b) => b.provider).join(" and ")} (spending limit); checking again in 30 minutes`);
+        setTimeout(() => scheduleSteward(0), 31 * 60 * 1000);
+        break;
+      }
       stewardAgain = true;
     } while (stewardAgain);
   } finally {
@@ -6588,8 +6609,9 @@ async function stewardPass() {
 app.get("/api/admin/proposals/verify", requireStaff, async (req, res) => {
   try {
     await loadSteward();
-    const block = aiQuotaBlock() || lastQuotaBlock();
-    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: block.provider, until: block.until, since: block.at } : null, batches: batchState() } });
+    const block = aiQuotaBlock();
+    const blocks = lastQuotaBlocks();
+    res.json({ ...proposalVerification(await proposalStore.listProposals()), steward: { running: stewardRunning, enabled: aiEnabled() && process.env.KENNION_STEWARD !== "0", paused: block ? { provider: "all", until: block.until, since: block.at } : null, blocked: blocks.map((b) => ({ provider: b.provider, until: b.until, since: b.at })), batches: batchState() } });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

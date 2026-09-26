@@ -1448,6 +1448,20 @@ asked again - used once - so nothing is paid for twice. Usage records carry
 `batched` and are costed at half. `KENNION_CLAUDE_BATCH=0` sends everything
 directly again.
 
+### Provider failover
+
+When one AI account reaches its spending limit, work keeps going on the other
+(`server/ai-failover.js`). Claude blocked: the reader (source map and
+extraction) and the corrector send the same request to ChatGPT
+(`CHATGPT_MODEL`, default `gpt-5`) through the Chat Completions API with a
+strict JSON schema, and the answer comes back in Claude's Message shape.
+ChatGPT blocked: Claude does the reading and correcting as usual. The dual
+audit never fails over - each model audits for itself, so Verified still means
+two independent checks; a blocked model's half of an audit waits and runs
+once its account answers again (checked every 30 minutes). Only when both are
+blocked does the steward pause. The Proposals page shows which provider is
+blocked.
+
 ### Backups
 
 The Railway plan keeps no volume backups, so the app keeps its own

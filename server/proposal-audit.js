@@ -36,9 +36,10 @@ import { PDFDocument } from "pdf-lib";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import { TIERS, canonicalPlans, matchCanonical, isEpoPlan, placementCore, exactName } from "./plan-canonical.js";
 import { claudeMessage } from "./claude-batch.js";
+import { withFailover, openaiModel } from "./ai-failover.js";
 import { AUDIT_STANDARD, COMPARE_VERSION, BENEFIT_FIELDS, comparePlan, sameBenefit, sameAmount, sameNetwork, sameName } from "./plan-compare.js";
 import { buildPacket, describe as describePages } from "./audit-packets.js";
-import { recordUsage, anthropicUsage, openaiUsage } from "./ai-usage.js";
+import { recordUsage, anthropicUsage, openaiUsage, providerBlock } from "./ai-usage.js";
 
 /** The API's page ceiling for the 1M-context model this audits with. */
 const MAX_PDF_PAGES = 600;
@@ -771,6 +772,12 @@ export async function auditProposal({ filename, mime, buffer, extracted, sourceS
   };
 
   const runModel = async (provider, who) => {
+    // A provider at its spending limit does not audit (and is not asked):
+    // its part waits, its saved jobs stay, and the next run resumes there.
+    // The audit never fails over - Verified needs both independent checks.
+    if (!transport && !read && !canned && providerBlock(provider === "claude" ? "anthropic" : "openai")) {
+      return composeModel(who, { model: who, verdict: "error", mismatches: [], notes: `${provider === "claude" ? "Claude" : "ChatGPT"} is at its spending limit - its audit waits until it is back.` }, [], stored.length);
+    }
     // A proposal that fits in one batch: one call does both jobs.
     if (batches.length === 1) {
       const indices = batches[0];
@@ -1009,20 +1016,25 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
   const started = Date.now();
   const meta = { plansInBatch: Array.isArray(targetIndices) ? targetIndices.length : stored.length, source: sourceSent(prepared, packet, numpages) };
   let response;
+  const correctionParams = {
+    model: CLAUDE_MODEL,
+    max_tokens: 128000,
+    output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
+    system: [withCache({ type: "text", text: CORRECTION_INSTRUCTIONS })],
+    messages: [{ role: "user", content }],
+  };
   try {
-    response = await claudeMessage(client, {
-      model: CLAUDE_MODEL,
-      max_tokens: 128000,
-      output_config: { effort: "high", format: { type: "json_schema", schema: CORRECTION_SCHEMA } },
-      system: [withCache({ type: "text", text: CORRECTION_INSTRUCTIONS })],
-      messages: [{ role: "user", content }],
-    });
+    // Claude, or ChatGPT with the same request when Claude is at its
+    // spending limit (server/ai-failover.js): corrections never stop for one provider.
+    response = await withFailover(() => claudeMessage(client, correctionParams), correctionParams, { name: "proposal_correction" });
   } catch (e) {
-    recordUsage({ purpose: "correction", provider: "anthropic", model: CLAUDE_MODEL, durationMs: Date.now() - started, ok: false, error: e.message, ...meta });
+    const viaOpenAI = /ChatGPT/.test(e.message || "");
+    recordUsage({ purpose: "correction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : CLAUDE_MODEL, durationMs: Date.now() - started, ok: false, error: e.message, ...meta });
     throw e;
   }
-  recordUsage({ purpose: "correction", provider: "anthropic", model: CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
-  if (response.stop_reason === "refusal") throw new Error("Claude declined the correction.");
+  const viaOpenAI = response._provider === "openai";
+  recordUsage({ purpose: "correction", provider: viaOpenAI ? "openai" : "anthropic", model: viaOpenAI ? openaiModel() : CLAUDE_MODEL, servedModel: response.model, usage: anthropicUsage(response), durationMs: Date.now() - started, ok: response.stop_reason === "end_turn", error: response.stop_reason !== "end_turn" ? response.stop_reason : null, ...meta });
+  if (response.stop_reason === "refusal") throw new Error(`${viaOpenAI ? "ChatGPT" : "Claude"} declined the correction.`);
   if (response.stop_reason === "max_tokens") throw new Error("The correction was too long for one answer.");
   const text = response.content
     .filter((b) => b.type === "text")
@@ -1030,7 +1042,7 @@ export async function correctProposal({ filename, mime, buffer, extracted, misma
     .join("");
   const out = JSON.parse(text);
   if (!out || !Array.isArray(out.fixes)) throw new Error("Could not read the correction.");
-  return { ...out, _pageMap: pageMap, _source: meta.source };
+  return { ...out, _pageMap: pageMap, _source: meta.source, _by: viaOpenAI ? `ChatGPT (${openaiModel()})` : `Claude (${CLAUDE_MODEL})` };
 }
 
 const moneyNumber = (v) => {

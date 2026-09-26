@@ -411,7 +411,12 @@ export interface Verification {
   checkedAt: string;
   groups: { group: string; cells: VerifyCell[]; filed: number; verified: number }[];
   totals: { filed: number; verified: number; working: number; failing: number; stuck: number; byStep: Record<string, number> };
-  steward?: { running: boolean; enabled: boolean; paused?: { provider: string; until: string | null; since: string } | null };
+  steward?: {
+    running: boolean;
+    enabled: boolean;
+    paused?: { provider: string; until: string | null; since: string } | null;
+    blocked?: { provider: string; until: string | null; since: string }[];
+  };
 }
 
 const STEP_NAMES = [
@@ -499,6 +504,8 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
   const t = v.totals;
   const fixing = t.working + t.failing;
   const paused = v.steward?.paused || null;
+  const blocked = v.steward?.blocked || [];
+  const providerName = (p: string) => (p === "anthropic" ? "Claude" : p === "openai" ? "ChatGPT" : p);
   const stuck = v.groups.flatMap((g) => g.cells.filter((c) => c.state === "stuck").map((c) => ({ group: g.group, c })));
   const all = t.filed > 0 && t.verified === t.filed;
   const again = async () => {
@@ -536,8 +543,12 @@ function VerifyPanel({ v, token, onChanged }: { v: Verification | null; token: s
         {fixing > 0 && !paused && <span style={{ color: "#2f6db3", fontWeight: 600 }}>AI fixing {fixing} now</span>}
         {fixing > 0 && paused && (
           <span style={{ color: C.amber, fontWeight: 600 }} title={`Since ${new Date(paused.since).toLocaleString()}; the AI tries again every half hour.`}>
-            AI paused: the {paused.provider === "anthropic" ? "Claude (Anthropic)" : paused.provider === "openai" ? "OpenAI" : paused.provider} account reached its API spending limit
-            {paused.until ? ` (the provider says until ${new Date(paused.until).toLocaleDateString()})` : ""} - {fixing} waiting. Raise the limit in the provider's console to resume.
+            AI paused: both Claude and ChatGPT are at their API spending limits - {fixing} waiting. Raise a limit in the provider's console to resume.
+          </span>
+        )}
+        {fixing > 0 && !paused && blocked.length > 0 && (
+          <span style={{ color: C.amber, fontWeight: 600 }} title="The AI tests the limit again every half hour and resumes by itself.">
+            {blocked.map((b) => `${providerName(b.provider)} is at its spending limit${b.until ? ` (until ${new Date(b.until).toLocaleDateString()})` : ""}`).join("; ")}: {blocked.map((b) => (b.provider === "anthropic" ? "ChatGPT" : "Claude")).join(", ")} is reading and correcting meanwhile; {blocked.map((b) => providerName(b.provider)).join(" and ")}'s half of each audit waits.
           </span>
         )}
         {stuck.length > 0 && <span style={{ color: C.amber, fontWeight: 600 }}>{stuck.length} need{stuck.length === 1 ? "s" : ""} review</span>}
