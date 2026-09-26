@@ -243,4 +243,15 @@ assert.equal(restated.extracted.plans[0].network, "Insurance Choice +");
 assert.equal(restated.extracted.plans[0].benefits.doctor_visit, "$45 copay", "a real difference is still corrected");
 assert.deepEqual(restated.log.map((l) => l.field), ["doctor_visit"]);
 
+// A corrector shown a targeted packet counts only the plans in the packet:
+// its count never replaces the reader's. A workbook read by its parser keeps
+// the parser's exact count, whatever the corrector counted.
+const packetFix = applyCorrection(epoReading, { document_plan_count: 1, remove: [], unpriced: [], add: [], fixes: [], _source: { full: false, pages: [3] } });
+assert.equal(packetFix.extracted.reconciliation.reader_unique_plans, 2, "a packet's count is not the document's");
+const wholeFix = applyCorrection(epoReading, { document_plan_count: 5, remove: [], unpriced: [], add: [], fixes: [], _source: { full: true } });
+assert.equal(wholeFix.extracted.reconciliation.reader_unique_plans, 5, "a count of the whole document is taken");
+const parsed = { ...epoReading, extraction: { method: "parser", parser: "gravie" }, coverage: { parser: "gravie" }, reconciliation: { ...epoReading.reconciliation, reader_unique_plans: 4 } };
+const parserFix = applyCorrection(parsed, { document_plan_count: 4, remove: [], unpriced: [], add: [], fixes: [], _source: { full: true } });
+assert.equal(parserFix.extracted.reconciliation.reader_unique_plans, 2, "a parsed workbook's count is the parser's, and a bad one is put right");
+
 console.log("plan canonical: one plan per carrier identity, appearances merged with provenance, conflicts flagged not resolved, every plan stored (EPO included) with visibility decided separately, deterministic validation, unique names and codes enforced - ok");

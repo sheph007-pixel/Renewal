@@ -5995,7 +5995,11 @@ async function settleGravieQuotes() {
       // say - a model's correction changed a name, network or rate the
       // parser read exactly (Johnson Storage's networks were overwritten with
       // the header line naming both networks). The workbook is the source.
-      const drifted = !stale && gravieDrift(plans, gravieExtracted(parsed).plans || []);
+      // Or a plan count a correction put out of step with the workbook (a
+      // corrector that counted only the plans in its packet, 4 of 134).
+      const rc = (r.extracted && r.extracted.reconciliation) || null;
+      const miscounted = !stale && rc && rc.reader_unique_plans != null && rc.reader_unique_plans !== rc.unique_plans ? `the reading's plan count says ${rc.reader_unique_plans}, ${rc.unique_plans} stored` : null;
+      const drifted = !stale && (gravieDrift(plans, gravieExtracted(parsed).plans || []) || miscounted);
       if (drifted) console.log(`gravie: #${r.id} ${r.group_name}: the stored reading differs from its workbook (${drifted}); parsed again`);
       const quote = have.get(r.group_name);
       const wanted = quote && String(quote.proposalId) === String(r.id) && quote.planCount === plans.length && !stale && !drifted;
@@ -6004,6 +6008,13 @@ async function settleGravieQuotes() {
         const extracted = gravieReading(parsed, r.group_name, r.source_sha, plans);
         await proposalStore.updateProposal(r.id, { extracted, summary: extracted.summary });
         reread++;
+        // Parsed again from the workbook: the steward starts this box afresh
+        // (a give-up on the old reading no longer stands).
+        if (drifted) {
+          await loadSteward();
+          if (stewardState[r.id]) delete stewardState[r.id];
+          await saveSteward();
+        }
       }
       await storeGravieQuote({ name: r.group_name }, parsed, r.filename, r.id, r.uploaded_by);
       written++;
